@@ -22,6 +22,18 @@ on:
 #       - 'docs/**'
 #       - '*.md'
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platforms to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - unix
+          - windows
+          - macos
+          - linux
 
 permissions:
   contents: write
@@ -33,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should-skip: ${{ steps.check.outputs.should-skip }}
+      build-matrix: ${{ steps.matrix.outputs.value }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,6 +70,33 @@ jobs:
             echo "✅ Proceeding with build"
           fi
 
+      - name: Select build matrix
+        id: matrix
+        env:
+          PLATFORM: ${{ github.event.inputs.platform || 'all' }}
+        run: |
+          case "$PLATFORM" in
+            windows)
+              echo 'value={"include":[{"os":"windows-latest","platform":"windows"}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            macos)
+              echo 'value={"include":[{"os":"macos-latest","platform":"macos"}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            linux)
+              echo 'value={"include":[{"os":"ubuntu-latest","platform":"linux"}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            unix)
+              echo 'value={"include":[{"os":"macos-latest","platform":"macos"},{"os":"ubuntu-latest","platform":"linux"}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            all)
+              echo 'value={"include":[{"os":"windows-latest","platform":"windows"},{"os":"macos-latest","platform":"macos"},{"os":"ubuntu-latest","platform":"linux"}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported platform selection: $PLATFORM" >&2
+              exit 1
+              ;;
+          esac
+
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -65,14 +105,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            platform: windows
-          - os: macos-latest
-            platform: macos
-          - os: ubuntu-latest
-            platform: linux
+      matrix: ${{ fromJSON(needs.check-commit.outputs.build-matrix) }}
 
     steps:
       - name: Checkout code
@@ -251,7 +284,11 @@ jobs:
     name: Create Release
     needs: [check-commit, build]
     runs-on: ubuntu-latest
-    if: success() && needs.check-commit.outputs.should-skip != 'true'
+    if: >-
+      success() &&
+      needs.check-commit.outputs.should-skip != 'true' &&
+      github.repository == 'QiaoKes/fntv-electron' &&
+      (github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all')
 
     steps:
       - name: Checkout code
