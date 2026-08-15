@@ -26,6 +26,7 @@ interface PlayRequest {
 
 // 全局播放器实例引用
 let currentPlayer: ply.BasePlayer | null = null;
+let playbackStarting = false;
 
 // MPV播放器路径缓存
 let cachedPlayerPath: string | null = null;
@@ -208,9 +209,7 @@ function eventHandler(fnapi: fn.ApiService) {
                     log.debug('记录播放状态end');
                 }
 
-                // 等待50ms
-                await new Promise(resolve => setTimeout(resolve, 50));
-                await refreshWindow();
+                // 正常退出只回传最终进度；整页刷新会造成主窗口白闪。
                 break;
 
             default:
@@ -221,13 +220,21 @@ function eventHandler(fnapi: fn.ApiService) {
 }
 
 // 处理播放事件
-async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: PlayRequest): Promise<void> {
-    // 检查是否已有播放器在播放
-    if (currentPlayer && currentPlayer.isPlaying()) {
-        log.warn('已有播放器在播放，无法重复播放');
+async function handlePlayMovie(_event: IpcMainEvent, request: PlayRequest): Promise<void> {
+    if (playbackStarting || currentPlayer?.isPlaying()) {
+        log.warn('播放器正在启动或播放，忽略重复播放请求');
         return;
     }
 
+    playbackStarting = true;
+    try {
+        await startPlayback(request);
+    } finally {
+        playbackStarting = false;
+    }
+}
+
+async function startPlayback({ id, token, sourceIndex }: PlayRequest): Promise<void> {
     log.info('Play movie event received id:', id, ' index:', sourceIndex);
 
     const config = fnConfig.readConfig();
@@ -347,7 +354,11 @@ async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: 
     currentPlayer = player;
 
     // 开始播放
-    player.playList(playList, currentIndex);
+    const started = await player.playList(playList, currentIndex);
+    if (!started && currentPlayer === player) {
+        currentPlayer = null;
+        return;
+    }
 }
 
 // 生成代理URL

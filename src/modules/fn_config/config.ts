@@ -206,16 +206,16 @@ export function setDownloadProxyConfig({ enabled = true, proxyUrl = 'https://ghf
     fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
 }
 
-// 获取是否隐藏原有播放按钮配置
+// 获取是否启用 MPV 播放接管（沿用旧字段以兼容已有配置）
 export function getHideOriginalPlayButton(): boolean {
     const config: Config = readConfig() || {};
-    return config.hideOriginalPlayButton !== false; // 默认为隐藏（true）
+    return config.hideOriginalPlayButton === true;
 }
 
-// 设置是否隐藏原有播放按钮配置
-export function setHideOriginalPlayButton(hide: boolean): void {
+// 设置是否启用 MPV 播放接管
+export function setHideOriginalPlayButton(enabled: boolean): void {
     const config: Config = readConfig() || {};
-    config.hideOriginalPlayButton = hide;
+    config.hideOriginalPlayButton = enabled;
     fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
 }
 

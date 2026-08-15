@@ -3,9 +3,7 @@ import { registerHook, HookType } from '../core/hooks';
 import {
     findItemGuid,
     getPlayButtonConfig,
-    getSelectedSourceIndex,
     isSemanticPlayButton,
-    sendPlayEvent,
 } from '../core/playback';
 
 function findDetailPlayButton(): HTMLElement | null {
@@ -20,47 +18,9 @@ function findDetailPlayButton(): HTMLElement | null {
     return null;
 }
 
-function playWithMpv(button: HTMLElement): boolean {
-    const itemGuid = findItemGuid(button);
-    if (!itemGuid) {
-        logger.error('无法调用 MPV：未能从当前详情页提取 item_guid');
-        return false;
-    }
-    return sendPlayEvent(itemGuid, getSelectedSourceIndex());
-}
-
 function interceptOriginalButton(button: HTMLElement): void {
     if (button.dataset.mpvDetailIntercepted === 'true') return;
     button.dataset.mpvDetailIntercepted = 'true';
-
-    button.addEventListener('click', (event) => {
-        const itemGuid = findItemGuid(button);
-        if (!itemGuid) {
-            logger.warn('未能识别播放项，保留飞牛影视原始播放行为');
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        sendPlayEvent(itemGuid, getSelectedSourceIndex());
-    }, true);
-}
-
-function injectMpvButton(referenceButton: HTMLElement): void {
-    if (referenceButton.dataset.mpvButtonInjected === 'true') return;
-    referenceButton.dataset.mpvButtonInjected = 'true';
-
-    const button = referenceButton.cloneNode(false) as HTMLElement;
-    button.textContent = 'MPV播放';
-    button.dataset.customPlay = 'true';
-    button.removeAttribute('data-mpv-detail-intercepted');
-    button.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        playWithMpv(referenceButton);
-    });
-    referenceButton.insertAdjacentElement('afterend', button);
 }
 
 async function setupDetailPlayButton(): Promise<void> {
@@ -68,11 +28,8 @@ async function setupDetailPlayButton(): Promise<void> {
     if (!button) return;
 
     const config = await getPlayButtonConfig();
-    if (config.hideOriginalPlayButton) {
-        interceptOriginalButton(button);
-    } else {
-        injectMpvButton(button);
-    }
+    if (!config.hideOriginalPlayButton) return;
+    interceptOriginalButton(button);
 }
 
 function handleSetup(): void {

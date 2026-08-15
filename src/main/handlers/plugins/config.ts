@@ -45,7 +45,7 @@ function handleGetPlayButtonConfig(event: IpcMainEvent): void {
 // 设置播放按钮配置
 function handleSetPlayButtonConfig(event: IpcMainEvent, { hideOriginalPlayButton }: Partial<PlayButtonConfig>): void {
     try {
-        fnConfig.setHideOriginalPlayButton(hideOriginalPlayButton !== false); // 默认为true
+        fnConfig.setHideOriginalPlayButton(hideOriginalPlayButton === true);
         event.reply('play-button-config-set', { success: true });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
