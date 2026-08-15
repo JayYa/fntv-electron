@@ -34,6 +34,10 @@ on:
           - windows
           - macos
           - linux
+      release_tag:
+        description: Existing prerelease tag to upload binaries to
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -261,11 +265,44 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      - name: Upload preview release assets
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+        run: |
+          case "${{ matrix.platform }}" in
+            windows) assets=(release/*.exe) ;;
+            macos) assets=(release/*.dmg) ;;
+            linux) assets=(release/*.AppImage) ;;
+            *)
+              echo "Unsupported platform: ${{ matrix.platform }}" >&2
+              exit 1
+              ;;
+          esac
+
+          for asset in "${assets[@]}"; do
+            if [ ! -f "$asset" ]; then
+              echo "Missing release asset: $asset" >&2
+              exit 1
+            fi
+          done
+
+          gh release upload "$RELEASE_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-build
-          path: release/
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.AppImage
+            release/*.blockmap
+          if-no-files-found: error
           retention-days: 30
       # —— 构建后：兜底清理（避免影响后续/下次流水线）——
       - name: Post-clean DMG volumes (FNMedia_* / 飞牛影视*)
