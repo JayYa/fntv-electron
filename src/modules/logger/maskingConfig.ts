@@ -3,8 +3,6 @@
  * 定义需要脱敏的数据模式和脱敏规则
  */
 
-import { getLogLevel, LogLevel } from './config';
-
 /**
  * 脱敏类型
  */
@@ -149,11 +147,10 @@ export const maskingChars: MaskingCharsConfig = {
 };
 
 /**
- * 是否启用脱敏功能
- * 开发模式下不启用脱敏，便于调试
- * 通过日志级别来判断：DEBUG级别表示开发环境，不启用脱敏
+ * 是否启用脱敏功能。
+ * 调试日志同样可能写入持久化文件，不能因日志级别而暴露凭据。
  */
-export const maskingEnabled: boolean = getLogLevel() !== LogLevel.DEBUG;
+export const maskingEnabled: boolean = true;
 
 /**
  * 敏感关键词列表（用于检测可能包含敏感信息的对象）

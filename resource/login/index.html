@@ -1215,7 +1215,7 @@
             const password = passwordInput.value.trim();
             const useHttps = document.getElementById('httpsSwitch').checked;
 
-            window.log.info('登录信息:', { domain, username, password, useHttps });
+            window.log.info('提交登录请求:', { useHttps });
             
             const loginData = {
                 domain: domain,

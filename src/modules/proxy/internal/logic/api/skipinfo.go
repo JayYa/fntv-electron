@@ -23,7 +23,7 @@ func GetSkipInfoHandler(c *gin.Context) {
 	}
 
 	if params.Domain == "" || params.Token == "" || params.ItemGuid == "" {
-		logger.Errorf("缺少必要参数: domain=%s, token=%s, itemGuid=%s", params.Domain, params.Token, params.ItemGuid)
+		logger.Errorf("缺少必要参数: domainPresent=%t, tokenPresent=%t, itemGuid=%s", params.Domain != "", params.Token != "", params.ItemGuid)
 		c.JSON(400, ResponseBase{Code: InternalErrorCode, Msg: "Missing required parameters"})
 		return
 	}
@@ -75,7 +75,7 @@ func SetSkipInfoHandler(c *gin.Context) {
 	}
 
 	if req.Domain == "" || req.Token == "" || req.Guid == "" {
-		logger.Errorf("缺少必要参数: domain=%s, token=%s, guid=%s", req.Domain, req.Token, req.Guid)
+		logger.Errorf("缺少必要参数: domainPresent=%t, tokenPresent=%t, guid=%s", req.Domain != "", req.Token != "", req.Guid)
 		c.JSON(400, ResponseBase{Code: InternalErrorCode, Msg: "Missing required parameters"})
 		return
 	}

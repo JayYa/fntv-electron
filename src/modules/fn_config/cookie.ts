@@ -25,14 +25,14 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
         const fnapi = new ApiService(domain, token);
         const response = await fnapi.getUserInfo(5000, 0);
         if (!response || !response.success) {
-            log.warn('无效的token:', token);
+            log.warn('已保存的 token 无效');
             return false;
         }
         log.info('Token 验证通过, username:', response.data?.username || '无用户信息');
     }
 
     // 使用 token 设置 cookie
-    log.info('从配置中恢复 cookies, domain:', domain, ' token:', token);
+    log.info('从配置中恢复 cookies, domain:', domain);
 
     const ses = session.fromPartition('persist:fntv');
     // 根据登录接口返回的 token 格式设置相应的 cookie

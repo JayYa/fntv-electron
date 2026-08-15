@@ -153,7 +153,7 @@ func PlayVideoHandler(c *gin.Context) {
 	}
 
 	// 执行代理
-	logger.Infof("开始代理 | 模式: %v | URL: %s", proxyType, targetUrl)
+	logger.Infof("开始代理 | 模式: %v | itemGuid: %s", proxyType, params.ItemGuid)
 
 	switch proxyType {
 	case ChunkedProxy:

@@ -12,6 +12,7 @@
         "clean:proxy:mac": "rimraf third_party/proxy/proxy_x64 third_party/proxy/proxy_arm64",
         "start": "npm run clean && npm run build:proxy:win && tsc && electron .",
         "compile": "tsc",
+        "test": "npm run compile && node --test tests/*.test.cjs",
         "watch": "tsc --watch",
         "clean": "rimraf dest",
         "build:win": "npm-run-all -s build:proxy:win compile && electron-builder --win",

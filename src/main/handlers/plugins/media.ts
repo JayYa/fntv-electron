@@ -12,6 +12,7 @@ import { escape } from 'querystring';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
+import { getMpvConfigDir } from './mpvConfig';
 
 /**
 * 媒体播放插件
@@ -227,7 +228,7 @@ async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: 
         return;
     }
 
-    log.info('Play movie event received id:', id, ' with token:', token, ' index:', sourceIndex);
+    log.info('Play movie event received id:', id, ' index:', sourceIndex);
 
     const config = fnConfig.readConfig();
     if (!config || !config.domain) {
@@ -242,7 +243,11 @@ async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: 
         return;
     }
 
-    log.info('获取播放信息成功:', response.data);
+    log.info('获取播放信息成功:', {
+        guid: response.data.guid,
+        type: response.data.type,
+        parent_guid: response.data.parent_guid || '',
+    });
 
     const type = response.data.type;
     const parentGuid = response.data.parent_guid;
@@ -260,7 +265,7 @@ async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: 
         for (const episode of episodeList.data) {
             const mediaItem = processEpisodeMedia(config, episode);
             playList.push(mediaItem);
-            log.info('添加剧集到播放列表:', mediaItem);
+            log.info('添加剧集到播放列表:', mediaItem.itemGuid);
         }
     } 
     else if (type === 'Video' && parentGuid) {
@@ -273,22 +278,22 @@ async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: 
         };
 
         const mediaList = await fnapi.getItemList(req);
-        log.info('获取媒体列表响应:', mediaList);
         if (!mediaList.success || !mediaList.data || !mediaList.data.list) {
             log.error('获取媒体列表失败:', mediaList ? mediaList.message : '未知错误');
             return;
         }
+        log.info(`获取媒体列表成功，共 ${mediaList.data.list.length} 项`);
 
         for (const media of mediaList.data.list) {
             const mediaItem = processEpisodeMedia(config, media);
             playList.push(mediaItem);
-            log.info('添加剧集到播放列表:', mediaItem);
+            log.info('添加媒体到播放列表:', mediaItem.itemGuid);
         }
     }
     else {
         const mediaItem = processSingleMedia(config, response.data);
         playList.push(mediaItem);
-        log.info('添加单集到播放列表:', mediaItem);
+        log.info('添加单集到播放列表:', mediaItem.itemGuid);
     }
 
     if (playList.length === 0) {
@@ -313,19 +318,26 @@ async function handlePlayMovie(event: IpcMainEvent, { id, token, sourceIndex }: 
         return;
     }
 
+    const mpvArgs = [
+        '--force-window=immediate',
+        '--network-timeout=180',
+        `--volume=${fnConfig.getMpvVolume()}`,
+    ];
+    if (os.platform() === 'win32' && !fnConfig.getMpvPlayerPath()) {
+        // bundled mpv.exe 自带 portable_config；显式指向用户目录，避免状态写入安装目录。
+        mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
+    }
+
     let playConfig: ply.Config = {
         fnapi: fnapi,
         playerPath: playerPath,
         // headers: {
         //     Authorization: token,
         // },
-        extraArgs: [
-            '--force-window=immediate',
-            '--network-timeout=180',
-            // "--user-agent=Lavf/59.27.100",
-        ],
+        extraArgs: mpvArgs,
         debug: true,
-        onEvent: eventHandler(fnapi)
+        onEvent: eventHandler(fnapi),
+        onVolumeChange: fnConfig.setMpvVolume,
     };
 
     // 创建播放器实例

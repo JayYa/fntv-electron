@@ -26,6 +26,7 @@ export interface Config {
     trayNotificationShown?: boolean;
     nasProxyEnabled?: boolean;
     mpvPlayerPath?: string;
+    mpvVolume?: number;
     exitMode?: 'direct' | 'minimize' | 'ask';
 }
 
@@ -274,6 +275,23 @@ export function setMpvPlayerPath(path: string | null): void {
     fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
 }
 
+export function getMpvVolume(): number {
+    const volume = readConfig()?.mpvVolume;
+    return typeof volume === 'number' && Number.isFinite(volume)
+        ? Math.min(100, Math.max(0, Math.round(volume)))
+        : 70;
+}
+
+export function setMpvVolume(volume: number): void {
+    if (!Number.isFinite(volume)) {
+        throw new Error('MPV音量必须是有限数值');
+    }
+
+    const config: Config = readConfig() || {};
+    config.mpvVolume = Math.min(100, Math.max(0, Math.round(volume)));
+    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+}
+
 // 向后兼容的函数
 export function getDownloadProxyUrl(): string {
     return getDownloadProxyConfig().proxyUrl;
@@ -320,6 +338,8 @@ module.exports = {
     setTrayNotificationShown,
     getMpvPlayerPath,
     setMpvPlayerPath,
+    getMpvVolume,
+    setMpvVolume,
     getExitMode,
     setExitMode
 };

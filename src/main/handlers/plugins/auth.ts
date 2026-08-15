@@ -25,6 +25,8 @@ interface HistoryItem {
     account: string;
 }
 
+let fnIdLoginInProgress = false;
+
 // 获取配置处理
 function handleGetConfig(event: IpcMainEvent): void {
     try {
@@ -61,10 +63,12 @@ function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }: Histo
 
 // 用户登录处理
 async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<void> {
-    log.info('Received loginData:', loginData);
+    log.info('收到登录请求:', {
+        useHttps: loginData?.useHttps,
+    });
 
     if (!loginData || !loginData.domain || !loginData.username || !loginData.password) {
-        log.error('登录失败: 缺少必要的登录信息, loginData:', loginData);
+        log.error('登录失败: 缺少必要的登录信息');
         event.reply('login-error', {
             title: '登录失败',
             message: '请提供完整的登录信息。'
@@ -74,8 +78,22 @@ async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<v
 
     // FN ID 登录分支
     if (isFnId(loginData.domain)) {
+        if (fnIdLoginInProgress) {
+            event.reply('login-error', {
+                title: 'FN ID 登录进行中',
+                message: '请先在已打开的 FN Connect 窗口中完成或取消登录。'
+            });
+            return;
+        }
+
         log.info('检测到 FN ID 格式，使用 FN Connect OAuth 登录');
-        return handleFnIdLogin(event, loginData);
+        fnIdLoginInProgress = true;
+        try {
+            await handleFnIdLogin(event, loginData);
+        } finally {
+            fnIdLoginInProgress = false;
+        }
+        return;
     }
 
     // 构建服务器地址
@@ -135,7 +153,7 @@ async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<v
             });
             return;
         }
-        log.info('登录成功 token:', token);
+        log.info('登录成功，已获取 token');
 
         // 保存登录信息
         const { saveConfig, addHistory } = require('../../../modules/fn_config/config');

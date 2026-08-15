@@ -86,7 +86,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     }
 
     // 恢复 cookie 并跳转到对应的 URL
-    log.info('恢复登录状态，即将跳转到主页面, domain:', savedConfig.domain, ' token:', savedConfig.token);
+    log.info('恢复登录状态，即将跳转到主页面, domain:', savedConfig.domain);
 
     // 恢复 cookie
     await restoreCookies(savedConfig.domain, savedConfig.token).then((result) => {
