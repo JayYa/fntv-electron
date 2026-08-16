@@ -36,7 +36,9 @@ function suppressNativePlayback(event: Event): void {
 }
 
 function playManagedButton(button: HTMLElement): void {
-    const itemGuid = findItemGuid(button);
+    const itemGuid = button.dataset.mpvDetailIntercepted === 'true'
+        ? findItemGuid(null)
+        : findItemGuid(button);
     if (!itemGuid) {
         logger.error('无法调用 MPV：未能识别播放项');
         return;
@@ -100,7 +102,7 @@ async function setupDelegatedPlayHandler(): Promise<void> {
     document.addEventListener('click', handleClick, true);
 }
 
-// 仅在明确启用 MPV 时接管播放事件；读取失败时保留飞牛原生播放器。
+// 根据用户设置决定是否由 MPV 接管播放；读取失败时默认使用 MPV。
 setupDelegatedPlayHandler().catch((error: unknown) => {
     logger.error('初始化 MPV 播放接管失败:', error);
 });

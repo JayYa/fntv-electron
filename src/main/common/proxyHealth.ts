@@ -14,12 +14,14 @@ export function isProxyHealthPayload(value: unknown): boolean {
         return false;
     }
     const payload = value as ProxyHealthResponse;
-    return payload.service === 'fntv-proxy' && payload.protocol === 1;
+    return payload.service === 'fntv-proxy' && payload.protocol === 2;
 }
 
-export function probeProxyHealth(timeoutMs: number = 500): Promise<boolean> {
+export function probeProxyHealth(secret: string, timeoutMs: number = 500): Promise<boolean> {
     return new Promise(resolve => {
-        const request = http.get(PROXY_HEALTH_URL, response => {
+        const request = http.get(PROXY_HEALTH_URL, {
+            headers: { 'X-FNTV-Proxy-Secret': secret },
+        }, response => {
             const chunks: Buffer[] = [];
 
             response.on('data', chunk => chunks.push(Buffer.from(chunk)));
@@ -43,11 +45,11 @@ export function probeProxyHealth(timeoutMs: number = 500): Promise<boolean> {
     });
 }
 
-export async function waitForProxyHealth(timeoutMs: number = 10000, intervalMs: number = 100): Promise<boolean> {
+export async function waitForProxyHealth(secret: string, timeoutMs: number = 10000, intervalMs: number = 100): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
-        if (await probeProxyHealth(Math.min(intervalMs, 500))) {
+        if (await probeProxyHealth(secret, Math.min(intervalMs, 500))) {
             return true;
         }
         await new Promise(resolve => setTimeout(resolve, intervalMs));

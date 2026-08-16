@@ -38,14 +38,15 @@ function handleSetDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Part
 
 // 获取播放按钮配置
 function handleGetPlayButtonConfig(event: IpcMainEvent): void {
-    const hideOriginalPlayButton = fnConfig.getHideOriginalPlayButton();
-    event.reply('play-button-config-info', { hideOriginalPlayButton });
+    event.reply('play-button-config-info', {
+        hideOriginalPlayButton: fnConfig.getHideOriginalPlayButton(),
+    });
 }
 
 // 设置播放按钮配置
 function handleSetPlayButtonConfig(event: IpcMainEvent, { hideOriginalPlayButton }: Partial<PlayButtonConfig>): void {
     try {
-        fnConfig.setHideOriginalPlayButton(hideOriginalPlayButton === true);
+        fnConfig.setHideOriginalPlayButton(hideOriginalPlayButton !== false);
         event.reply('play-button-config-set', { success: true });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

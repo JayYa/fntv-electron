@@ -32,7 +32,15 @@ function handleGetConfig(event: IpcMainEvent): void {
     try {
         const config = fnConfig.readConfig() || {};
         const history = fnConfig.getHistory() || [];
-        event.reply('config-data', { config, history });
+        // 登录页只需要表单回填字段，禁止把长期 token 暴露给渲染进程。
+        event.reply('config-data', {
+            config: {
+                account: config.account,
+                domain: config.domain,
+                useHttps: config.useHttps,
+            },
+            history,
+        });
     } catch (error) {
         log.error('读取配置失败:', error);
         event.reply('config-data', { config: {}, history: [] });
@@ -62,7 +70,11 @@ function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }: Histo
 }
 
 // 用户登录处理
-async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<void> {
+async function handleLogin(
+    event: IpcMainEvent,
+    loginData: LoginData,
+    certificateRetryAttempted: boolean = false,
+): Promise<void> {
     log.info('收到登录请求:', {
         useHttps: loginData?.useHttps,
     });
@@ -117,12 +129,19 @@ async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<v
                 );
 
                 if (shouldTrust) {
+                    if (certificateRetryAttempted) {
+                        event.reply('login-error', {
+                            title: '证书验证失败',
+                            message: '信任证书后仍无法建立安全连接，请检查服务器证书配置。',
+                        });
+                        return;
+                    }
                     // 用户选择信任，添加到信任列表并重试登录
                     addTrustedHost(server);
                     log.info('用户信任证书，重试登录');
 
                     // 递归调用重试登录
-                    return handleLogin(event, loginData);
+                    return handleLogin(event, loginData, true);
                 } else {
                     // 用户不信任，返回错误
                     event.reply('login-error', {
@@ -190,9 +209,13 @@ async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<v
         }
     } catch (error) {
         log.error('登录请求失败:', error);
+        const message = error instanceof Error ? error.message : '';
+        const secureStorageFailure = /安全存储|密钥环/.test(message);
         event.reply('login-error', {
-            title: '连接失败',
-            message: '无法连接到服务器，请检查域名是否正确或网络连接是否正常。'
+            title: secureStorageFailure ? '无法安全保存登录信息' : '连接失败',
+            message: secureStorageFailure
+                ? message
+                : '无法连接到服务器，请检查域名是否正确或网络连接是否正常。'
         });
     }
 }

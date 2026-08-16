@@ -15,8 +15,10 @@ const mainwinConfig: BrowserWindowConstructorOptions = {
         webgl: true,
         partition: 'persist:fntv',
         preload: path.join(__dirname, '../../preload/index.js'),
-        nodeIntegration: true,   // 开启 Node.js 支持
-        contextIsolation: false,  // 如果 preload 里要直接改 DOM，通常要关掉
+        nodeIntegration: false,
+        contextIsolation: true,
+        // preload 仍需加载项目内模块；后续完成单文件打包后可再启用 sandbox。
+        sandbox: false,
         spellcheck: false,  // 禁用拼写检查，避免输入法干扰
     }
 };

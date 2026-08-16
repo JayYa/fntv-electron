@@ -52,6 +52,8 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
             value: token,
             path: '/',
             secure: isHttps,          // HTTPS 才设置 secure
+            // 飞牛网页前端会读取该 Cookie 维持路由与 API 登录态。
+            // 远程页面已通过 contextIsolation/nodeIntegration 与本机能力隔离。
             httpOnly: false,
             sameSite: isHttps ? 'no_restriction' : 'lax'  // HTTP 下用 lax
         });

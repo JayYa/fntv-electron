@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'node:path';
 import * as crypto from 'crypto';
-import { app } from 'electron';
+import { app, safeStorage } from 'electron';
 import { USER_DATA_PATH } from '../../public/constants';
 
 const HISTORY_LIMIT = 5;
 const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
 const IV = Buffer.alloc(16, 0); // Initialization vector
+const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
 
 app.setPath('userData', USER_DATA_PATH);
 
@@ -92,20 +93,49 @@ function getConfigPath(): string {
     return path.join(dir, 'config.json');
 }
 
-// 加密密码
-function encrypt(text: string): string {
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), IV);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return encrypted;
-}
-
-// 解密密码
-function decrypt(encrypted: string): string {
+// 仅用于读取旧版本固定密钥加密的密码。
+function decryptLegacyPassword(encrypted: string): string {
     const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), IV);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
+}
+
+function encryptCredential(value: string): string {
+    if (!value) return '';
+    if (!safeStorage.isEncryptionAvailable()) {
+        throw new Error('操作系统安全存储不可用，无法保存登录凭据');
+    }
+    if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') {
+        throw new Error('Linux 系统未提供可用的密钥环，拒绝以明文方式保存登录凭据');
+    }
+    return SAFE_STORAGE_PREFIX + safeStorage.encryptString(value).toString('base64');
+}
+
+function decryptCredential(value: string, isLegacyPassword: boolean): { value: string; legacy: boolean } {
+    if (!value) return { value: '', legacy: false };
+    if (value.startsWith(SAFE_STORAGE_PREFIX)) {
+        return {
+            value: safeStorage.decryptString(Buffer.from(value.slice(SAFE_STORAGE_PREFIX.length), 'base64')),
+            legacy: false,
+        };
+    }
+    return {
+        value: isLegacyPassword ? decryptLegacyPassword(value) : value,
+        legacy: true,
+    };
+}
+
+function writeConfig(config: Config): void {
+    const stored: Config = {
+        ...config,
+        token: encryptCredential(config.token || ''),
+        history: config.history?.map(item => ({
+            ...item,
+            password: encryptCredential(item.password),
+        })),
+    };
+    fs.writeFileSync(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
 // 读取配置
@@ -113,9 +143,26 @@ export function readConfig(): Config | null {
     const p = getConfigPath();
     if (fs.existsSync(p)) {
         try {
-            return JSON.parse(fs.readFileSync(p, 'utf-8')) as Config;
-        } catch {
-            return null;
+            const stored = JSON.parse(fs.readFileSync(p, 'utf-8')) as Config;
+            const token = decryptCredential(stored.token || '', false);
+            let needsMigration = token.legacy;
+            const config: Config = {
+                ...stored,
+                token: token.value,
+                history: stored.history?.map(item => {
+                    const password = decryptCredential(item.password, true);
+                    needsMigration ||= password.legacy;
+                    return { ...item, password: password.value };
+                }),
+            };
+
+            if (needsMigration && safeStorage.isEncryptionAvailable()) {
+                writeConfig(config);
+            }
+            return config;
+        } catch (error) {
+            if (error instanceof SyntaxError) return null;
+            throw error;
         }
     }
     return null;
@@ -128,7 +175,7 @@ export function saveConfig({ account, domain, token, useHttps }: SaveConfigParam
     config.domain = domain;
     config.token = token;
     config.useHttps = useHttps || false;
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 添加历史记录（域名、账号、加密密码、HTTPS设置）
@@ -143,14 +190,14 @@ export function addHistory({ domain, account, password, useHttps }: AddHistoryPa
     config.history.unshift({
         domain,
         account,
-        password: encrypt(password),
+        password,
         useHttps: useHttps || false
     });
     // 限制最多数量
     if (config.history.length > HISTORY_LIMIT) {
         config.history = config.history.slice(0, HISTORY_LIMIT);
     }
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 获取历史记录（解密密码）
@@ -160,7 +207,7 @@ export function getHistory(): HistoryItem[] {
     return config.history.map(item => ({
         domain: item.domain,
         account: item.account,
-        password: decrypt(item.password),
+        password: item.password,
         useHttps: item.useHttps || false
     }));
 }
@@ -169,7 +216,7 @@ export function getHistory(): HistoryItem[] {
 export function clearHistory(): void {
     const config: Config = readConfig() || {};
     config.history = [];
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 删除单个历史记录
@@ -183,7 +230,7 @@ export function deleteHistoryItem({ domain, account }: DeleteHistoryParams): boo
     );
     
     if (config.history.length < originalLength) {
-        fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+        writeConfig(config);
         return true;
     }
     return false;
@@ -203,20 +250,20 @@ export function setDownloadProxyConfig({ enabled = true, proxyUrl = 'https://ghf
     const config: Config = readConfig() || {};
     config.downloadProxyEnabled = enabled;
     config.downloadProxy = proxyUrl;
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 获取是否启用 MPV 播放接管（沿用旧字段以兼容已有配置）
 export function getHideOriginalPlayButton(): boolean {
     const config: Config = readConfig() || {};
-    return config.hideOriginalPlayButton === true;
+    return config.hideOriginalPlayButton !== false;
 }
 
 // 设置是否启用 MPV 播放接管
 export function setHideOriginalPlayButton(enabled: boolean): void {
     const config: Config = readConfig() || {};
     config.hideOriginalPlayButton = enabled;
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 获取NAS本地网盘代理配置
@@ -229,7 +276,7 @@ export function getNasProxyEnabled(): boolean {
 export function setNasProxyEnabled(enabled: boolean): void {
     const config: Config = readConfig() || {};
     config.nasProxyEnabled = enabled;
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 获取 macOS 关闭行为偏好
@@ -242,7 +289,7 @@ export function getMacCloseAction(): 'minimize' | 'quit' | 'ask' {
 export function setMacCloseAction(action: 'minimize' | 'quit' | 'ask'): void {
     const config: Config = readConfig() || {};
     config.macCloseAction = action;
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 获取托盘通知是否已显示过
@@ -255,7 +302,7 @@ export function getTrayNotificationShown(): boolean {
 export function setTrayNotificationShown(shown: boolean): void {
     const config: Config = readConfig() || {};
     config.trayNotificationShown = shown;
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 获取MPV播放器路径配置
@@ -272,7 +319,7 @@ export function setMpvPlayerPath(path: string | null): void {
     } else {
         config.mpvPlayerPath = path;
     }
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 export function getMpvVolume(): number {
@@ -289,7 +336,7 @@ export function setMpvVolume(volume: number): void {
 
     const config: Config = readConfig() || {};
     config.mpvVolume = Math.min(100, Math.max(0, Math.round(volume)));
-    fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+    writeConfig(config);
 }
 
 // 向后兼容的函数
@@ -313,7 +360,7 @@ export function setExitMode(mode: 'direct' | 'minimize' | 'ask'): void {
         ...config,
         exitMode: mode
     };
-    fs.writeFileSync(getConfigPath(), JSON.stringify(updatedConfig, null, 2));
+    writeConfig(updatedConfig);
 }
 
 // CommonJS导出，确保与现有代码兼容

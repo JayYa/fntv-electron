@@ -48,6 +48,7 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
             /authorization['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
             /access_token['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
             /refresh_token['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
+            /session[='":\s]*['"]*([a-f0-9]{32,})['"]*?/gi,
         ],
         maskType: 'partial', // 部分遮蔽
         showStart: 4, // 显示前4位
@@ -129,7 +130,7 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
     // URL中的敏感参数
     urlParams: {
         patterns: [
-            /([?&](?:token|key|secret|password|pwd)=)([^&\s]+)/gi,
+            /[?&](?:token|session|key|secret|password|pwd)=([^&\s]+)/gi,
         ],
         maskType: 'partial',
         showStart: 4,
@@ -156,7 +157,7 @@ export const maskingEnabled: boolean = true;
  * 敏感关键词列表（用于检测可能包含敏感信息的对象）
  */
 export const sensitiveKeywords: string[] = [
-    'password', 'pwd', 'passwd', 'token', 'secret', 'key', 'auth',
+    'password', 'pwd', 'passwd', 'token', 'session', 'secret', 'key', 'auth',
     'phone', 'mobile', 'email', 'id_card', 'idcard', 'bank_card',
     'address', 'location',
     'domain', 'host', 'url', 'hostname', 'endpoint', 'server'

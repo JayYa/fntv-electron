@@ -1,6 +1,4 @@
 import { ipcRenderer } from 'electron';
-import logger from './logger';
-import { getCookie } from './utils';
 import { extractItemGuidFromUrl, isItemGuid } from './playTarget';
 import type { PlayMovieData } from './types';
 
@@ -17,13 +15,13 @@ export function getPlayButtonConfig(): Promise<PlayButtonConfig> {
     configPromise = new Promise((resolve) => {
         const timeout = setTimeout(() => {
             ipcRenderer.off('play-button-config-info', handler);
-            resolve({ hideOriginalPlayButton: false });
+            resolve({ hideOriginalPlayButton: true });
         }, 2000);
 
         const handler = (_event: Electron.IpcRendererEvent, data?: Partial<PlayButtonConfig>) => {
             clearTimeout(timeout);
             ipcRenderer.off('play-button-config-info', handler);
-            resolve({ hideOriginalPlayButton: data?.hideOriginalPlayButton === true });
+            resolve({ hideOriginalPlayButton: data?.hideOriginalPlayButton !== false });
         };
 
         ipcRenderer.once('play-button-config-info', handler);
@@ -88,13 +86,7 @@ export function getSelectedSourceIndex(): number {
 }
 
 export function sendPlayEvent(itemGuid: string, sourceIndex = 0): boolean {
-    const token = getCookie('Trim-MC-token');
-    if (!token) {
-        logger.error('无法调用 MPV：未找到 Trim-MC-token');
-        return false;
-    }
-
-    const playData: PlayMovieData = { id: itemGuid, token, sourceIndex };
+    const playData: PlayMovieData = { id: itemGuid, sourceIndex };
     ipcRenderer.send('play-movie', playData);
     return true;
 }

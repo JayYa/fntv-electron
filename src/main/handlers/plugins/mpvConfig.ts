@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as logger from '../../../modules/logger';
+import { resolvePortableConfigDir, upgradeFntvUoscConfig } from '../../common/mpvConfigHelpers';
 
 /**
  * MPV配置文件管理插件
@@ -21,21 +22,23 @@ export function getMpvConfigDir(): string {
 
 // 获取应用中的portable_config目录
 function getPortableConfigDir(): string {
-    if (!app.isPackaged) {
-        return path.join(app.getAppPath(), 'third_party', 'fntv-mpv', 'portable_config');
-    }
+    return resolvePortableConfigDir({
+        appPath: app.getAppPath(),
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+    });
+}
 
-    if (process.platform === 'darwin') {
-        // macOS: third_party目录在应用包的Contents目录下，而不是在app.asar内
-        // 构建时只复制了portable_config目录内容到third_party/fntv-mpv/portable_config
-        const appPath = app.getAppPath();
-        const contentsPath = path.dirname(path.dirname(appPath)); // 从app.asar向上两级到Contents
-        return path.join(contentsPath, 'third_party', 'fntv-mpv', 'portable_config');
-    } else if (process.platform === 'win32') {
-        return path.join(process.resourcesPath, 'third_party', 'fntv-mpv', 'portable_config');
-    } else {
-        return path.join(process.resourcesPath, 'third_party', 'fntv-mpv', 'portable_config');
-    }
+function upgradeUserUoscConfig(mpvConfigDir: string): void {
+    const uoscConfigPath = path.join(mpvConfigDir, 'script-opts', 'uosc.conf');
+    if (!fs.existsSync(uoscConfigPath)) return;
+
+    const current = fs.readFileSync(uoscConfigPath, 'utf8');
+    const upgraded = upgradeFntvUoscConfig(current);
+    if (upgraded === current) return;
+
+    fs.writeFileSync(uoscConfigPath, upgraded, 'utf8');
+    logger.info('MPV uosc 控制栏已补充播放/暂停按钮');
 }
 
 // 递归复制目录
@@ -102,6 +105,9 @@ function initializeMpvConfig(): void {
             copyDirectoryRecursive(sourcePluginDir, destinationPluginDir);
             logger.info(`MPV托管插件已同步: ${managedPlugin}`);
         }
+
+        // 仅迁移已知的 fntv uosc 控制栏，避免覆盖用户自定义布局。
+        upgradeUserUoscConfig(mpvConfigDir);
     } catch (error) {
         logger.error('初始化MPV配置失败:', error);
     }

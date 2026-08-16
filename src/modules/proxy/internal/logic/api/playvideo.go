@@ -36,7 +36,7 @@ func parseQueryParam(c *gin.Context) (*PlayVideoParams, error) {
 		return nil, err
 	}
 
-	if params.Domain == "" || params.Token == "" || params.ItemGuid == "" || params.Account == "" {
+	if params.Session == "" || params.ItemGuid == "" {
 		return nil, errors.New("missing required parameters")
 	}
 
@@ -77,7 +77,7 @@ func getStreamUserAgent(info fnapi.StreamResponse) string {
 	return ""
 }
 
-func PlayVideoHandler(c *gin.Context) {
+func PlayVideoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 	params, err := parseQueryParam(c)
 	if err != nil {
 		logger.Errorf("解析参数失败: %v", err)
@@ -85,7 +85,14 @@ func PlayVideoHandler(c *gin.Context) {
 		return
 	}
 
-	fnApi := fnapi.NewApiService(params.Domain, params.Token, params.SkipVerify == 1)
+	session, err := sessions.Resolve(params.Session, params.ItemGuid)
+	if err != nil {
+		logger.Warnf("拒绝无效播放会话: itemGuid=%s", params.ItemGuid)
+		c.JSON(401, gin.H{"error": "Invalid playback session"})
+		return
+	}
+
+	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify)
 	resp, err := fnApi.GetStreamListCached(params.ItemGuid)
 	if err != nil || !resp.Success || len(resp.Data.VideoStreams) == 0 {
 		logger.Errorf("获取播放信息失败或为空: %v", err)
@@ -101,7 +108,7 @@ func PlayVideoHandler(c *gin.Context) {
 	}
 
 	// 获取流地址信息
-	streamResp, err := fnApi.GetStreamCached(targetMediaGuid, params.Account)
+	streamResp, err := fnApi.GetStreamCached(targetMediaGuid, session.Account)
 	if err != nil || !streamResp.Success {
 		logger.Errorf("获取视频流失败: %v", err)
 		c.JSON(500, gin.H{"error": "Failed to get stream"})
@@ -111,13 +118,13 @@ func PlayVideoHandler(c *gin.Context) {
 	var (
 		targetUrl    = fnApi.GetVideoURL(targetMediaGuid)
 		proxyType    = TransparentProxy
-		skipVerify   = params.SkipVerify == 1
+		skipVerify   = session.SkipVerify
 		extraHeaders = utils.PassthroughHeaders(c.Request)
 	)
 
 	cloudInfo := ParseCloudInfo(streamResp.Data)
 	streamUserAgent := getStreamUserAgent(streamResp.Data)
-	useCloudDirect := cloudInfo != nil && params.UseNasLocal != 1
+	useCloudDirect := cloudInfo != nil && !session.UseNasLocal
 
 	// 云盘直链模式
 	if useCloudDirect {
@@ -148,7 +155,7 @@ func PlayVideoHandler(c *gin.Context) {
 	} else {
 		// 本地 NAS 转发模式 ---
 		// 只有请求 NAS 时才需要 Authorization Token
-		extraHeaders["Authorization"] = params.Token
+		extraHeaders["Authorization"] = session.Token
 		extraHeaders["Cookie"] = extraHeaders["Cookie"] + "; mode=relay"
 	}
 
