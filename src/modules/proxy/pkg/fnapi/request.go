@@ -152,14 +152,16 @@ func Request[T any](client *http.Client, baseURL, url string, method HttpMethod,
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		defer resp.Body.Close()
-
 		respBody, err := io.ReadAll(resp.Body)
+		closeErr := resp.Body.Close()
 		if err != nil {
 			logger.Warnf("读取响应体失败 (尝试%d/%d): %v", attempt+1, tryTimes+1, err)
 			lastErr = err
 			time.Sleep(100 * time.Millisecond)
 			continue
+		}
+		if closeErr != nil {
+			logger.Warnf("关闭响应体失败 (尝试%d/%d): %v", attempt+1, tryTimes+1, closeErr)
 		}
 
 		logger.Debugf("收到响应: 状态码=%d, 响应体大小=%d bytes", resp.StatusCode, len(respBody))

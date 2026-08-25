@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as log from '../../modules/logger';
 import { readConfig } from '../../modules/fn_config/config';
 import { restoreCookies } from '../../modules/fn_config/cookie';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 
 /**
  * 设置窗口为半屏
@@ -78,7 +78,21 @@ export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
  */
 export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<void> {
     // 从配置中恢复 cookie
-    const savedConfig = readConfig();
+    let savedConfig;
+    try {
+        savedConfig = readConfig();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '无法读取安全配置';
+        log.error('读取安全配置失败:', error);
+        await dialog.showMessageBox(mainWindow, {
+            type: 'error',
+            title: '安全存储不可用',
+            message,
+            detail: '请启用操作系统密钥环后重新登录。已有配置不会被明文降级。',
+        });
+        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        return;
+    }
     if (!savedConfig || !savedConfig.token || !savedConfig.domain) {
         log.warn('没有找到已保存的配置，无法恢复 cookie');
         mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
@@ -86,7 +100,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     }
 
     // 恢复 cookie 并跳转到对应的 URL
-    log.info('恢复登录状态，即将跳转到主页面, domain:', savedConfig.domain, ' token:', savedConfig.token);
+    log.info('恢复登录状态，即将跳转到主页面, domain:', savedConfig.domain);
 
     // 恢复 cookie
     await restoreCookies(savedConfig.domain, savedConfig.token).then((result) => {

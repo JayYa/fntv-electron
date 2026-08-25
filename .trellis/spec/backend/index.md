@@ -26,6 +26,7 @@
 | [quality.md](./quality.md)                         | Import paths, Vite config, code quality           | Before committing                  |
 | [macos-permissions.md](./macos-permissions.md)     | macOS system permissions (mic, accessibility)     | Features requiring permissions     |
 | [text-input.md](./text-input.md)                   | Text insertion without clipboard pollution        | Voice-to-text, paste features      |
+| [external-runtime.md](./external-runtime.md)       | MPV bundle ownership and proxy lifecycle           | Runtime packaging and synchronization |
 
 ---
 
@@ -79,6 +80,7 @@
 | Logging                  | [logging.md](./logging.md)         |
 | Scoped logger            | [logging.md](./logging.md)         |
 | Packaging native modules | [logging.md](./logging.md)         |
+| External runtime ownership | [external-runtime.md](./external-runtime.md) |
 
 ### Import Paths & Quality
 
@@ -109,6 +111,7 @@
 | **Use `logger.scope()`** for module loggers                    | [logging.md](./logging.md)                     |
 | **Check permissions before use** on macOS                      | [macos-permissions.md](./macos-permissions.md) |
 | **Use direct text insertion** instead of clipboard             | [text-input.md](./text-input.md)               |
+| **Keep one authoritative source for external runtime files**   | [external-runtime.md](./external-runtime.md)   |
 
 ---
 

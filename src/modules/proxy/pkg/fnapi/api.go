@@ -108,6 +108,11 @@ func generateCacheKey(method, url string, params interface{}) string {
 	return key
 }
 
+func (s *ApiService) generateCacheKey(method, url string, params interface{}) string {
+	namespace := GetMd5(s.baseURL + ":" + s.token)
+	return namespace + ":" + generateCacheKey(method, url, params)
+}
+
 // Login 用户登录
 func (s *ApiService) Login(username, password string) (*ApiResponse[interface{}], error) {
 	return Request[interface{}](s.client, s.baseURL, "/v/api/v1/login", MethodPOST, s.token, LoginData{
@@ -199,7 +204,7 @@ func (s *ApiService) SetSkipInfo(parentGuid string, skipStart, skipEnd int) erro
 
 // GetUserInfoCached 获取用户信息（带缓存）
 func (s *ApiService) GetUserInfoCached() (*ApiResponse[UserInfo], error) {
-	cacheKey := generateCacheKey("GET", "/v/api/v1/user/info", nil)
+	cacheKey := s.generateCacheKey("GET", "/v/api/v1/user/info", nil)
 	var cachedResp ApiResponse[UserInfo]
 	if exists, err := getCache(cacheKey, &cachedResp); exists && err == nil {
 		return &cachedResp, nil
@@ -214,7 +219,7 @@ func (s *ApiService) GetUserInfoCached() (*ApiResponse[UserInfo], error) {
 
 // GetPlayInfoCached 获取视频播放信息（带缓存）
 func (s *ApiService) GetPlayInfoCached(itemGUID string) (*ApiResponse[PlayInfo], error) {
-	cacheKey := generateCacheKey("POST", "/v/api/v1/play/info", PlayInfoData{ItemGUID: itemGUID})
+	cacheKey := s.generateCacheKey("POST", "/v/api/v1/play/info", PlayInfoData{ItemGUID: itemGUID})
 	var cachedResp ApiResponse[PlayInfo]
 	if exists, err := getCache(cacheKey, &cachedResp); exists && err == nil {
 		return &cachedResp, nil
@@ -229,7 +234,7 @@ func (s *ApiService) GetPlayInfoCached(itemGUID string) (*ApiResponse[PlayInfo],
 
 // GetPlayQualityCached 获取播放质量列表（带缓存）
 func (s *ApiService) GetPlayQualityCached(mediaGUID string) (*ApiResponse[PlayQualityResponse], error) {
-	cacheKey := generateCacheKey("POST", "/v/api/v1/play/quality", map[string]string{"media_guid": mediaGUID})
+	cacheKey := s.generateCacheKey("POST", "/v/api/v1/play/quality", map[string]string{"media_guid": mediaGUID})
 	var cachedResp ApiResponse[PlayQualityResponse]
 	if exists, err := getCache(cacheKey, &cachedResp); exists && err == nil {
 		return &cachedResp, nil
@@ -244,7 +249,7 @@ func (s *ApiService) GetPlayQualityCached(mediaGUID string) (*ApiResponse[PlayQu
 
 // GetStreamListCached 获取流列表（带缓存）
 func (s *ApiService) GetStreamListCached(itemGUID string) (*ApiResponse[StreamListResponse], error) {
-	cacheKey := generateCacheKey("GET", fmt.Sprintf("/v/api/v1/stream/list/%s", itemGUID), nil)
+	cacheKey := s.generateCacheKey("GET", fmt.Sprintf("/v/api/v1/stream/list/%s", itemGUID), nil)
 	var cachedResp ApiResponse[StreamListResponse]
 	if exists, err := getCache(cacheKey, &cachedResp); exists && err == nil {
 		return &cachedResp, nil
@@ -268,7 +273,7 @@ func (s *ApiService) GetStreamCached(mediaGUID, account string) (*ApiResponse[St
 		MediaGUID: mediaGUID,
 		IP:        ip,
 	}
-	cacheKey := generateCacheKey("POST", "/v/api/v1/stream", data)
+	cacheKey := s.generateCacheKey("POST", "/v/api/v1/stream", data)
 	var cachedResp ApiResponse[StreamResponse]
 	if exists, err := getCache(cacheKey, &cachedResp); exists && err == nil {
 		return &cachedResp, nil

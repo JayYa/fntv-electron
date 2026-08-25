@@ -1,4 +1,4 @@
-import { BrowserWindow, IpcMainEvent, session } from 'electron';
+import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
 import { request, HttpMethod } from '../../../modules/fn_api/request';
@@ -6,6 +6,7 @@ import { isTrusted } from '../../../modules/cert_trust';
 import { restoreCookies } from '../../../modules/fn_config/cookie';
 import * as fnConfig from '../../../modules/fn_config/config';
 import * as log from '../../../modules/logger';
+import { resolveFnConnectBaseUrl } from '../core/fnConnect';
 
 /**
  * FN ID 登录插件
@@ -71,11 +72,11 @@ function getInjectionScript(username: string, password: string): string {
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
-            // 在 /login 页面自动填充用户名密码
+            // 在登录页面自动填充用户名密码
             if (window.location.href.indexOf('/login') !== -1) {
                 setTimeout(function() {
-                    var uInput = document.getElementById('username');
-                    var pInput = document.getElementById('password');
+                    var uInput = document.querySelector('#username, input[name="username"], input[autocomplete="username"]');
+                    var pInput = document.querySelector('#password, input[name="password"], input[type="password"]');
                     if (uInput && AUTO_LOGIN_USER) {
                         triggerInput(uInput, AUTO_LOGIN_USER);
                         if (AUTO_LOGIN_PASS && pInput) {
@@ -95,7 +96,7 @@ function getInjectionScript(username: string, password: string): string {
                 setTimeout(function() {
                     var btns = document.querySelectorAll('button');
                     for (var i = 0; i < btns.length; i++) {
-                        if (btns[i].innerText.indexOf('授权') !== -1) {
+                        if (/授权|允许|同意/.test(btns[i].innerText || '')) {
                             btns[i].click();
                             break;
                         }
@@ -200,7 +201,13 @@ function getInjectionScript(username: string, password: string): string {
                     if (window.location.href.indexOf('/login') !== -1) return;
                     window.__fntv_sys_config_requested = true;
                     fetch('/v/api/v1/sys/config', { credentials: 'include' })
-                        .then(function(r) { return r.text(); })
+                        .then(function(r) {
+                            var contentType = r.headers.get('content-type') || '';
+                            if (!r.ok || contentType.indexOf('application/json') === -1) {
+                                throw new Error('sys/config did not return JSON');
+                            }
+                            return r.text();
+                        })
                         .then(function(text) {
                             postMessage({
                                 type: "SysConfig",
@@ -229,13 +236,15 @@ function getInjectionScript(username: string, password: string): string {
 export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData): Promise<void> {
     const fnId = loginData.domain.trim();
     const fnConnectUrl = buildFnConnectUrl(fnId);
-    log.info(`[FN ID] 开始 FN ID 登录: fnId=${fnId}, url=${fnConnectUrl}`);
+    log.info('[FN ID] 开始 FN ID 登录');
 
     let oauthWindow: BrowserWindow | null = null;
     let baseUrl = '';
     let cookieString = '';
     let sysConfigLoaded = false;
     let authRequested = false;
+    let loginCompleted = false;
+    let cookieCheckInProgress = false;
 
     try {
         // 创建 OAuth 登录窗口
@@ -244,11 +253,12 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             height: 600,
             show: false, // Wait for ready-to-show
             title: 'FN ID 登录',
+            autoHideMenuBar: true,
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
-                // 使用独立 session 避免干扰主窗口
-                partition: 'persist:fnid-oauth',
+                // 每次登录使用临时隔离会话，避免旧 token 被误判为本次登录结果。
+                partition: `fnid-oauth-${Date.now()}`,
             }
         });
 
@@ -289,6 +299,81 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                 reject(new Error('FN ID 登录超时（120秒）'));
             }, 120000);
 
+            async function completeLogin(token: string, targetBaseUrl: string): Promise<void> {
+                if (loginCompleted) return;
+                loginCompleted = true;
+
+                try {
+                    const restored = await restoreCookies(targetBaseUrl, token, true);
+                    if (!restored) throw new Error('无法恢复 FN Connect 登录状态');
+
+                    fnConfig.saveConfig({
+                        account: loginData.username,
+                        domain: targetBaseUrl,
+                        token,
+                        useHttps: targetBaseUrl.startsWith('https://'),
+                    });
+                    fnConfig.addHistory({
+                        domain: fnId,
+                        account: loginData.username,
+                        password: loginData.password,
+                        useHttps: true,
+                    });
+
+                    const mainWindow = getMainWindow();
+                    log.info(`[FN ID] 登录成功，跳转到主页面: ${targetBaseUrl}/v`);
+                    await mainWindow.loadURL(`${targetBaseUrl}/v`);
+
+                    clearTimeout(timeout);
+                    resolve();
+                } catch (error) {
+                    loginCompleted = false;
+                    reject(error);
+                }
+            }
+
+            async function tryCompleteFromSession(): Promise<void> {
+                if (loginCompleted || authRequested || cookieCheckInProgress || !oauthWindow || oauthWindow.isDestroyed()) return;
+                cookieCheckInProgress = true;
+
+                try {
+                    const currentUrl = oauthWindow.webContents.getURL();
+                    if (!currentUrl || currentUrl === 'about:blank') return;
+
+                    const cookies = await oauthSession.cookies.get({ name: 'Trim-MC-token' });
+                    const tokenCookie = cookies.find((cookie) => cookie.value.length > 0);
+                    if (!tokenCookie) return;
+
+                    const targetBaseUrl = resolveFnConnectBaseUrl(currentUrl, fnConnectUrl);
+                    const verification = await new ApiService(targetBaseUrl, tokenCookie.value).getUserInfo(5000, 0);
+                    if (!verification?.success) {
+                        log.info('[FN ID] 当前 Cookie 不是可用的媒体 token，继续 OAuth 流程');
+                        return;
+                    }
+
+                    log.info(`[FN ID] 检测到有效登录 Cookie，使用当前连接完成登录: ${targetBaseUrl}`);
+                    authRequested = true;
+                    await completeLogin(tokenCookie.value, targetBaseUrl);
+                } finally {
+                    cookieCheckInProgress = false;
+                }
+            }
+
+            oauthWindow!.webContents.on('did-finish-load', () => {
+                setTimeout(() => {
+                    tryCompleteFromSession().catch((error: unknown) => {
+                        log.error('[FN ID] 检查登录 Cookie 失败:', error);
+                    });
+                }, 300);
+            });
+
+            oauthSession.cookies.on('changed', (_event, cookie, _cause, removed) => {
+                if (removed || cookie.name !== 'Trim-MC-token' || !cookie.value) return;
+                tryCompleteFromSession().catch((error: unknown) => {
+                    log.error('[FN ID] Cookie 变更处理失败:', error);
+                });
+            });
+
             // 处理从 WebView 收到的消息
             async function handleMessage(messageData: any) {
                 try {
@@ -322,6 +407,10 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                         if (!body) return;
 
                         try {
+                            if (typeof body !== 'string' || !body.trimStart().startsWith('{')) {
+                                log.warn('[FN ID] sys/config 未返回 JSON，等待登录 Cookie 或 OAuth 回调');
+                                return;
+                            }
                             const bodyJson = JSON.parse(body);
                             const data = bodyJson.data;
                             if (!data || !data.nas_oauth) return;
@@ -401,7 +490,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                                 if (!authResponse || !authResponse.success || !authResponse.data?.token) {
                                     const msg = authResponse?.message || '换取 token 失败';
 
-                                    log.error(`[FN ID] ${baseUrl} 授权失败: ${msg}, 完整响应: ${JSON.stringify(authResponse)}`);
+                                    log.error(`[FN ID] ${baseUrl} 授权失败: ${msg}`);
 
                                     authRequested = false;
                                     reject(new Error(msg));
@@ -411,33 +500,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                                 const token = authResponse.data.token;
                                 log.info('[FN ID] 获取 token 成功');
 
-                                // 保存配置
-                                fnConfig.saveConfig({
-                                    account: loginData.username,
-                                    domain: baseUrl,
-                                    token: token,
-                                    useHttps: true,
-                                });
-
-                                // 添加到登录历史
-                                fnConfig.addHistory({
-                                    domain: fnId,
-                                    account: loginData.username,
-                                    password: loginData.password,
-                                    useHttps: true,
-                                });
-
-                                // 设置主窗口的 Cookie
-                                const mainWindow = getMainWindow();
-                                if (mainWindow) {
-                                    await restoreCookies(baseUrl, token, true);
-
-                                    log.info(`[FN ID] 登录成功，跳转到主页面: ${baseUrl}/v`);
-                                    mainWindow.loadURL(`${baseUrl}/v`);
-                                }
-
-                                clearTimeout(timeout);
-                                resolve();
+                                await completeLogin(token, baseUrl);
                             } catch (err) {
                                 authRequested = false;
                                 log.error('[FN ID] Token 交换失败:', err);
@@ -534,7 +597,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             oauthWindow!.on('closed', () => {
                 oauthWindow = null;
                 clearTimeout(timeout);
-                if (!authRequested) {
+                if (!authRequested && !loginCompleted) {
                     reject(new Error('用户关闭了登录窗口'));
                 }
             });

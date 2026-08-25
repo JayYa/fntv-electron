@@ -158,7 +158,7 @@ export async function request<T = any>(
                 }
             }
 
-            // 不是json直接返回二进制文件
+            // Axios 允许 header 值为多种类型；HTTP Content-Type 只按字符串处理。
             const contentType = response.headers['content-type'];
             if (typeof contentType === 'string' && !contentType.includes('application/json')) {
                 return {
@@ -178,7 +178,7 @@ export async function request<T = any>(
                     };
                 }
 
-                log.warn(`fn_api 请求时签名错误，重试中 attempt = ${attempt + 1}, url: ${fullUrl}`);
+                log.warn(`fn_api 请求时签名错误，重试中 attempt = ${attempt + 1}, path: ${url}`);
                 await setTimeout(100); // 等待100ms
                 continue; // 继续下一次循环
             }
@@ -199,13 +199,13 @@ export async function request<T = any>(
             const errorCode = error.code || 'UNKNOWN';
             // 优先获取 error.message，因为 connection error 没有 response
             const errorMsg = error.message;
-            const respData = error.response ? JSON.stringify(error.response.data) : 'No Response Data';
+            const responseStatus = error.response?.status ?? '无响应';
 
-            log.error(`请求异常: [${errorCode}] ${errorMsg} | Resp: ${respData} | URL: ${fullUrl}`);
+            log.error(`请求异常: [${errorCode}] ${errorMsg} | HTTP: ${responseStatus} | path: ${url}`);
 
             // 检查是否为证书验证错误且URL未被信任
             if (isCertificateError(error) && !isTrusted(baseUrl)) {
-                log.warn(`检测到证书验证错误: code: ${errorCode}, msg: ${errorMsg}, URL: ${fullUrl}`);
+                log.warn(`检测到证书验证错误: code: ${errorCode}, msg: ${errorMsg}, path: ${url}`);
 
                 // 返回特殊的证书错误响应，让上层处理
                 return {
