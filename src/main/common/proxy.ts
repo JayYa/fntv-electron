@@ -2,7 +2,6 @@ import { app, BrowserWindow, dialog, Notification } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { randomBytes } from 'node:crypto';
 import { registerAllPlugins } from '../handlers';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import * as winctrl from './winctrl';
@@ -11,6 +10,7 @@ import { getMacCloseAction, setMacCloseAction, getTrayNotificationShown, setTray
 import * as log from '../../modules/logger';
 import { getDaemonInstance, ProxyDaemon } from './proxyDaemon';
 import { PROXY_PORT, probeProxyHealth, waitForProxyHealth } from './proxyHealth';
+import { loadOrCreateProxySecret } from './proxySecret';
 
 
 // 全局守护程序实例
@@ -19,9 +19,12 @@ let restartScheduled = false;
 let startPromise: Promise<ChildProcess | null> | null = null;
 const PROXY_RESTART_DELAY_MS = 3000;
 const MAX_PROXY_RESTART_ATTEMPTS = 5;
-const proxySecret = randomBytes(32).toString('hex');
+let proxySecret: string | null = null;
 
 export function getProxySecret(): string {
+    if (!proxySecret) {
+        proxySecret = loadOrCreateProxySecret(app.getPath('userData'));
+    }
     return proxySecret;
 }
 
@@ -29,9 +32,9 @@ function getProxyEnvironment(): NodeJS.ProcessEnv {
     return { ...process.env, LANG: 'C.UTF-8' };
 }
 
-function sendProxySecret(proxyProcess: ChildProcess): void {
+function sendProxySecret(proxyProcess: ChildProcess, secret: string): void {
     if (!proxyProcess.stdin) throw new Error('Proxy 标准输入不可用，无法安全传递认证密钥');
-    proxyProcess.stdin.end(proxySecret + '\n');
+    proxyProcess.stdin.end(secret + '\n');
 }
 
 // 获取应用中的proxy可执行文件路径
@@ -72,6 +75,7 @@ export function startProxyProcess(): Promise<ChildProcess | null> {
 
 async function startProxyProcessOnce(): Promise<ChildProcess | null> {
     const proxyPath = getProxyExecPath();
+    const proxySecret = getProxySecret();
 
     // 检查可执行文件是否存在
     if (!fs.existsSync(proxyPath)) {
@@ -112,7 +116,7 @@ async function startProxyProcessOnce(): Promise<ChildProcess | null> {
                 log.error('Proxy stderr:', data.toString('utf8'));
             });
         });
-        sendProxySecret(proxyProcess);
+        sendProxySecret(proxyProcess, proxySecret);
 
         const healthy = await Promise.race([
             waitForProxyHealth(proxySecret, 10000),
@@ -194,6 +198,7 @@ async function startProxyProcessOnce(): Promise<ChildProcess | null> {
  */
 async function startProxyProcessInternal(): Promise<ChildProcess> {
     const proxyPath = getProxyExecPath();
+    const proxySecret = getProxySecret();
 
     // 启动proxy进程
     const proxyProcess = spawn(proxyPath, [], {
@@ -217,7 +222,7 @@ async function startProxyProcessInternal(): Promise<ChildProcess> {
             log.error('Proxy stderr:', data.toString('utf8'));
         });
     });
-    sendProxySecret(proxyProcess);
+    sendProxySecret(proxyProcess, proxySecret);
 
     const healthy = await Promise.race([
         waitForProxyHealth(proxySecret, 10000),

@@ -102,7 +102,7 @@ async function setupDelegatedPlayHandler(): Promise<void> {
     document.addEventListener('click', handleClick, true);
 }
 
-// 根据用户设置决定是否由 MPV 接管播放；读取失败时默认使用 MPV。
+// 只有用户明确启用时才由 MPV 接管；读取失败时保留原生播放。
 setupDelegatedPlayHandler().catch((error: unknown) => {
     logger.error('初始化 MPV 播放接管失败:', error);
 });

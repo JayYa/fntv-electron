@@ -1,6 +1,8 @@
 import { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 import * as path from 'path';
 
+const isMac = process.platform === 'darwin';
+
 const mainwinConfig: BrowserWindowConstructorOptions = {
     width: 1400,
     height: 800,
@@ -9,7 +11,13 @@ const mainwinConfig: BrowserWindowConstructorOptions = {
     autoHideMenuBar: true,
     show: false,
     icon: path.join(__dirname, '../../../build/icon.ico'),
-    frame: false,
+    // macOS 使用系统交通灯按钮，但让现有页面继续延伸到标题栏区域。
+    // Windows/Linux 保持原有的无边框窗口和自定义窗口按钮。
+    frame: isMac,
+    ...(isMac && {
+        titleBarStyle: 'hiddenInset' as const,
+        trafficLightPosition: { x: 14, y: 14 },
+    }),
     // transparent: true,
     webPreferences: {
         webgl: true,

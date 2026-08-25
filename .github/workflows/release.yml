@@ -194,46 +194,6 @@ jobs:
             fi
           fi
 
-          echo "🔄 Overlaying latest uosc_danmaku..."
-          UOSC_COMMIT=$(curl -fsSL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/Tony15246/uosc_danmaku/commits/main | \
-            sed -n 's/.*"sha": "\([0-9a-f]*\)".*/\1/p' | head -1)
-          if [ -z "$UOSC_COMMIT" ]; then
-            echo "❌ Failed to resolve latest uosc_danmaku commit"
-            exit 1
-          fi
-
-          curl -fL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -o uosc-danmaku.zip \
-            "https://github.com/Tony15246/uosc_danmaku/archive/$UOSC_COMMIT.zip"
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            powershell -Command "Expand-Archive -Path uosc-danmaku.zip -DestinationPath uosc-danmaku-update -Force"
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            # macOS 自带 unzip 无法稳定处理上游 issue 模板中的 Unicode 文件名。
-            ditto -x -k uosc-danmaku.zip uosc-danmaku-update
-          else
-            unzip -q uosc-danmaku.zip -d uosc-danmaku-update
-          fi
-
-          UOSC_SOURCE=$(find uosc-danmaku-update -mindepth 1 -maxdepth 1 -type d | head -1)
-          UOSC_TARGET=third_party/fntv-mpv/portable_config/scripts/uosc_danmaku
-          if [ -z "$UOSC_SOURCE" ] || [ ! -d "$UOSC_TARGET" ]; then
-            echo "❌ Unexpected MPV/uosc_danmaku package structure"
-            exit 1
-          fi
-
-          rm -rf "$UOSC_TARGET"
-          mkdir -p "$UOSC_TARGET"
-          for entry in main.lua apis dicts modules sites; do
-            if [ ! -e "$UOSC_SOURCE/$entry" ]; then
-              echo "❌ Missing uosc_danmaku runtime entry: $entry"
-              exit 1
-            fi
-            cp -R "$UOSC_SOURCE/$entry" "$UOSC_TARGET"/
-          done
-          rm -rf uosc-danmaku-update uosc-danmaku.zip
-          echo "✅ uosc_danmaku synced at commit $UOSC_COMMIT"
-
           echo "📁 Final structure:"
           if [ "$RUNNER_OS" = "Windows" ]; then
             # Windows 使用 PowerShell 列出目录

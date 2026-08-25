@@ -17,9 +17,13 @@ export function isProxyHealthPayload(value: unknown): boolean {
     return payload.service === 'fntv-proxy' && payload.protocol === 2;
 }
 
-export function probeProxyHealth(secret: string, timeoutMs: number = 500): Promise<boolean> {
+export function probeProxyHealth(
+    secret: string,
+    timeoutMs: number = 500,
+    healthUrl: string = PROXY_HEALTH_URL,
+): Promise<boolean> {
     return new Promise(resolve => {
-        const request = http.get(PROXY_HEALTH_URL, {
+        const request = http.get(healthUrl, {
             headers: { 'X-FNTV-Proxy-Secret': secret },
         }, response => {
             const chunks: Buffer[] = [];

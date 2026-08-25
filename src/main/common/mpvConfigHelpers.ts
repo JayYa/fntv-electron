@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as path from 'path';
 
 interface PortableConfigPaths {
@@ -26,34 +27,49 @@ export function resolveBundledMpvPath(paths: BundledMpvPaths): string {
     return path.join(baseDir, 'third_party', 'fntv-mpv', 'mpv.exe');
 }
 
-const FNTV_UOSC_MARKERS = [
-    'button:danmaku',
-    'button:danmaku_delay',
-    'button:skip_cfg_btn',
-];
+export type MpvConfigSyncResult = 'initialized' | 'updated';
 
-export function upgradeFntvUoscConfig(content: string): string {
-    const lines = content.split(/\r?\n/);
-    const controlsIndex = lines.findIndex(line => line.startsWith('controls='));
-    if (controlsIndex < 0) return content;
+function copyDirectoryRecursive(
+    source: string,
+    destination: string,
+    overwrite: boolean = true,
+): void {
+    fs.mkdirSync(destination, { recursive: true });
 
-    const controls = lines[controlsIndex];
-    const isManagedFntvControls = FNTV_UOSC_MARKERS.every(marker => controls.includes(marker));
-    if (!isManagedFntvControls) return content;
+    for (const item of fs.readdirSync(source, { withFileTypes: true })) {
+        const sourcePath = path.join(source, item.name);
+        const destinationPath = path.join(destination, item.name);
+        if (item.isDirectory()) {
+            copyDirectoryRecursive(sourcePath, destinationPath, overwrite);
+        } else if (overwrite || !fs.existsSync(destinationPath)) {
+            fs.copyFileSync(sourcePath, destinationPath);
+        }
+    }
+}
 
-    let changed = false;
-    if (!controls.split(',').includes('play-pause')) {
-        lines[controlsIndex] = controls.replace('controls=menu,gap,', 'controls=menu,gap,play-pause,gap,');
-        changed = lines[controlsIndex] !== controls;
+export function synchronizeMpvConfig(
+    portableConfigDir: string,
+    mpvConfigDir: string,
+): MpvConfigSyncResult {
+    if (!fs.existsSync(portableConfigDir)) {
+        throw new Error(`Portable config directory not found: ${portableConfigDir}`);
     }
 
-    const persistencyIndex = lines.findIndex(line => line === 'controls_persistency=idle');
-    if (persistencyIndex >= 0) {
-        lines[persistencyIndex] = 'controls_persistency=paused';
-        changed = true;
+    const scriptsDir = path.join(mpvConfigDir, 'scripts');
+    if (!fs.existsSync(scriptsDir)) {
+        // Existing user files may predate managed scripts; seed missing bundle files only.
+        copyDirectoryRecursive(portableConfigDir, mpvConfigDir, false);
+        return 'initialized';
     }
 
-    if (!changed) return content;
-    const newline = content.includes('\r\n') ? '\r\n' : '\n';
-    return lines.join(newline);
+    const managedPlugin = 'uosc_danmaku';
+    const sourcePluginDir = path.join(portableConfigDir, 'scripts', managedPlugin);
+    if (!fs.existsSync(sourcePluginDir) || !fs.statSync(sourcePluginDir).isDirectory()) {
+        throw new Error(`Managed MPV plugin not found: ${sourcePluginDir}`);
+    }
+
+    const destinationPluginDir = path.join(scriptsDir, managedPlugin);
+    fs.rmSync(destinationPluginDir, { recursive: true, force: true });
+    copyDirectoryRecursive(sourcePluginDir, destinationPluginDir);
+    return 'updated';
 }

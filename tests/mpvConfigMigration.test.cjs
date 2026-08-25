@@ -1,10 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const {
     resolveBundledMpvPath,
     resolvePortableConfigDir,
-    upgradeFntvUoscConfig,
+    synchronizeMpvConfig,
 } = require('../dest/main/common/mpvConfigHelpers.js');
 
 test('resolves the packaged mpv executable next to the application executable', () => {
@@ -29,29 +31,66 @@ test('resolves packaged extraFiles next to the resources directory on every plat
     );
 });
 
-test('adds play-pause and paused persistency to the known fntv uosc layout', () => {
-    const current = [
-        'controls=menu,gap,subtitles,button:danmaku,button:danmaku_delay,button:skip_cfg_btn,gap,fullscreen',
-        'controls_persistency=idle',
-    ].join('\n');
-    assert.equal(
-        upgradeFntvUoscConfig(current),
-        [
-            'controls=menu,gap,play-pause,gap,subtitles,button:danmaku,button:danmaku_delay,button:skip_cfg_btn,gap,fullscreen',
-            'controls_persistency=paused',
-        ].join('\n'),
-    );
+test('updates only managed danmaku code and preserves user-owned MPV state', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-sync-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+    const portable = path.join(root, 'portable_config');
+    const user = path.join(root, 'user_config');
+    const bundledPlugin = path.join(portable, 'scripts', 'uosc_danmaku');
+    const userPlugin = path.join(user, 'scripts', 'uosc_danmaku');
+    fs.mkdirSync(bundledPlugin, { recursive: true });
+    fs.mkdirSync(userPlugin, { recursive: true });
+    fs.mkdirSync(path.join(user, 'script-opts'), { recursive: true });
+
+    fs.writeFileSync(path.join(bundledPlugin, 'main.lua'), 'VERSION = "2.1.0"');
+    fs.writeFileSync(path.join(userPlugin, 'main.lua'), 'VERSION = "2.0.0"');
+    fs.writeFileSync(path.join(user, 'scripts', 'custom.lua'), 'custom-script');
+
+    const preservedFiles = new Map([
+        [path.join(user, 'script-opts', 'uosc_danmaku.conf'), Buffer.from('opacity=0.42\n')],
+        [path.join(user, 'script-opts', 'uosc.conf'), Buffer.from('controls=custom\r\n')],
+        [path.join(user, 'danmaku-history.json'), Buffer.from('{"show_danmaku":false}')],
+    ]);
+    for (const [file, content] of preservedFiles) fs.writeFileSync(file, content);
+
+    assert.equal(synchronizeMpvConfig(portable, user), 'updated');
+    assert.equal(fs.readFileSync(path.join(userPlugin, 'main.lua'), 'utf8'), 'VERSION = "2.1.0"');
+    assert.equal(fs.readFileSync(path.join(user, 'scripts', 'custom.lua'), 'utf8'), 'custom-script');
+    for (const [file, content] of preservedFiles) {
+        assert.deepEqual(fs.readFileSync(file), content);
+    }
 });
 
-test('does not overwrite custom uosc controls', () => {
-    const custom = 'controls=menu,gap,subtitles,audio,fullscreen\ncontrols_persistency=idle';
-    assert.equal(upgradeFntvUoscConfig(custom), custom);
+test('seeds the complete bundled configuration on first initialization', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-init-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+    const portable = path.join(root, 'portable_config');
+    const user = path.join(root, 'user_config');
+    fs.mkdirSync(path.join(portable, 'scripts', 'uosc_danmaku'), { recursive: true });
+    fs.writeFileSync(path.join(portable, 'scripts', 'uosc_danmaku', 'main.lua'), 'bundled');
+    fs.writeFileSync(path.join(portable, 'danmaku-history.json'), '{"show_danmaku":true}');
+
+    assert.equal(synchronizeMpvConfig(portable, user), 'initialized');
+    assert.equal(fs.readFileSync(path.join(user, 'scripts', 'uosc_danmaku', 'main.lua'), 'utf8'), 'bundled');
+    assert.equal(fs.readFileSync(path.join(user, 'danmaku-history.json'), 'utf8'), '{"show_danmaku":true}');
 });
 
-test('keeps an already upgraded fntv layout stable', () => {
-    const upgraded = [
-        'controls=menu,gap,play-pause,gap,button:danmaku,button:danmaku_delay,button:skip_cfg_btn',
-        'controls_persistency=paused',
-    ].join('\r\n');
-    assert.equal(upgradeFntvUoscConfig(upgraded), upgraded);
+test('first initialization does not overwrite pre-existing user state', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-seed-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+    const portable = path.join(root, 'portable_config');
+    const user = path.join(root, 'user_config');
+    fs.mkdirSync(path.join(portable, 'scripts', 'uosc_danmaku'), { recursive: true });
+    fs.mkdirSync(path.join(portable, 'script-opts'), { recursive: true });
+    fs.mkdirSync(path.join(user, 'script-opts'), { recursive: true });
+    fs.writeFileSync(path.join(portable, 'scripts', 'uosc_danmaku', 'main.lua'), 'bundled');
+    fs.writeFileSync(path.join(portable, 'script-opts', 'uosc.conf'), 'bundled-controls');
+    fs.writeFileSync(path.join(user, 'script-opts', 'uosc.conf'), 'user-controls');
+
+    assert.equal(synchronizeMpvConfig(portable, user), 'initialized');
+    assert.equal(fs.readFileSync(path.join(user, 'script-opts', 'uosc.conf'), 'utf8'), 'user-controls');
+    assert.equal(fs.readFileSync(path.join(user, 'scripts', 'uosc_danmaku', 'main.lua'), 'utf8'), 'bundled');
 });

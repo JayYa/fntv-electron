@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as crypto from 'crypto';
 import { app, safeStorage } from 'electron';
 import { USER_DATA_PATH } from '../../public/constants';
+import { isMpvPlaybackEnabled } from './playbackPreference';
 
 const HISTORY_LIMIT = 5;
 const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
@@ -256,7 +257,7 @@ export function setDownloadProxyConfig({ enabled = true, proxyUrl = 'https://ghf
 // 获取是否启用 MPV 播放接管（沿用旧字段以兼容已有配置）
 export function getHideOriginalPlayButton(): boolean {
     const config: Config = readConfig() || {};
-    return config.hideOriginalPlayButton !== false;
+    return isMpvPlaybackEnabled(config.hideOriginalPlayButton);
 }
 
 // 设置是否启用 MPV 播放接管

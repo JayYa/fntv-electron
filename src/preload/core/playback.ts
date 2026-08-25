@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron';
+import { isMpvPlaybackEnabled } from '../../modules/fn_config/playbackPreference';
 import { extractItemGuidFromUrl, isItemGuid } from './playTarget';
 import type { PlayMovieData } from './types';
 
@@ -15,13 +16,15 @@ export function getPlayButtonConfig(): Promise<PlayButtonConfig> {
     configPromise = new Promise((resolve) => {
         const timeout = setTimeout(() => {
             ipcRenderer.off('play-button-config-info', handler);
-            resolve({ hideOriginalPlayButton: true });
+            resolve({ hideOriginalPlayButton: false });
         }, 2000);
 
         const handler = (_event: Electron.IpcRendererEvent, data?: Partial<PlayButtonConfig>) => {
             clearTimeout(timeout);
             ipcRenderer.off('play-button-config-info', handler);
-            resolve({ hideOriginalPlayButton: data?.hideOriginalPlayButton !== false });
+            resolve({
+                hideOriginalPlayButton: isMpvPlaybackEnabled(data?.hideOriginalPlayButton),
+            });
         };
 
         ipcRenderer.once('play-button-config-info', handler);
