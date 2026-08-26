@@ -21,6 +21,8 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            padding: 12px;
+            box-sizing: border-box;
             color: #fff;
         }
 
@@ -29,7 +31,11 @@
             background: rgba(37, 43, 55, 0.5);
             /* 半透明背景 */
             border-radius: 12px;
-            padding: 30px;
+            padding: 24px 30px;
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            scrollbar-gutter: stable;
+            box-sizing: border-box;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 
             backdrop-filter: blur(12px);
@@ -42,7 +48,7 @@
 
         .logo {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             position: relative;
         }
 
@@ -94,13 +100,13 @@
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 14px;
             position: relative;
         }
 
         label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             font-weight: 500;
         }
 
@@ -127,7 +133,7 @@
         .switch-container {
             display: flex;
             align-items: center;
-            margin-bottom: 24px;
+            margin-bottom: 18px;
         }
 
         .switch-label {
@@ -914,6 +920,11 @@
             <input type="password" id="password" placeholder="请输入密码" spellcheck="false" tabindex="3" />
             <button type="button" class="password-toggle" id="passwordToggle" title="显示/隐藏密码"><img id="passwordToggleImg" width="20px" src="./image/password-show.png" alt="显示密码" /></button>
         </div>
+        <div class="form-group has-button">
+            <label for="accessCode">访问码（可选）</label>
+            <input type="password" id="accessCode" placeholder="服务器未启用访问码时请留空" spellcheck="false" autocomplete="off" tabindex="4" />
+            <button type="button" class="password-toggle" id="accessCodeToggle" title="显示访问码"><img id="accessCodeToggleImg" width="20px" src="./image/password-show.png" alt="显示访问码" /></button>
+        </div>
         <div class="switch-container">
             <label class="switch">
                 <input type="checkbox" id="httpsSwitch" />
@@ -958,7 +969,7 @@
             <div class="proxy-switch-row">
                 <span>使用 MPV 播放</span>
                 <label class="proxy-switch">
-                    <input type="checkbox" id="hideOriginalPlayButtonSwitch">
+                    <input type="checkbox" id="hideOriginalPlayButtonSwitch" checked>
                     <span class="proxy-slider"></span>
                 </label>
             </div>
@@ -1003,6 +1014,9 @@
         const passwordInput = document.getElementById('password');
         const passwordToggle = document.getElementById('passwordToggle');
         const passwordToggleImg = document.getElementById('passwordToggleImg');
+        const accessCodeInput = document.getElementById('accessCode');
+        const accessCodeToggle = document.getElementById('accessCodeToggle');
+        const accessCodeToggleImg = document.getElementById('accessCodeToggleImg');
         const historyBtn = document.getElementById('historyBtn');
         const historyDropdown = document.getElementById('historyDropdown');
         const customConfirm = document.getElementById('customConfirm');
@@ -1214,6 +1228,7 @@
             const domain = domainInput.value.trim();
             const username = usernameInput.value.trim();
             const password = passwordInput.value.trim();
+            const accessCode = accessCodeInput.value.trim();
             const useHttps = document.getElementById('httpsSwitch').checked;
 
             window.log.info('提交登录请求:', { useHttps });
@@ -1222,6 +1237,7 @@
                 domain: domain,
                 username: username,
                 password: password,
+                accessCode: accessCode,
                 useHttps: useHttps
             };
 
@@ -1273,6 +1289,20 @@
                 passwordInput.type = 'password';
                 passwordToggleImg.src = './image/password-show.png';
                 passwordToggle.title = '显示密码';
+            }
+        });
+
+        accessCodeToggle.addEventListener('click', function () {
+            if (accessCodeInput.type === 'password') {
+                accessCodeInput.type = 'text';
+                accessCodeToggleImg.src = './image/password-hide.png';
+                accessCodeToggle.title = '隐藏访问码';
+                accessCodeToggleImg.alt = '隐藏访问码';
+            } else {
+                accessCodeInput.type = 'password';
+                accessCodeToggleImg.src = './image/password-show.png';
+                accessCodeToggle.title = '显示访问码';
+                accessCodeToggleImg.alt = '显示访问码';
             }
         });
 
@@ -1337,6 +1367,7 @@
                     domainInput.value = item.domain;
                     usernameInput.value = item.account;
                     passwordInput.value = item.password;
+                    accessCodeInput.value = item.accessCode || '';
                     document.getElementById('httpsSwitch').checked = item.useHttps === true;
 
                     // 关闭下拉框
@@ -1414,6 +1445,9 @@
             }
             if (config && config.account) {
                 usernameInput.value = config.account;
+            }
+            if (config && config.accessCode) {
+                accessCodeInput.value = config.accessCode;
             }
             
             // 渲染历史记录
@@ -1596,7 +1630,7 @@
         // 监听播放方式响应
         ipcRenderer.on('play-button-config-info', (event, data) => {
             if (data) {
-                hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton === true;
+                hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton !== false;
             }
         });
 

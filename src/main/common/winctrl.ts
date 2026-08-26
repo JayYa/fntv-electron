@@ -1,8 +1,10 @@
 import * as path from 'path';
 import * as log from '../../modules/logger';
-import { readConfig } from '../../modules/fn_config/config';
+import { readConfig, saveConfig } from '../../modules/fn_config/config';
 import { restoreCookies } from '../../modules/fn_config/cookie';
 import { BrowserWindow, dialog } from 'electron';
+import { AccessCodeVerificationError, establishAccessCodeSession } from './accessCodeSession';
+import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
 
 /**
  * 设置窗口为半屏
@@ -97,6 +99,32 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
         log.warn('没有找到已保存的配置，无法恢复 cookie');
         mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
         return;
+    }
+
+    if (savedConfig.accessCode) {
+        try {
+            const accessSession = await establishAccessCodeSession(savedConfig.domain, savedConfig.accessCode);
+            const resolvedBaseUrl = applyVerifiedOriginToFnConnectBaseUrl(
+                savedConfig.domain,
+                accessSession.baseUrl,
+            );
+            if (resolvedBaseUrl !== savedConfig.domain) {
+                savedConfig.domain = resolvedBaseUrl;
+                savedConfig.useHttps = resolvedBaseUrl.startsWith('https://');
+                saveConfig({
+                    account: savedConfig.account || '',
+                    domain: savedConfig.domain,
+                    token: savedConfig.token,
+                    accessCode: savedConfig.accessCode,
+                    useHttps: savedConfig.useHttps,
+                });
+            }
+        } catch (error) {
+            const reason = error instanceof AccessCodeVerificationError ? error.reason : 'network';
+            log.warn('恢复访问码会话失败:', reason);
+            mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+            return;
+        }
     }
 
     // 恢复 cookie 并跳转到对应的 URL

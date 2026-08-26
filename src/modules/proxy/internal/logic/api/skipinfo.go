@@ -33,7 +33,7 @@ func GetSkipInfoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 		c.JSON(401, ResponseBase{Code: InternalErrorCode, Msg: "Invalid playback session"})
 		return
 	}
-	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify)
+	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify, session.AccessCookie)
 
 	// 获取跳过片头片尾信息
 	logger.Infof("开始获取跳过片头片尾信息: itemGuid=%s", params.ItemGuid)
@@ -90,7 +90,7 @@ func SetSkipInfoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 		c.JSON(401, ResponseBase{Code: InternalErrorCode, Msg: "Invalid playback session"})
 		return
 	}
-	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify)
+	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify, session.AccessCookie)
 
 	// 获取播放信息缓存
 	playInfo, err := fnApi.GetPlayInfoCached(req.Guid)

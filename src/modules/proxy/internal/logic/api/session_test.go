@@ -28,3 +28,38 @@ func TestPlaybackSessionRejectsMissingCredentials(t *testing.T) {
 		t.Fatal("expected missing credentials to be rejected")
 	}
 }
+
+func TestPlaybackSessionCarriesAccessCookieInsideAuthenticatedSession(t *testing.T) {
+	store := NewPlaybackSessionStore()
+	id, err := store.Create(PlaybackSessionRequest{
+		Token:        "token",
+		Account:      "account",
+		Domain:       "https://nas.example",
+		AccessCookie: "gateway=secret",
+		ItemGuids:    []string{"item"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := store.Resolve(id, "item")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.AccessCookie != "gateway=secret" {
+		t.Fatalf("unexpected access cookie: %q", session.AccessCookie)
+	}
+}
+
+func TestPlaybackSessionRejectsCookieHeaderInjection(t *testing.T) {
+	store := NewPlaybackSessionStore()
+	_, err := store.Create(PlaybackSessionRequest{
+		Token:        "token",
+		Account:      "account",
+		Domain:       "https://nas.example",
+		AccessCookie: "gateway=secret\r\nX-Injected: yes",
+		ItemGuids:    []string{"item"},
+	})
+	if err == nil {
+		t.Fatal("expected invalid access cookie to be rejected")
+	}
+}

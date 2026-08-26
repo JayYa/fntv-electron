@@ -7,6 +7,10 @@ import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
+import {
+    AccessCodeVerificationError,
+    establishAccessCodeSession,
+} from '../../common/accessCodeSession';
 
 /**
  * 用户认证插件
@@ -17,6 +21,7 @@ interface LoginData {
     domain: string;
     username: string;
     password: string;
+    accessCode?: string;
     useHttps?: boolean;
 }
 
@@ -37,6 +42,7 @@ function handleGetConfig(event: IpcMainEvent): void {
             config: {
                 account: config.account,
                 domain: config.domain,
+                accessCode: config.accessCode,
                 useHttps: config.useHttps,
             },
             history,
@@ -110,9 +116,12 @@ async function handleLogin(
 
     // 构建服务器地址
     let server = loginData.useHttps ? `https://${loginData.domain}` : `http://${loginData.domain}`;
-    const fnapi = new fn.ApiService(server);
+    const accessCode = loginData.accessCode?.trim() || '';
 
     try {
+        const accessSession = await establishAccessCodeSession(server, accessCode);
+        server = accessSession.baseUrl;
+        const fnapi = new fn.ApiService(server);
         const response = await fnapi.login(loginData.username, loginData.password);
 
         if (!response || !response.success) {
@@ -182,7 +191,8 @@ async function handleLogin(
             account: loginData.username,
             domain: server,
             token: response.data.token,
-            useHttps: loginData.useHttps
+            accessCode,
+            useHttps: server.startsWith('https://')
         });
 
         // 添加到登录历史
@@ -190,6 +200,7 @@ async function handleLogin(
             domain: loginData.domain,
             account: loginData.username,
             password: loginData.password,
+            accessCode,
             useHttps: loginData.useHttps
         });
 
@@ -208,6 +219,16 @@ async function handleLogin(
             }
         }
     } catch (error) {
+        if (error instanceof AccessCodeVerificationError) {
+            log.warn('访问码验证失败:', error.reason);
+            event.reply('login-error', {
+                title: error.reason === 'rejected' ? '访问码错误' : '连接失败',
+                message: error.reason === 'rejected'
+                    ? '访问码错误，请检查后重试。'
+                    : '无法连接到访问码验证服务，请检查地址、证书或网络连接。',
+            });
+            return;
+        }
         log.error('登录请求失败:', error);
         const message = error instanceof Error ? error.message : '';
         const secureStorageFailure = /安全存储|密钥环/.test(message);

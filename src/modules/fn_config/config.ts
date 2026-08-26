@@ -19,6 +19,7 @@ export interface Config {
     account?: string;
     domain?: string;
     token?: string;
+    accessCode?: string;
     useHttps?: boolean;
     history?: HistoryItem[];
     downloadProxyEnabled?: boolean;
@@ -39,6 +40,7 @@ export interface HistoryItem {
     domain: string;
     account: string;
     password: string;
+    accessCode?: string;
     useHttps?: boolean;
 }
 
@@ -49,6 +51,7 @@ export interface SaveConfigParams {
     account: string;
     domain: string;
     token: string;
+    accessCode?: string;
     useHttps?: boolean;
 }
 
@@ -59,6 +62,7 @@ export interface AddHistoryParams {
     domain: string;
     account: string;
     password: string;
+    accessCode?: string;
     useHttps?: boolean;
 }
 
@@ -131,9 +135,11 @@ function writeConfig(config: Config): void {
     const stored: Config = {
         ...config,
         token: encryptCredential(config.token || ''),
+        accessCode: encryptCredential(config.accessCode || ''),
         history: config.history?.map(item => ({
             ...item,
             password: encryptCredential(item.password),
+            accessCode: encryptCredential(item.accessCode || ''),
         })),
     };
     fs.writeFileSync(getConfigPath(), JSON.stringify(stored, null, 2));
@@ -146,14 +152,21 @@ export function readConfig(): Config | null {
         try {
             const stored = JSON.parse(fs.readFileSync(p, 'utf-8')) as Config;
             const token = decryptCredential(stored.token || '', false);
-            let needsMigration = token.legacy;
+            const accessCode = decryptCredential(stored.accessCode || '', false);
+            let needsMigration = token.legacy || accessCode.legacy;
             const config: Config = {
                 ...stored,
                 token: token.value,
+                accessCode: accessCode.value,
                 history: stored.history?.map(item => {
                     const password = decryptCredential(item.password, true);
-                    needsMigration ||= password.legacy;
-                    return { ...item, password: password.value };
+                    const historyAccessCode = decryptCredential(item.accessCode || '', false);
+                    needsMigration ||= password.legacy || historyAccessCode.legacy;
+                    return {
+                        ...item,
+                        password: password.value,
+                        accessCode: historyAccessCode.value,
+                    };
                 }),
             };
 
@@ -170,17 +183,18 @@ export function readConfig(): Config | null {
 }
 
 // 保存配置（账号、域名、token、HTTPS设置）
-export function saveConfig({ account, domain, token, useHttps }: SaveConfigParams): void {
+export function saveConfig({ account, domain, token, accessCode, useHttps }: SaveConfigParams): void {
     const config: Config = readConfig() || {};
     config.account = account;
     config.domain = domain;
     config.token = token;
+    if (accessCode !== undefined) config.accessCode = accessCode;
     config.useHttps = useHttps || false;
     writeConfig(config);
 }
 
 // 添加历史记录（域名、账号、加密密码、HTTPS设置）
-export function addHistory({ domain, account, password, useHttps }: AddHistoryParams): void {
+export function addHistory({ domain, account, password, accessCode, useHttps }: AddHistoryParams): void {
     const config: Config = readConfig() || {};
     config.history = config.history || [];
     // 移除重复项
@@ -192,6 +206,7 @@ export function addHistory({ domain, account, password, useHttps }: AddHistoryPa
         domain,
         account,
         password,
+        accessCode: accessCode || '',
         useHttps: useHttps || false
     });
     // 限制最多数量
@@ -209,6 +224,7 @@ export function getHistory(): HistoryItem[] {
         domain: item.domain,
         account: item.account,
         password: item.password,
+        accessCode: item.accessCode || '',
         useHttps: item.useHttps || false
     }));
 }

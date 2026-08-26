@@ -9,5 +9,5 @@ test('proxy playback URLs expose only the short-lived session capability', () =>
         url,
         `http://127.0.0.1:22345/api/v1/playvideo/item-guid?session=${session}&sourceIndex=2`,
     );
-    assert.doesNotMatch(url, /token=|account=|domain=/);
+    assert.doesNotMatch(url, /token=|account=|domain=|accessCode=|accessCookie=/);
 });
