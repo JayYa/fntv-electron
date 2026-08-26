@@ -15,6 +15,7 @@ import { getMpvConfigDir } from './mpvConfig';
 import { resolveBundledMpvPath } from '../../common/mpvConfigHelpers';
 import { getProxySecret } from '../../common/proxy';
 import { createProxyPlaybackUrl, registerPlaybackSession } from '../../common/proxySession';
+import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
 
 /**
 * 媒体播放插件
@@ -323,6 +324,7 @@ async function startPlayback({ id, sourceIndex }: PlayRequest): Promise<void> {
         token: config.token,
         account: config.account,
         domain: config.domain,
+        accessCookie: getAccessCookieHeader(config.domain),
         skipVerify: isTrusted(config.domain),
         useNasLocal: config.nasProxyEnabled === true,
         itemGuids: playList.map(item => item.itemGuid),

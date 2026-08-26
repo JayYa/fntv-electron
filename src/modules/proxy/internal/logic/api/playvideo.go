@@ -77,6 +77,17 @@ func getStreamUserAgent(info fnapi.StreamResponse) string {
 	return ""
 }
 
+func applyPlaybackCookie(headers map[string]string, useCloudDirect bool, cloudCookie, accessCookie string) {
+	delete(headers, "Cookie")
+	if useCloudDirect {
+		if cloudCookie != "" {
+			headers["Cookie"] = cloudCookie
+		}
+		return
+	}
+	headers["Cookie"] = fnapi.ComposeCookieHeader(accessCookie)
+}
+
 func PlayVideoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 	params, err := parseQueryParam(c)
 	if err != nil {
@@ -92,7 +103,7 @@ func PlayVideoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 		return
 	}
 
-	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify)
+	fnApi := fnapi.NewApiService(session.Domain, session.Token, session.SkipVerify, session.AccessCookie)
 	resp, err := fnApi.GetStreamListCached(params.ItemGuid)
 	if err != nil || !resp.Success || len(resp.Data.VideoStreams) == 0 {
 		logger.Errorf("获取播放信息失败或为空: %v", err)
@@ -125,6 +136,11 @@ func PlayVideoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 	cloudInfo := ParseCloudInfo(streamResp.Data)
 	streamUserAgent := getStreamUserAgent(streamResp.Data)
 	useCloudDirect := cloudInfo != nil && !session.UseNasLocal
+	cloudCookie := ""
+	if cloudInfo != nil {
+		cloudCookie = cloudInfo.Cookie
+	}
+	applyPlaybackCookie(extraHeaders, useCloudDirect, cloudCookie, session.AccessCookie)
 
 	// 云盘直链模式
 	if useCloudDirect {
@@ -133,11 +149,6 @@ func PlayVideoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 		targetUrl = cloudInfo.DownloadURL
 		// 禁止跳过证书验证，云厂商的证书通常是合法的，不需要跳过验证
 		skipVerify = false
-
-		// 注入云盘需要的 Cookie
-		if cloudInfo.Cookie != "" {
-			extraHeaders["Cookie"] = cloudInfo.Cookie
-		}
 
 		if streamUserAgent != "" {
 			extraHeaders["User-Agent"] = streamUserAgent
@@ -156,7 +167,6 @@ func PlayVideoHandler(c *gin.Context, sessions *PlaybackSessionStore) {
 		// 本地 NAS 转发模式 ---
 		// 只有请求 NAS 时才需要 Authorization Token
 		extraHeaders["Authorization"] = session.Token
-		extraHeaders["Cookie"] = extraHeaders["Cookie"] + "; mode=relay"
 	}
 
 	// 执行代理

@@ -6,17 +6,17 @@ const {
     isMpvPlaybackEnabled,
 } = require('../dest/modules/fn_config/playbackPreference.js');
 
-test('enables MPV playback only for an explicit boolean true', () => {
+test('keeps the historical MPV default while rejecting malformed values', () => {
     assert.equal(isMpvPlaybackEnabled(true), true);
     assert.equal(isMpvPlaybackEnabled(false), false);
-    assert.equal(isMpvPlaybackEnabled(undefined), false);
+    assert.equal(isMpvPlaybackEnabled(undefined), true);
     assert.equal(isMpvPlaybackEnabled(null), false);
     assert.equal(isMpvPlaybackEnabled('true'), false);
     assert.equal(isMpvPlaybackEnabled(1), false);
     assert.equal(isMpvPlaybackEnabled({ value: true }), false);
 });
 
-test('preload timeout and login settings default to native playback', () => {
+test('preload timeout and login settings default to MPV playback', () => {
     const preloadPlayback = fs.readFileSync(
         path.join(__dirname, '..', 'dest', 'preload', 'core', 'playback.js'),
         'utf8',
@@ -26,7 +26,7 @@ test('preload timeout and login settings default to native playback', () => {
         'utf8',
     );
 
-    assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: false \}\)/);
-    assert.doesNotMatch(loginPage, /id="hideOriginalPlayButtonSwitch" checked/);
-    assert.match(loginPage, /data\.hideOriginalPlayButton === true/);
+    assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: true \}\)/);
+    assert.match(loginPage, /id="hideOriginalPlayButtonSwitch" checked/);
+    assert.match(loginPage, /data\.hideOriginalPlayButton !== false/);
 });

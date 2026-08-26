@@ -44,10 +44,12 @@ test('migrates legacy credentials to OS-protected storage without changing retur
             account: 'user',
             domain: 'https://nas.example',
             token: 'legacy-token',
+            accessCode: 'legacy-access-code',
             history: [{
                 domain: 'nas.example',
                 account: 'user',
                 password: legacyEncrypt('legacy-password'),
+                accessCode: 'legacy-history-access-code',
             }],
         }));
 
@@ -55,10 +57,12 @@ test('migrates legacy credentials to OS-protected storage without changing retur
         delete require.cache[configModulePath];
         const config = require(configModulePath);
         assert.equal(config.readConfig().token, 'legacy-token');
+        assert.equal(config.readConfig().accessCode, 'legacy-access-code');
         assert.equal(config.getHistory()[0].password, 'legacy-password');
+        assert.equal(config.getHistory()[0].accessCode, 'legacy-history-access-code');
 
         const stored = fs.readFileSync(configPath, 'utf8');
-        assert.doesNotMatch(stored, /legacy-token|legacy-password/);
+        assert.doesNotMatch(stored, /legacy-token|legacy-password|legacy-access-code|legacy-history-access-code/);
         assert.match(stored, /safe-storage:v1:/);
     } finally {
         Module._load = originalLoad;

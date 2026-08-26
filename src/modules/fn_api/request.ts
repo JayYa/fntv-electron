@@ -4,6 +4,7 @@ import { setTimeout } from 'timers/promises';
 import https from 'https';
 import log from '../logger';
 import { isTrusted, showCertificateTrustDialog, isCertificateError, addTrustedHost } from '../cert_trust';
+import { composeCookieHeader, getAccessCookieHeader } from './accessGrant';
 
 // 全局配置
 const api_key = 'NDzZTVxnRKP8Z0jXg1VAMonaG8akvh';
@@ -76,7 +77,8 @@ export async function request<T = any>(
     timeout: number = DEFAULT_TIMEOUT,
     tryTimes: number = 5,
 ): Promise<ApiResponse<T>> {
-    const fullUrl = baseUrl + url;
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    const fullUrl = normalizedBaseUrl + url;
     if (method === HttpMethod.POST || method === HttpMethod.PUT) {
         data = data || {};
         data["nonce"] = generateRandomDigits(); // POST/PUT请求添加随机数防重放
@@ -87,13 +89,13 @@ export async function request<T = any>(
     const headers = {
         "Content-Type": "application/json",
         "Authorization": token,
-        "Cookie": "mode=relay",
         "Authx": authx,
-        ...extraHeaders
+        ...extraHeaders,
+        "Cookie": composeCookieHeader(getAccessCookieHeader(normalizedBaseUrl), extraHeaders?.Cookie),
     };
 
     // 根据URL是否已被信任来决定是否验证证书
-    const shouldIgnoreCert = isTrusted(baseUrl);
+    const shouldIgnoreCert = isTrusted(normalizedBaseUrl);
 
     const config = {
         headers,
@@ -129,7 +131,7 @@ export async function request<T = any>(
 
                 if (location) {
                     // 1. 解析新地址
-                    let newBaseUrl = baseUrl;
+                    let newBaseUrl = normalizedBaseUrl;
                     let newUrlPath = location;
 
                     // 如果是绝对路径 (http开头)，重新拆解 baseUrl 和 path
@@ -204,7 +206,7 @@ export async function request<T = any>(
             log.error(`请求异常: [${errorCode}] ${errorMsg} | HTTP: ${responseStatus} | path: ${url}`);
 
             // 检查是否为证书验证错误且URL未被信任
-            if (isCertificateError(error) && !isTrusted(baseUrl)) {
+            if (isCertificateError(error) && !isTrusted(normalizedBaseUrl)) {
                 log.warn(`检测到证书验证错误: code: ${errorCode}, msg: ${errorMsg}, path: ${url}`);
 
                 // 返回特殊的证书错误响应，让上层处理

@@ -5,6 +5,7 @@ interface PlaybackSessionInput {
     token: string;
     account: string;
     domain: string;
+    accessCookie?: string;
     skipVerify: boolean;
     useNasLocal: boolean;
     itemGuids: string[];

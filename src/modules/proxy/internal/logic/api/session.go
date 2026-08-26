@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,12 +16,13 @@ import (
 const playbackSessionTTL = 24 * time.Hour
 
 type PlaybackSessionRequest struct {
-	Token       string   `json:"token"`
-	Account     string   `json:"account"`
-	Domain      string   `json:"domain"`
-	SkipVerify  bool     `json:"skipVerify"`
-	UseNasLocal bool     `json:"useNasLocal"`
-	ItemGuids   []string `json:"itemGuids"`
+	Token        string   `json:"token"`
+	Account      string   `json:"account"`
+	Domain       string   `json:"domain"`
+	AccessCookie string   `json:"accessCookie,omitempty"`
+	SkipVerify   bool     `json:"skipVerify"`
+	UseNasLocal  bool     `json:"useNasLocal"`
+	ItemGuids    []string `json:"itemGuids"`
 }
 
 type PlaybackSession struct {
@@ -48,6 +50,9 @@ func (s *PlaybackSessionStore) Create(req PlaybackSessionRequest) (string, error
 	}
 	if len(req.ItemGuids) > 10000 {
 		return "", errors.New("too many playlist items")
+	}
+	if len(req.AccessCookie) > 16384 || strings.ContainsAny(req.AccessCookie, "\r\n") {
+		return "", errors.New("invalid access cookie")
 	}
 
 	allowedItems := make(map[string]struct{}, len(req.ItemGuids))

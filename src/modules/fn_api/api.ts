@@ -24,7 +24,7 @@ export class ApiService {
      * @param token - 授权令牌
      */
     constructor(baseURL: string, token: string = '') {
-        this.baseURL = baseURL;
+        this.baseURL = baseURL.replace(/\/+$/, '');
         this.tempDir = path.join(app.getPath('temp'), 'fntv_subtitles');
         this.token = token;
 
