@@ -216,6 +216,13 @@ function eventHandler(fnapi: fn.ApiService) {
                 await fnapi.recordPlayStatus(record);
                 break;
 
+            case ply.EventType.ITEM_END:
+                // 播放器只报告"这一项结束了"，是否算已观看在这里判定
+                const endedItem = data as ply.PlayStatusData;
+                log.info('播放项结束:', endedItem);
+                await finishPlayItem(fnapi, endedItem);
+                break;
+
             case ply.EventType.ERROR:
                 const errorData = data as ply.PlayErrorData;
                 log.error('MPV error:', String(errorData.message));
