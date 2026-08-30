@@ -298,6 +298,8 @@ export class MpvPlayer extends BasePlayer {
                     });
 
                     // 尝试跳转到上次播放位置, 即将到达片尾不跳转
+                    // duration > 0 不可省略：isNearEnd 对 duration <= 0 返回 false，
+                    // 取反后会变成「时长不可靠的源也照样跳转」，与本意相反。
                     if (currentItem.ts > 0 && currentItem.duration > 0 && !isNearEnd(currentItem.ts, currentItem.duration)) {
                         // 使用重试机制进行跳转, 这里粗暴了点, 视频没加载没法跳，只能重试
                         this.seekWithRetry(currentItem.ts, 50000, 10);

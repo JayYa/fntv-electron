@@ -118,13 +118,61 @@ async function refreshWindow(): Promise<void> {
 }
 
 /**
+ * 上报一次播放进度记录（进度更新与播放项结束共用同一份记录结构）。
+ *
+ * 进度上报属于外部依赖：查询播放信息或写入记录失败时只记日志并返回 false，
+ * 不抛出、不重试、不提示用户，避免影响播放。
+ *
+ * @param fnapi - API服务实例
+ * @param status - 播放状态快照
+ * @returns 是否上报成功
+ */
+async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData): Promise<boolean> {
+    try {
+        // 优先从缓存查询播放信息
+        const resp = await fnapi.getPlayInfoCached(status.itemGuid);
+        if (!resp.success || !resp.data) {
+            log.error('获取播放信息失败:', resp ? resp.message : '未知错误');
+            return false;
+        }
+
+        const info = resp.data;
+
+        const record: fn.PlayStatusData = {
+            item_guid: status.itemGuid,
+            media_guid: info.media_guid,
+            video_guid: info.video_guid,
+            audio_guid: info.audio_guid,
+            subtitle_guid: info.subtitle_guid,
+            play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
+            ts: status.ts,
+            duration: status.duration,
+        };
+
+        log.info('播放进度更新:', record);
+
+        const recorded = await fnapi.recordPlayStatus(record);
+        if (!recorded.success) {
+            log.error('记录播放状态失败:', recorded.message || '未知错误');
+            return false;
+        }
+        return true;
+    } catch (err) {
+        log.error('记录播放状态异常:', err instanceof Error ? err.message : String(err));
+        return false;
+    }
+}
+
+/**
  * 播放项结束时的收尾处理：先上报最终播放进度，再判定是否标记为已观看。
  *
  * 顺序不可颠倒：已观看必须后写，否则可能被随后的进度记录覆盖，导致服务端出现
  * 「标了已观看但进度停在一半」的不一致。
  *
- * 判定使用播放器实测的 ts / duration，而非服务端元数据中的时长。
- * `setWatched` 失败只记录 error 日志：不重试、不提示用户、不中断播放。
+ * 两步彼此独立：进度上报失败（例如断网、缓存未命中）不会阻止已观看判定，
+ * 因为该判定只依赖播放器实测的 ts / duration，不需要服务端返回的播放信息。
+ *
+ * 整条收尾链路只记日志、不抛异常：不重试、不提示用户、不影响播放。
  *
  * @param fnapi - API服务实例
  * @param status - 被离开的播放项的最终播放状态快照
@@ -134,38 +182,17 @@ async function finishPlayItem(fnapi: fn.ApiService, status: ply.PlayStatusData):
         return;
     }
 
-    // 优先从缓存查询播放信息
-    const resp = await fnapi.getPlayInfoCached(status.itemGuid);
-    if (!resp.success || !resp.data) {
-        log.error('获取播放信息失败:', resp ? resp.message : '未知错误');
-        return;
-    }
-
-    const info = resp.data;
-
-    const record: fn.PlayStatusData = {
-        item_guid: status.itemGuid,
-        media_guid: info.media_guid,
-        video_guid: info.video_guid,
-        audio_guid: info.audio_guid,
-        subtitle_guid: info.subtitle_guid,
-        play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
-        ts: status.ts,
-        duration: status.duration,
-    };
-
-    log.debug('记录播放状态start');
-    await fnapi.recordPlayStatus(record);
-    log.debug('记录播放状态end');
+    // 先尝试上报最终进度，成功与否都继续判定已观看
+    await reportPlayRecord(fnapi, status);
 
     if (!isNearEnd(status.ts, status.duration)) {
         return;
     }
 
     try {
-        const watched = await fnapi.setWatched(status.itemGuid);
-        if (!watched.success) {
-            log.error('标记已观看失败:', watched.message || '未知错误');
+        const watchedResp = await fnapi.setWatched(status.itemGuid);
+        if (!watchedResp.success) {
+            log.error('标记已观看失败:', watchedResp.message || '未知错误');
             return;
         }
         log.info('已标记为已观看:', status.itemGuid);
@@ -191,29 +218,7 @@ function eventHandler(fnapi: fn.ApiService) {
                     return;
                 }
 
-                // 优先从缓存查询播放信息
-                const resp = await fnapi.getPlayInfoCached(progressData.itemGuid);
-                if (!resp.success || !resp.data) {
-                    log.error('获取播放信息失败:', resp ? resp.message : '未知错误');
-                    return;
-                }
-
-                const info = resp.data;
-
-                const record: fn.PlayStatusData = {
-                    item_guid: progressData.itemGuid,
-                    media_guid: info.media_guid,
-                    video_guid: info.video_guid,
-                    audio_guid: info.audio_guid,
-                    subtitle_guid: info.subtitle_guid,
-                    play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
-                    ts: progressData.ts,
-                    duration: progressData.duration,
-                };
-
-                log.info('播放进度更新:', record);
-
-                await fnapi.recordPlayStatus(record);
+                await reportPlayRecord(fnapi, progressData);
                 break;
 
             case ply.EventType.ITEM_END:
