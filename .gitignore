@@ -14,3 +14,7 @@ play_video.py
 *.exe
 .idea
 .vscode
+# Agent skill config (see CLAUDE.md): docs/ is ignored above, re-include just this subtree
+!docs/
+docs/*
+!docs/agents/
