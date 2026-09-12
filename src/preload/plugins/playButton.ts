@@ -25,47 +25,39 @@ function isPlayMaskButton(button: HTMLElement): boolean {
     return className.includes('play-mask') || className.includes('playmask');
 }
 
-function directButtons(container: Element): HTMLButtonElement[] {
-    return Array.from(container.children).filter(
-        (child): child is HTMLButtonElement => child instanceof HTMLButtonElement,
-    );
+// 网页端头部操作行的 Tailwind 类（从服务端 JS chunk 确认）：主播放键是该行的第一个子元素。
+const ACTION_ROW_CLASSES = ['h-[54px]', 'shrink-0', 'items-center'];
+// 主播放键本身的类，用于操作行类名变化时的兜底识别。
+const PLAY_BUTTON_CLASSES = ['!min-w-[150px]', '!rounded-full'];
+
+function hasAllClasses(element: Element, classes: string[]): boolean {
+    return classes.every((name) => element.classList.contains(name));
+}
+
+function isActionRowPlayButton(button: HTMLButtonElement): boolean {
+    const row = button.parentElement;
+    if (!row || row.firstElementChild !== button) return false;
+    return hasAllClasses(row, ACTION_ROW_CLASSES) || hasAllClasses(button, PLAY_BUTTON_CLASSES);
 }
 
 /**
  * 结构识别：定位详情页头部操作行容器，取其第一个 `button` 子元素。
  *
- * 仓库里没有网页端源码，这里用启发式定位「操作行」：
- * 1. 以页面第一个 `h1`（标题）为锚点，只考虑文档顺序上位于它之后的元素；
- *    没有 `h1` 时退化为从 `body` 开始扫描（路由门控已保证这是详情页）。
- * 2. 第一个「直接子元素里有 ≥2 个 `button`」的元素视为操作行
- *    （播放 / 收藏 / 更多… 并排），排除导航、页眉、侧栏与 play-mask 内的元素。
- * 3. 该容器的第一个 `button` 子元素即主播放键；找不到则返回 null，交给文案规则兜底。
+ * 网页端事实（从服务端 JS chunk 确认）：操作行是
+ * `div.relative.flex.h-[54px].shrink-0.items-center.gap-2`，其中**只有主播放键是 `button`**
+ * （Semi Button，类含 `!min-w-[150px] !rounded-full`），收藏 / 已观看 / 更多都是 `div`。
+ * tv / season 页的主键文案是「第 N 季 第 M 集」「第 M 集」等，不含「播放」，因此不能靠文案。
+ *
+ * 规则：文档顺序上第一个满足「是父元素的第一个子元素，且父元素带操作行类名（或按钮自身带主键类名）」
+ * 的 `button`；排除导航、页眉、侧栏与 play-mask 内的元素。找不到则返回 null，交给文案规则兜底。
  */
 function findStructuralPlayButton(): HTMLElement | null {
-    const heading = document.querySelector('h1');
-    const root = document.body;
-    if (!root) return null;
-
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-    let started = heading === null;
-
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const element = node as Element;
-        if (!started) {
-            if (element === heading) started = true;
-            continue;
-        }
-        if (element.closest(EXCLUDED_ANCESTOR_SELECTOR)) continue;
-
-        const buttons = directButtons(element);
-        if (buttons.length < 2) continue;
-
-        // 首个按钮是卡片 play-mask 时说明这只是一个卡片行（如推荐列表），继续找下一个候选。
-        const [first] = buttons;
-        if (isPlayMaskButton(first)) continue;
-        return first;
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('button'));
+    for (const button of buttons) {
+        if (button.closest(EXCLUDED_ANCESTOR_SELECTOR)) continue;
+        if (isPlayMaskButton(button)) continue;
+        if (isActionRowPlayButton(button)) return button;
     }
-
     return null;
 }
 
