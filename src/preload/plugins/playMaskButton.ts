@@ -35,7 +35,14 @@ function suppressNativePlayback(event: Event): void {
     event.stopImmediatePropagation();
 }
 
+// 详情页主键加载中（disabled、文案「查询中」）时不触发播放。
+function isDisabledButton(button: HTMLElement): boolean {
+    return button.hasAttribute('disabled') || button.getAttribute('aria-disabled') === 'true';
+}
+
 function playManagedButton(button: HTMLElement): void {
+    if (button.dataset.mpvDetailIntercepted === 'true' && isDisabledButton(button)) return;
+
     const itemGuid = button.dataset.mpvDetailIntercepted === 'true'
         ? findItemGuid(null)
         : findItemGuid(button);
@@ -87,6 +94,17 @@ function handleClick(event: MouseEvent): void {
     playManagedButton(button);
 }
 
+// 键盘 Enter/Space 触发与鼠标一致：捕获阶段拦截，避免网页端原生播放器响应。
+function handleKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+
+    const button = findManagedPlayButton(event.target);
+    if (!button) return;
+
+    suppressNativePlayback(event);
+    playManagedButton(button);
+}
+
 async function setupDelegatedPlayHandler(): Promise<void> {
     if (initialized) return;
 
@@ -100,6 +118,7 @@ async function setupDelegatedPlayHandler(): Promise<void> {
         pressedPlayButton = null;
     }, true);
     document.addEventListener('click', handleClick, true);
+    document.addEventListener('keydown', handleKeyDown, true);
 }
 
 // 只有用户明确启用时才由 MPV 接管；读取失败时保留原生播放。
