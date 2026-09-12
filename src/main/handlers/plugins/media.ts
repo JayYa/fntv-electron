@@ -17,6 +17,7 @@ import { getProxySecret } from '../../common/proxy';
 import { createProxyPlaybackUrl, registerPlaybackSession } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
 import { isNearEnd } from '../../../modules/playback/nearEnd';
+import { applyRestart } from '../../../modules/playback/restart';
 
 /**
 * 媒体播放插件
@@ -25,6 +26,7 @@ import { isNearEnd } from '../../../modules/playback/nearEnd';
 interface PlayRequest {
     id: string;
     sourceIndex: number; // 可选，播放源
+    restart?: boolean; // 从头播放：清除服务端进度并从 0 秒拉起播放器
 }
 
 // 全局播放器实例引用
@@ -118,6 +120,28 @@ async function refreshWindow(): Promise<void> {
 }
 
 /**
+ * 构造服务端播放记录：进度上报与「从头播放」清零共用同一份结构，只有 ts 不同。
+ */
+function buildPlayStatusRecord(
+    fnapi: fn.ApiService,
+    info: fn.PlayInfo,
+    itemGuid: string,
+    ts: number,
+    duration: number,
+): fn.PlayStatusData {
+    return {
+        item_guid: itemGuid,
+        media_guid: info.media_guid,
+        video_guid: info.video_guid,
+        audio_guid: info.audio_guid,
+        subtitle_guid: info.subtitle_guid,
+        play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
+        ts,
+        duration,
+    };
+}
+
+/**
  * 上报一次播放进度记录（进度更新与播放项结束共用同一份记录结构）。
  *
  * 进度上报属于外部依赖：查询播放信息或写入记录失败时只记日志并返回 false，
@@ -136,18 +160,7 @@ async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData
             return false;
         }
 
-        const info = resp.data;
-
-        const record: fn.PlayStatusData = {
-            item_guid: status.itemGuid,
-            media_guid: info.media_guid,
-            video_guid: info.video_guid,
-            audio_guid: info.audio_guid,
-            subtitle_guid: info.subtitle_guid,
-            play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
-            ts: status.ts,
-            duration: status.duration,
-        };
+        const record = buildPlayStatusRecord(fnapi, resp.data, status.itemGuid, status.ts, status.duration);
 
         log.info('播放进度更新:', record);
 
@@ -159,6 +172,38 @@ async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData
         return true;
     } catch (err) {
         log.error('记录播放状态异常:', err instanceof Error ? err.message : String(err));
+        return false;
+    }
+}
+
+/**
+ * 「从头播放」语义的一半：把服务端播放进度清零（写一条 `ts = 0` 的播放记录）。
+ *
+ * 这是用户主动选择"不接着上次看"，清进度是动作的一部分；与「接近片尾」时重新打开
+ * 从头播不同——后者只是不恢复位置，服务端进度原样保留。已观看标记不在此处清除。
+ *
+ * 尽力而为：写入失败（非成功响应或异常）只记日志并返回 false，不抛出、不重试、
+ * 不阻断播放；另一半语义（本地播放项 `ts` 归零）由调用方独立完成。
+ *
+ * @param fnapi - API服务实例
+ * @param info - 本次播放的播放信息（已由 getPlayInfo 取得）
+ * @param duration - 播放项总时长（秒）
+ * @returns 是否清零成功
+ */
+async function clearPlayRecord(fnapi: fn.ApiService, info: fn.PlayInfo, duration: number): Promise<boolean> {
+    try {
+        const record = buildPlayStatusRecord(fnapi, info, info.guid, 0, duration);
+
+        log.info('从头播放，清零服务端播放进度:', record);
+
+        const recorded = await fnapi.recordPlayStatus(record);
+        if (!recorded.success) {
+            log.warn('清零播放进度失败:', recorded.message || '未知错误');
+            return false;
+        }
+        return true;
+    } catch (err) {
+        log.warn('清零播放进度异常:', err instanceof Error ? err.message : String(err));
         return false;
     }
 }
@@ -276,8 +321,8 @@ async function handlePlayMovie(_event: IpcMainEvent, request: PlayRequest): Prom
     }
 }
 
-async function startPlayback({ id, sourceIndex }: PlayRequest): Promise<void> {
-    log.info('Play movie event received id:', id, ' index:', sourceIndex);
+async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise<void> {
+    log.info('Play movie event received id:', id, ' index:', sourceIndex, ' restart:', restart === true);
 
     const config = fnConfig.readConfig();
     if (!config?.domain || !config.token || !config.account) {
@@ -355,6 +400,13 @@ async function startPlayback({ id, sourceIndex }: PlayRequest): Promise<void> {
     const currentIndex = playList.findIndex(item => item.itemGuid === itemGuid);
     if (currentIndex < 0) {
         throw new Error('当前播放项不在生成的播放列表中');
+    }
+
+    // 从头播放：先尽力清零服务端进度（失败不阻断），再把当前项 ts 归零，mpv 不做续播 seek
+    if (restart === true) {
+        log.info('从头播放', { itemGuid, previousTs: playList[currentIndex].ts });
+        await clearPlayRecord(fnapi, response.data, playList[currentIndex].duration);
+        playList[currentIndex] = applyRestart(playList[currentIndex], true);
     }
 
     const session = await registerPlaybackSession(getProxySecret(), {

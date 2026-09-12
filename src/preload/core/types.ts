@@ -14,6 +14,7 @@ export interface Logger {
 export interface PlayMovieData {
     id: string;
     sourceIndex: number; // 播放源
+    restart?: boolean; // 从头播放：清除续播进度后再拉起播放器
 }
 
 export interface LoginPageApi {
