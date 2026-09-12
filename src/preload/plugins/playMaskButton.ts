@@ -23,9 +23,14 @@ function isCardPlayButton(button: HTMLElement): boolean {
 function findManagedPlayButton(target: EventTarget | null): HTMLElement | null {
     if (!(target instanceof Element)) return null;
 
+    // 已被 playButton.ts 打标的详情页主键优先拦截，不依赖文案/图标规则：
+    // tv/season 详情页的主键文案（如「播放 S1E3」「继续观看」）不满足 findSemanticPlayButton
+    // 的文本匹配，只靠语义规则会漏拦，导致网页端原生播放器被拉起。
+    const marked = target.closest<HTMLElement>('[data-mpv-detail-intercepted="true"]');
+    if (marked) return marked.dataset.customPlay === 'true' ? null : marked;
+
     const button = findSemanticPlayButton(target);
     if (!button) return null;
-    if (button.dataset.mpvDetailIntercepted === 'true') return button;
     return isCardPlayButton(button) ? button : null;
 }
 
@@ -96,6 +101,7 @@ function handleClick(event: MouseEvent): void {
 
 // 键盘 Enter/Space 触发与鼠标一致：捕获阶段拦截，避免网页端原生播放器响应。
 function handleKeyDown(event: KeyboardEvent): void {
+    if (event.repeat) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
 
     const button = findManagedPlayButton(event.target);

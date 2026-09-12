@@ -60,8 +60,10 @@ function findStructuralPlayButton(): HTMLElement | null {
         const buttons = directButtons(element);
         if (buttons.length < 2) continue;
 
+        // 首个按钮是卡片 play-mask 时说明这只是一个卡片行（如推荐列表），继续找下一个候选。
         const [first] = buttons;
-        return isPlayMaskButton(first) ? null : first;
+        if (isPlayMaskButton(first)) continue;
+        return first;
     }
 
     return null;
@@ -78,14 +80,13 @@ function findSemanticDetailPlayButton(): HTMLElement | null {
 }
 
 /**
- * 详情页主播放键 = 路由 + 结构识别；文案/图标规则保持为兜底，任一命中即打标。
- * 非详情路由（folder / person / video / library…）不跑结构规则，避免误标「收藏」等按钮。
+ * 详情页主播放键 = 路由 + 结构识别；文案/图标规则在任何路由上都保持为兜底（与旧行为一致），
+ * 任一命中即打标。只有结构规则受路由门控：非详情路由（folder / person / video / library…）
+ * 不跑结构规则，避免误标「收藏」等按钮。
  */
 function findDetailPlayButton(): HTMLElement | null {
     const route = detectDetailRoute(window.location.href);
-    if (route === null) return null;
-
-    return findStructuralPlayButton() ?? findSemanticDetailPlayButton();
+    return (route ? findStructuralPlayButton() : null) ?? findSemanticDetailPlayButton();
 }
 
 function interceptOriginalButton(button: HTMLElement): void {
@@ -93,22 +94,9 @@ function interceptOriginalButton(button: HTMLElement): void {
     button.dataset.mpvDetailIntercepted = 'true';
 }
 
-function clearStaleMarks(): void {
-    document.querySelectorAll<HTMLElement>('[data-mpv-detail-intercepted="true"]').forEach((element) => {
-        delete element.dataset.mpvDetailIntercepted;
-    });
-}
-
 async function setupDetailPlayButton(): Promise<void> {
-    // SPA 切到非详情路由时，React 可能复用按钮元素，主动清掉旧标记以免误拦截。
-    if (detectDetailRoute(window.location.href) === null) {
-        clearStaleMarks();
-        return;
-    }
-
-    // OnDomChange 会反复触发；已打标且仍在文档中的按钮无需重新识别。
-    const marked = document.querySelector<HTMLElement>('[data-mpv-detail-intercepted="true"]');
-    if (marked?.isConnected) return;
+    // OnDomChange 会反复触发；已有打标按钮在文档中时无需重新识别（querySelector 只返回已连接节点）。
+    if (document.querySelector('[data-mpv-detail-intercepted="true"]')) return;
 
     const button = findDetailPlayButton();
     if (!button) return;

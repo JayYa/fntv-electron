@@ -120,6 +120,28 @@ async function refreshWindow(): Promise<void> {
 }
 
 /**
+ * 构造服务端播放记录：进度上报与「从头播放」清零共用同一份结构，只有 ts 不同。
+ */
+function buildPlayStatusRecord(
+    fnapi: fn.ApiService,
+    info: fn.PlayInfo,
+    itemGuid: string,
+    ts: number,
+    duration: number,
+): fn.PlayStatusData {
+    return {
+        item_guid: itemGuid,
+        media_guid: info.media_guid,
+        video_guid: info.video_guid,
+        audio_guid: info.audio_guid,
+        subtitle_guid: info.subtitle_guid,
+        play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
+        ts,
+        duration,
+    };
+}
+
+/**
  * 上报一次播放进度记录（进度更新与播放项结束共用同一份记录结构）。
  *
  * 进度上报属于外部依赖：查询播放信息或写入记录失败时只记日志并返回 false，
@@ -138,18 +160,7 @@ async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData
             return false;
         }
 
-        const info = resp.data;
-
-        const record: fn.PlayStatusData = {
-            item_guid: status.itemGuid,
-            media_guid: info.media_guid,
-            video_guid: info.video_guid,
-            audio_guid: info.audio_guid,
-            subtitle_guid: info.subtitle_guid,
-            play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
-            ts: status.ts,
-            duration: status.duration,
-        };
+        const record = buildPlayStatusRecord(fnapi, resp.data, status.itemGuid, status.ts, status.duration);
 
         log.info('播放进度更新:', record);
 
@@ -181,27 +192,18 @@ async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData
  */
 async function clearPlayRecord(fnapi: fn.ApiService, info: fn.PlayInfo, duration: number): Promise<boolean> {
     try {
-        const record: fn.PlayStatusData = {
-            item_guid: info.guid,
-            media_guid: info.media_guid,
-            video_guid: info.video_guid,
-            audio_guid: info.audio_guid,
-            subtitle_guid: info.subtitle_guid,
-            play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
-            ts: 0,
-            duration: duration,
-        };
+        const record = buildPlayStatusRecord(fnapi, info, info.guid, 0, duration);
 
         log.info('从头播放，清零服务端播放进度:', record);
 
         const recorded = await fnapi.recordPlayStatus(record);
         if (!recorded.success) {
-            log.error('清零播放进度失败:', recorded.message || '未知错误');
+            log.warn('清零播放进度失败:', recorded.message || '未知错误');
             return false;
         }
         return true;
     } catch (err) {
-        log.error('清零播放进度异常:', err instanceof Error ? err.message : String(err));
+        log.warn('清零播放进度异常:', err instanceof Error ? err.message : String(err));
         return false;
     }
 }
@@ -402,7 +404,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
 
     // 从头播放：先尽力清零服务端进度（失败不阻断），再把当前项 ts 归零，mpv 不做续播 seek
     if (restart === true) {
-        log.info('从头播放:', itemGuid, ' 原续播位置:', playList[currentIndex].ts);
+        log.info('从头播放', { itemGuid, previousTs: playList[currentIndex].ts });
         await clearPlayRecord(fnapi, response.data, playList[currentIndex].duration);
         playList[currentIndex] = applyRestart(playList[currentIndex], true);
     }
