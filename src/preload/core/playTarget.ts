@@ -85,13 +85,13 @@ function detectFromPath(path: string): DetailRoute | null {
     const last = segments[segments.length - 1];
     if (ROUTE_MARKERS.has(last)) return null;
 
-    const [, kind, third] = segments;
+    const [, kind, seasonMarker] = segments;
     if (kind === 'movie' || kind === 'other') {
         return segments.length === 3 ? kind : null;
     }
     if (kind === 'tv') {
         if (segments.length === 3) return 'tv';
-        if (segments.length === 4 && third === 'season') return 'season';
+        if (segments.length === 4 && seasonMarker === 'season') return 'season';
     }
     return null;
 }
