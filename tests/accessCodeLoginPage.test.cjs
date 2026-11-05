@@ -4,12 +4,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const loginPage = fs.readFileSync(path.join(__dirname, '../resource/login/index.html'), 'utf8');
+const loginScript = fs.readFileSync(path.join(__dirname, '../resource/login/index.js'), 'utf8');
 
 test('login page exposes an optional password-style access-code control', () => {
     assert.match(loginPage, /<label for="accessCode">访问码（可选）<\/label>/);
     assert.match(loginPage, /<input type="password" id="accessCode"[^>]+autocomplete="off"/);
     assert.match(loginPage, /id="accessCodeToggle"[^>]+title="显示访问码"/);
-    assert.match(loginPage, /accessCode: accessCode/);
+    assert.match(loginScript, /accessCode: accessCode/);
 });
 
 test('compact login panel remains scrollable on short windows', () => {

@@ -25,8 +25,12 @@ test('preload timeout and login settings default to MPV playback', () => {
         path.join(__dirname, '..', 'resource', 'login', 'index.html'),
         'utf8',
     );
+    const loginScript = fs.readFileSync(
+        path.join(__dirname, '..', 'resource', 'login', 'index.js'),
+        'utf8',
+    );
 
     assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: true \}\)/);
     assert.match(loginPage, /id="hideOriginalPlayButtonSwitch" checked/);
-    assert.match(loginPage, /data\.hideOriginalPlayButton !== false/);
+    assert.match(loginScript, /data\.hideOriginalPlayButton !== false/);
 });

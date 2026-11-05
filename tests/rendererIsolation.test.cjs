@@ -17,8 +17,29 @@ test('login page uses the restricted preload bridge and renders history as text'
         path.join(__dirname, '..', 'resource', 'login', 'index.html'),
         'utf8',
     );
-    assert.doesNotMatch(loginPage, /require\(['"]electron['"]\)/);
-    assert.match(loginPage, /window\.electronAPI/);
-    assert.match(loginPage, /account\.textContent = item\.account/);
-    assert.doesNotMatch(loginPage, /data-password="\$\{/);
+    const loginScript = fs.readFileSync(
+        path.join(__dirname, '..', 'resource', 'login', 'index.js'),
+        'utf8',
+    );
+    for (const source of [loginPage, loginScript]) {
+        assert.doesNotMatch(source, /require\(['"]electron['"]\)/);
+        assert.doesNotMatch(source, /data-password="\$\{/);
+    }
+    assert.match(loginScript, /window\.electronAPI/);
+    assert.match(loginScript, /account\.textContent = item\.account/);
+});
+
+test('login page runs only its external script and the CSP forbids inline scripts', () => {
+    const loginPage = fs.readFileSync(
+        path.join(__dirname, '..', 'resource', 'login', 'index.html'),
+        'utf8',
+    );
+    const scriptTags = loginPage.match(/<script\b[^>]*>/gi);
+    const csp = loginPage.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+    const scriptSrc = csp.split(';').map((directive) => directive.trim())
+        .find((directive) => directive.startsWith('script-src '));
+
+    assert.deepEqual(scriptTags, ['<script src="./index.js">']);
+    assert.doesNotMatch(loginPage, /<[a-z][^>]*\son[a-z]+\s*=/i);
+    assert.equal(scriptSrc, "script-src 'self'");
 });
