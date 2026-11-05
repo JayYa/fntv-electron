@@ -24,7 +24,9 @@
         "build:mac": "pnpm run build:proxy:mac:x64 && pnpm run build:proxy:mac:arm64 && pnpm run build:proxy:mac:universal && pnpm run compile && pnpm run clean:proxy:mac && electron-builder --mac --publish never",
         "build:linux:x64": "pnpm run build:proxy:linux:x64 && pnpm run compile && electron-builder --linux AppImage --x64 --publish never",
         "build:linux:arm64": "pnpm run build:proxy:linux:arm64 && pnpm run compile && electron-builder --linux AppImage --arm64 --publish never",
-        "build:linux": "pnpm run build:linux:x64 && pnpm run build:linux:arm64"
+        "build:linux": "pnpm run build:linux:x64 && pnpm run build:linux:arm64",
+        "generate-iconset": "node scripts/generate-iconset.js",
+        "generate-icns": "bash scripts/generate-icns.sh"
     },
     "author": "JayYa",
     "license": "GPL-3.0-only",
