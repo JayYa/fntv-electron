@@ -1,3 +1,5 @@
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import * as fn from '../../../modules/fn_api/api';
@@ -30,26 +32,72 @@ interface HistoryItem {
     account: string;
 }
 
+const LOGIN_PAGE_PATH = path.join(__dirname, '../../../../resource/login/index.html');
+
 let fnIdLoginInProgress = false;
+
+// 明文凭据只回给本地登录页。preload 的 file: 判断在渲染进程里，主进程要自己再查一次。
+function isLoginPage(event: IpcMainEvent): boolean {
+    try {
+        const url = new URL(event.senderFrame?.url ?? '');
+        // path.relative 在 Windows 上不区分大小写，盘符写法不同也算同一个文件。
+        return url.protocol === 'file:' && path.relative(LOGIN_PAGE_PATH, fileURLToPath(url)) === '';
+    } catch {
+        return false;
+    }
+}
 
 // 获取配置处理
 function handleGetConfig(event: IpcMainEvent): void {
     try {
         const config = fnConfig.readConfig() || {};
         const history = fnConfig.getHistory() || [];
-        // 登录页只需要表单回填字段，禁止把长期 token 暴露给渲染进程。
+        // 这里按字段白名单发送：密码、访问码和 token 都不进列表数据，凭据走下面的按需频道。
         event.reply('config-data', {
             config: {
                 account: config.account,
                 domain: config.domain,
-                accessCode: config.accessCode,
+                hasAccessCode: Boolean(config.accessCode),
                 useHttps: config.useHttps,
             },
-            history,
+            history: history.map(({ domain, account, useHttps }) => ({ domain, account, useHttps })),
         });
     } catch (error) {
         log.error('读取配置失败:', error);
         event.reply('config-data', { config: {}, history: [] });
+    }
+}
+
+// 按需读取一条历史记录的凭据。回复带上域名和账号，登录页靠它丢弃连点时迟到的回复。
+function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partial<HistoryItem>): void {
+    if (!isLoginPage(event)) {
+        log.warn('拒绝了非登录页的历史凭据请求');
+        return;
+    }
+    const { domain, account } = request ?? {};
+    if (typeof domain !== 'string' || typeof account !== 'string') return;
+    try {
+        event.reply('history-credentials', {
+            domain,
+            account,
+            ...fnConfig.getHistoryCredentials({ domain, account }),
+        });
+    } catch (error) {
+        log.error('读取历史凭据失败:', error);
+    }
+}
+
+// 按需读取当前配置的访问码，用于回填登录页。
+function handleGetCurrentAccessCode(event: IpcMainEvent): void {
+    if (!isLoginPage(event)) {
+        log.warn('拒绝了非登录页的访问码请求');
+        return;
+    }
+    try {
+        const { domain, account, accessCode } = fnConfig.readConfig() || {};
+        event.reply('current-access-code', { domain, account, accessCode: accessCode || '' });
+    } catch (error) {
+        log.error('读取当前访问码失败:', error);
     }
 }
 
@@ -244,6 +292,8 @@ async function handleLogin(
 // 注册认证相关处理器
 function init(): void {
     registerHandler('get-config', handleGetConfig);
+    registerHandler('get-history-credentials', handleGetHistoryCredentials);
+    registerHandler('get-current-access-code', handleGetCurrentAccessCode);
     registerHandler('clear-history', handleClearHistory);
     registerHandler('delete-history-item', handleDeleteHistoryItem);
     registerHandler('login', handleLogin);
