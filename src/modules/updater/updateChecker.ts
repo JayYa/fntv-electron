@@ -12,6 +12,9 @@ try {
     semver = null;
 }
 
+// 更新源：只在这里改
+const UPDATE_REPOSITORY = { owner: 'JayYa', repo: 'fntv-electron' } as const;
+
 // 类型定义
 export interface UpdateInfo {
     hasUpdate: boolean;
@@ -56,7 +59,7 @@ export class UpdateChecker {
     private maxRetries: number;
     private baseRetryDelay: number;
 
-    constructor(owner: string = 'QiaoKes', repo: string = 'fntv-electron', currentVersion: string | null = null) {
+    constructor(owner: string = UPDATE_REPOSITORY.owner, repo: string = UPDATE_REPOSITORY.repo, currentVersion: string | null = null) {
         this.owner = owner;
         this.repo = repo;
         // 如果传入了版本号就使用传入的，否则尝试从app获取，最后使用默认值
@@ -115,6 +118,12 @@ export class UpdateChecker {
                 htmlUrl: release.html_url
             };
         } catch (error: any) {
+            // 仓库还没有 Release 时 GitHub 返回 404，这不是检查失败
+            if (error.response?.status === 404) {
+                log.info('更新源暂无 Release');
+                return { hasUpdate: false };
+            }
+
             log.error(`检查更新失败 (尝试 ${retryCount + 1}/${this.maxRetries + 1}):`, error.message);
             
             // 如果还有重试次数，则等待后重试
@@ -213,9 +222,9 @@ export class UpdateChecker {
                 // Linux: 支持 x64 和 arm64
                 if (arch === 'x64') {
                     patterns = [
-                        /FNMedia_.*_linux_x64\.AppImage$/i,
-                        /_linux_x64\.AppImage$/i,
-                        /linux.*x64.*\.AppImage$/i
+                        /FNMedia_.*_linux_(?:x64|x86_64)\.AppImage$/i,
+                        /_linux_(?:x64|x86_64)\.AppImage$/i,
+                        /linux.*(?:x64|x86_64).*\.AppImage$/i
                     ];
                 } else if (arch === 'arm64') {
                     patterns = [
@@ -374,12 +383,12 @@ let instance: UpdateChecker | null = null;
 
 /**
  * 获取 UpdateChecker 单例实例
- * @param owner - GitHub 仓库所有者，默认 'QiaoKes'
- * @param repo - GitHub 仓库名称，默认 'fntv-electron'
+ * @param owner - GitHub 仓库所有者，默认 UPDATE_REPOSITORY.owner
+ * @param repo - GitHub 仓库名称，默认 UPDATE_REPOSITORY.repo
  * @param currentVersion - 当前版本号，默认从 app.getVersion() 获取
  * @returns UpdateChecker 实例
  */
-export function getInstance(owner: string = 'QiaoKes', repo: string = 'fntv-electron', currentVersion: string | null = null): UpdateChecker {
+export function getInstance(owner: string = UPDATE_REPOSITORY.owner, repo: string = UPDATE_REPOSITORY.repo, currentVersion: string | null = null): UpdateChecker {
     if (!instance) {
         instance = new UpdateChecker(owner, repo, currentVersion);
     }
