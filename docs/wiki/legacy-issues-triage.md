@@ -1,0 +1,74 @@
+# 历史遗留 issue 分诊
+
+相关：[独立维护](independent-maintenance.md)、[发布与更新链路](release-and-update.md)。来源：issue #28 至 #35，以及 2026-11-05 的只读核实报告（子代理 `a88263d0438c43a79`）。
+
+## 2026-11-05 推荐顺序（chief of staff，维护者已确认，见下方决定）
+
+1. #33 行尾。此时没有 open PR，renormalize 的成本最低。
+2. #30 和 #35 小修，顺带修 `CODING_STANDARDS.md:28` 的坏正则。
+3. #29 解密失败。
+4. #28 明文凭据，以及 FN ID 注入（尚未开 issue）。
+5. #31 的 CSP 部分。
+6. #34 lint。
+7. #31 的 sandbox 部分。
+
+#32 按维护者 2026-11-05 的决定暂缓。
+
+核实报告原本建议先做 #29 和 #28。chief of staff 把 #33 提前，理由是项目未公开发版、时间不紧，而 renormalize 要避开跨分支冲突。
+
+## 2026-11-05 事实（`JayYa/fntv-electron@6be8d03`）
+
+测试基础：
+
+- `pnpm test` 67/67 通过，`go test ./...` 通过。
+- `tests/` 没有 auth、preload、winctrl 的测试，也没有 DOM 或 Electron 运行时测试。
+- safeStorage 可用 `Module._load` mock（`tests/credentialStorage.test.cjs:18`）。
+- 用假 `ipcMain` 可以跑真实 `auth.init()`。
+
+#29：
+
+- 已用真实 Electron 38 验证：启动时一条坏密文会让 `tray.ts:16` 抛错，`main.ts:101-103` 随后 `app.quit()`，结果是无窗口、无对话框的静默退出。
+- 推断：如果只把失败项清空，setter 的 read-modify-write 或 `config.ts:173` 的迁移写回会把密文永久写成空串。Linux 密钥环临时锁定时凭据会真的丢失。
+
+#28：
+
+- `auth.ts:45` 当前配置的 accessCode 也是明文发送。
+- `fnid_login.ts:61,337` 在每次 `did-finish-load` 向 OAuth 窗口主世界注入明文密码，读代码未见 URL 校验或 `will-navigate` 限制。这一条未做运行验证。
+- `cookie.ts:57` 的 Trim-MC-token 是 `httpOnly:false`，与“长期 token 不发给渲染进程”的说法不严格一致。
+- `config.ts:384` 的 `module.exports =` 覆盖 ES export，新函数不加进这张表时运行时是 undefined，tsc 查不出。
+
+#31：
+
+- 已实测 `sandbox:true`：`electron.shell` 不存在，`preload/index.ts:66` 的 openExternal 要移到主进程 IPC。
+- 临时副本用 esbuild 打包 preload 得到 26.5KB，沙箱下 `electronAPI` 正常。真实 fnOS 页面未测。
+- 登录页只有 1 个内联 script（`index.html:1006-1666`），内联事件处理器为 0。
+- 测试中 `rendererIsolation:20,23` 是 doesNotMatch，脚本外置后不改会空转通过。
+
+#33：
+
+- 3 个混合、6 个 CRLF，不需要 Windows 例外。
+- 临时 clone 模拟：renormalize 只改这 9 个文件和 `.gitattributes`。
+
+#34：
+
+- 小规则集现存 57 条违规，涉及 18 个文件，其中 unused-vars 52 条。
+- `CODING_STANDARDS.md` 的可机器化规则多数是 grep 型，适合 CI 脚本或 `tests/*.cjs`，不适合 ESLint。
+- issue 举的两条规则在 HEAD 已不在标准文档里。
+
+## 2026-11-05 issue 之外的发现
+
+- `CODING_STANDARDS.md:28` 的验证命令 `'(alert|confirm|prompt)('` 是坏正则，`git grep` 报 fatal。由 `46340cc` 引入。
+- 推断：`config.ts:178` 遇 SyntaxError 返回 null，下一次 setter 会用 `{}` 覆盖整份配置。
+- `plugins/config.ts` 的 IPC handler 没有 try/catch。
+- 推断：`compile` 不清理 `dest/`，已删除插件的旧 js 仍会被 readdirSync 加载。
+
+## 2026-11-05 维护者决定
+
+维护者确认了上面的顺序，并同意：
+
+- #29 解密失败的字段在内存里按未登录处理，保留原密文，不写回空串。这取代 #29 正文的建议 1。
+- FN ID 注入拆成 #37，与 #28 同批。上面“尚未开 issue”的说法已被取代。chief of staff 开 issue 前读过 `fnid_login.ts`，确认注入前没有 origin 校验，也没有 `will-navigate` 限制。
+- 配置读写和构建产物的小问题合并为 #38，排在 #29 之后。
+- 一个 issue 一个 PR，由子代理实现，从 #33 开始。#31 拆成两个 PR。
+
+同日，#28、#29、#31、#34 补了核实评论并改为 `ready-for-agent`。依赖写成了 GitHub 原生关系：#28 被 #29 阻塞，#31 被 #28 阻塞，#34 被 #33 阻塞，#38 被 #29 阻塞。
