@@ -6,6 +6,7 @@ import { USER_DATA_PATH } from '../../public/constants';
 import { isMpvPlaybackEnabled } from './playbackPreference';
 
 const HISTORY_LIMIT = 5;
+const CONFIG_BACKUP_LIMIT = 3;
 const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
 const IV = Buffer.alloc(16, 0); // Initialization vector
 const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
@@ -162,6 +163,78 @@ function storeCredential(value: string | undefined, retained: string | undefined
     return value ? encryptCredential(value) : retained ?? '';
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// 顶层不是对象的 JSON 和语法错误一样算损坏，读取和备份判定都走 SyntaxError 这条路。
+function parseConfig(text: string): Config {
+    const stored: unknown = JSON.parse(text);
+    if (!isObject(stored)) throw new SyntaxError('配置顶层不是对象');
+    return stored;
+}
+
+function isHistoryItem(item: unknown): item is HistoryItem {
+    return isObject(item) && typeof item.domain === 'string' && typeof item.account === 'string';
+}
+
+function hasUnusableHistory(stored: { history?: unknown }): boolean {
+    return stored.history != null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
+}
+
+// 这样的文件读出来会丢内容，被替换前要留底。
+function isDamaged(configPath: string): boolean {
+    if (!fs.existsSync(configPath)) return false;
+    const text = fs.readFileSync(configPath, 'utf-8');
+    try {
+        return hasUnusableHistory(parseConfig(text));
+    } catch {
+        return true;
+    }
+}
+
+// 用复制而不是改名：写入失败时 config.json 还在。备份含密文，只记文件名。
+function backupConfig(configPath: string): void {
+    const prefix = `${path.basename(configPath)}.corrupt-`;
+    for (let stamp = Date.now(); ; stamp++) {
+        try {
+            fs.copyFileSync(configPath, path.join(path.dirname(configPath), prefix + stamp), fs.constants.COPYFILE_EXCL);
+            warnOnce(`配置文件内容损坏，替换前已备份为 ${prefix + stamp}`);
+            break;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        }
+    }
+    try {
+        const dir = path.dirname(configPath);
+        const backups = fs.readdirSync(dir).filter(name => name.startsWith(prefix)).sort();
+        backups.slice(0, -CONFIG_BACKUP_LIMIT).forEach(name => fs.rmSync(path.join(dir, name)));
+    } catch {
+        // 备份已经落盘，清理旧备份失败不影响这次写入。
+        warnOnce('清理旧配置备份失败');
+    }
+}
+
+// 先写完临时文件再备份：写不下去时不占备份名额。rename 之前 config.json 始终是旧内容。
+function replaceConfig(configPath: string, content: string): void {
+    const tempPath = `${configPath}.tmp`;
+    const mode = fs.existsSync(configPath) ? fs.statSync(configPath).mode : undefined;
+    try {
+        const fd = fs.openSync(tempPath, 'w', mode);
+        try {
+            fs.writeFileSync(fd, content);
+            fs.fsyncSync(fd);
+        } finally {
+            fs.closeSync(fd);
+        }
+        if (isDamaged(configPath)) backupConfig(configPath);
+        fs.renameSync(tempPath, configPath);
+    } catch (error) {
+        fs.rmSync(tempPath, { force: true });
+        throw error;
+    }
+}
+
 function writeConfig(config: Config): void {
     const stored: Config = {
         ...config,
@@ -173,7 +246,7 @@ function writeConfig(config: Config): void {
             accessCode: storeCredential(item.accessCode, item[RETAINED]?.accessCode),
         })),
     };
-    fs.writeFileSync(getConfigPath(), JSON.stringify(stored, null, 2));
+    replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
 // 读取配置
@@ -181,12 +254,15 @@ export function readConfig(): Config | null {
     const p = getConfigPath();
     if (fs.existsSync(p)) {
         try {
-            const stored = JSON.parse(fs.readFileSync(p, 'utf-8')) as Config;
+            const stored = parseConfig(fs.readFileSync(p, 'utf-8'));
             const token = readCredential('token', stored.token || '', false);
             const accessCode = readCredential('accessCode', stored.accessCode || '', false);
             // 访问码解不开时过不了网关，token 单独可用也不算已登录，同样隐藏并保留原值。
             const accessCodeFailed = accessCode.retained !== undefined;
             let needsMigration = accessCode.legacy || (token.legacy && !accessCodeFailed);
+            const historyUnusable = hasUnusableHistory(stored);
+            if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
+            const history = Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
             const config: Config = {
                 ...stored,
                 token: accessCodeFailed ? '' : token.value,
@@ -195,7 +271,7 @@ export function readConfig(): Config | null {
                     token: accessCodeFailed ? stored.token : token.retained,
                     accessCode: accessCode.retained,
                 },
-                history: stored.history?.map((item, index) => {
+                history: history?.map((item, index) => {
                     const password = readCredential(`history[${index}].password`, item.password, true);
                     const historyAccessCode = readCredential(`history[${index}].accessCode`, item.accessCode || '', false);
                     needsMigration ||= password.legacy || historyAccessCode.legacy;
@@ -241,6 +317,15 @@ export function saveConfig({ account, domain, token, accessCode, useHttps }: Sav
     writeConfig(config);
 }
 
+// 从最旧的开始淘汰，解不开的留到最后：密钥恢复后它们还能用。下标 0 是刚加的，不淘汰。
+function findEvictionIndex(history: HistoryItem[]): number {
+    for (let index = history.length - 1; index > 0; index--) {
+        const { password, accessCode } = history[index][RETAINED] ?? {};
+        if (password === undefined && accessCode === undefined) return index;
+    }
+    return history.length - 1;
+}
+
 // 添加历史记录（域名、账号、加密密码、HTTPS设置）
 export function addHistory({ domain, account, password, accessCode, useHttps }: AddHistoryParams): void {
     const config: Config = readConfig() || {};
@@ -258,8 +343,8 @@ export function addHistory({ domain, account, password, accessCode, useHttps }: 
         useHttps: useHttps || false
     });
     // 限制最多数量
-    if (config.history.length > HISTORY_LIMIT) {
-        config.history = config.history.slice(0, HISTORY_LIMIT);
+    while (config.history.length > HISTORY_LIMIT) {
+        config.history.splice(findEvictionIndex(config.history), 1);
     }
     writeConfig(config);
 }
