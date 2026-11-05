@@ -48,7 +48,7 @@ brew install mpv
 sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null
 ```
 
-- linux请先安装mpv播放器(版本>0.37.0)再使用，插件前往[fntv-mpv](https://github.com/QiaoKes/fntv-mpv-config/releases) 自行安装
+- linux请先安装mpv播放器(版本>0.37.0)再使用，插件前往[fntv-mpv](https://github.com/JayYa/fntv-mpv-config/releases) 自行安装
 
 ### 从源码构建
 
@@ -65,7 +65,18 @@ cd fntv-electron
 npm i
 ```
 
-3. 运行开发模式：
+3. 准备 MPV：
+
+`third_party/fntv-mpv` 不入库，开发运行和打包都依赖它。从固定版本的 [fntv-mpv-config Release](https://github.com/JayYa/fntv-mpv-config/releases/tag/fntv-mpv-v20260826_013404) 下载归档，解压到这个目录：
+
+```bash
+curl -fL -o mpv-config.zip https://github.com/JayYa/fntv-mpv-config/releases/download/fntv-mpv-v20260826_013404/mpv-package-20260825_173358.zip
+mkdir -p third_party/fntv-mpv
+unzip -q mpv-config.zip -d third_party/fntv-mpv
+rm mpv-config.zip
+```
+
+4. 运行开发模式：
 
 ```bash
 npm start
@@ -84,7 +95,7 @@ npm run build:linux
 ### 1. mpv播放器功能有点少，怎么客制化，想添加补帧滤镜等？
 
 1. 自动方法
-   克隆fntv-mpv仓库，自己改一下相关配置：[fntv-mpv-config](https://github.com/QiaoKes/fntv-mpv-config)
+   克隆fntv-mpv仓库，自己改一下相关配置：[fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
 2. 手动方法
    打开你安装目录的third_party，只修改third_party\fntv-mpv\portable_config下面的插件，其余的不要动。其中input.conf是快捷键。
 
@@ -124,9 +135,9 @@ third_party\fntv-mpv\portable_config\input.conf
 ```
 
 2. MPV配置由以下仓库单独管理:
-   [fntv-mpv-config](https://github.com/QiaoKes/fntv-mpv-config)
+   [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
 3. 预设着色器方案
-   [mpv.conf](https://github.com/QiaoKes/fntv-mpv-config/blob/release/custom_config/mpv/mpv.conf)
+   [mpv.conf](https://github.com/JayYa/fntv-mpv-config/blob/release/custom_config/mpv/mpv.conf)
 
 ## 🙏 特别感谢
 

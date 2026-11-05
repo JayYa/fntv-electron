@@ -5,6 +5,7 @@
 - `npm test`：先用 `tsc` 编译到 `dest/`，再跑 `node --test tests/*.test.cjs`。
 - `go test ./...`：在 `src/modules/proxy` 下运行。
 - 改登录页时 `tests/accessCodeLoginPage.test.cjs` 必须通过，它包含在 `npm test` 里。
+- PR 上 `.github/workflows/ci.yml` 自动跑这两项。
 
 `tests/accessCodeSession.test.cjs` 在加载时就报 `Electron failed to install correctly`，说明 `electron` 的 postinstall 没跑。新版 npm 默认拦截未批准的安装脚本，`npm i` 的输出里会有 `install-scripts` 警告。这是环境问题，不是测试回归。批准并重装 `electron` 后再跑。
 
@@ -16,6 +17,7 @@
 - 用到文件系统时，在 `fs.mkdtempSync(path.join(os.tmpdir(), ...))` 里操作，并用 `t.after` 清理（`tests/mpvConfigMigration.test.cjs`）。
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
 - 模块直接使用 Electron API 时，替换 `Module._load` 返回 `electron` 的假对象，结束后恢复（`tests/credentialStorage.test.cjs`）。
+- 更新检查的测试替换 `axios.get` 返回 GitHub 响应，HTTP 错误用真实的 `axios.AxiosError` 构造（`tests/updateChecker.test.cjs`）。
 
 ## 只测外部行为
 

@@ -41,6 +41,12 @@
 - FNMedia API 和更新检查走 `axios`，也就是 Node 网络栈，不走 Chromium（`src/modules/fn_api/request.ts`、`updateChecker.ts`）。
 - 页面能打开但主进程请求失败时，先查这个差异：系统代理、VPN 和证书在两个网络栈里表现不同。
 
+## 更新检查
+
+- 更新源只在 `updateChecker.ts` 的 `UPDATE_REPOSITORY` 改。
+- GitHub 返回 404 表示仓库还没有 Release，按 `hasUpdate: false` 处理，不重试，不报错。其它失败照常重试并提示（`tests/updateChecker.test.cjs`）。
+- 安装包匹配按打包工具的真实架构名写：Linux x64 的 AppImage 产物名是 `x86_64`，不是 `x64`。
+
 ## 凭据
 
 - 落盘的凭据走 `config.ts` 的 `writeConfig`，由 `encryptCredential` 加密。新增凭据字段时，同时补上读写两边。
@@ -61,7 +67,16 @@
 提交信息、PR 标题、分支名这类不可信内容先放进 `env:`，再在 shell 里用 `"$VAR"` 读取，不把 `${{ }}` 直接拼进 `run:`。
 
 - 范例：`release.yml` 的 `Select build matrix` 步骤（`PLATFORM`）。
-- 已知违规：同文件 `Check commit message` 步骤直接拼接 `head_commit.message`，由 #21 修复。
+
+其它规则：
+
+- 第三方 action 固定到 commit SHA，行尾注释版本号（`ci.yml`、`release.yml`）。
+- Go 版本用 `go-version-file: src/modules/proxy/go.mod` 读取，不在工作流里另写一份。
+- 工作流权限只给 `contents: read`。`release.yml` 只手动触发，不创建 Release，不传 `GH_TOKEN`，产物留在 Actions artifacts。
+- 构建依赖的外部资产固定 tag 和 sha256，不取 `releases/latest`（`release.yml` 的 `Download third-party dependencies`）。
+- `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
+- `release.yml` 是 CRLF 和 LF 混合行尾，改动时保留，不整文件转换。Git Bash 的 `sed -i` 会吞 CR，要加 `-b`。
+- 验证：`git grep -n -E 'head_commit|releases/latest|secrets\.' -- .github/workflows` 没有结果。
 
 ## 提交
 

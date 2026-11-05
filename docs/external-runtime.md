@@ -12,7 +12,8 @@
 
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
 - Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/release.yml` 的 `Download third-party dependencies` 步骤。
-- 该步骤目前取 `releases/latest`，没有固定 tag。Spec #18 要求改成固定 tag，改完后删掉这一句。
+- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20260826_013404`，并校验 sha256。这个 Release 是上游同 tag 的镜像，因为 GitHub fork 不带 Release。
+- 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再同时改这个步骤的 tag、资产名和 sha256，以及 `README.md` 的准备步骤。
 - Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
 
 ## 用户配置同步
