@@ -52,19 +52,15 @@ function delay(ms: number): Promise<void> {
 }
 
 export class UpdateChecker {
-    private owner: string;
-    private repo: string;
     private currentVersion: string;
     private githubApiUrl: string;
     private maxRetries: number;
     private baseRetryDelay: number;
 
-    constructor(owner: string = UPDATE_REPOSITORY.owner, repo: string = UPDATE_REPOSITORY.repo, currentVersion: string | null = null) {
-        this.owner = owner;
-        this.repo = repo;
+    constructor(currentVersion: string | null = null) {
         // 如果传入了版本号就使用传入的，否则尝试从app获取，最后使用默认值
         this.currentVersion = currentVersion || (app ? app.getVersion() : 'unknown');
-        this.githubApiUrl = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+        this.githubApiUrl = `https://api.github.com/repos/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/latest`;
         // 重试配置
         this.maxRetries = 3;
         this.baseRetryDelay = 1000; // 基础延迟1秒
@@ -383,14 +379,12 @@ let instance: UpdateChecker | null = null;
 
 /**
  * 获取 UpdateChecker 单例实例
- * @param owner - GitHub 仓库所有者，默认 UPDATE_REPOSITORY.owner
- * @param repo - GitHub 仓库名称，默认 UPDATE_REPOSITORY.repo
  * @param currentVersion - 当前版本号，默认从 app.getVersion() 获取
  * @returns UpdateChecker 实例
  */
-export function getInstance(owner: string = UPDATE_REPOSITORY.owner, repo: string = UPDATE_REPOSITORY.repo, currentVersion: string | null = null): UpdateChecker {
+export function getInstance(currentVersion: string | null = null): UpdateChecker {
     if (!instance) {
-        instance = new UpdateChecker(owner, repo, currentVersion);
+        instance = new UpdateChecker(currentVersion);
     }
     return instance;
 }
