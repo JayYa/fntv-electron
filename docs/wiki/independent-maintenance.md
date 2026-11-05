@@ -36,3 +36,8 @@ Chief of staff 同日作出的取舍：
 
 - 维护者合并了 PR #24、#23、#22，改动进入 `main`（`37fc97d`）。堆叠 PR 的 `Closes` 不会自动触发，#20、#21 由 chief of staff 手动关闭。
 - 维护者同意删除远端 `release` 分支及已合并的 `t3/*` 分支。agent 的删除操作被权限模式拒绝，当天未执行，由维护者处理。
+
+## 2026-11-05 清理完成
+
+- 维护者合并了 PR #25（`2fd08f2`），`package-lock.json` 入库，CI 改用 `npm ci`。
+- 维护者删除了远端 `release` 分支和已合并的 `t3/*` 分支，上一节“由维护者处理”的待办已完成。`release-and-update.md` 里关于 `release` 分支的待办同时被取代。
