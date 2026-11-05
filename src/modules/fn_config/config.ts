@@ -301,6 +301,15 @@ export function saveConfig({ account, domain, token, accessCode, useHttps }: Sav
     writeConfig(config);
 }
 
+// 从最旧的开始淘汰，解不开的留到最后：密钥恢复后它们还能用。下标 0 是刚加的，不淘汰。
+function findEvictionIndex(history: HistoryItem[]): number {
+    for (let index = history.length - 1; index > 0; index--) {
+        const { password, accessCode } = history[index][RETAINED] ?? {};
+        if (password === undefined && accessCode === undefined) return index;
+    }
+    return history.length - 1;
+}
+
 // 添加历史记录（域名、账号、加密密码、HTTPS设置）
 export function addHistory({ domain, account, password, accessCode, useHttps }: AddHistoryParams): void {
     const config: Config = readConfig() || {};
@@ -318,8 +327,8 @@ export function addHistory({ domain, account, password, accessCode, useHttps }: 
         useHttps: useHttps || false
     });
     // 限制最多数量
-    if (config.history.length > HISTORY_LIMIT) {
-        config.history = config.history.slice(0, HISTORY_LIMIT);
+    while (config.history.length > HISTORY_LIMIT) {
+        config.history.splice(findEvictionIndex(config.history), 1);
     }
     writeConfig(config);
 }
