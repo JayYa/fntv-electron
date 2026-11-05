@@ -24,3 +24,10 @@ Chief of staff 同日作出的取舍：
 - 截至 `JayYa/fntv-electron@af416c0`，`README.md:234` 是仓库内唯一的项目版权行。
 - 上游最后提交是 2026-08-26，最新 Release 是 v2.6.2。
 - Trellis 由上游在 2026-08-26 引入，相关提交都来自上游，维护者没有使用过。
+
+## 2026-11-05 实施结果
+
+- 三个工单分别对应堆叠 PR #22、#23、#24，当天全部开出，等待维护者审查。
+- 经验：测试此前只在 Windows 上跑过，`tests/credentialStorage.test.cjs` 的 Linux 分支在首次 CI 才暴露问题。
+- 经验：`npm` 11 本地会拦截 electron postinstall，`tests/accessCodeSession.test.cjs` 本地失败属环境问题，CI 上通过。
+- 经验：`.gitignore` 默认忽略 `docs/`，在 `docs/` 新增路径要先放行。
