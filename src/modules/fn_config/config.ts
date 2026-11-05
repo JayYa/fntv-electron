@@ -163,12 +163,16 @@ function storeCredential(value: string | undefined, retained: string | undefined
     return value ? encryptCredential(value) : retained ?? '';
 }
 
+function hasUnusableHistory(stored: { history?: unknown } | null): boolean {
+    return stored?.history != null && !Array.isArray(stored.history);
+}
+
+// 这样的文件读出来会丢内容，被替换前要留底。
 function isDamaged(configPath: string): boolean {
     if (!fs.existsSync(configPath)) return false;
     const text = fs.readFileSync(configPath, 'utf-8');
     try {
-        JSON.parse(text);
-        return false;
+        return hasUnusableHistory(JSON.parse(text));
     } catch {
         return true;
     }
@@ -180,7 +184,7 @@ function backupConfig(configPath: string): void {
     for (let stamp = Date.now(); ; stamp++) {
         try {
             fs.copyFileSync(configPath, path.join(path.dirname(configPath), prefix + stamp), fs.constants.COPYFILE_EXCL);
-            warnOnce(`配置文件无法读取，原内容已备份为 ${prefix + stamp}`);
+            warnOnce(`配置文件内容损坏，替换前已备份为 ${prefix + stamp}`);
             break;
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
@@ -241,6 +245,8 @@ export function readConfig(): Config | null {
             // 访问码解不开时过不了网关，token 单独可用也不算已登录，同样隐藏并保留原值。
             const accessCodeFailed = accessCode.retained !== undefined;
             let needsMigration = accessCode.legacy || (token.legacy && !accessCodeFailed);
+            const historyUnusable = hasUnusableHistory(stored);
+            if (historyUnusable) warnOnce('配置里的 history 不是数组，按空列表读取');
             const config: Config = {
                 ...stored,
                 token: accessCodeFailed ? '' : token.value,
@@ -249,7 +255,7 @@ export function readConfig(): Config | null {
                     token: accessCodeFailed ? stored.token : token.retained,
                     accessCode: accessCode.retained,
                 },
-                history: stored.history?.map((item, index) => {
+                history: historyUnusable ? [] : stored.history?.map((item, index) => {
                     const password = readCredential(`history[${index}].password`, item.password, true);
                     const historyAccessCode = readCredential(`history[${index}].accessCode`, item.accessCode || '', false);
                     needsMigration ||= password.legacy || historyAccessCode.legacy;

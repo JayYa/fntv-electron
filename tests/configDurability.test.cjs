@@ -143,3 +143,46 @@ test('the backup is logged by file name without its content', (t) => {
     assert.match(logText(), new RegExp(backups()[0]));
     assert.doesNotMatch(logText(), /c2VjcmV0/);
 });
+
+for (const [label, history] of [
+    ['an object', { domain: 'nas.example' }],
+    ['a string', 'safe-storage:v1:c2VjcmV0'],
+    ['a number', 5],
+]) {
+    test(`a history that is ${label} reads as an empty list`, (t) => {
+        const { config, configPath } = setupConfig(t);
+        const original = JSON.stringify({ domain: 'https://nas.example', history });
+        fs.writeFileSync(configPath, original);
+
+        assert.deepEqual(config.readConfig().history, []);
+        assert.deepEqual(config.getHistory(), []);
+        assert.equal(config.readConfig().domain, 'https://nas.example');
+        assert.equal(fs.readFileSync(configPath, 'utf8'), original);
+    });
+}
+
+test('writing over a non-array history keeps the original file in a backup', (t) => {
+    const { config, configPath, backups, readBackup, logText } = setupConfig(t);
+    const original = JSON.stringify({ mpvVolume: 33, history: { password: 'c2VjcmV0' } });
+    fs.writeFileSync(configPath, original);
+
+    config.addHistory({ domain: 'nas.example', account: 'user', password: 'new-password' });
+
+    assert.equal(backups().length, 1);
+    assert.equal(readBackup(backups()[0]), original);
+    assert.equal(config.getHistory()[0].account, 'user');
+    assert.equal(config.getMpvVolume(), 33);
+    assert.doesNotMatch(logText(), /c2VjcmV0/);
+
+    config.setMpvVolume(44);
+    assert.equal(backups().length, 1);
+});
+
+test('a config without history still has no history after a write', (t) => {
+    const { config, configPath } = setupConfig(t);
+    fs.writeFileSync(configPath, JSON.stringify({ history: null, mpvVolume: 33 }));
+
+    config.setMpvVolume(44);
+
+    assert.equal('history' in JSON.parse(fs.readFileSync(configPath, 'utf8')), false);
+});

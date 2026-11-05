@@ -59,7 +59,7 @@
 ## 配置文件
 
 - `config.json` 只由 `config.ts` 的 `writeConfig` 写。写入走临时文件、`fsync` 和 `rename`，中途失败时旧文件不变（`tests/configDurability.test.cjs`）。
-- 解析失败的文件被替换前复制为 `config.json.corrupt-<毫秒时间戳>`，保留最新 3 份，备份失败就放弃这次写入。备份含密文，日志只记文件名。
+- 解析失败或 `history` 不是数组的文件读出来会丢内容，被替换前复制为 `config.json.corrupt-<毫秒时间戳>`，保留最新 3 份，备份失败就放弃这次写入。备份含密文，日志只记文件名。`history` 不是数组时按空列表读取，只读不写时文件不变。
 
 ## 跨层改动
 
