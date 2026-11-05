@@ -1,4 +1,5 @@
 import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import * as log from '../../../modules/logger';
 
 type IpcHandler = (event: IpcMainEvent, ...args: any[]) => void;
 type IpcInvokeHandler = (event: IpcMainInvokeEvent, ...args: any[]) => any;
@@ -13,6 +14,18 @@ interface HandlerInfo {
 }
 
 const handlers = new Map<string, HandlerInfo>();
+
+// ipcMain.on 的处理器抛错会变成主进程未捕获异常，handle 的错误由 Electron 转给调用方。
+// await 之前的部分仍是同步执行的。
+function guardHandler(channel: string, handler: IpcHandler): IpcHandler {
+    return async (event, ...args) => {
+        try {
+            await handler(event, ...args);
+        } catch (error) {
+            log.error(`IPC 处理器执行失败: ${channel}`, error);
+        }
+    };
+}
 
 /**
  * 注册 IPC 处理器
@@ -31,7 +44,7 @@ function registerHandler(channel: string, handler: IpcHandler | IpcInvokeHandler
     if (options.useHandle) {
         ipcMain.handle(channel, handler as IpcInvokeHandler);
     } else {
-        ipcMain.on(channel, handler as IpcHandler);
+        ipcMain.on(channel, guardHandler(channel, handler as IpcHandler));
     }
 }
 
