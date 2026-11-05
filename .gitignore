@@ -1,7 +1,7 @@
 node_modules
 release
 third_party/*
-!.gitkip
+!.gitkeep
 *.zip
 log
 *.log
