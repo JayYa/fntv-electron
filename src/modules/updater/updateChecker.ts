@@ -57,9 +57,8 @@ export class UpdateChecker {
     private maxRetries: number;
     private baseRetryDelay: number;
 
-    constructor(currentVersion: string | null = null) {
-        // 如果传入了版本号就使用传入的，否则尝试从app获取，最后使用默认值
-        this.currentVersion = currentVersion || (app ? app.getVersion() : 'unknown');
+    constructor() {
+        this.currentVersion = app.getVersion();
         this.githubApiUrl = `https://api.github.com/repos/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/latest`;
         // 重试配置
         this.maxRetries = 3;
@@ -379,12 +378,11 @@ let instance: UpdateChecker | null = null;
 
 /**
  * 获取 UpdateChecker 单例实例
- * @param currentVersion - 当前版本号，默认从 app.getVersion() 获取
  * @returns UpdateChecker 实例
  */
-export function getInstance(currentVersion: string | null = null): UpdateChecker {
+export function getInstance(): UpdateChecker {
     if (!instance) {
-        instance = new UpdateChecker(currentVersion);
+        instance = new UpdateChecker();
     }
     return instance;
 }
