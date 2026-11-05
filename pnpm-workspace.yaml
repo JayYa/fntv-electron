@@ -1,0 +1,16 @@
+# .npmrc 里只有 registry 和认证配置对 pnpm 生效，其它配置写这里。
+# CI 删 .npmrc 后这里的配置仍然有效。
+
+# 扁平 node_modules，electron-builder 打包的生产依赖和迁移前一致。
+nodeLinker: hoisted
+
+# 放行这些包的安装脚本。未列出的包有安装脚本时，pnpm install 直接报错。
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  sharp: true
+
+# electron 的 postinstall 靠 extract-zip 解压。yauzl 2.10 在 Node 26 上读不出数据，
+# 进程以 0 退出，留下空的 dist。yauzl 3 修好了这个问题，extract-zip 还没跟进。
+overrides:
+  extract-zip>yauzl: ^3.4.0
