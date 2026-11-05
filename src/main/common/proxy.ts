@@ -80,7 +80,7 @@ async function startProxyProcessOnce(): Promise<ChildProcess | null> {
     // 检查可执行文件是否存在
     if (!fs.existsSync(proxyPath)) {
         const errorMsg = `Proxy可执行文件不存在`;
-        const detailMsg = `文件路径: ${proxyPath}\n\n请确保已正确编译proxy模块。\n编译命令: npm run build:proxy`;
+        const detailMsg = `文件路径: ${proxyPath}\n\n请确保已正确编译proxy模块。\n编译命令: pnpm run build:proxy`;
         log.error(errorMsg + ': ' + proxyPath);
         dialog.showErrorBox('启动失败 - 文件不存在', errorMsg + '\n\n' + detailMsg);
         throw new Error(errorMsg);

@@ -117,7 +117,7 @@ async function main() {
         await generateIconSet();
         console.log('');
         console.log('💡 提示: 安装 sharp 库可以自动生成图标:');
-        console.log('npm install --save-dev sharp');
+        console.log('pnpm add -D sharp');
         console.log('然后重新运行此脚本');
     }
 }

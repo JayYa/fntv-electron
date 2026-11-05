@@ -13,7 +13,7 @@ echo "开始生成 macOS ICNS 文件..."
 # 检查 iconset 目录是否存在
 if [ ! -d "$ICONSET_DIR" ]; then
     echo "错误: icon.iconset 目录不存在"
-    echo "请先运行: npm run generate-iconset"
+    echo "请先运行: pnpm run generate-iconset"
     exit 1
 fi
 
@@ -43,7 +43,7 @@ if [ ${#missing_files[@]} -gt 0 ]; then
     for file in "${missing_files[@]}"; do
         echo "  - $file"
     done
-    echo "请先运行: npm run generate-iconset"
+    echo "请先运行: pnpm run generate-iconset"
     exit 1
 fi
 
