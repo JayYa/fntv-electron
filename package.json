@@ -25,7 +25,16 @@
         "build:linux:arm64": "npm run build:proxy:linux:arm64 && electron-builder --linux AppImage --arm64",
         "build:linux": "npm-run-all -s compile build:linux:x64 build:linux:arm64"
     },
-    "author": "tracing",
+    "author": "JayYa",
+    "license": "GPL-3.0-only",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/JayYa/fntv-electron.git"
+    },
+    "homepage": "https://github.com/JayYa/fntv-electron#readme",
+    "bugs": {
+        "url": "https://github.com/JayYa/fntv-electron/issues"
+    },
     "devDependencies": {
         "@types/cacheable-request": "^6.0.3",
         "@types/debug": "^4.1.12",
@@ -68,6 +77,7 @@
         "productName": "飞牛影视",
         "artifactName": "FNMedia_${version}_${os}_${arch}.${ext}",
         "appId": "com.qiaokes.fntv",
+        "copyright": "Copyright (c) 2025 Tag mig hånden and fntv-electron contributors; modifications (c) 2026 JayYa",
         "compression": "normal",
         "win": {
             "target": [
