@@ -12,7 +12,7 @@ function legacyEncrypt(value) {
     return cipher.update(value, 'utf8', 'hex') + cipher.final('hex');
 }
 
-test('migrates legacy credentials to OS-protected storage without changing returned values', () => {
+function setupConfig(t, { storageBackend = 'gnome_libsecret' } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-credentials-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     const electronMock = {
@@ -22,6 +22,7 @@ test('migrates legacy credentials to OS-protected storage without changing retur
         },
         safeStorage: {
             isEncryptionAvailable() { return true; },
+            getSelectedStorageBackend() { return storageBackend; },
             encryptString(value) { return Buffer.from(`protected:${value}`, 'utf8'); },
             decryptString(value) {
                 const decoded = value.toString('utf8');
@@ -37,35 +38,74 @@ test('migrates legacy credentials to OS-protected storage without changing retur
         return originalLoad.call(this, request, parent, isMain);
     };
 
-    try {
-        fs.mkdirSync(paths.userData, { recursive: true });
-        const configPath = path.join(paths.userData, 'config.json');
-        fs.writeFileSync(configPath, JSON.stringify({
-            account: 'user',
-            domain: 'https://nas.example',
-            token: 'legacy-token',
-            accessCode: 'legacy-access-code',
-            history: [{
-                domain: 'nas.example',
-                account: 'user',
-                password: legacyEncrypt('legacy-password'),
-                accessCode: 'legacy-history-access-code',
-            }],
-        }));
+    const clearCompiledModules = () => Object.keys(require.cache)
+        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
+        .forEach((id) => delete require.cache[id]);
 
-        const configModulePath = require.resolve('../dest/modules/fn_config/config.js');
-        delete require.cache[configModulePath];
-        const config = require(configModulePath);
-        assert.equal(config.readConfig().token, 'legacy-token');
-        assert.equal(config.readConfig().accessCode, 'legacy-access-code');
-        assert.equal(config.getHistory()[0].password, 'legacy-password');
-        assert.equal(config.getHistory()[0].accessCode, 'legacy-history-access-code');
-
-        const stored = fs.readFileSync(configPath, 'utf8');
-        assert.doesNotMatch(stored, /legacy-token|legacy-password|legacy-access-code|legacy-history-access-code/);
-        assert.match(stored, /safe-storage:v1:/);
-    } finally {
+    t.after(() => {
         Module._load = originalLoad;
+        clearCompiledModules();
         fs.rmSync(testRoot, { recursive: true, force: true });
-    }
+    });
+
+    fs.mkdirSync(paths.userData, { recursive: true });
+    clearCompiledModules();
+    return {
+        loadConfig: () => require('../dest/modules/fn_config/config.js'),
+        configPath: path.join(paths.userData, 'config.json'),
+    };
+}
+
+function simulateLinux(t) {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { ...originalPlatform, value: 'linux' });
+    t.after(() => Object.defineProperty(process, 'platform', originalPlatform));
+}
+
+test('migrates legacy credentials to OS-protected storage without changing returned values', (t) => {
+    const { loadConfig, configPath } = setupConfig(t);
+    fs.writeFileSync(configPath, JSON.stringify({
+        account: 'user',
+        domain: 'https://nas.example',
+        token: 'legacy-token',
+        accessCode: 'legacy-access-code',
+        history: [{
+            domain: 'nas.example',
+            account: 'user',
+            password: legacyEncrypt('legacy-password'),
+            accessCode: 'legacy-history-access-code',
+        }],
+    }));
+
+    const config = loadConfig();
+    assert.equal(config.readConfig().token, 'legacy-token');
+    assert.equal(config.readConfig().accessCode, 'legacy-access-code');
+    assert.equal(config.getHistory()[0].password, 'legacy-password');
+    assert.equal(config.getHistory()[0].accessCode, 'legacy-history-access-code');
+
+    const stored = fs.readFileSync(configPath, 'utf8');
+    assert.doesNotMatch(stored, /legacy-token|legacy-password|legacy-access-code|legacy-history-access-code/);
+    assert.match(stored, /safe-storage:v1:/);
+});
+
+test('Linux refuses to save credentials when safeStorage falls back to basic_text', (t) => {
+    simulateLinux(t);
+    const { loadConfig, configPath } = setupConfig(t, { storageBackend: 'basic_text' });
+
+    assert.throws(
+        () => loadConfig().saveConfig({ account: 'user', domain: 'https://nas.example', token: 'plain-token' }),
+        /拒绝以明文方式保存登录凭据/,
+    );
+    assert.equal(fs.existsSync(configPath), false);
+});
+
+test('Linux saves credentials encrypted when safeStorage uses a real keyring', (t) => {
+    simulateLinux(t);
+    const { loadConfig, configPath } = setupConfig(t);
+
+    loadConfig().saveConfig({ account: 'user', domain: 'https://nas.example', token: 'plain-token' });
+
+    const stored = fs.readFileSync(configPath, 'utf8');
+    assert.doesNotMatch(stored, /plain-token/);
+    assert.match(stored, /safe-storage:v1:/);
 });

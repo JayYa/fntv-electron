@@ -1,0 +1,43 @@
+name: CI
+
+# 不按目标分支过滤：堆叠 PR 的 base 不是 main，也要跑。
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: src/modules/proxy/go.mod
+          cache-dependency-path: src/modules/proxy/go.sum
+
+      # .npmrc 指向国内镜像，只给本地开发用。
+      - name: Clean npm config
+        run: rm -f .npmrc
+
+      # 不加 --ignore-scripts：electron 的 postinstall 要下载二进制，tests/accessCodeSession.test.cjs 依赖它。
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Run Go tests
+        run: go test ./...
+        working-directory: src/modules/proxy

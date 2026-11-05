@@ -26,4 +26,4 @@ Electron 把 Proxy 密钥存在 `userData` 下，并跨重启复用。Electron �
 
 - 改插件版本要先在 `fntv-mpv-config` 发布新归档，再构建 Electron。
 - 回滚只需恢复之前的配置依赖或 Release，并回退 Electron 改动。用户状态始终在被替换的插件目录之外。
-- 构建目前取 `fntv-mpv-config` 的 `releases/latest`，还没有真正固定版本。Spec #18 决定改为固定 tag。
+- 构建固定到 `JayYa/fntv-mpv-config` 的一个 tag 并校验 sha256，不取 `releases/latest`（Spec #18）。
