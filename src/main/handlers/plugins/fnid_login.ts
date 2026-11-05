@@ -8,6 +8,14 @@ import * as fnConfig from '../../../modules/fn_config/config';
 import * as log from '../../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl, resolveFnConnectBaseUrl } from '../core/fnConnect';
 import {
+    createFnIdTrust,
+    isFnIdLoginPage,
+    isFnIdNasPage,
+    resolveFnIdNavigation,
+    resolveFnIdOauthTrust,
+    resolveFnIdWindowOpen,
+} from '../core/fnIdTrust';
+import {
     AccessCodeVerificationError,
     establishAccessCodeSession,
 } from '../../common/accessCodeSession';
@@ -44,21 +52,17 @@ function buildFnConnectUrl(fnId: string): string {
 }
 
 /**
- * 生成注入 WebView 的 JavaScript 脚本
+ * 生成注入 WebView 的 JavaScript 脚本，不含任何凭据
  * 功能：
  * 1. Hook XHR 和 Fetch，拦截 /oauthapi/authorize 响应获取 code
  * 2. 拦截 /sac/rpcproxy/v1/new-user-guide/status 获取 Cookie
- * 3. 在 /login 页面自动填充用户名密码并提交
- * 4. 在 /signin 页面自动点击授权按钮
- * 5. 在非 /login 页面获取 sys_config
+ * 3. 在 /signin 页面自动点击授权按钮
+ * 4. 在非 /login 页面获取 sys_config
  */
-function getInjectionScript(username: string, password: string): string {
+function getInjectionScript(): string {
     return `
         (function() {
             console.log("[fntv-electron] Injecting FN ID Login Interceptor...");
-
-            var AUTO_LOGIN_USER = ${JSON.stringify(username)};
-            var AUTO_LOGIN_PASS = ${JSON.stringify(password)};
 
             function postMessage(payload) {
                 try {
@@ -68,32 +72,6 @@ function getInjectionScript(username: string, password: string): string {
                 } catch (e) {
                     console.error("[fntv-electron] postMessage error:", e);
                 }
-            }
-
-            function triggerInput(input, value) {
-                var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                nativeInputValueSetter.call(input, value);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-
-            // 在登录页面自动填充用户名密码
-            if (window.location.href.indexOf('/login') !== -1) {
-                setTimeout(function() {
-                    var uInput = document.querySelector('#username, input[name="username"], input[autocomplete="username"]');
-                    var pInput = document.querySelector('#password, input[name="password"], input[type="password"]');
-                    if (uInput && AUTO_LOGIN_USER) {
-                        triggerInput(uInput, AUTO_LOGIN_USER);
-                        if (AUTO_LOGIN_PASS && pInput) {
-                            triggerInput(pInput, AUTO_LOGIN_PASS);
-                            // 自动点击登录按钮
-                            setTimeout(function() {
-                                var btn = document.querySelector('button[type="submit"]');
-                                if (btn) btn.click();
-                            }, 200);
-                        }
-                    }
-                }, 200);
             }
 
             // 在 /signin 页面自动点击授权按钮
@@ -217,8 +195,7 @@ function getInjectionScript(username: string, password: string): string {
                             postMessage({
                                 type: "SysConfig",
                                 url: "/v/api/v1/sys/config",
-                                body: text || "",
-                                pageUrl: String(window.location.href || "")
+                                body: text || ""
                             });
                         })
                         .catch(function() {
@@ -235,9 +212,59 @@ function getInjectionScript(username: string, password: string): string {
     `;
 }
 
-function getAccessCodeInjectionScript(accessCode: string): string {
+/**
+ * 主进程判断页面和脚本执行之间页面可能已经换了，所以脚本先核对 origin 再读取凭据。
+ */
+// 只记路径和 hash 路由。查询串里可能有授权码和 state。
+function describePageForLog(pageUrl: string): string {
+    try {
+        const page = new URL(pageUrl);
+        return `${page.pathname}${page.hash.split('?')[0]}`;
+    } catch {
+        return '(无效地址)';
+    }
+}
+
+function getLoginAutofillScript(username: string, password: string, pageUrl: string): string {
+    const page = new URL(pageUrl);
     return `
         (function() {
+            if (window.location.origin !== ${JSON.stringify(page.origin)}
+                || window.location.pathname !== ${JSON.stringify(page.pathname)}) return;
+
+            var AUTO_LOGIN_USER = ${JSON.stringify(username)};
+            var AUTO_LOGIN_PASS = ${JSON.stringify(password)};
+
+            function triggerInput(input, value) {
+                var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                nativeInputValueSetter.call(input, value);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            setTimeout(function() {
+                var uInput = document.querySelector('#username, input[name="username"], input[autocomplete="username"]');
+                var pInput = document.querySelector('#password, input[name="password"], input[type="password"]');
+                if (uInput && AUTO_LOGIN_USER) {
+                    triggerInput(uInput, AUTO_LOGIN_USER);
+                    if (AUTO_LOGIN_PASS && pInput) {
+                        triggerInput(pInput, AUTO_LOGIN_PASS);
+                        // 自动点击登录按钮
+                        setTimeout(function() {
+                            var btn = document.querySelector('button[type="submit"]');
+                            if (btn) btn.click();
+                        }, 200);
+                    }
+                }
+            }, 200);
+        })();
+    `;
+}
+
+function getAccessCodeInjectionScript(accessCode: string, pageUrl: string): string {
+    return `
+        (function() {
+            if (window.location.origin !== ${JSON.stringify(new URL(pageUrl).origin)}) return false;
             var input = document.querySelector('#access-code-input, input[name="access-code"]');
             var form = input ? input.closest('form') : null;
             var title = document.querySelector('#page-title');
@@ -273,6 +300,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
     let authRequested = false;
     let loginCompleted = false;
     let cookieCheckInProgress = false;
+    let trust = createFnIdTrust(fnConnectUrl);
 
     try {
         // 创建 OAuth 登录窗口
@@ -297,6 +325,32 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
 
         const oauthSession = oauthWindow.webContents.session;
 
+        function guardNavigation(event: { url: string; preventDefault(): void }): void {
+            const next = resolveFnIdNavigation(event.url, trust);
+            if (next) {
+                trust = next;
+                return;
+            }
+            event.preventDefault();
+            log.warn('[FN ID] 已阻止 OAuth 窗口跳转到预期范围之外的地址');
+        }
+
+        oauthWindow.webContents.on('will-navigate', guardNavigation);
+        oauthWindow.webContents.on('will-redirect', (event) => {
+            // FN Connect 用隐藏 iframe 探测 NAS 地址，子框架的跳转不算窗口导航。
+            if (event.isMainFrame) guardNavigation(event);
+        });
+        oauthWindow.webContents.setWindowOpenHandler(({ url }) => {
+            const next = resolveFnIdWindowOpen(url, oauthWindow?.webContents.getURL() ?? '', trust);
+            if (next) {
+                trust = next;
+                oauthWindow?.loadURL(url);
+            } else {
+                log.warn('[FN ID] 已拒绝 OAuth 窗口的弹窗');
+            }
+            return { action: 'deny' };
+        });
+
         async function establishTargetSession(targetBaseUrl: string): Promise<string> {
             if (!accessCode) return targetBaseUrl;
             const result = await establishAccessCodeSession(targetBaseUrl, accessCode);
@@ -315,6 +369,13 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
         // 注册 JS bridge 用于 WebView 与主进程通信
         oauthWindow.webContents.on('did-finish-load', async () => {
             if (!oauthWindow) return;
+            const pageUrl = oauthWindow.webContents.getURL();
+            log.info(
+                `[FN ID] 页面加载: ${describePageForLog(pageUrl)}，NAS 页面: ${isFnIdNasPage(pageUrl, trust)}，`
+                + `登录页: ${isFnIdLoginPage(pageUrl, trust)}，已确认目标: ${trust.targetOrigin !== null}，`
+                + `有密码: ${Boolean(loginData.password)}`,
+            );
+            if (!isFnIdNasPage(pageUrl, trust)) return;
             try {
                 const isAccessCodePage = accessCode
                     ? await oauthWindow.webContents.executeJavaScript(
@@ -327,20 +388,24 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                     : false;
                 if (isAccessCodePage) {
                     await oauthWindow.webContents
-                        .executeJavaScript(getAccessCodeInjectionScript(accessCode))
+                        .executeJavaScript(getAccessCodeInjectionScript(accessCode, pageUrl))
                         .catch(() => {
                             log.error('[FN ID] 访问码页面自动提交失败');
                         });
                     return;
                 }
 
-                const script = getInjectionScript(loginData.username, loginData.password);
                 await oauthWindow.webContents.executeJavaScript(`
                     window.__fntvBridge = function(msg) {
                         console.log('__FNTV_BRIDGE__:' + msg);
                     };
-                    ${script}
+                    ${getInjectionScript()}
                 `);
+                if (isFnIdLoginPage(pageUrl, trust)) {
+                    await oauthWindow.webContents.executeJavaScript(
+                        getLoginAutofillScript(loginData.username, loginData.password, pageUrl),
+                    );
+                }
             } catch (err) {
                 log.error('[FN ID] JS 注入失败:', err);
             }
@@ -394,7 +459,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
 
                 try {
                     const currentUrl = oauthWindow.webContents.getURL();
-                    if (!currentUrl || currentUrl === 'about:blank') return;
+                    if (!isFnIdNasPage(currentUrl, trust)) return;
 
                     const cookies = await oauthSession.cookies.get({ name: 'Trim-MC-token' });
                     const tokenCookie = cookies.find((cookie) => cookie.value.length > 0);
@@ -431,6 +496,18 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                     log.error('[FN ID] Cookie 变更处理失败:', error);
                 });
             });
+
+            // NAS 报告的 OAuth 地址不可用时，留在当前页面的 origin。
+            function adoptOauthBaseUrl(reportedUrl: string, pageOrigin: string): string {
+                if (!reportedUrl || reportedUrl === '://') return pageOrigin;
+                const next = resolveFnIdOauthTrust(reportedUrl, trust);
+                if (!next) {
+                    log.warn('[FN ID] 忽略 NAS 报告的 OAuth 地址，继续使用当前页面地址');
+                    return pageOrigin;
+                }
+                trust = next;
+                return reportedUrl;
+            }
 
             // 处理从 WebView 收到的消息
             async function handleMessage(messageData: any) {
@@ -474,15 +551,10 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                             if (!data || !data.nas_oauth) return;
 
                             const appId = data.nas_oauth.app_id;
-                            const oauthUrl = data.nas_oauth.url || '';
+                            const pageOrigin = new URL(oauthWindow!.webContents.getURL()).origin;
 
                             // 确定 baseUrl
-                            if (oauthUrl && oauthUrl !== '://') {
-                                baseUrl = oauthUrl;
-                            } else if (messageData.pageUrl) {
-                                const parsed = new URL(messageData.pageUrl);
-                                baseUrl = `${parsed.protocol}//${parsed.host}`;
-                            }
+                            baseUrl = adoptOauthBaseUrl(data.nas_oauth.url || '', pageOrigin);
 
                             if (baseUrl && appId) {
                                 sysConfigLoaded = true;
@@ -599,10 +671,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                     const data = configResponse.data as any;
                     const oauth = data.nas_oauth;
                     if (oauth && oauth.app_id) {
-                        let targetBaseUrl = currentBaseUrl;
-                        if (oauth.url && oauth.url !== '://') {
-                            targetBaseUrl = oauth.url;
-                        }
+                        const targetBaseUrl = adoptOauthBaseUrl(oauth.url || '', currentBaseUrl);
                         baseUrl = targetBaseUrl;
 
                         const appId = oauth.app_id;
@@ -640,8 +709,14 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             }
 
             // 监听 console 消息（JS bridge）
-            oauthWindow!.webContents.on('console-message', (_event, _level, message) => {
+            oauthWindow!.webContents.on('console-message', (details) => {
+                const { frame, message } = details;
                 if (message.startsWith('__FNTV_BRIDGE__:')) {
+                    // 任何页面都能打印这个前缀，只听 NAS 页面的主框架。
+                    const webContents = oauthWindow?.webContents;
+                    if (!webContents || frame !== webContents.mainFrame) return;
+                    if (!isFnIdNasPage(webContents.getURL(), trust)) return;
+
                     const jsonStr = message.substring('__FNTV_BRIDGE__:'.length);
                     try {
                         const data = JSON.parse(jsonStr);
