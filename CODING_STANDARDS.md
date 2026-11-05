@@ -73,6 +73,7 @@
 - 第三方 action 固定到 commit SHA，行尾注释版本号（`ci.yml`、`release.yml`）。
 - Go 版本用 `go-version-file: src/modules/proxy/go.mod` 读取，不在工作流里另写一份。
 - 工作流权限只给 `contents: read`。`release.yml` 只手动触发，不创建 Release，不传 `GH_TOKEN`，产物留在 Actions artifacts。
+- `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub。验证：`git grep -n 'electron-builder --' -- package.json` 每行都有 `--publish never`。
 - 构建依赖的外部资产固定 tag 和 sha256，不取 `releases/latest`（`release.yml` 的 `Download third-party dependencies`）。
 - `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
 - `release.yml` 是 CRLF 和 LF 混合行尾，改动时保留，不整文件转换。Git Bash 的 `sed -i` 会吞 CR，要加 `-b`。
