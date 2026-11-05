@@ -92,6 +92,13 @@
 - `release.yml` 是 CRLF 和 LF 混合行尾，改动时保留，不整文件转换。Git Bash 的 `sed -i` 会吞 CR，要加 `-b`。
 - 验证：`git grep -n -E 'head_commit|releases/latest|secrets\.' -- .github/workflows` 没有结果。
 
+## 文档
+
+- 中文和英文、数字之间加一个空格，行内代码和链接的两侧也一样。中文句子用全角标点。
+- 产品名用官方写法：Windows、macOS、Linux、PotPlayer、Anime4K、NAS。说播放器时写 MPV，只有命令才写 `mpv`。
+- 文件名、路径和配置项放进行内代码。
+- 验证：`LC_ALL=C.UTF-8 grep -nP '\p{Han}[A-Za-z0-9]|[A-Za-z0-9]\p{Han}' README.md` 只剩代码块和链接锚点里的内容。
+
 ## 提交
 
 格式是 `type(scope): 描述`，描述用中文，一个提交只做一件事。PR 标题用同样的格式。
