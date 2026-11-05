@@ -10,7 +10,7 @@
 
 | 标识 | 位置 | 不改的理由 |
 | --- | --- | --- |
-| `name`（`fntv`） | `package.json` | 决定应用名。Electron `safeStorage` 在 macOS 和 Linux 上按应用名找密钥，改名后可能解不开已保存的凭据，`readConfig` 随之抛错（`src/modules/fn_config/config.ts`）。 |
+| `name`（`fntv`） | `package.json` | 决定应用名。Electron `safeStorage` 在 macOS 和 Linux 上按应用名找密钥，改名后可能解不开已保存的凭据，用户只能重新登录（`src/modules/fn_config/config.ts`）。 |
 | `productName`（`飞牛影视`） | `package.json` 的 `build` | 打包后它决定应用名，风险同 `name`；安装目录和快捷方式名也随之改变。 |
 | `appId`（`com.qiaokes.fntv`） | `package.json` 的 `build` | 打包工具用它生成 macOS bundle id 和 Windows 安装标识。改了会变成另一个应用，而不是升级。 |
 | `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、`proxy-secret` 和 Chromium 会话。改了等于丢配置，已运行的 Proxy 也认证不了。 |
@@ -49,6 +49,7 @@
 ## 凭据
 
 - 落盘的凭据走 `config.ts` 的 `writeConfig`，由 `encryptCredential` 加密。新增凭据字段时，同时补上读写两边。
+- 解不开的凭据读出来是空值，按未登录处理，密文留在 `config.ts` 内部由 `writeConfig` 原样写回，只有新值才替换。新增凭据字段时读写两边用 `readCredential` 和 `storeCredential`（`tests/credentialStorage.test.cjs`）。
 - Linux 上 `safeStorage` 后端是 `basic_text` 时拒绝保存，不降级为明文。
 - Proxy 密钥、访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时要脱敏（`src/modules/logger/masking.ts`，`tests/sessionMasking.test.cjs`）。
 
