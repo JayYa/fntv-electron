@@ -27,6 +27,13 @@
 - 新增 IPC 频道时加进 `src/preload/index.ts` 的 `SEND_CHANNELS` 或 `RECEIVE_CHANNELS`。
 - 长期 token 留在主进程，`config-data` 只发表单回填字段（`src/main/handlers/plugins/auth.ts`）。
 - 需要用户确认或输入时走主进程的 `dialog`，或用页面内组件。`alert`、`confirm`、`prompt` 在 Electron 里不可靠，`prompt` 直接不支持。验证：`git grep -n -E '\b(alert|confirm|prompt)\(' -- src resource` 没有结果。
+- 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 只放行这个域（`src/preload/index.ts`），点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`，`tests/accessCodeLoginPage.test.cjs`）。
+
+## 署名
+
+- `package.json` 显式设置 `build.copyright`，并保留原作者。不设时打包工具可能从 `author` 派生版权行，抹掉原作者。
+- 原作者版权行 `Copyright (c) 2025 Tag mig hånden` 和 `LICENSE` 保持原样，修改声明另起一行。
+- 验证：`git grep -n 'Tag mig hånden' -- package.json README.md resource/login/index.html` 三个文件都有结果。
 
 ## 网络
 
