@@ -25,7 +25,7 @@
 
 - 断言公开入口的输入、输出和落盘结果，不绑定内部函数和调用顺序。例如 `synchronizeMpvConfig` 的测试只看返回值和目录内容。
 - 测试走模块已有的公开入口或依赖参数，不为测试新增接缝。
-- 文本断言只用于没有运行入口的内容：`resource/login/index.html` 和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
+- 文本断言只用于没有运行入口的内容：`resource/login/index.html`、`resource/login/index.js` 和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
 - 测试失败时先判断是行为回归还是测试过期，只有测试过期才改断言。
 
 ## 配置和工作流
