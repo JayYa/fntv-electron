@@ -78,7 +78,6 @@
 - `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub。验证：`git grep -n 'electron-builder --' -- package.json` 每行都有 `--publish never`。
 - 构建依赖的外部资产固定 tag 和 sha256（`release.yml` 的 `Download third-party dependencies`）。
 - `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
-- `release.yml` 是 CRLF 和 LF 混合行尾，改动时保留，不整文件转换。Git Bash 的 `sed -i` 会吞 CR，要加 `-b`。
 - 验证：`git grep -n -E 'head_commit|releases/latest|secrets\.' -- .github/workflows` 没有结果。
 
 ## 文档
