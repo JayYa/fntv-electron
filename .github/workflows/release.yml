@@ -78,17 +78,8 @@ jobs:
         continue-on-error: true
 
       - name: Install dependencies
-        run: npm install --no-optional --no-audit --no-fund
+        run: npm ci --omit=optional --no-audit --no-fund
         timeout-minutes: 10
-
-      - name: Install macOS specific dependencies
-        if: runner.os == 'macOS'
-        run: |
-          # 确保 dmg-license 正确安装
-          npm install dmg-license --save-dev
-          # 安装额外的 macOS 构建依赖
-          npm install --no-optional
-        timeout-minutes: 5
 
       - name: Setup Python (for native modules)
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

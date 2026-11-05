@@ -33,7 +33,7 @@ jobs:
 
       # 不加 --ignore-scripts：electron 的 postinstall 要下载二进制，tests/accessCodeSession.test.cjs 依赖它。
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Run Node tests
         run: npm test

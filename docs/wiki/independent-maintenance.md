@@ -31,3 +31,8 @@ Chief of staff 同日作出的取舍：
 - 经验：测试此前只在 Windows 上跑过，`tests/credentialStorage.test.cjs` 的 Linux 分支在首次 CI 才暴露问题。
 - 经验：`npm` 11 本地会拦截 electron postinstall，`tests/accessCodeSession.test.cjs` 本地失败属环境问题，CI 上通过。
 - 经验：`.gitignore` 默认忽略 `docs/`，在 `docs/` 新增路径要先放行。
+
+## 2026-11-05 合并与清理
+
+- 维护者合并了 PR #24、#23、#22，改动进入 `main`（`37fc97d`）。堆叠 PR 的 `Closes` 不会自动触发，#20、#21 由 chief of staff 手动关闭。
+- 维护者同意删除远端 `release` 分支及已合并的 `t3/*` 分支。agent 的删除操作被权限模式拒绝，当天未执行，由维护者处理。
