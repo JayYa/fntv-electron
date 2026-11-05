@@ -215,6 +215,16 @@ function getInjectionScript(): string {
 /**
  * 主进程判断页面和脚本执行之间页面可能已经换了，所以脚本先核对 origin 再读取凭据。
  */
+// 只记路径和 hash 路由。查询串里可能有授权码和 state。
+function describePageForLog(pageUrl: string): string {
+    try {
+        const page = new URL(pageUrl);
+        return `${page.pathname}${page.hash.split('?')[0]}`;
+    } catch {
+        return '(无效地址)';
+    }
+}
+
 function getLoginAutofillScript(username: string, password: string, pageUrl: string): string {
     const page = new URL(pageUrl);
     return `
@@ -335,6 +345,8 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             if (next) {
                 trust = next;
                 oauthWindow?.loadURL(url);
+            } else {
+                log.warn('[FN ID] 已拒绝 OAuth 窗口的弹窗');
             }
             return { action: 'deny' };
         });
@@ -358,6 +370,11 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
         oauthWindow.webContents.on('did-finish-load', async () => {
             if (!oauthWindow) return;
             const pageUrl = oauthWindow.webContents.getURL();
+            log.info(
+                `[FN ID] 页面加载: ${describePageForLog(pageUrl)}，NAS 页面: ${isFnIdNasPage(pageUrl, trust)}，`
+                + `登录页: ${isFnIdLoginPage(pageUrl, trust)}，已确认目标: ${trust.targetOrigin !== null}，`
+                + `有密码: ${Boolean(loginData.password)}`,
+            );
             if (!isFnIdNasPage(pageUrl, trust)) return;
             try {
                 const isAccessCodePage = accessCode
