@@ -7,7 +7,7 @@
 - 改登录页时 `tests/accessCodeLoginPage.test.cjs` 必须通过，它包含在 `npm test` 里。
 - PR 上 `.github/workflows/ci.yml` 自动跑这两项。
 
-`tests/accessCodeSession.test.cjs` 在加载时就报 `Electron failed to install correctly`，说明 `electron` 的 postinstall 没跑。新版 npm 默认拦截未批准的安装脚本，`npm i` 的输出里会有 `install-scripts` 警告。这是环境问题，不是测试回归。批准并重装 `electron` 后再跑。CI 用 Node 22 自带的 npm，postinstall 正常运行，这个测试以 CI 结果为准。
+`tests/accessCodeSession.test.cjs` 在加载时就报 `Electron failed to install correctly`，说明 `electron` 的 postinstall 没跑。新版 npm 默认拦截未批准的安装脚本，`npm i` 和 `npm ci` 的输出里会有 `install-scripts` 警告。这是环境问题，不是测试回归。批准并重装 `electron` 后再跑。CI 用 Node 22 自带的 npm 跑 `npm ci`，postinstall 正常运行，这个测试以 CI 结果为准。
 
 ## `tests/*.test.cjs` 写法
 

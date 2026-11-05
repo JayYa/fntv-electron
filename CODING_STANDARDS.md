@@ -63,6 +63,14 @@
   - `composeCookieHeader`（`accessGrant.ts`）和 `ComposeCookieHeader`（`request.go`）。
   - `/health` 的 `service`、`protocol`（`proxyHealth.ts`、`register.go`）。
 
+## 依赖
+
+- `package-lock.json` 入库。改 `package.json` 的依赖时，锁文件在同一个提交里同步更新。`ci.yml` 和 `release.yml` 用 `npm ci`，两者不一致时安装直接失败。
+- 工作流里不运行 `npm install`，也不在 CI 里改写依赖。验证：`git grep -n 'npm install' -- .github/workflows` 没有结果。
+- 改依赖的命令带上 `--registry=https://registry.npmjs.org`。`.npmrc` 指向 npmmirror，不加时新条目的 `resolved` 会写成镜像地址；CI 删掉 `.npmrc` 后，npm 只替换 npmjs 地址，不替换镜像地址，这些包仍从镜像下载。本地开发时 npmjs 地址会替换成 `.npmrc` 的镜像，不受影响。验证：`git grep -c npmmirror -- package-lock.json` 没有结果。
+- 重新生成锁文件时，在只有 `package.json` 的空目录里运行 `npm install --package-lock-only`，再把结果拷回来。已有 `node_modules` 时，npm 可能只留下当前平台的可选依赖。验证：`git grep -c -E '"node_modules/@img/sharp-(darwin-arm64|linux-x64|win32-x64)"' -- package-lock.json` 结果是 3。
+- `release.yml` 用 `--omit=optional`，生产依赖没有可选包，不影响打包内容。`dmg-builder` 已改用 dmgbuild，不再需要 `dmg-license`。
+
 ## GitHub Workflow
 
 提交信息、PR 标题、分支名这类不可信内容先放进 `env:`，再在 shell 里用 `"$VAR"` 读取，不把 `${{ }}` 直接拼进 `run:`。
