@@ -16,10 +16,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # 不写 version：版本来自 package.json 的 packageManager。放在 setup-node 前面，cache: pnpm 要用到 pnpm。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          cache: pnpm
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -28,15 +33,15 @@ jobs:
           cache-dependency-path: src/modules/proxy/go.sum
 
       # .npmrc 指向国内镜像，只给本地开发用。
-      - name: Clean npm config
+      - name: Remove local registry config
         run: rm -f .npmrc
 
       # 不加 --ignore-scripts：electron 的 postinstall 要下载二进制，tests/accessCodeSession.test.cjs 依赖它。
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Run Node tests
-        run: npm test
+        run: pnpm test
 
       - name: Run Go tests
         run: go test ./...

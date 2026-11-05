@@ -66,19 +66,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          cache: pnpm
 
-      - name: Clean npm config
+      - name: Remove local registry config
         run: |
           rm -f .npmrc
         shell: bash
         continue-on-error: true
 
       - name: Install dependencies
-        run: npm ci --omit=optional --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
         timeout-minutes: 10
 
       - name: Setup Python (for native modules)
@@ -126,17 +130,17 @@ jobs:
           find third_party/fntv-mpv -maxdepth 2 -type d
 
       - name: Compile TypeScript
-        run: npm run compile
+        run: pnpm run compile
         timeout-minutes: 5
 
       - name: Build application
         run: |
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            npm run build:win
+            pnpm run build:win
           elif [ "${{ matrix.platform }}" = "macos" ]; then
-            npm run build:mac
+            pnpm run build:mac
           else
-            npm run build:linux
+            pnpm run build:linux
           fi
         shell: bash
         timeout-minutes: 15
