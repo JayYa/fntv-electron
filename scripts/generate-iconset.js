@@ -116,8 +116,8 @@ async function main() {
     } else {
         await generateIconSet();
         console.log('');
-        console.log('💡 提示: 安装 sharp 库可以自动生成图标:');
-        console.log('pnpm add -D sharp');
+        console.log('💡 提示: sharp 已是 devDependency，但当前无法加载，所以没有自动生成图标。');
+        console.log('请运行 pnpm install 重新安装依赖');
         console.log('然后重新运行此脚本');
     }
 }
