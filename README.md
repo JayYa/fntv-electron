@@ -2,6 +2,8 @@
 
 飞牛影视桌面客户端，基于Electron构建，提供更好的桌面体验和增强功能。
 
+> 本仓库是 [QiaoKes/fntv-electron](https://github.com/QiaoKes/fntv-electron) 的修改版，自 2026-11-05 起由 JayYa 独立维护。
+
 <img src="resource/docs/switch.png" width="90%">
 <img src="resource/docs/simple.png" width="90%">
 
@@ -20,98 +22,11 @@
 - **智能跳过** - 可在MPV播放器界面设置。支持三种跳过片头片尾模式：章节检查，手动设置片头片尾，快捷键跳过固定时长
 - **跨平台支持** - 支持windows、macos和linux
 
-## 爱发电
-
-<a href="https://afdian.com/a/qiaoke" target="_blank">
-  <img src="resource/docs/support_aifadian.svg" alt="support_aifadian">
-</a>
-
-您的每一次 star ⭐ 和 赞助 🎁 都是我持续优化的动力。让我们一起维护这个用爱发电的项目！
-
-## 赞助者
-
-感谢这些来自爱发电的赞助者：
-
-<!-- AFDIAN-ACTION:START -->
-
-<a href="https://afdian.com/u/41cb933ef7ff11f0a9a952540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-purple.png?imageView2/1/?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_41cb9" title="爱发电用户_41cb9"/>
-</a>
-<a href="https://afdian.com/u/bf093216d1da11f085b852540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-blue.png?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_7kDX" title="爱发电用户_7kDX"/>
-</a>
-<a href="https://afdian.com/u/5251e4e2d1c611f0b83d52540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-purple.png?imageView2/1/?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_5251e" title="爱发电用户_5251e"/>
-</a>
-<a href="https://afdian.com/u/ec6015fcd0ca11ef8f8e52540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-purple.png?imageView2/1/?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_ec601" title="爱发电用户_ec601"/>
-</a>
-<a href="https://afdian.com/u/713bc866afc811f093a952540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-purple.png?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_7WxX" title="爱发电用户_7WxX"/>
-</a>
-<a href="https://afdian.com/u/f9548ae809f311ef805e52540025c377">
-    <img src="https://pic1.afdiancdn.com/user/f9548ae809f311ef805e52540025c377/avatar/b585c02959db06c4ea614f6e94fba294_w279_h252_s65.jpg.gif?imageView2/1/w/120/h/120" width="40" height="40" alt="1" title="1"/>
-</a>
-<a href="https://afdian.com/u/4514cc8c9a8411f0992b52540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-purple.png?imageView2/1/?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_4514c" title="爱发电用户_4514c"/>
-</a>
-<a href="https://afdian.com/u/2685303096b611f0b4a652540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-purple.png?imageView2/1/?imageView2/1/w/120/h/120" width="40" height="40" alt="嬴游仙人莫迪" title="嬴游仙人莫迪"/>
-</a>
-<a href="https://afdian.com/u/8a03268e8ba411f0bcbb52540025c377">
-    <img src="https://pic1.afdiancdn.com/default/avatar/avatar-orange.png?imageView2/1/w/120/h/120" width="40" height="40" alt="爱发电用户_e6g3" title="爱发电用户_e6g3"/>
-</a>
-
-<details>
-  <summary>点我 打开/关闭 赞助者列表</summary>
-
-<a href="https://afdian.com/u/41cb933ef7ff11f0a9a952540025c377">
-爱发电用户_41cb9
-</a>
-<span>( 1 次赞助, 共 ￥10 ) 留言: </span><br>
-<a href="https://afdian.com/u/bf093216d1da11f085b852540025c377">
-爱发电用户_7kDX
-</a>
-<span>( 1 次赞助, 共 ￥10 ) 留言: </span><br>
-<a href="https://afdian.com/u/5251e4e2d1c611f0b83d52540025c377">
-爱发电用户_5251e
-</a>
-<span>( 1 次赞助, 共 ￥20 ) 留言: </span><br>
-<a href="https://afdian.com/u/ec6015fcd0ca11ef8f8e52540025c377">
-爱发电用户_ec601
-</a>
-<span>( 1 次赞助, 共 ￥10 ) 留言: 不错不错</span><br>
-<a href="https://afdian.com/u/713bc866afc811f093a952540025c377">
-爱发电用户_7WxX
-</a>
-<span>( 1 次赞助, 共 ￥10 ) 留言: 加油，支持一杯蜜雪</span><br>
-<a href="https://afdian.com/u/f9548ae809f311ef805e52540025c377">
-1
-</a>
-<span>( 1 次赞助, 共 ￥10 ) 留言: fntv</span><br>
-<a href="https://afdian.com/u/4514cc8c9a8411f0992b52540025c377">
-爱发电用户_4514c
-</a>
-<span>( 1 次赞助, 共 ￥10 ) 留言: </span><br>
-<a href="https://afdian.com/u/2685303096b611f0b4a652540025c377">
-嬴游仙人莫迪
-</a>
-<span>( 1 次赞助, 共 ￥60 ) 留言: 谢谢，我是真的很喜欢...</span><br>
-<a href="https://afdian.com/u/8a03268e8ba411f0bcbb52540025c377">
-爱发电用户_e6g3
-</a>
-<span>( 1 次赞助, 共 ￥20 ) 留言: 给几个建议我是mac...</span><br>
-
-</details>
-<!-- 注意: 尽量将标签前靠,否则经测试可能被 GitHub 解析为代码块 -->
-
-<!-- AFDIAN-ACTION:END -->
-
 ## 📦 安装方法
 
-### 预编译版本
+### 构建产物
 
-前往 [Releases页面](https://github.com/QiaoKes/fntv-electron/releases) 下载最新版本：
+本仓库暂无公开 Release，请按下文[从源码构建](#从源码构建)自行构建，产物在 `release/` 目录：
 
 * 文件名: `FNMedia_${version}_${os}_${arch}.${ext}`
 
@@ -133,14 +48,14 @@ brew install mpv
 sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null
 ```
 
-- linux请先安装mpv播放器(版本>0.37.0)再使用，插件前往[fntv-mpv](https://github.com/QiaoKes/fntv-mpv-config/releases) 自行安装，可以参考[issue#54](https://github.com/QiaoKes/fntv-electron/issues/54)
+- linux请先安装mpv播放器(版本>0.37.0)再使用，插件前往[fntv-mpv](https://github.com/JayYa/fntv-mpv-config/releases) 自行安装
 
 ### 从源码构建
 
 1. 克隆仓库：
 
 ```bash
-git clone https://github.com/QiaoKes/fntv-electron.git
+git clone https://github.com/JayYa/fntv-electron.git
 cd fntv-electron
 ```
 
@@ -150,7 +65,18 @@ cd fntv-electron
 npm i
 ```
 
-3. 运行开发模式：
+3. 准备 MPV：
+
+`third_party/fntv-mpv` 不入库，开发运行和打包都依赖它。从固定版本的 [fntv-mpv-config Release](https://github.com/JayYa/fntv-mpv-config/releases/tag/fntv-mpv-v20260826_013404) 下载归档，解压到这个目录：
+
+```bash
+curl -fL -o mpv-config.zip https://github.com/JayYa/fntv-mpv-config/releases/download/fntv-mpv-v20260826_013404/mpv-package-20260825_173358.zip
+mkdir -p third_party/fntv-mpv
+unzip -q mpv-config.zip -d third_party/fntv-mpv
+rm mpv-config.zip
+```
+
+4. 运行开发模式：
 
 ```bash
 npm start
@@ -169,7 +95,7 @@ npm run build:linux
 ### 1. mpv播放器功能有点少，怎么客制化，想添加补帧滤镜等？
 
 1. 自动方法
-   克隆fntv-mpv仓库，自己改一下相关配置：[fntv-mpv-config](https://github.com/QiaoKes/fntv-mpv-config)
+   克隆fntv-mpv仓库，自己改一下相关配置：[fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
 2. 手动方法
    打开你安装目录的third_party，只修改third_party\fntv-mpv\portable_config下面的插件，其余的不要动。其中input.conf是快捷键。
 
@@ -209,9 +135,9 @@ third_party\fntv-mpv\portable_config\input.conf
 ```
 
 2. MPV配置由以下仓库单独管理:
-   [fntv-mpv-config](https://github.com/QiaoKes/fntv-mpv-config)
+   [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
 3. 预设着色器方案
-   [mpv.conf](https://github.com/QiaoKes/fntv-mpv-config/blob/release/custom_config/mpv/mpv.conf)
+   [mpv.conf](https://github.com/JayYa/fntv-mpv-config/blob/release/custom_config/mpv/mpv.conf)
 
 ## 🙏 特别感谢
 
@@ -225,13 +151,15 @@ third_party\fntv-mpv\portable_config\input.conf
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=QiaoKes/fntv-electron&type=date&legend=top-left)](https://www.star-history.com/#QiaoKes/fntv-electron&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=JayYa/fntv-electron&type=date&legend=top-left)](https://www.star-history.com/#JayYa/fntv-electron&type=date&legend=top-left)
 
 ## 📄 许可证
 
 本项目采用 [GPL3.0 许可证](LICENSE)
 
 Copyright (c) 2025 Tag mig hånden
+
+修改声明：本仓库是原作者作品的修改版，自 2026-11-05 起由 JayYa 独立维护，修改部分同样按 GPL-3.0 发布。
 
 ---
 

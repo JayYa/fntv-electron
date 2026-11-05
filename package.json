@@ -19,13 +19,22 @@
         "test": "npm run compile && node --test tests/*.test.cjs",
         "watch": "tsc --watch",
         "clean": "rimraf dest",
-        "build:win": "npm-run-all -s build:proxy:win compile && electron-builder --win",
-        "build:mac": "npm-run-all -s build:proxy:mac:x64 build:proxy:mac:arm64 build:proxy:mac:universal compile clean:proxy:mac && electron-builder --mac",
-        "build:linux:x64": "npm run build:proxy:linux:x64 && electron-builder --linux AppImage --x64",
-        "build:linux:arm64": "npm run build:proxy:linux:arm64 && electron-builder --linux AppImage --arm64",
+        "build:win": "npm-run-all -s build:proxy:win compile && electron-builder --win --publish never",
+        "build:mac": "npm-run-all -s build:proxy:mac:x64 build:proxy:mac:arm64 build:proxy:mac:universal compile clean:proxy:mac && electron-builder --mac --publish never",
+        "build:linux:x64": "npm run build:proxy:linux:x64 && electron-builder --linux AppImage --x64 --publish never",
+        "build:linux:arm64": "npm run build:proxy:linux:arm64 && electron-builder --linux AppImage --arm64 --publish never",
         "build:linux": "npm-run-all -s compile build:linux:x64 build:linux:arm64"
     },
-    "author": "tracing",
+    "author": "JayYa",
+    "license": "GPL-3.0-only",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/JayYa/fntv-electron.git"
+    },
+    "homepage": "https://github.com/JayYa/fntv-electron#readme",
+    "bugs": {
+        "url": "https://github.com/JayYa/fntv-electron/issues"
+    },
     "devDependencies": {
         "@types/cacheable-request": "^6.0.3",
         "@types/debug": "^4.1.12",
@@ -68,6 +77,7 @@
         "productName": "飞牛影视",
         "artifactName": "FNMedia_${version}_${os}_${arch}.${ext}",
         "appId": "com.qiaokes.fntv",
+        "copyright": "Copyright (c) 2025 Tag mig hånden and fntv-electron contributors; modifications (c) 2026 JayYa",
         "compression": "normal",
         "win": {
             "target": [

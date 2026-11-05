@@ -27,12 +27,26 @@
 - 新增 IPC 频道时加进 `src/preload/index.ts` 的 `SEND_CHANNELS` 或 `RECEIVE_CHANNELS`。
 - 长期 token 留在主进程，`config-data` 只发表单回填字段（`src/main/handlers/plugins/auth.ts`）。
 - 需要用户确认或输入时走主进程的 `dialog`，或用页面内组件。`alert`、`confirm`、`prompt` 在 Electron 里不可靠，`prompt` 直接不支持。验证：`git grep -n -E '\b(alert|confirm|prompt)\(' -- src resource` 没有结果。
+- 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 只放行这个域（`src/preload/index.ts`），点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`，`tests/accessCodeLoginPage.test.cjs`）。
+
+## 署名
+
+- `package.json` 显式设置 `build.copyright`，并保留原作者。不设时打包工具可能从 `author` 派生版权行，抹掉原作者。
+- `README.md` 的原作者版权行 `Copyright (c) 2025 Tag mig hånden` 和 `LICENSE` 保持原样，修改声明另起一行。
+- `build.copyright` 是例外：打包元数据只有这一行，原作者和修改声明写在同一行，原作者不能去掉。
+- 验证：`git grep -n 'Tag mig hånden' -- package.json README.md resource/login/index.html` 三个文件都有结果。
 
 ## 网络
 
 - 依赖 `persist:fntv` 会话 Cookie 的请求用 Electron `net`（`src/main/common/accessCodeSession.ts`）。
 - FNMedia API 和更新检查走 `axios`，也就是 Node 网络栈，不走 Chromium（`src/modules/fn_api/request.ts`、`updateChecker.ts`）。
 - 页面能打开但主进程请求失败时，先查这个差异：系统代理、VPN 和证书在两个网络栈里表现不同。
+
+## 更新检查
+
+- 更新源只在 `updateChecker.ts` 的 `UPDATE_REPOSITORY` 改。
+- GitHub 返回 404 表示仓库还没有 Release，按 `hasUpdate: false` 处理，不重试，不报错。其它失败照常重试并提示（`tests/updateChecker.test.cjs`）。
+- 安装包匹配按打包工具的真实架构名写：Linux x64 的 AppImage 产物名是 `x86_64`，不是 `x64`。
 
 ## 凭据
 
@@ -54,7 +68,17 @@
 提交信息、PR 标题、分支名这类不可信内容先放进 `env:`，再在 shell 里用 `"$VAR"` 读取，不把 `${{ }}` 直接拼进 `run:`。
 
 - 范例：`release.yml` 的 `Select build matrix` 步骤（`PLATFORM`）。
-- 已知违规：同文件 `Check commit message` 步骤直接拼接 `head_commit.message`，由 #21 修复。
+
+其它规则：
+
+- 第三方 action 固定到 commit SHA，行尾注释版本号（`ci.yml`、`release.yml`）。
+- Go 版本用 `go-version-file: src/modules/proxy/go.mod` 读取，不在工作流里另写一份。
+- 工作流权限只给 `contents: read`。`release.yml` 只手动触发，不创建 Release，不传 `GH_TOKEN`，产物留在 Actions artifacts。
+- `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub。验证：`git grep -n 'electron-builder --' -- package.json` 每行都有 `--publish never`。
+- 构建依赖的外部资产固定 tag 和 sha256，不取 `releases/latest`（`release.yml` 的 `Download third-party dependencies`）。
+- `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
+- `release.yml` 是 CRLF 和 LF 混合行尾，改动时保留，不整文件转换。Git Bash 的 `sed -i` 会吞 CR，要加 `-b`。
+- 验证：`git grep -n -E 'head_commit|releases/latest|secrets\.' -- .github/workflows` 没有结果。
 
 ## 提交
 
