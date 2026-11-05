@@ -6,6 +6,7 @@ import { USER_DATA_PATH } from '../../public/constants';
 import { isMpvPlaybackEnabled } from './playbackPreference';
 
 const HISTORY_LIMIT = 5;
+const CONFIG_BACKUP_LIMIT = 3;
 const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
 const IV = Buffer.alloc(16, 0); // Initialization vector
 const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
@@ -162,6 +163,59 @@ function storeCredential(value: string | undefined, retained: string | undefined
     return value ? encryptCredential(value) : retained ?? '';
 }
 
+function isDamaged(configPath: string): boolean {
+    if (!fs.existsSync(configPath)) return false;
+    const text = fs.readFileSync(configPath, 'utf-8');
+    try {
+        JSON.parse(text);
+        return false;
+    } catch {
+        return true;
+    }
+}
+
+// 用复制而不是改名：写入失败时 config.json 还在。备份含密文，只记文件名。
+function backupConfig(configPath: string): void {
+    const prefix = `${path.basename(configPath)}.corrupt-`;
+    for (let stamp = Date.now(); ; stamp++) {
+        try {
+            fs.copyFileSync(configPath, path.join(path.dirname(configPath), prefix + stamp), fs.constants.COPYFILE_EXCL);
+            warnOnce(`配置文件无法读取，原内容已备份为 ${prefix + stamp}`);
+            break;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        }
+    }
+    try {
+        const dir = path.dirname(configPath);
+        const backups = fs.readdirSync(dir).filter(name => name.startsWith(prefix)).sort();
+        backups.slice(0, -CONFIG_BACKUP_LIMIT).forEach(name => fs.rmSync(path.join(dir, name)));
+    } catch {
+        // 备份已经落盘，清理旧备份失败不影响这次写入。
+        warnOnce('清理旧配置备份失败');
+    }
+}
+
+// 先写完临时文件再备份：写不下去时不占备份名额。rename 之前 config.json 始终是旧内容。
+function replaceConfig(configPath: string, content: string): void {
+    const tempPath = `${configPath}.tmp`;
+    const mode = fs.existsSync(configPath) ? fs.statSync(configPath).mode : undefined;
+    try {
+        const fd = fs.openSync(tempPath, 'w', mode);
+        try {
+            fs.writeFileSync(fd, content);
+            fs.fsyncSync(fd);
+        } finally {
+            fs.closeSync(fd);
+        }
+        if (isDamaged(configPath)) backupConfig(configPath);
+        fs.renameSync(tempPath, configPath);
+    } catch (error) {
+        fs.rmSync(tempPath, { force: true });
+        throw error;
+    }
+}
+
 function writeConfig(config: Config): void {
     const stored: Config = {
         ...config,
@@ -173,7 +227,7 @@ function writeConfig(config: Config): void {
             accessCode: storeCredential(item.accessCode, item[RETAINED]?.accessCode),
         })),
     };
-    fs.writeFileSync(getConfigPath(), JSON.stringify(stored, null, 2));
+    replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
 // 读取配置

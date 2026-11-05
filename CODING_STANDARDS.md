@@ -56,6 +56,11 @@
 - Linux 上 `safeStorage` 后端是 `basic_text` 时拒绝保存，不降级为明文。
 - Proxy 密钥、访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时要脱敏（`src/modules/logger/masking.ts`，`tests/sessionMasking.test.cjs`）。
 
+## 配置文件
+
+- `config.json` 只由 `config.ts` 的 `writeConfig` 写。写入走临时文件、`fsync` 和 `rename`，中途失败时旧文件不变（`tests/configDurability.test.cjs`）。
+- 解析失败的文件被替换前复制为 `config.json.corrupt-<毫秒时间戳>`，保留最新 3 份，备份失败就放弃这次写入。备份含密文，日志只记文件名。
+
 ## 跨层改动
 
 - 改字段含义前，用 `git grep` 找全读写处，改完再搜一遍。`hideOriginalPlayButton` 同时被主进程、preload 和登录页读取，默认值必须一致（`docs/external-runtime.md`）。
