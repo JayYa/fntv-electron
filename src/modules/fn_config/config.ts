@@ -10,6 +10,10 @@ const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-2
 const IV = Buffer.alloc(16, 0); // Initialization vector
 const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
 
+// 解不开的凭据在内存里是空值，磁盘上的原值挂在这个 symbol 下。对象展开和 filter 会带上它，
+// JSON 和 IPC 不带，所以 read-modify-write 不需要知道它的存在，writeConfig 负责原样写回。
+const RETAINED = Symbol('retainedCredentials');
+
 app.setPath('userData', USER_DATA_PATH);
 
 /**
@@ -31,6 +35,7 @@ export interface Config {
     mpvPlayerPath?: string;
     mpvVolume?: number;
     exitMode?: 'direct' | 'minimize' | 'ask';
+    [RETAINED]?: { token?: string; accessCode?: string };
 }
 
 /**
@@ -42,6 +47,7 @@ export interface HistoryItem {
     password: string;
     accessCode?: string;
     useHttps?: boolean;
+    [RETAINED]?: { password?: string; accessCode?: string };
 }
 
 /**
@@ -131,15 +137,40 @@ function decryptCredential(value: string, isLegacyPassword: boolean): { value: s
     };
 }
 
+// readConfig 被频繁调用，同一条只记一次。
+const loggedWarnings = new Set<string>();
+
+function warnOnce(message: string): void {
+    if (loggedWarnings.has(message)) return;
+    loggedWarnings.add(message);
+    // 本模块加载时才设置 userData，静态引入会让 logger 先用默认目录初始化。
+    (require('../logger') as typeof import('../logger')).warn(message);
+}
+
+function readCredential(field: string, value: string, isLegacyPassword: boolean): { value: string; legacy: boolean; retained?: string } {
+    try {
+        return decryptCredential(value, isLegacyPassword);
+    } catch {
+        // 只记字段名：错误对象可能带密文。
+        warnOnce(`凭据解密失败，按未登录处理: ${field}`);
+        return { value: '', legacy: false, retained: value };
+    }
+}
+
+// 空值不算新凭据，解不开的原值要留到用户重新登录。
+function storeCredential(value: string | undefined, retained: string | undefined): string {
+    return value ? encryptCredential(value) : retained ?? '';
+}
+
 function writeConfig(config: Config): void {
     const stored: Config = {
         ...config,
-        token: encryptCredential(config.token || ''),
-        accessCode: encryptCredential(config.accessCode || ''),
+        token: storeCredential(config.token, config[RETAINED]?.token),
+        accessCode: storeCredential(config.accessCode, config[RETAINED]?.accessCode),
         history: config.history?.map(item => ({
             ...item,
-            password: encryptCredential(item.password),
-            accessCode: encryptCredential(item.accessCode || ''),
+            password: storeCredential(item.password, item[RETAINED]?.password),
+            accessCode: storeCredential(item.accessCode, item[RETAINED]?.accessCode),
         })),
     };
     fs.writeFileSync(getConfigPath(), JSON.stringify(stored, null, 2));
@@ -151,27 +182,42 @@ export function readConfig(): Config | null {
     if (fs.existsSync(p)) {
         try {
             const stored = JSON.parse(fs.readFileSync(p, 'utf-8')) as Config;
-            const token = decryptCredential(stored.token || '', false);
-            const accessCode = decryptCredential(stored.accessCode || '', false);
-            let needsMigration = token.legacy || accessCode.legacy;
+            const token = readCredential('token', stored.token || '', false);
+            const accessCode = readCredential('accessCode', stored.accessCode || '', false);
+            // 访问码解不开时过不了网关，token 单独可用也不算已登录，同样隐藏并保留原值。
+            const accessCodeFailed = accessCode.retained !== undefined;
+            let needsMigration = accessCode.legacy || (token.legacy && !accessCodeFailed);
             const config: Config = {
                 ...stored,
-                token: token.value,
+                token: accessCodeFailed ? '' : token.value,
                 accessCode: accessCode.value,
-                history: stored.history?.map(item => {
-                    const password = decryptCredential(item.password, true);
-                    const historyAccessCode = decryptCredential(item.accessCode || '', false);
+                [RETAINED]: {
+                    token: accessCodeFailed ? stored.token : token.retained,
+                    accessCode: accessCode.retained,
+                },
+                history: stored.history?.map((item, index) => {
+                    const password = readCredential(`history[${index}].password`, item.password, true);
+                    const historyAccessCode = readCredential(`history[${index}].accessCode`, item.accessCode || '', false);
                     needsMigration ||= password.legacy || historyAccessCode.legacy;
                     return {
                         ...item,
                         password: password.value,
                         accessCode: historyAccessCode.value,
+                        [RETAINED]: {
+                            password: password.retained,
+                            accessCode: historyAccessCode.retained,
+                        },
                     };
                 }),
             };
 
             if (needsMigration && safeStorage.isEncryptionAvailable()) {
-                writeConfig(config);
+                try {
+                    writeConfig(config);
+                } catch {
+                    // 迁移失败不影响本次读取，旧值留在磁盘上，下次读取时重试。
+                    warnOnce('迁移旧版凭据失败，暂时保留原值');
+                }
             }
             return config;
         } catch (error) {
@@ -189,6 +235,8 @@ export function saveConfig({ account, domain, token, accessCode, useHttps }: Sav
     config.domain = domain;
     config.token = token;
     if (accessCode !== undefined) config.accessCode = accessCode;
+    // 带新 token 的保存是重新登录，这次的访问码就算为空也要替换解不开的旧值，否则每次启动都回登录页。
+    if (token && accessCode !== undefined) delete config[RETAINED]?.accessCode;
     config.useHttps = useHttps || false;
     writeConfig(config);
 }
