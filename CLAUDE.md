@@ -1,10 +1,5 @@
 # CLAUDE.md
 
-## Standards
-
-- `CODING_STANDARDS.md`: read before changing code, workflows or stable identifiers, and before committing.
-- `TESTING_STANDARDS.md`: read before writing tests or judging a test failure.
-
 ## Agent skills
 
 ### Issue tracker
