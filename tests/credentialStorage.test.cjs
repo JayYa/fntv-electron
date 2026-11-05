@@ -464,3 +464,15 @@ for (const failing of ['saved-token', 'saved-access-code']) {
         assert.deepEqual(dialogs, []);
     });
 }
+
+test('startup does not blame the keyring when the config file itself cannot be read', async (t) => {
+    const { loadWinctrl, configPath, dialogs } = setupConfig(t);
+    fs.mkdirSync(configPath);
+
+    const window = fakeMainWindow();
+    await loadWinctrl().setupCookieRestore(window);
+
+    assertLandedOnLoginPage(window);
+    assert.equal(dialogs.length, 1);
+    assert.doesNotMatch(JSON.stringify(dialogs[0]), /密钥环|安全存储/);
+});
