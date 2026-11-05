@@ -1042,6 +1042,9 @@
         
         let historyData = [];
         let confirmCallback = null;
+        // 正在等的凭据回复。连点历史或用户改了表单后这里就变了，迟到的回复对不上，直接丢弃。
+        let pendingHistoryCredentials = null;
+        let pendingCurrentAccessCode = null;
 
         // 自定义确认对话框函数
         function showCustomConfirm(message, callback) {
@@ -1368,9 +1371,13 @@
 
                     domainInput.value = item.domain;
                     usernameInput.value = item.account;
-                    passwordInput.value = item.password;
-                    accessCodeInput.value = item.accessCode || '';
+                    passwordInput.value = '';
+                    accessCodeInput.value = '';
                     document.getElementById('httpsSwitch').checked = item.useHttps === true;
+
+                    pendingCurrentAccessCode = null;
+                    pendingHistoryCredentials = { domain: item.domain, account: item.account };
+                    ipcRenderer.send('get-history-credentials', pendingHistoryCredentials);
 
                     // 关闭下拉框
                     historyDropdown.classList.remove('show');
@@ -1435,7 +1442,9 @@
         ipcRenderer.on('config-data', (event, data) => {
             const { config, history } = data;
             historyData = history || [];
-            
+            pendingHistoryCredentials = null;
+            pendingCurrentAccessCode = null;
+
             // 如果有当前配置，填充到表单中
             if (config && config.domain) {
                 // 去除掉http://和https://
@@ -1448,15 +1457,43 @@
             if (config && config.account) {
                 usernameInput.value = config.account;
             }
-            if (config && config.accessCode) {
-                accessCodeInput.value = config.accessCode;
+            if (config && config.hasAccessCode) {
+                pendingCurrentAccessCode = { domain: config.domain, account: config.account };
+                ipcRenderer.send('get-current-access-code');
             }
-            
+
             // 渲染历史记录
             renderHistoryList();
             
             // 检查输入状态
             checkInputs();
+        });
+
+        function isPendingLogin(pending, reply) {
+            return pending && pending.domain === reply.domain && pending.account === reply.account;
+        }
+
+        // 解不开的凭据回复里是空值，表单留空让用户手动输入。
+        ipcRenderer.on('history-credentials', (event, data) => {
+            if (!isPendingLogin(pendingHistoryCredentials, data)) return;
+            pendingHistoryCredentials = null;
+            passwordInput.value = data.password;
+            accessCodeInput.value = data.accessCode;
+            checkInputs();
+        });
+
+        ipcRenderer.on('current-access-code', (event, data) => {
+            if (!isPendingLogin(pendingCurrentAccessCode, data)) return;
+            pendingCurrentAccessCode = null;
+            accessCodeInput.value = data.accessCode;
+        });
+
+        // 用户动过表单后以用户输入为准。
+        [domainInput, usernameInput, passwordInput, accessCodeInput].forEach(input => {
+            input.addEventListener('input', () => {
+                pendingHistoryCredentials = null;
+                pendingCurrentAccessCode = null;
+            });
         });
 
         // 监听历史记录删除成功

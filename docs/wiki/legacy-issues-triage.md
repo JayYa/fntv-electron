@@ -80,3 +80,10 @@
 - `CODING_STANDARDS.md:28` 原来的 `\b` 是 0x08 退格字节，PR #40 一并修正。
 - 待确认：`.gitignore` 的 `docs` 规则是否影响 `docs/` 下的新文件。`docs/wiki/legacy-issues-triage.md` 新增时 `git status` 能看到，子代理的“需要 `git add -f`”未验证。
 - 未处理：`generate-iconset.js` 的回退分支写死“在 Windows 环境下”，还会写入假 PNG 占位文件。
+
+## 2026-11-05 #29 合并（`JayYa/fntv-electron@f0d3cad`）
+
+- 维护者合并了 PR #42。解不开的凭据读出来是空值，原密文挂在 `config.ts` 私有 symbol 上，`writeConfig` 原样写回。
+- 维护者接受三点取舍：登出不清解不开的密文；带新 token 且访问码为空的保存算重新登录；迁移写回失败只记日志。
+- 第一点的依据：`clearLoginCookies` 除登出（`login.ts:78`）外，还由 `/v/login` 请求路径（`login.ts:55`）触发，不一定是用户主动操作。
+- 未验证：Linux 密钥环真实锁定的表现、打包版日志目录、真实 Proxy 下的启动。

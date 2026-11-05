@@ -9,11 +9,13 @@ import preloadLogger from './core/logger';
 
 const SEND_CHANNELS = new Set([
     'login', 'delete-history-item', 'clear-history', 'get-config',
+    'get-history-credentials', 'get-current-access-code',
     'get-version', 'check-update', 'get-download-proxy', 'get-play-button-config',
     'set-download-proxy', 'set-play-button-config',
 ]);
 const RECEIVE_CHANNELS = new Set([
-    'config-data', 'history-item-deleted', 'login-error', 'login-success',
+    'config-data', 'history-credentials', 'current-access-code',
+    'history-item-deleted', 'login-error', 'login-success',
     'version-info', 'update-status', 'download-proxy-info', 'play-button-config-info',
     'download-proxy-set', 'play-button-config-set',
 ]);

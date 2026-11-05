@@ -277,6 +277,12 @@ export function getHistory(): HistoryItem[] {
     }));
 }
 
+// 获取一条历史记录的凭据。找不到或解不开时读出来是空值，由用户手动输入。
+export function getHistoryCredentials({ domain, account }: DeleteHistoryParams): { password: string; accessCode: string } {
+    const item = getHistory().find(entry => entry.domain === domain && entry.account === account);
+    return { password: item?.password || '', accessCode: item?.accessCode || '' };
+}
+
 // 清除历史记录
 export function clearHistory(): void {
     const config: Config = readConfig() || {};
@@ -434,6 +440,7 @@ module.exports = {
     readConfig,
     addHistory,
     getHistory,
+    getHistoryCredentials,
     clearHistory,
     deleteHistoryItem,
     getDownloadProxyUrl,
