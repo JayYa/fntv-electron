@@ -2,17 +2,17 @@
 
 ## 运行
 
-- `npm test`：先用 `tsc` 编译到 `dest/`，再跑 `node --test tests/*.test.cjs`。
+- `pnpm test`：先用 `tsc` 编译到 `dest/`，再跑 `node --test tests/*.test.cjs`。
 - `go test ./...`：在 `src/modules/proxy` 下运行。
-- 改登录页时 `tests/accessCodeLoginPage.test.cjs` 必须通过，它包含在 `npm test` 里。
+- 改登录页时 `tests/accessCodeLoginPage.test.cjs` 必须通过，它包含在 `pnpm test` 里。
 - PR 上 `.github/workflows/ci.yml` 自动跑这两项。
 
-`tests/accessCodeSession.test.cjs` 在加载时就报 `Electron failed to install correctly`，说明 `electron` 的 postinstall 没跑。新版 npm 默认拦截未批准的安装脚本，`npm i` 和 `npm ci` 的输出里会有 `install-scripts` 警告。这是环境问题，不是测试回归。批准并重装 `electron` 后再跑。CI 用 Node 22 自带的 npm 跑 `npm ci`，postinstall 正常运行，这个测试以 CI 结果为准。
+`tests/accessCodeSession.test.cjs` 在加载时就报 `Electron failed to install correctly`，说明 `node_modules/electron/dist` 不完整。这是环境问题，不是测试回归。先确认 `pnpm-workspace.yaml` 的 `allowBuilds` 有 `electron`、`overrides` 有 `extract-zip>yauzl`，再删掉 `node_modules` 重新 `pnpm install`。安装输出里 `electron postinstall: Done` 不能证明解压完成，要看 `node_modules/electron/path.txt` 是否存在。
 
 ## `tests/*.test.cjs` 写法
 
 - 用 CommonJS、`node:test` 和 `node:assert/strict`。
-- 从 `../dest/...` 引入编译产物，所以测试要经过 `npm test`，单独运行前先 `npm run compile`。
+- 从 `../dest/...` 引入编译产物，所以测试要经过 `pnpm test`，单独运行前先 `pnpm run compile`。
 - 测试名用一句英文写清行为，例如 `first initialization does not overwrite pre-existing user state`。
 - 用到文件系统时，在 `fs.mkdtempSync(path.join(os.tmpdir(), ...))` 里操作，并用 `t.after` 清理（`tests/mpvConfigMigration.test.cjs`）。
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
