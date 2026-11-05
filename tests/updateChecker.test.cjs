@@ -190,3 +190,23 @@ test('Linux arm64 keeps picking the arm64 AppImage', async (t) => {
 
     assert.equal(await downloadFileName(t, [LINUX_X86_64, LINUX_ARM64]), LINUX_ARM64);
 });
+
+test('Linux x64 rejects names that end in AppImage without the .AppImage extension', async (t) => {
+    simulateHost(t, 'linux', 'x64');
+
+    assert.equal(await downloadFileName(t, [
+        'FNMedia_2.7.0_linux_x86_64AppImage',
+        'FNMedia_2.7.0_linux_x86_64-AppImage',
+        'FNMedia_2.7.0_linux_x64AppImage',
+        'FNMedia_2.7.0_linux_x64-AppImage',
+    ]), null);
+});
+
+test('Linux arm64 rejects names that end in AppImage without the .AppImage extension', async (t) => {
+    simulateHost(t, 'linux', 'arm64');
+
+    assert.equal(await downloadFileName(t, [
+        'FNMedia_2.7.0_linux_arm64AppImage',
+        'FNMedia_2.7.0_linux_arm64-AppImage',
+    ]), null);
+});
