@@ -17,8 +17,14 @@ test('login page uses the restricted preload bridge and renders history as text'
         path.join(__dirname, '..', 'resource', 'login', 'index.html'),
         'utf8',
     );
-    assert.doesNotMatch(loginPage, /require\(['"]electron['"]\)/);
-    assert.match(loginPage, /window\.electronAPI/);
-    assert.match(loginPage, /account\.textContent = item\.account/);
-    assert.doesNotMatch(loginPage, /data-password="\$\{/);
+    const loginScript = fs.readFileSync(
+        path.join(__dirname, '..', 'resource', 'login', 'index.js'),
+        'utf8',
+    );
+    for (const source of [loginPage, loginScript]) {
+        assert.doesNotMatch(source, /require\(['"]electron['"]\)/);
+        assert.doesNotMatch(source, /data-password="\$\{/);
+    }
+    assert.match(loginScript, /window\.electronAPI/);
+    assert.match(loginScript, /account\.textContent = item\.account/);
 });

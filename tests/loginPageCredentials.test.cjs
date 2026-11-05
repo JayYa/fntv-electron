@@ -4,8 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const loginPage = fs.readFileSync(path.join(__dirname, '../resource/login/index.html'), 'utf8');
-const pageScript = loginPage.match(/<script>([\s\S]*)<\/script>/)[1];
+const pageScript = fs.readFileSync(path.join(__dirname, '../resource/login/index.js'), 'utf8');
 
 function createElement() {
     const listeners = new Map();
@@ -53,7 +52,7 @@ function createElement() {
     return element;
 }
 
-// 用假 DOM 跑登录页真实的内联脚本，主进程这一侧由测试扮演。
+// 用假 DOM 跑登录页真实的脚本，主进程这一侧由测试扮演。
 function openLoginPage() {
     const elements = new Map();
     const getElement = (id) => {
