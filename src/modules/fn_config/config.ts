@@ -163,8 +163,23 @@ function storeCredential(value: string | undefined, retained: string | undefined
     return value ? encryptCredential(value) : retained ?? '';
 }
 
-function hasUnusableHistory(stored: { history?: unknown } | null): boolean {
-    return stored?.history != null && !Array.isArray(stored.history);
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// 顶层不是对象的 JSON 和语法错误一样算损坏，读取和备份判定都走 SyntaxError 这条路。
+function parseConfig(text: string): Config {
+    const stored: unknown = JSON.parse(text);
+    if (!isObject(stored)) throw new SyntaxError('配置顶层不是对象');
+    return stored;
+}
+
+function isHistoryItem(item: unknown): item is HistoryItem {
+    return isObject(item) && typeof item.domain === 'string' && typeof item.account === 'string';
+}
+
+function hasUnusableHistory(stored: { history?: unknown }): boolean {
+    return stored.history != null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
 }
 
 // 这样的文件读出来会丢内容，被替换前要留底。
@@ -172,7 +187,7 @@ function isDamaged(configPath: string): boolean {
     if (!fs.existsSync(configPath)) return false;
     const text = fs.readFileSync(configPath, 'utf-8');
     try {
-        return hasUnusableHistory(JSON.parse(text));
+        return hasUnusableHistory(parseConfig(text));
     } catch {
         return true;
     }
@@ -239,14 +254,15 @@ export function readConfig(): Config | null {
     const p = getConfigPath();
     if (fs.existsSync(p)) {
         try {
-            const stored = JSON.parse(fs.readFileSync(p, 'utf-8')) as Config;
+            const stored = parseConfig(fs.readFileSync(p, 'utf-8'));
             const token = readCredential('token', stored.token || '', false);
             const accessCode = readCredential('accessCode', stored.accessCode || '', false);
             // 访问码解不开时过不了网关，token 单独可用也不算已登录，同样隐藏并保留原值。
             const accessCodeFailed = accessCode.retained !== undefined;
             let needsMigration = accessCode.legacy || (token.legacy && !accessCodeFailed);
             const historyUnusable = hasUnusableHistory(stored);
-            if (historyUnusable) warnOnce('配置里的 history 不是数组，按空列表读取');
+            if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
+            const history = Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
             const config: Config = {
                 ...stored,
                 token: accessCodeFailed ? '' : token.value,
@@ -255,7 +271,7 @@ export function readConfig(): Config | null {
                     token: accessCodeFailed ? stored.token : token.retained,
                     accessCode: accessCode.retained,
                 },
-                history: historyUnusable ? [] : stored.history?.map((item, index) => {
+                history: history?.map((item, index) => {
                     const password = readCredential(`history[${index}].password`, item.password, true);
                     const historyAccessCode = readCredential(`history[${index}].accessCode`, item.accessCode || '', false);
                     needsMigration ||= password.legacy || historyAccessCode.legacy;

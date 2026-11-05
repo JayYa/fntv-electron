@@ -178,6 +178,107 @@ test('writing over a non-array history keeps the original file in a backup', (t)
     assert.equal(backups().length, 1);
 });
 
+for (const [label, content] of [
+    ['null', 'null'],
+    ['an array', '[{"account":"user"}]'],
+    ['a number', '5'],
+    ['a string', '"safe-storage:v1:c2VjcmV0"'],
+]) {
+    test(`a config that is ${label} reads as missing and stays on disk`, (t) => {
+        const { config, configPath, backups } = setupConfig(t);
+        fs.writeFileSync(configPath, content);
+
+        assert.equal(config.readConfig(), null);
+        assert.deepEqual(config.getHistory(), []);
+        assert.equal(fs.readFileSync(configPath, 'utf8'), content);
+        assert.deepEqual(backups(), []);
+    });
+
+    test(`a setter after a config that is ${label} keeps it in a backup`, (t) => {
+        const { config, configPath, backups, readBackup } = setupConfig(t);
+        fs.writeFileSync(configPath, content);
+
+        config.setNasProxyEnabled(true);
+
+        assert.equal(backups().length, 1);
+        assert.equal(readBackup(backups()[0]), content);
+        assert.equal(config.getNasProxyEnabled(), true);
+    });
+}
+
+const SAVED_ENTRY = {
+    domain: 'nas.example',
+    account: 'user',
+    password: `safe-storage:v1:${Buffer.from('protected:saved-password').toString('base64')}`,
+};
+
+for (const [label, entry] of [
+    ['null', null],
+    ['a string', 'x'],
+    ['a number', 5],
+    ['an array', ['nas.example', 'user']],
+    ['an object without an account', { domain: 'nas.example' }],
+    ['an object without a domain', { account: 'user' }],
+    ['an object with a non-string domain', { domain: 5, account: 'user' }],
+    ['an object with a non-string account', { domain: 'nas.example', account: null }],
+]) {
+    test(`a history entry that is ${label} is left out on read and stays on disk`, (t) => {
+        const { config, configPath, backups } = setupConfig(t);
+        const original = JSON.stringify({ mpvVolume: 33, history: [entry, SAVED_ENTRY] });
+        fs.writeFileSync(configPath, original);
+
+        assert.equal(config.readConfig().history.length, 1);
+        assert.deepEqual(config.getHistory(), [{
+            domain: 'nas.example',
+            account: 'user',
+            password: 'saved-password',
+            accessCode: '',
+            useHttps: false,
+        }]);
+        assert.equal(fs.readFileSync(configPath, 'utf8'), original);
+        assert.deepEqual(backups(), []);
+    });
+}
+
+test('writing over a history with unusable entries keeps the original file in a backup', (t) => {
+    const { config, configPath, backups, readBackup, logText } = setupConfig(t);
+    const original = JSON.stringify({ mpvVolume: 33, history: [null, 'c2VjcmV0', SAVED_ENTRY] });
+    fs.writeFileSync(configPath, original);
+
+    config.setMpvVolume(44);
+
+    assert.equal(backups().length, 1);
+    assert.equal(readBackup(backups()[0]), original);
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')).history.map((item) => item.account), ['user']);
+    assert.doesNotMatch(logText(), /c2VjcmV0/);
+
+    config.setMpvVolume(55);
+    assert.equal(backups().length, 1);
+});
+
+test('migrating legacy credentials on read keeps the unusable history entries in a backup', (t) => {
+    const { config, configPath, backups, readBackup } = setupConfig(t);
+    const original = JSON.stringify({ token: 'legacy-token', history: [null, SAVED_ENTRY] });
+    fs.writeFileSync(configPath, original);
+
+    assert.equal(config.readConfig().token, 'legacy-token');
+
+    assert.equal(backups().length, 1);
+    assert.equal(readBackup(backups()[0]), original);
+});
+
+test('a retained credential survives the rewrite that drops an unusable entry', (t) => {
+    const { config, configPath } = setupConfig(t);
+    const undecryptable = { domain: 'nas.example', account: 'user', password: 'not-legacy-ciphertext' };
+    fs.writeFileSync(configPath, JSON.stringify({ history: [null, undecryptable] }));
+
+    config.setMpvVolume(44);
+
+    const { history } = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.equal(history.length, 1);
+    assert.equal(history[0].password, 'not-legacy-ciphertext');
+});
+
 test('a config without history still has no history after a write', (t) => {
     const { config, configPath } = setupConfig(t);
     fs.writeFileSync(configPath, JSON.stringify({ history: null, mpvVolume: 33 }));
