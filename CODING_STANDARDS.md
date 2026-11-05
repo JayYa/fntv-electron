@@ -32,7 +32,8 @@
 ## 署名
 
 - `package.json` 显式设置 `build.copyright`，并保留原作者。不设时打包工具可能从 `author` 派生版权行，抹掉原作者。
-- 原作者版权行 `Copyright (c) 2025 Tag mig hånden` 和 `LICENSE` 保持原样，修改声明另起一行。
+- `README.md` 的原作者版权行 `Copyright (c) 2025 Tag mig hånden` 和 `LICENSE` 保持原样，修改声明另起一行。
+- `build.copyright` 是例外：打包元数据只有这一行，原作者和修改声明写在同一行，原作者不能去掉。
 - 验证：`git grep -n 'Tag mig hånden' -- package.json README.md resource/login/index.html` 三个文件都有结果。
 
 ## 网络
