@@ -22,7 +22,9 @@
 
 ## FN ID 登录
 
-FN ID 窗口是隔离的。访问码只在当前页面是 fnOS 访问码页时注入脚本，用于自动填写。拿到目标 FNMedia origin 后，主进程再建立和直接登录相同的授权。
+FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离开 FN Connect 时到达的第一个地址就是目标 origin（`src/main/handlers/core/fnIdTrust.ts`）。访问码只在页面属于这个 origin，而且是 fnOS 访问码页时注入脚本，用于自动填写。拿到目标 FNMedia origin 后，主进程再建立和直接登录相同的授权。
+
+确认后的跳转沿用上面的重定向规则：只允许同主机，不允许 HTTPS 降级到 HTTP。例外是 NAS 在 `sys/config` 里报告的 `nas_oauth.url`，它可以换主机，但同样不能降级；不满足时留在当前 origin。
 
 ## 存储与暴露范围
 
