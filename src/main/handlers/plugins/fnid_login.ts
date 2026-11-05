@@ -8,6 +8,11 @@ import * as fnConfig from '../../../modules/fn_config/config';
 import * as log from '../../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl, resolveFnConnectBaseUrl } from '../core/fnConnect';
 import {
+    createFnIdTrust,
+    resolveFnIdNavigation,
+    resolveFnIdWindowOpen,
+} from '../core/fnIdTrust';
+import {
     AccessCodeVerificationError,
     establishAccessCodeSession,
 } from '../../common/accessCodeSession';
@@ -273,6 +278,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
     let authRequested = false;
     let loginCompleted = false;
     let cookieCheckInProgress = false;
+    let trust = createFnIdTrust(fnConnectUrl);
 
     try {
         // 创建 OAuth 登录窗口
@@ -296,6 +302,30 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
         });
 
         const oauthSession = oauthWindow.webContents.session;
+
+        function guardNavigation(event: { url: string; preventDefault(): void }): void {
+            const next = resolveFnIdNavigation(event.url, trust);
+            if (next) {
+                trust = next;
+                return;
+            }
+            event.preventDefault();
+            log.warn('[FN ID] 已阻止 OAuth 窗口跳转到预期范围之外的地址');
+        }
+
+        oauthWindow.webContents.on('will-navigate', guardNavigation);
+        oauthWindow.webContents.on('will-redirect', (event) => {
+            // FN Connect 用隐藏 iframe 探测 NAS 地址，子框架的跳转不算窗口导航。
+            if (event.isMainFrame) guardNavigation(event);
+        });
+        oauthWindow.webContents.setWindowOpenHandler(({ url }) => {
+            const next = resolveFnIdWindowOpen(url, oauthWindow?.webContents.getURL() ?? '', trust);
+            if (next) {
+                trust = next;
+                oauthWindow?.loadURL(url);
+            }
+            return { action: 'deny' };
+        });
 
         async function establishTargetSession(targetBaseUrl: string): Promise<string> {
             if (!accessCode) return targetBaseUrl;
