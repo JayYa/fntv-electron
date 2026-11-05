@@ -1,13 +1,9 @@
 # CLAUDE.md
 
-## Project instructions
+## Standards
 
-This project is also managed by Trellis. Its instructions live in `AGENTS.md`, and the working
-knowledge it points at (coding standards per layer, prior decisions, task history) lives under
-`.trellis/`. Read `AGENTS.md` and the relevant files under `.trellis/spec/` before writing code.
-
-Trellis and the agent skills below are two separate workflows. Follow one per task; don't
-interleave them.
+- `CODING_STANDARDS.md`: read before changing code, workflows or stable identifiers, and before committing.
+- `TESTING_STANDARDS.md`: read before writing tests or judging a test failure.
 
 ## Agent skills
 
