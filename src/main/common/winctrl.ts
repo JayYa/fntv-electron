@@ -84,13 +84,13 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     try {
         savedConfig = readConfig();
     } catch (error) {
-        const message = error instanceof Error ? error.message : '无法读取安全配置';
-        log.error('读取安全配置失败:', error);
+        const message = error instanceof Error ? error.message : '无法读取配置文件';
+        log.error('读取配置失败:', error);
         await dialog.showMessageBox(mainWindow, {
             type: 'error',
-            title: '安全存储不可用',
+            title: '无法读取配置',
             message,
-            detail: '请启用操作系统密钥环后重新登录。已有配置不会被明文降级。',
+            detail: '请检查配置文件 ~/.fntv/config.json 是否可读，然后重新登录。',
         });
         mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
         return;

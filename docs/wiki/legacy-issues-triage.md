@@ -72,3 +72,11 @@
 - 一个 issue 一个 PR，由子代理实现，从 #33 开始。#31 拆成两个 PR。
 
 同日，#28、#29、#31、#34 补了核实评论并改为 `ready-for-agent`。依赖写成了 GitHub 原生关系：#28 被 #29 阻塞，#31 被 #28 阻塞，#34 被 #33 阻塞，#38 被 #29 阻塞。
+
+## 2026-11-05 进度（`JayYa/fntv-electron@c7e8b24`）
+
+- 维护者合并了 PR #39（#33，merge commit `905d2de`，保留了 `5c0edbb`，`.git-blame-ignore-revs` 有效）、PR #40（#30）、PR #41（#35）。
+- 未实际运行：`generate-icns`（需要 macOS 的 `iconutil`）和 Linux 打包。
+- `CODING_STANDARDS.md:28` 原来的 `\b` 是 0x08 退格字节，PR #40 一并修正。
+- 待确认：`.gitignore` 的 `docs` 规则是否影响 `docs/` 下的新文件。`docs/wiki/legacy-issues-triage.md` 新增时 `git status` 能看到，子代理的“需要 `git add -f`”未验证。
+- 未处理：`generate-iconset.js` 的回退分支写死“在 Windows 环境下”，还会写入假 PNG 占位文件。
