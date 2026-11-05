@@ -4,13 +4,13 @@
 
 ### 生成 iconset (适用于所有平台):
 ```bash
-npm run generate-iconset
+pnpm run generate-iconset
 ```
 这会自动从 `build/icon.png` 生成所有需要的尺寸到 `build/icon.iconset/` 目录。
 
 ### 生成 ICNS (仅限 macOS):
 ```bash
-npm run generate-icns
+pnpm run generate-icns
 ```
 这会在 macOS 上使用 `iconutil` 工具将 iconset 转换为 `icon.icns` 文件。
 
@@ -38,6 +38,6 @@ npm run generate-icns
 - icon_512x512@2x.png (1024x1024 像素)
 
 ## 注意事项
-- 使用 `npm run generate-iconset` 会自动生成所有需要的尺寸
+- 使用 `pnpm run generate-iconset` 会自动生成所有需要的尺寸
 - 在 Windows/Linux 上只能生成 iconset，需要在 macOS 上才能生成最终的 .icns 文件
 - electron-builder 在 macOS 上构建时会自动使用 iconset 或现有的 .icns 文件

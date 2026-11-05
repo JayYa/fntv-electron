@@ -61,8 +61,10 @@ cd fntv-electron
 
 2. 安装依赖：
 
+依赖用 pnpm 管理，版本固定在 `package.json` 的 `packageManager`。下载 Electron 走国内镜像时，先设置环境变量 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`，`.npmrc` 里的 `electron_mirror` 对 pnpm 无效。
+
 ```bash
-npm i
+pnpm install
 ```
 
 3. 准备 MPV：
@@ -79,15 +81,15 @@ rm mpv-config.zip
 4. 运行开发模式：
 
 ```bash
-npm start
+pnpm start
 ```
 
 5. 构建安装包：
 
 ```bash
-npm run build:win
-npm run build:mac
-npm run build:linux
+pnpm run build:win
+pnpm run build:mac
+pnpm run build:linux
 ```
 
 ## 常用问题Q&A
