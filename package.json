@@ -16,7 +16,7 @@
         "clean:proxy:mac": "rimraf third_party/proxy/proxy_x64 third_party/proxy/proxy_arm64",
         "start": "pnpm run clean && pnpm run build:proxy:win && tsc && electron .",
         "start:mac": "pnpm run clean && pnpm run build:proxy:mac && pnpm run compile && electron .",
-        "compile": "tsc",
+        "compile": "pnpm run clean && tsc",
         "test": "pnpm run compile && node --test tests/*.test.cjs",
         "watch": "tsc --watch",
         "clean": "rimraf dest",
