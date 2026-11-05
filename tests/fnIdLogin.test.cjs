@@ -151,6 +151,68 @@ function setupLogin(t, { accessCode = '' } = {}) {
     };
 }
 
+const sysConfig = (url) => ({
+    type: 'SysConfig',
+    url: '/v/api/v1/sys/config',
+    body: JSON.stringify({ data: { nas_oauth: { app_id: 'app1', url } } }),
+});
+
+test('injects the password only on the login page of the confirmed NAS', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+    assert.equal(login.navigate('will-navigate', `${NAS}/v`), true);
+
+    const fnConnectPage = await login.finishLoad('https://5ddd.com/demo123');
+    const appPage = await login.finishLoad(`${NAS}/v`);
+    const signinPage = await login.finishLoad(`${NAS}/signin?client_id=app1`);
+    const loginPage = await login.finishLoad(`${NAS}/login?redirect=%2Fsignin`);
+
+    assert.doesNotMatch(fnConnectPage, new RegExp(PASSWORD));
+    assert.doesNotMatch(appPage, new RegExp(PASSWORD));
+    assert.doesNotMatch(signinPage, new RegExp(PASSWORD));
+    assert.match(appPage, /oauthapi\/authorize/);
+    assert.match(signinPage, /oauthapi\/authorize/);
+    assert.match(loginPage, new RegExp(PASSWORD));
+    assert.match(loginPage, /oauthapi\/authorize/);
+});
+
+test('makes the password script check the page again before it reads the password', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/login`);
+
+    const loginPage = await login.finishLoad(`${NAS}/login`);
+
+    const guard = loginPage.indexOf(`window.location.origin !== ${JSON.stringify(NAS)}`);
+    assert.notEqual(guard, -1);
+    assert.ok(guard < loginPage.indexOf(PASSWORD));
+});
+
+test('injects nothing into a page outside the confirmed NAS', async (t) => {
+    const login = setupLogin(t, { accessCode: ACCESS_CODE });
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+
+    for (const url of [`${EVIL}/login`, 'https://evil.com/x?next=/login', `http://nas.example.com:5667/login`]) {
+        assert.equal(await login.finishLoad(url), '', url);
+    }
+});
+
+test('fills the access code only on the confirmed NAS', async (t) => {
+    const login = setupLogin(t, { accessCode: ACCESS_CODE });
+    await login.start();
+
+    assert.doesNotMatch(await login.finishLoad('https://evil.com/'), new RegExp(ACCESS_CODE));
+
+    login.navigate('will-navigate', `${NAS}/`);
+    const nasPage = await login.finishLoad(`${NAS}/`);
+
+    assert.match(nasPage, new RegExp(ACCESS_CODE));
+    const guard = nasPage.indexOf(`window.location.origin !== ${JSON.stringify(NAS)}`);
+    assert.notEqual(guard, -1);
+    assert.ok(guard < nasPage.indexOf(ACCESS_CODE));
+});
+
 test('blocks main-frame redirects off the confirmed NAS but not subframe probes', async (t) => {
     const login = setupLogin(t);
     await login.start();
@@ -163,6 +225,17 @@ test('blocks main-frame redirects off the confirmed NAS but not subframe probes'
     assert.equal(login.navigate('will-navigate', 'https://evil.com/login'), false);
     assert.equal(login.navigate('will-navigate', 'http://nas.example.com:5667/login'), false);
     assert.equal(login.navigate('will-navigate', 'file:///C:/Windows/win.ini'), false);
+});
+
+test('a subframe probe does not become the confirmed NAS', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+
+    login.navigate('will-redirect', 'https://evil.com/bridge', { isMainFrame: false });
+    login.navigate('will-navigate', `${NAS}/v`);
+
+    assert.equal(await login.finishLoad('https://evil.com/login'), '');
+    assert.notEqual(await login.finishLoad(`${NAS}/login`), '');
 });
 
 test('continues an FN Connect target=_blank address in the same window and denies other popups', async (t) => {
@@ -179,4 +252,54 @@ test('continues an FN Connect target=_blank address in the same window and denie
 
     assert.deepEqual(oauthWindow.openHandler({ url: 'https://evil.com/' }), { action: 'deny' });
     assert.ok(!oauthWindow.loaded.includes('https://evil.com/'));
+});
+
+test('ignores bridge messages from an unconfirmed page or a subframe', async (t) => {
+    const login = setupLogin(t);
+    const oauthWindow = await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    const before = oauthWindow.loaded.length;
+
+    await login.finishLoad('https://evil.com/');
+    await login.bridge(sysConfig('https://evil.com'));
+    assert.equal(oauthWindow.loaded.length, before);
+
+    await login.finishLoad(`${NAS}/v`);
+    await login.bridge(sysConfig('https://evil.com'), { name: 'subframe' });
+    assert.equal(oauthWindow.loaded.length, before);
+});
+
+test('moves to the OAuth address the NAS reports', async (t) => {
+    const login = setupLogin(t);
+    const oauthWindow = await login.start();
+    login.navigate('will-navigate', 'http://192.0.2.10:5666/v');
+    await login.finishLoad('http://192.0.2.10:5666/v');
+
+    await login.bridge(sysConfig('https://other.example.net:8443'));
+
+    assert.match(oauthWindow.loaded.at(-1), /^https:\/\/other\.example\.net:8443\/signin\?client_id=app1/);
+    assert.match(await login.finishLoad('https://other.example.net:8443/login'), new RegExp(PASSWORD));
+    assert.doesNotMatch(await login.finishLoad('http://192.0.2.10:5666/login'), new RegExp(PASSWORD));
+});
+
+test('stays on the current NAS when the reported OAuth address downgrades to HTTP', async (t) => {
+    const login = setupLogin(t);
+    const oauthWindow = await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad(`${NAS}/v`);
+
+    await login.bridge(sysConfig('http://192.0.2.10:5666'));
+
+    assert.match(oauthWindow.loaded.at(-1), new RegExp(`^${NAS}/signin\\?client_id=app1`));
+});
+
+test('does not send the access code to an unconfirmed page that sets the token cookie', async (t) => {
+    const login = setupLogin(t, { accessCode: ACCESS_CODE });
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad('https://evil.com/');
+
+    await login.tokenCookieChanged();
+
+    assert.deepEqual(login.netRequests, []);
 });
