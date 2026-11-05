@@ -22,3 +22,25 @@ test('compact login panel remains scrollable on short windows', () => {
     assert.match(loginPage, /overflow-y: auto/);
     assert.match(loginPage, /scrollbar-gutter: stable/);
 });
+
+test('login page credits the original author and the current maintainer', () => {
+    const credits = [...loginPage.matchAll(/<span class="code-by">([^<]+)<\/span>\s*<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)]
+        .map(([, role, href, name]) => ({ role, href, name }));
+
+    assert.deepEqual(credits, [
+        { role: '原作者', href: 'https://github.com/QiaoKes/fntv-electron', name: 'Tag mig hånden' },
+        { role: '维护者', href: 'https://github.com/JayYa/fntv-electron', name: 'JayYa' },
+    ]);
+});
+
+test('every login page link opens through the GitHub-only external link handler', () => {
+    const anchors = loginPage.match(/<a\s[^>]*>/g);
+
+    assert.ok(anchors.length > 0);
+    for (const anchor of anchors) {
+        assert.match(anchor, /class="github-link"/);
+        const target = new URL(anchor.match(/href="([^"]+)"/)[1]);
+        assert.equal(target.protocol, 'https:');
+        assert.equal(target.hostname, 'github.com');
+    }
+});
