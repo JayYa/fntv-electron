@@ -29,7 +29,10 @@ FN ID 窗口是隔离的。访问码只在当前页面是 fnOS 访问码页时�
 - 当前配置和历史里的访问码都由 `safeStorage` 加密。没有 `accessCode` 的旧历史记录读出来是空值。
 - 当前访问码解不开时，`readConfig` 连同 token 一起按未登录返回，启动回到登录页，不跳过网关。两者的密文都保留，密钥恢复后还能用。
 - 访问码不进日志、URL、命令行参数和环境变量，也不出现在 Proxy 响应里。派生的 Cookie 不出现在播放会话 URL 里。
-- 本地登录页需要回填表单，所以 `config-data` 会把解密后的访问码发给它，`history` 里还带解密后的密码。原设计写的“渲染进程配置摘要不含访问码”与这一点不符，以当前代码为准。这个范围只限本地登录页，远程页面拿不到；长期 token 不发给渲染进程。
+- `config-data` 不含密码、访问码和 token。当前配置只带 `hasAccessCode` 布尔值，`history` 只带 `domain`、`account` 和 `useHttps`。
+- 明文凭据按需发给本地登录页：用户点击历史时走 `get-history-credentials`，当前配置有访问码时走 `get-current-access-code` 回填表单。主进程校验 `senderFrame` 是本地 `file:` 登录页，其它来源不回复。回复带域名和账号，登录页丢弃对不上的回复。解不开的凭据是空值，表单留空由用户手动输入。
+- 按需频道减少的是登录页内存里常驻的明文，防不了登录页自身被注入：注入的脚本同样能发这些请求，只是要逐条取。当前访问码在打开登录页时就会回填，和改动前一样留在表单里。
+- 配置里的 token 不经 IPC 发给渲染进程，但它不是只留在主进程：`Trim-MC-token` Cookie 是 `httpOnly: false`，飞牛网页前端要读取它（`src/modules/fn_config/cookie.ts`），所以远程页面的脚本能读到 token。
 
 ## Consequences
 

@@ -12,11 +12,6 @@ test('login page exposes an optional password-style access-code control', () => 
     assert.match(loginPage, /accessCode: accessCode/);
 });
 
-test('login history and current config restore the optional access code', () => {
-    assert.match(loginPage, /accessCodeInput\.value = item\.accessCode \|\| ''/);
-    assert.match(loginPage, /accessCodeInput\.value = config\.accessCode/);
-});
-
 test('compact login panel remains scrollable on short windows', () => {
     assert.match(loginPage, /max-height: calc\(100vh - 24px\)/);
     assert.match(loginPage, /overflow-y: auto/);
