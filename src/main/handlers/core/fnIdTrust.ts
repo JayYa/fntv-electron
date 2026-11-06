@@ -1,3 +1,5 @@
+import { isIP } from 'net';
+
 /**
  * FN ID 登录窗口的页面信任判断。
  *
@@ -57,6 +59,13 @@ function nasPagePath(url: URL, trust: FnIdTrust): string | null {
         : null;
 }
 
+/** 按 Cookie 规则判断 host 能否读到 domain 下的 Cookie。domain 不含端口，以点开头时包含子域。 */
+function cookieDomainCovers(domain: string, host: string): boolean {
+    const normalized = domain.toLowerCase();
+    if (normalized.replace(/^[.]/, '') === host) return true;
+    return normalized.startsWith('.') && !isIP(host) && host.endsWith(normalized);
+}
+
 export function createFnIdTrust(fnConnectUrl: string): FnIdTrust {
     return { fnConnectUrl, targetOrigin: null };
 }
@@ -72,6 +81,19 @@ export function isFnIdLoginPage(pageUrl: string, trust: FnIdTrust): boolean {
     const page = parseWebUrl(pageUrl);
     const path = page && nasPagePath(page, trust);
     return typeof path === 'string' && LOGIN_PATH.test(path);
+}
+
+/**
+ * 登录窗口的分区里，只有目标 NAS 或中继页能读到的 Cookie 才能当作登录 token。
+ * 中继页不看 Cookie 的路径：真实中继没有验证过，路径猜错会让中继登录失败。
+ * 取到的 token 还要过 NAS 的用户信息接口，这里只排除其它站点的 Cookie。
+ */
+export function isFnIdTokenCookie(cookie: { domain?: string }, trust: FnIdTrust): boolean {
+    const { domain } = cookie;
+    if (!domain) return false;
+    const hosts = [new URL(trust.fnConnectUrl).hostname];
+    if (trust.targetOrigin) hosts.push(new URL(trust.targetOrigin).hostname);
+    return hosts.some((host) => cookieDomainCovers(domain, host));
 }
 
 /**

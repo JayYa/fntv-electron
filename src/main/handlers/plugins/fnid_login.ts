@@ -10,6 +10,7 @@ import {
     createFnIdTrust,
     isFnIdLoginPage,
     isFnIdNasPage,
+    isFnIdTokenCookie,
     resolveFnIdNavigation,
     resolveFnIdOauthTrust,
     resolveFnIdWindowOpen,
@@ -452,6 +453,14 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                 }
             }
 
+            // 只记 Cookie 的域，不记值。登录走不通时靠这行判断是不是误拒。
+            function logIgnoredTokenCookies(domains: Array<string | undefined>): void {
+                log.info(
+                    `[FN ID] 忽略目标范围外的登录 Cookie，Cookie 域: ${domains.join(', ')}，`
+                    + `已确认目标: ${trust.targetOrigin !== null}`,
+                );
+            }
+
             async function tryCompleteFromSession(): Promise<void> {
                 if (loginCompleted || authRequested || cookieCheckInProgress || !oauthWindow || oauthWindow.isDestroyed()) return;
                 cookieCheckInProgress = true;
@@ -461,8 +470,14 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                     if (!isFnIdNasPage(currentUrl, trust)) return;
 
                     const cookies = await oauthSession.cookies.get({ name: 'Trim-MC-token' });
-                    const tokenCookie = cookies.find((cookie) => cookie.value.length > 0);
-                    if (!tokenCookie) return;
+                    const candidates = cookies.filter((cookie) => cookie.value.length > 0);
+                    const tokenCookie = candidates.find((cookie) => isFnIdTokenCookie(cookie, trust));
+                    if (!tokenCookie) {
+                        if (candidates.length > 0) {
+                            logIgnoredTokenCookies(candidates.map((cookie) => cookie.domain));
+                        }
+                        return;
+                    }
 
                     const targetBaseUrl = await establishTargetSession(
                         resolveFnConnectBaseUrl(currentUrl, fnConnectUrl),
@@ -491,6 +506,10 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
 
             oauthSession.cookies.on('changed', (_event, cookie, _cause, removed) => {
                 if (removed || cookie.name !== 'Trim-MC-token' || !cookie.value) return;
+                if (!isFnIdTokenCookie(cookie, trust)) {
+                    logIgnoredTokenCookies([cookie.domain]);
+                    return;
+                }
                 tryCompleteFromSession().catch((error: unknown) => {
                     log.error('[FN ID] Cookie 变更处理失败:', error);
                 });

@@ -4,6 +4,7 @@ const {
     createFnIdTrust,
     isFnIdLoginPage,
     isFnIdNasPage,
+    isFnIdTokenCookie,
     resolveFnIdNavigation,
     resolveFnIdOauthTrust,
     resolveFnIdWindowOpen,
@@ -192,5 +193,54 @@ test('moves trust to the OAuth address a NAS reports unless it downgrades', () =
         'https://5ddd.com',
     ]) {
         assert.equal(resolveFnIdOauthTrust(url, httpsTrust), null, url);
+    }
+});
+
+test('accepts the token cookie shapes Chromium stores for the confirmed NAS', () => {
+    const accepted = [
+        ['http://192.168.1.10:5666', '192.168.1.10'],
+        ['http://[fd00::10]:5666', '[fd00::10]'],
+        ['https://demo.fnos.net', 'demo.fnos.net'],
+        ['https://demo.fnos.net', '.demo.fnos.net'],
+        ['https://demo.fnos.net', '.fnos.net'],
+        ['https://demo.fnos.net:5667', 'DEMO.fnos.net'],
+    ];
+
+    for (const [origin, domain] of accepted) {
+        assert.equal(isFnIdTokenCookie({ domain }, trustFor(origin)), true, `${origin} ${domain}`);
+    }
+});
+
+test('accepts token cookies of the FN Connect relay with or without a confirmed NAS', () => {
+    for (const trust of [createFnIdTrust(FN_CONNECT_URL), trustFor('https://demo.fnos.net')]) {
+        assert.equal(isFnIdTokenCookie({ domain: '5ddd.com' }, trust), true);
+        assert.equal(isFnIdTokenCookie({ domain: '.5ddd.com' }, trust), true);
+    }
+});
+
+test('refuses token cookies no confirmed NAS or relay page can read', () => {
+    const lan = trustFor('http://192.168.1.10:5666');
+    const nas = trustFor('https://demo.fnos.net');
+
+    for (const [domain, trust] of [
+        ['evil.com', nas],
+        ['.evil.com', nas],
+        ['demo.fnos.net.evil.com', nas],
+        ['.demo.fnos.net.evil.com', nas],
+        ['xdemo.fnos.net', nas],
+        ['fnos.net', nas],
+        ['other.demo.fnos.net', nas],
+        ['.other.demo.fnos.net', nas],
+        ['check.fnos.net', nas],
+        ['www.5ddd.com', nas],
+        ['x5ddd.com', nas],
+        ['192.168.1.11', lan],
+        ['.1.10', lan],
+        ['.168.1.10', lan],
+        ['demo.fnos.net', createFnIdTrust(FN_CONNECT_URL)],
+        ['', nas],
+        [undefined, nas],
+    ]) {
+        assert.equal(isFnIdTokenCookie({ domain }, trust), false, String(domain));
     }
 });
