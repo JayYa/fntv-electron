@@ -8,7 +8,8 @@ function injectTitleBar(): void {
     logger.info('Injecting custom title bar...');
     if (document.getElementById('custom-titlebar')) return;
 
-    const isMac = process.platform === 'darwin';
+    // Chromium 在 macOS 上固定返回 MacIntel，Apple 芯片也一样。
+    const isMac = navigator.platform.startsWith('Mac');
 
     const bar = document.createElement('div');
     bar.id = 'custom-titlebar';

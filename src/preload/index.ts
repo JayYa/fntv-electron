@@ -1,11 +1,16 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { contextBridge, ipcRenderer, shell } from 'electron';
 
 import { HookType, runHooks } from './core/hooks';
 
 // 导入渲染进程日志模块
 import preloadLogger from './core/logger';
+
+// 沙箱里不能读目录，也不能 require 相对路径，插件只能静态导入。新增插件时在这里加一行。
+// 保持字母序，和原来 readdirSync 的加载顺序一致（tests/preloadBundle.test.cjs）。
+import './plugins/continueWatchingMenu';
+import './plugins/playButton';
+import './plugins/playMaskButton';
+import './plugins/titlebar';
 
 const SEND_CHANNELS = new Set([
     'login', 'delete-history-item', 'clear-history', 'get-config',
@@ -75,14 +80,6 @@ function exposeLoginPageApi(): void {
 }
 
 exposeLoginPageApi();
-
-// 自动加载插件
-const pluginsDir = path.join(__dirname, 'plugins');
-fs.readdirSync(pluginsDir).forEach((file: string) => {
-    if (file.endsWith('.js')) {
-        require(path.join(pluginsDir, file));
-    }
-});
 
 function initInjector(): void {
     if (document.readyState !== 'loading') {
