@@ -1,4 +1,4 @@
-import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, ipcMain } from 'electron';
+import { Tray, Menu, nativeImage, BrowserWindow, app, dialog } from 'electron';
 import * as path from 'path';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';

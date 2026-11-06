@@ -40,7 +40,7 @@ const loggerInterface: ILogger = {
     info: (message: string, ...args: any[]) => logger.info(message, ...args),
     warn: (message: string, ...args: any[]) => logger.warn(message, ...args),
     error: (message: string, ...args: any[]) => logger.error(message, ...args),
-    noformat: (message: string, ...args: any[]) => logger.noformat(message),
+    noformat: (message: string) => logger.noformat(message),
     log: (message: string, ...args: any[]) => logger.info(message, ...args), // log方法映射到info
     
     // 提供logger实例的访问

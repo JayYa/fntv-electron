@@ -5,7 +5,6 @@
 
 import { 
     maskingPatterns, 
-    maskingChars, 
     maskingEnabled, 
     sensitiveKeywords,
     MaskType
@@ -102,7 +101,7 @@ function maskDomain(domainUrl: string): string {
                 return maskHostname(domainUrl);
             }
         }
-    } catch (error) {
+    } catch {
         // 如果URL解析失败，尝试按域名:端口格式处理
         const colonIndex = domainUrl.lastIndexOf(':');
         if (colonIndex > 0 && /^\d+$/.test(domainUrl.substring(colonIndex + 1))) {
@@ -129,7 +128,7 @@ function maskHostname(hostname: string): string {
     const ipPattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
     const ipMatch = hostname.match(ipPattern);
     if (ipMatch) {
-        const [, ip1, ip2, ip3, ip4] = ipMatch;
+        const [, ip1, ip2] = ipMatch;
         return `${ip1}.${ip2}.***.**`;
     }
 
@@ -199,7 +198,7 @@ export function maskStringByPatterns(text: string): string {
     let maskedText = text;
 
     // 遍历所有脱敏模式
-    Object.entries(maskingPatterns).forEach(([category, config]) => {
+    Object.entries(maskingPatterns).forEach(([, config]) => {
         config.patterns.forEach(pattern => {
             maskedText = maskedText.replace(pattern, (match, ...args) => {
                 // 找到捕获组中的敏感数据
@@ -382,7 +381,7 @@ export function maskError(error: any): any {
  * 启用/禁用脱敏功能
  * @param enabled - 是否启用
  */
-export function setMaskingEnabled(enabled: boolean): void {
+export function setMaskingEnabled(_enabled: boolean): void {
     // 注意：这里不能直接修改导入的常量，需要通过其他方式实现
     console.warn('动态修改脱敏状态需要重新配置模块');
 }

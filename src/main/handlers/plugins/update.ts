@@ -12,13 +12,13 @@ import * as log from '../../../modules/logger';
 const updateChecker = getUpdateChecker();
 
 // 处理手动检查更新
-async function handleCheckUpdate(event: IpcMainEvent): Promise<void> {
+async function handleCheckUpdate(): Promise<void> {
     log.info('收到手动检查更新请求');
     await updateChecker.manualCheckForUpdates();
 }
 
 // 处理自动检查更新
-async function handleAutoCheckUpdate(event: IpcMainEvent): Promise<void> {
+async function handleAutoCheckUpdate(): Promise<void> {
     log.info('收到自动检查更新请求');
     await updateChecker.autoCheckForUpdates();
 }

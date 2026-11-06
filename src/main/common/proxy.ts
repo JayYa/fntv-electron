@@ -1,12 +1,7 @@
-import { app, BrowserWindow, dialog, Notification } from 'electron';
+import { app, dialog } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { registerAllPlugins } from '../handlers';
-import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
-import * as winctrl from './winctrl';
-import { createTray, showTrayNotification, destroyTray } from './tray';
-import { getMacCloseAction, setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
 import { getDaemonInstance, ProxyDaemon } from './proxyDaemon';
 import { PROXY_PORT, probeProxyHealth, waitForProxyHealth } from './proxyHealth';

@@ -3,7 +3,7 @@ import axios, { AxiosResponse } from 'axios';
 import { setTimeout } from 'timers/promises';
 import https from 'https';
 import log from '../logger';
-import { isTrusted, showCertificateTrustDialog, isCertificateError, addTrustedHost } from '../cert_trust';
+import { isTrusted, isCertificateError } from '../cert_trust';
 import { composeCookieHeader, getAccessCookieHeader } from './accessGrant';
 
 // 全局配置

@@ -11,7 +11,7 @@ const preloadLogger: Logger = {
     debug: (...args: any[]): void => {
         try {
             ipcRenderer.invoke('log-message', 'debug', ...args);
-        } catch (error) {
+        } catch {
             // 如果IPC不可用，回退到console（仅在开发环境）
             if (process.env.NODE_ENV === 'development') {
                 console.debug(...args);
@@ -22,7 +22,7 @@ const preloadLogger: Logger = {
     info: (...args: any[]): void => {
         try {
             ipcRenderer.invoke('log-message', 'info', ...args);
-        } catch (error) {
+        } catch {
             if (process.env.NODE_ENV === 'development') {
                 console.info(...args);
             }
@@ -32,7 +32,7 @@ const preloadLogger: Logger = {
     warn: (...args: any[]): void => {
         try {
             ipcRenderer.invoke('log-message', 'warn', ...args);
-        } catch (error) {
+        } catch {
             if (process.env.NODE_ENV === 'development') {
                 console.warn(...args);
             }
@@ -42,7 +42,7 @@ const preloadLogger: Logger = {
     error: (...args: any[]): void => {
         try {
             ipcRenderer.invoke('log-message', 'error', ...args);
-        } catch (error) {
+        } catch {
             if (process.env.NODE_ENV === 'development') {
                 console.error(...args);
             }
@@ -52,7 +52,7 @@ const preloadLogger: Logger = {
     log: (...args: any[]): void => {
         try {
             ipcRenderer.invoke('log-message', 'info', ...args);
-        } catch (error) {
+        } catch {
             if (process.env.NODE_ENV === 'development') {
                 console.log(...args);
             }

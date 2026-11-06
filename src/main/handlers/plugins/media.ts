@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, IpcMainEvent } from 'electron';
+import { app, dialog, IpcMainEvent } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
 import * as fnConfig from '../../../modules/fn_config/config';
@@ -7,7 +7,7 @@ import { registerAppHook } from '../core/appHook';
 import * as log from '../../../modules/logger';
 import * as os from 'os';
 import * as fs from 'fs';
-import { PlayStatusData, ItemListRequest } from '../../../modules/fn_api/types';
+import { ItemListRequest } from '../../../modules/fn_api/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
@@ -453,7 +453,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 
-    let playConfig: ply.Config = {
+    const playConfig: ply.Config = {
         fnapi: fnapi,
         playerPath: playerPath,
         // headers: {

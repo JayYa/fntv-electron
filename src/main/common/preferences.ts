@@ -10,11 +10,6 @@ import {
     setTrayNotificationShown as setConfigTrayNotificationShown
 } from '../../modules/fn_config/config';
 
-interface UserPreferences {
-    macCloseAction?: 'minimize' | 'quit' | 'ask';
-    trayNotificationShown?: boolean;
-}
-
 /**
  * 获取 macOS 关闭行为偏好
  */

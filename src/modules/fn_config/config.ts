@@ -179,7 +179,7 @@ function isHistoryItem(item: unknown): item is HistoryItem {
 }
 
 function hasUnusableHistory(stored: { history?: unknown }): boolean {
-    return stored.history != null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
+    return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
 }
 
 // 这样的文件读出来会丢内容，被替换前要留底。

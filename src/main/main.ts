@@ -1,7 +1,4 @@
 import { app, BrowserWindow, dialog, Notification } from 'electron';
-import { spawn, ChildProcess } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
 import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import * as winctrl from './common/winctrl';
@@ -18,7 +15,6 @@ app.commandLine.appendSwitch('--lang', 'en-US');
 app.commandLine.appendSwitch('--disable-features', 'VizDisplayCompositor');
 
 let mainWindow: BrowserWindow | null = null;
-let proxyProcess: ChildProcess | null = null;
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -27,7 +23,7 @@ if (!gotTheLock) {
     app.quit();
 } else {
     // 当尝试启动第二个实例时，聚焦到现有窗口
-    app.on('second-instance', (event, commandLine, workingDirectory) => {
+    app.on('second-instance', () => {
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             if (!mainWindow.isVisible()) mainWindow.show();
@@ -66,7 +62,7 @@ if (!gotTheLock) {
             });
 
             // 启动代理服务器
-            proxyProcess = await startProxyProcess();
+            await startProxyProcess();
 
             // 创建主窗口
             mainWindow = getMainWindow();
