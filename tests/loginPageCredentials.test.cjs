@@ -1,10 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
-
-const pageScript = fs.readFileSync(path.join(__dirname, '../resource/login/index.js'), 'utf8');
+const { loginPageScripts } = require('./helpers/loginPage.cjs');
 
 function createElement() {
     const listeners = new Map();
@@ -83,7 +80,10 @@ function openLoginPage() {
             log: { info() {}, warn() {}, error() {} },
         }),
     };
-    vm.runInNewContext(pageScript, context);
+    vm.createContext(context);
+    for (const { name, source } of loginPageScripts()) {
+        vm.runInContext(source, context, { filename: name });
+    }
 
     const form = () => ({
         domain: getElement('domain').value,

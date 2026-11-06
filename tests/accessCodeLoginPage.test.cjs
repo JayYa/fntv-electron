@@ -2,10 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loginPageStyles } = require('./helpers/loginPage.cjs');
+const { loginPageScriptText, loginPageStyles } = require('./helpers/loginPage.cjs');
 
 const loginPage = fs.readFileSync(path.join(__dirname, '../resource/login/index.html'), 'utf8');
-const loginScript = fs.readFileSync(path.join(__dirname, '../resource/login/index.js'), 'utf8');
+const loginScript = loginPageScriptText();
 const loginStyles = loginPageStyles();
 
 test('login page exposes an optional password-style access-code control', () => {

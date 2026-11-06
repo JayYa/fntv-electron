@@ -22,4 +22,12 @@ function loginPageStyles() {
         .join('\n');
 }
 
-module.exports = { loginPageStyles };
+// 按页面加载顺序返回每个脚本，要模拟真实加载时逐个运行，不要拼起来：拼接后函数提升会盖住顺序问题。
+function loginPageScripts() {
+    return referencedFiles(/<script src="\.\/([^"]+)"/g, '.js')
+        .map((name) => ({ name, source: readLoginFile(name) }));
+}
+
+const loginPageScriptText = () => loginPageScripts().map(({ source }) => source).join('\n');
+
+module.exports = { loginPageScriptText, loginPageScripts, loginPageStyles };

@@ -5,7 +5,7 @@
 - `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。
 - `pnpm run compile`：先清空 `dest/` 再运行 `tsc`，已删除源文件的旧 js 不会留下来被 `readdirSync` 加载。`tsBuildInfoFile` 要留在 `dest/` 里，放到外面时 `tsc` 会认为无需输出，留下空目录。`pnpm run watch` 不清理，删过文件后跑一次 `compile`。
 - `go test ./...`：改 Go 代码时在 `src/modules/proxy` 下运行。
-- `pnpm run lint`：用 ESLint 检查 `src/**/*.ts` 和 `resource/login/index.js`，规则在 `eslint.config.mjs`。
+- `pnpm run lint`：用 ESLint 检查 `src/**/*.ts` 和 `resource/login/*.js`，规则在 `eslint.config.mjs`。
 - CI 三项都跑（`.github/workflows/ci.yml`）。
 
 ### `Electron failed to install correctly`
@@ -27,7 +27,7 @@
 
 - 断言公开入口的输入、输出和落盘结果，不绑定内部函数和调用顺序。例如 `synchronizeMpvConfig` 的测试只看返回值和目录内容。
 - 测试走模块已有的公开入口或依赖参数，不为测试新增接缝。
-- 文本断言只用于没有运行入口的内容：`resource/login/index.html`、`resource/login/index.js` 和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
+- 文本断言只用于没有运行入口的内容：`resource/login/` 下的页面、样式、脚本和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
 - 测试失败时先判断是行为回归还是测试过期，只有测试过期才改断言。
 
 ## 配置和工作流

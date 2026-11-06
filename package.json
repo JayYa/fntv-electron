@@ -17,7 +17,7 @@
         "start": "pnpm run clean && pnpm run build:proxy:win && tsc && electron .",
         "start:mac": "pnpm run clean && pnpm run build:proxy:mac && pnpm run compile && electron .",
         "compile": "pnpm run clean && tsc",
-        "lint": "eslint src resource/login/index.js",
+        "lint": "eslint src resource/login",
         "prepare": "git config core.hooksPath .githooks",
         "test": "pnpm run compile && node --test tests/*.test.cjs",
         "watch": "tsc --watch",

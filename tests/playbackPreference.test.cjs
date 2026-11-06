@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { loginPageScriptText } = require('./helpers/loginPage.cjs');
 const {
     isMpvPlaybackEnabled,
 } = require('../dest/modules/fn_config/playbackPreference.js');
@@ -25,10 +26,7 @@ test('preload timeout and login settings default to MPV playback', () => {
         path.join(__dirname, '..', 'resource', 'login', 'index.html'),
         'utf8',
     );
-    const loginScript = fs.readFileSync(
-        path.join(__dirname, '..', 'resource', 'login', 'index.js'),
-        'utf8',
-    );
+    const loginScript = loginPageScriptText();
 
     assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: true \}\)/);
     assert.match(loginPage, /id="hideOriginalPlayButtonSwitch" checked/);
