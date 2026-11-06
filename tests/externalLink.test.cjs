@@ -108,3 +108,15 @@ test('frames other than the login page cannot open links', async (t) => {
 
     assert.deepEqual(opened, []);
 });
+
+test('refuses GitHub addresses with credentials or a custom port', () => {
+    for (const url of [
+        'https://user:pw@github.com/x',
+        'https://user@github.com/x',
+        'https://github.com:8443/x',
+    ]) {
+        assert.equal(resolveAllowedExternalUrl(url), null, url);
+    }
+
+    assert.equal(resolveAllowedExternalUrl('https://github.com:443/x'), 'https://github.com/x');
+});

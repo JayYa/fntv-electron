@@ -23,7 +23,7 @@ async function handleOpenExternal(event: IpcMainInvokeEvent, url: unknown): Prom
     }
 
     await shell.openExternal(target);
-    log.info('已打开外链:', new URL(target).pathname);
+    log.info('已打开外链');
 }
 
 function init(): void {

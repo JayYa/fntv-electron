@@ -25,7 +25,7 @@
 - 主窗口保持 `sandbox: true`，加载 esbuild 打包的 `dest/preload/bundle.js`。preload 只能 `require('electron')`，不用 `fs`、`path`、`__dirname`、`process` 和 `electron.shell`，需要这些能力时走主进程 IPC。打包用 `platform: 'browser'`，导入 Node 内置模块时构建失败（`scripts/build-preload.cjs`，`tests/preloadBundle.test.cjs`）。
 - preload 插件在 `src/preload/index.ts` 里按字母序静态导入，并写进 `PLUGINS`，放进 `plugins/` 目录不会自动加载（`tests/preloadBundle.test.cjs`）。
 - 本地页面只通过 `window.electronAPI` 访问主进程。这个桥只暴露给 `file:` 页面，远程页面拿不到（`src/preload/index.ts`）。
-- 新增页面可用的 IPC 频道时加进 `src/preload/index.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
+- 新增页面可用的 IPC 频道时加进 `src/preload/loginPageApi.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
 - IPC 处理器用 `registerHandler` 注册，不直接调 `ipcMain.on`。它捕获同步和异步错误并写日志，处理器不用自己防未捕获异常。需要告诉渲染进程失败时才写 `try`/`catch` 并回复（`src/main/handlers/core/ipcHandler.ts`，`tests/ipcHandler.test.cjs`）。
 - FN ID 窗口加载远程页面。向它注入脚本、处理 bridge 消息、放行导航或采用 `Trim-MC-token` Cookie 前，都要过 `fnIdTrust.ts` 的判断。NAS 地址由 FN Connect 运行时返回，不要改成域名白名单（`tests/fnIdTrust.test.cjs`、`tests/fnIdLogin.test.cjs`）。
 - `config-data` 按字段白名单发送，不含密码、访问码和 token（`src/main/handlers/plugins/auth.ts`，`tests/loginCredentials.test.cjs`）。

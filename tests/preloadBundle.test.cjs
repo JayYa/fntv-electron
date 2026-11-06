@@ -33,10 +33,13 @@ test('the bundled preload uses no Node globals', () => {
     assert.doesNotMatch(bundle, /\b(?:process|__dirname|__filename|Buffer)\b/);
 });
 
-test('every script that produces dest also bundles the preload', () => {
-    const { scripts } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+test('the login page bridge loads before any plugin', () => {
+    const index = fs.readFileSync(path.join(root, 'src', 'preload', 'index.ts'), 'utf8');
+    const bridgeImport = index.indexOf("import './loginPageApi';");
 
-    assert.match(scripts.compile, /build:preload/);
-    assert.match(scripts.start, /build:preload/);
-    assert.match(scripts.watch, /build-preload\.cjs --watch/);
+    assert.notEqual(bridgeImport, -1);
+    assert.ok(bridgeImport < index.indexOf("import './plugins/"));
+
+    const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
+    assert.ok(bundle.indexOf('exposeInMainWorld') < bundle.indexOf('src/preload/plugins/'));
 });

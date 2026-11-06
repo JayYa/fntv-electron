@@ -217,7 +217,7 @@ test('a credential request without a domain and account is ignored', (t) => {
 });
 
 test('the preload bridge allows the credential channels', () => {
-    const preload = fs.readFileSync(path.join(__dirname, '..', 'src', 'preload', 'index.ts'), 'utf8');
+    const preload = fs.readFileSync(path.join(__dirname, '..', 'src', 'preload', 'loginPageApi.ts'), 'utf8');
     const [, send] = preload.match(/SEND_CHANNELS = new Set\(\[([^\]]+)\]/);
     const [, receive] = preload.match(/RECEIVE_CHANNELS = new Set\(\[([^\]]+)\]/);
 
