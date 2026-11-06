@@ -413,3 +413,40 @@ test('a token cookie change on another site does not start the login check', asy
 
     assert.deepEqual(login.nasRequests, []);
 });
+
+test('treats only URL-safe 6 to 30 character input as an FN ID', async (t) => {
+    const { isFnId } = setupLogin(t);
+
+    for (const value of [
+        'demo123',
+        'my-nas-01',
+        'my_nas_01',
+        'DEMO123',
+        '123456',
+        '  demo123  ',
+        'a'.repeat(30),
+    ]) {
+        assert.equal(isFnId(value), true, value);
+    }
+
+    for (const value of [
+        '',
+        'demo1',
+        'a'.repeat(31),
+        'nas.example.com',
+        'demo/123',
+        'demo123/../other99',
+        'demo?123',
+        'demo#123',
+        'demo 123',
+        'demo\n123',
+        'demo\123',
+        'demo%2f123',
+        'demo@123',
+        'demo:5666',
+        '[fd00::10]:5666',
+        '飞牛账号一二三',
+    ]) {
+        assert.equal(isFnId(value), false, value);
+    }
+});
