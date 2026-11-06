@@ -8,6 +8,7 @@ nodeLinker: hoisted
 allowBuilds:
   electron: true
   electron-winstaller: true
+  esbuild: true
   sharp: true
 
 # electron 的 postinstall 靠 extract-zip 解压。yauzl 2.10 在 Node 26 上读不出数据，

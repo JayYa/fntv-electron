@@ -15,3 +15,25 @@ test('preload statically imports every plugin in alphabetical order', () => {
 
     assert.deepEqual(imported, plugins);
 });
+
+test('the bundled preload requires nothing but electron', () => {
+    const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
+
+    assert.match(bundle, /require\("electron"\)/);
+    // 把允许的调用去掉后不能再出现 require，esbuild 的 __require 也算。
+    assert.doesNotMatch(bundle.replaceAll('require("electron")', ''), /require/);
+});
+
+test('the bundled preload uses no Node globals', () => {
+    const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
+
+    assert.doesNotMatch(bundle, /\b(?:process|__dirname|__filename|Buffer)\b/);
+});
+
+test('every script that produces dest also bundles the preload', () => {
+    const { scripts } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+
+    assert.match(scripts.compile, /build:preload/);
+    assert.match(scripts.start, /build:preload/);
+    assert.match(scripts.watch, /build-preload\.cjs --watch/);
+});
