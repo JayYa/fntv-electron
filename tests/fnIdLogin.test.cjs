@@ -440,7 +440,7 @@ test('treats only URL-safe 6 to 30 character input as an FN ID', async (t) => {
         'demo#123',
         'demo 123',
         'demo\n123',
-        'demo\123',
+        'demo\\123',
         'demo%2f123',
         'demo@123',
         'demo:5666',

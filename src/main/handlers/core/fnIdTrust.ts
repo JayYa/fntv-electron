@@ -84,16 +84,15 @@ export function isFnIdLoginPage(pageUrl: string, trust: FnIdTrust): boolean {
 }
 
 /**
- * 登录窗口的分区里，只有目标 NAS 或中继页能读到的 Cookie 才能当作登录 token。
+ * 登录窗口的分区里，确认目标前只认中继页的 Cookie，确认后只认目标 NAS 的 Cookie。
  * 中继页不看 Cookie 的路径：真实中继没有验证过，路径猜错会让中继登录失败。
  * 取到的 token 还要过 NAS 的用户信息接口，这里只排除其它站点的 Cookie。
  */
 export function isFnIdTokenCookie(cookie: { domain?: string }, trust: FnIdTrust): boolean {
     const { domain } = cookie;
     if (!domain) return false;
-    const hosts = [new URL(trust.fnConnectUrl).hostname];
-    if (trust.targetOrigin) hosts.push(new URL(trust.targetOrigin).hostname);
-    return hosts.some((host) => cookieDomainCovers(domain, host));
+    // 确认目标后中继的 Cookie 不再可用：它不是目标 NAS 的 token，放弃后还能走 OAuth。
+    return cookieDomainCovers(domain, new URL(trust.targetOrigin ?? trust.fnConnectUrl).hostname);
 }
 
 /**

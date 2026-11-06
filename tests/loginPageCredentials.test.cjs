@@ -290,7 +290,7 @@ test('login page accepts the same FN ID characters as the main process', () => {
         'demo?123',
         'demo#123',
         'demo 123',
-        'demo\123',
+        'demo\\123',
         'demo%2f123',
         'demo@123',
         'demo:5666',

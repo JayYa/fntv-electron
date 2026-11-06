@@ -211,10 +211,13 @@ test('accepts the token cookie shapes Chromium stores for the confirmed NAS', ()
     }
 });
 
-test('accepts token cookies of the FN Connect relay with or without a confirmed NAS', () => {
-    for (const trust of [createFnIdTrust(FN_CONNECT_URL), trustFor('https://demo.fnos.net')]) {
-        assert.equal(isFnIdTokenCookie({ domain: '5ddd.com' }, trust), true);
-        assert.equal(isFnIdTokenCookie({ domain: '.5ddd.com' }, trust), true);
+test('accepts relay token cookies only until a NAS is confirmed', () => {
+    const relay = createFnIdTrust(FN_CONNECT_URL);
+    const nas = trustFor('https://demo.fnos.net');
+
+    for (const domain of ['5ddd.com', '.5ddd.com']) {
+        assert.equal(isFnIdTokenCookie({ domain }, relay), true);
+        assert.equal(isFnIdTokenCookie({ domain }, nas), false);
     }
 });
 
