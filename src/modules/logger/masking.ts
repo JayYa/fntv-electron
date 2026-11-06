@@ -376,12 +376,3 @@ export function maskError(error: any): any {
 
     return maskSensitiveData(error);
 }
-
-/**
- * 启用/禁用脱敏功能
- * @param enabled - 是否启用
- */
-export function setMaskingEnabled(_enabled: boolean): void {
-    // 注意：这里不能直接修改导入的常量，需要通过其他方式实现
-    console.warn('动态修改脱敏状态需要重新配置模块');
-}
