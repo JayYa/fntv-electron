@@ -108,3 +108,7 @@
 
 - `type`：`feat`、`fix`、`docs`、`refactor`、`test`、`chore`。
 - `scope`：受影响的模块或领域，例如 `player`、`media`、`playback`、`agents`。没有明确模块时可以省略。
+
+## 文件大小
+
+agent 写的文件不超过 5,000 tokens（字节数 / 4）。`pnpm install` 会启用 `.githooks/pre-commit`，它只检查暂存文件，超限时按错误信息拆分。二进制文件自动跳过，锁文件和生成文件在 `.gitattributes` 里标 `-agent-authored`（`scripts/check-staged-file-size.cjs`，`tests/stagedFileSize.test.cjs`）。

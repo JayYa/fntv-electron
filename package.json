@@ -18,6 +18,7 @@
         "start:mac": "pnpm run clean && pnpm run build:proxy:mac && pnpm run compile && electron .",
         "compile": "pnpm run clean && tsc",
         "lint": "eslint src resource/login/index.js",
+        "prepare": "git config core.hooksPath .githooks",
         "test": "pnpm run compile && node --test tests/*.test.cjs",
         "watch": "tsc --watch",
         "clean": "rimraf dest",

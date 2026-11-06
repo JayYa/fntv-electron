@@ -132,3 +132,9 @@
 - 维护者运行应用后合并了 PR #48。`log/app.log` 里 2026-11-07 00:09 那次启动和直连登录成功，只有已知的两条：`fnid_login.js` 没有 init，以及 worktree 缺 MPV 配置目录。
 - `config.ts` 和 `cookie.ts` 改成纯 ES export，`module.exports =` 被 lint 禁止，`docs/wiki` 里此前关于导出表的坑已被取代。
 - 文档里的“验证：”命令由 `tests/standards.test.cjs` 实际运行。
+
+## 2026-11-07 #45 合并和文件大小限制（`JayYa/fntv-electron@cc1d785`）
+
+- 维护者用真实 FN ID 走局域网登录成功后合并了 PR #50。这次走的是 OAuth 授权码路径，“检测到有效登录 Cookie”路径未被真实流程覆盖。
+- 维护者要求在继续其他 issue 前加 pre-commit 检查：暂存文件不超过 5,000 tokens（字节数 / 4），跳过非 agent 写的文件，错误信息要写清拆分方法。
+- 截至 `cc1d785`，agent 写的超限文件有 `fnid_login.ts`、`resource/login/index.html`、`resource/login/index.js`、`tests/credentialStorage.test.cjs`。下次改动它们时要先拆分。
