@@ -126,3 +126,9 @@
 - 自动检查：`config.ts` 的 `module.exports =` 会让新函数运行时为 undefined，tsc 查不出。这是机械问题，交给 #34 处理。
 - 自动检查：`CODING_STANDARDS.md` 的验证命令坏了也没人发现（`46340cc`）。文档里的验证命令应当由测试实际运行，交给 #34 处理。
 - 审查：本轮 PR 只有 chief of staff 抽查和维护者审查，没有独立的 code-review 子代理。安全相关 PR 开出后先跑 `code-review`，从 #31 sandbox 开始执行。
+
+## 2026-11-07 #34 合并（`JayYa/fntv-electron@5fac5e4`）
+
+- 维护者运行应用后合并了 PR #48。`log/app.log` 里 2026-11-07 00:09 那次启动和直连登录成功，只有已知的两条：`fnid_login.js` 没有 init，以及 worktree 缺 MPV 配置目录。
+- `config.ts` 和 `cookie.ts` 改成纯 ES export，`module.exports =` 被 lint 禁止，`docs/wiki` 里此前关于导出表的坑已被取代。
+- 文档里的“验证：”命令由 `tests/standards.test.cjs` 实际运行。

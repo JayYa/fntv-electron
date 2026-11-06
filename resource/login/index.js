@@ -170,8 +170,9 @@ function restoreFocus() {
     }
 }
 
+// 和主进程的 isFnId（fnid_login.ts）保持一致。
 function isFnId(value) {
-    return value && !value.includes('.') && value.length >= 6 && value.length <= 30;
+    return /^[A-Za-z0-9_-]{6,30}$/.test(value);
 }
 
 function isValidDomainOrIP(value) {

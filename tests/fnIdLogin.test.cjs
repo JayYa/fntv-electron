@@ -5,28 +5,33 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
+const axios = require('axios');
 
 const PASSWORD = 'plain-password-value';
 const ACCESS_CODE = 'plain-access-code';
 const NAS = 'https://nas.example.com:5667';
 const EVIL = 'https://nas.example.com.evil.com:5667';
 
-function setupLogin(t, { accessCode = '' } = {}) {
+function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token', domain: 'nas.example.com' }] } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-fnid-'));
-    const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
+    const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
     const netRequests = [];
+    const nasRequests = [];
     let oauthWindow = null;
+    let mainWindow = null;
 
     class FakeBrowserWindow extends EventEmitter {
         constructor() {
             super();
-            oauthWindow = this;
+            // 登录窗口最先创建，登录成功后才创建主窗口。
+            if (oauthWindow) mainWindow = this;
+            else oauthWindow = this;
             this.loaded = [];
             this.scripts = [];
             this.destroyed = false;
             const cookies = new EventEmitter();
             cookies.set = async () => {};
-            cookies.get = async () => [{ value: 'cookie-token' }];
+            cookies.get = async () => tokenCookies;
             const webContents = new EventEmitter();
             webContents.session = { cookies };
             webContents.mainFrame = { name: 'main' };
@@ -95,7 +100,19 @@ function setupLogin(t, { accessCode = '' } = {}) {
         .forEach((id) => delete require.cache[id]);
     clearCompiledModules();
 
-    const { handleFnIdLogin } = require('../dest/main/handlers/plugins/fnid_login.js');
+    // 假 NAS：用户信息接口接受任何 token，测试只看发给了谁、发了哪个 token。
+    const originalAxiosGet = axios.get;
+    axios.get = async (url, config) => {
+        nasRequests.push({ url, token: config.headers.Authorization });
+        return {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            data: { code: 0, msg: '', data: { username: 'alice' } },
+        };
+    };
+
+    const { handleFnIdLogin, isFnId } = require('../dest/main/handlers/plugins/fnid_login.js');
+    const { readConfig } = require('../dest/modules/fn_config/config.js');
     const replies = [];
     const finished = handleFnIdLogin(
         { reply: (channel, payload) => replies.push({ channel, payload }) },
@@ -105,6 +122,7 @@ function setupLogin(t, { accessCode = '' } = {}) {
     t.after(async () => {
         oauthWindow?.close();
         await finished;
+        axios.get = originalAxiosGet;
         Module._load = originalLoad;
         clearCompiledModules();
         fs.rmSync(testRoot, { recursive: true, force: true });
@@ -116,6 +134,11 @@ function setupLogin(t, { accessCode = '' } = {}) {
 
     return {
         netRequests,
+        nasRequests,
+        isFnId,
+        finished,
+        readConfig,
+        mainWindowLoaded: () => mainWindow?.loaded ?? [],
         async start() {
             await flush();
             return oauthWindow;
@@ -142,9 +165,9 @@ function setupLogin(t, { accessCode = '' } = {}) {
             oauthWindow.webContents.emit('console-message', { frame, message }, 1, message);
             await flush();
         },
-        async tokenCookieChanged() {
+        async tokenCookieChanged(domain = 'nas.example.com') {
             oauthWindow.webContents.session.cookies.emit(
-                'changed', {}, { name: 'Trim-MC-token', value: 'cookie-token' }, 'explicit', false,
+                'changed', {}, { name: 'Trim-MC-token', value: 'cookie-token', domain }, 'explicit', false,
             );
             await flush();
         },
@@ -302,4 +325,128 @@ test('does not send the access code to an unconfirmed page that sets the token c
     await login.tokenCookieChanged();
 
     assert.deepEqual(login.netRequests, []);
+});
+
+for (const { name, page, confirmed, domain, baseUrl } of [
+    {
+        name: 'a LAN address with a port',
+        page: 'http://192.168.1.10:5666/v/oauth/result',
+        confirmed: true,
+        domain: '192.168.1.10',
+        baseUrl: 'http://192.168.1.10:5666',
+    },
+    {
+        name: 'an fnos.net address',
+        page: 'https://demo.fnos.net/v/oauth/result',
+        confirmed: true,
+        domain: 'demo.fnos.net',
+        baseUrl: 'https://demo.fnos.net',
+    },
+    {
+        name: 'an fnos.net address with a parent-domain cookie',
+        page: 'https://demo.fnos.net/v/oauth/result',
+        confirmed: true,
+        domain: '.fnos.net',
+        baseUrl: 'https://demo.fnos.net',
+    },
+    {
+        name: 'the FN Connect relay path',
+        page: 'https://5ddd.com/demo123/v',
+        confirmed: false,
+        domain: '5ddd.com',
+        baseUrl: 'https://5ddd.com/demo123',
+    },
+]) {
+    test(`completes login from the token cookie of ${name}`, async (t) => {
+        const login = setupLogin(t, { tokenCookies: [{ value: 'nas-token', domain }] });
+        await login.start();
+        if (confirmed) login.navigate('will-navigate', page);
+        await login.finishLoad(page);
+
+        await login.tokenCookieChanged(domain);
+        await login.finished;
+
+        assert.deepEqual(login.nasRequests, [{ url: `${baseUrl}/v/api/v1/user/info`, token: 'nas-token' }]);
+        assert.equal(login.readConfig().token, 'nas-token');
+        assert.equal(login.readConfig().domain, baseUrl);
+        assert.deepEqual(login.mainWindowLoaded(), [`${baseUrl}/v`]);
+    });
+}
+
+test('skips a token cookie of another site and uses the one of the confirmed NAS', async (t) => {
+    const login = setupLogin(t, {
+        tokenCookies: [
+            { value: 'evil-token', domain: 'evil.com' },
+            { value: 'nas-token', domain: 'nas.example.com' },
+        ],
+    });
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad(`${NAS}/v`);
+
+    await login.tokenCookieChanged();
+    await login.finished;
+
+    assert.deepEqual(login.nasRequests, [{ url: `${NAS}/v/api/v1/user/info`, token: 'nas-token' }]);
+    assert.equal(login.readConfig().token, 'nas-token');
+});
+
+test('never sends a token cookie of another site to the NAS', async (t) => {
+    const login = setupLogin(t, { tokenCookies: [{ value: 'evil-token', domain: 'evil.com' }] });
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad(`${NAS}/v`);
+
+    await login.tokenCookieChanged();
+
+    assert.deepEqual(login.nasRequests, []);
+    assert.deepEqual(login.mainWindowLoaded(), []);
+});
+
+test('a token cookie change on another site does not start the login check', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad(`${NAS}/v`);
+
+    await login.tokenCookieChanged('evil.com');
+
+    assert.deepEqual(login.nasRequests, []);
+});
+
+test('treats only URL-safe 6 to 30 character input as an FN ID', async (t) => {
+    const { isFnId } = setupLogin(t);
+
+    for (const value of [
+        'demo123',
+        'my-nas-01',
+        'my_nas_01',
+        'DEMO123',
+        '123456',
+        '  demo123  ',
+        'a'.repeat(30),
+    ]) {
+        assert.equal(isFnId(value), true, value);
+    }
+
+    for (const value of [
+        '',
+        'demo1',
+        'a'.repeat(31),
+        'nas.example.com',
+        'demo/123',
+        'demo123/../other99',
+        'demo?123',
+        'demo#123',
+        'demo 123',
+        'demo\n123',
+        'demo\\123',
+        'demo%2f123',
+        'demo@123',
+        'demo:5666',
+        '[fd00::10]:5666',
+        '飞牛账号一二三',
+    ]) {
+        assert.equal(isFnId(value), false, value);
+    }
 });

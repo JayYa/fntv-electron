@@ -268,3 +268,34 @@ test('the saved access code does not overwrite an access code the user typed fir
 
     assert.equal(page.form().accessCode, 'typed-access-code');
 });
+
+test('login page accepts the same FN ID characters as the main process', () => {
+    const page = openLoginPage();
+    page.typeInto('username', 'alice');
+    page.typeInto('password', 'secret');
+    const accepts = (value) => {
+        page.typeInto('domain', value);
+        return page.loginEnabled();
+    };
+
+    for (const value of ['demo123', 'my-nas-01', 'my_nas_01', 'DEMO123', '123456', '  demo123  ', 'a'.repeat(30)]) {
+        assert.equal(accepts(value), true, value);
+    }
+
+    for (const value of [
+        'demo1',
+        'a'.repeat(31),
+        'demo/123',
+        'demo123/../other99',
+        'demo?123',
+        'demo#123',
+        'demo 123',
+        'demo\\123',
+        'demo%2f123',
+        'demo@123',
+        'demo:5666',
+        '飞牛账号一二三',
+    ]) {
+        assert.equal(accepts(value), false, value);
+    }
+});
