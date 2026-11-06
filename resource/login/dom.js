@@ -1,4 +1,4 @@
-/* exported ipcRenderer, loginBtn, domainInput, usernameInput, passwordInput, passwordToggle,
+/* exported ipcRenderer, loginBtn, domainInput, domainError, usernameInput, passwordInput, passwordToggle,
     passwordToggleImg, accessCodeInput, accessCodeToggle, accessCodeToggleImg, historyBtn,
     historyDropdown, customConfirm, confirmMessage, confirmCancel, confirmOk, customMessage,
     messageIcon, messageTitle, messageContent, messageButton, versionText, updateBtn,
@@ -13,6 +13,7 @@ const ipcRenderer = window.electronAPI;
 
 const loginBtn = document.getElementById('loginBtn');
 const domainInput = document.getElementById('domain');
+const domainError = document.getElementById('domainError');
 const usernameInput = document.getElementById('username');
 const passwordInput = document.getElementById('password');
 const passwordToggle = document.getElementById('passwordToggle');
