@@ -518,32 +518,3 @@ export function setExitMode(mode: 'direct' | 'minimize' | 'ask'): void {
     };
     writeConfig(updatedConfig);
 }
-
-// CommonJS导出，确保与现有代码兼容
-module.exports = {
-    saveConfig,
-    readConfig,
-    addHistory,
-    getHistory,
-    getHistoryCredentials,
-    clearHistory,
-    deleteHistoryItem,
-    getDownloadProxyUrl,
-    setDownloadProxyUrl,
-    getDownloadProxyConfig,
-    setDownloadProxyConfig,
-    getHideOriginalPlayButton,
-    setHideOriginalPlayButton,
-    getNasProxyEnabled,
-    setNasProxyEnabled,
-    getMacCloseAction,
-    setMacCloseAction,
-    getTrayNotificationShown,
-    setTrayNotificationShown,
-    getMpvPlayerPath,
-    setMpvPlayerPath,
-    getMpvVolume,
-    setMpvVolume,
-    getExitMode,
-    setExitMode
-};

@@ -32,7 +32,14 @@ export default [
         plugins: {
             '@typescript-eslint': tseslint.plugin
         },
-        rules: sharedRules
+        rules: {
+            ...sharedRules,
+            // module.exports = 整体替换 export 的结果，新函数没加进表时运行时是 undefined，tsc 查不出。
+            'no-restricted-syntax': ['error', {
+                selector: "AssignmentExpression[left.object.name='module'][left.property.name='exports']",
+                message: '用 ES export，不要写 module.exports =。'
+            }]
+        }
     },
     {
         // 登录页用普通 <script> 加载，不是模块。
