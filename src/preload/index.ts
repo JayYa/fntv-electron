@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, shell } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
 import { HookType, runHooks } from './core/hooks';
 
@@ -24,11 +24,17 @@ const RECEIVE_CHANNELS = new Set([
     'version-info', 'update-status', 'download-proxy-info', 'play-button-config-info',
     'download-proxy-set', 'play-button-config-set',
 ]);
+const INVOKE_CHANNELS = new Set(['open-external']);
 type PageListener = (...args: unknown[]) => void;
 const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();
 
 function assertAllowed(channels: Set<string>, channel: string): void {
     if (!channels.has(channel)) throw new Error(`IPC channel not allowed: ${channel}`);
+}
+
+function invokeAllowed(channel: string, ...args: unknown[]): Promise<unknown> {
+    assertAllowed(INVOKE_CHANNELS, channel);
+    return ipcRenderer.invoke(channel, ...args);
 }
 
 function wrapListener(channel: string, listener: PageListener): (...args: unknown[]) => void {
@@ -65,12 +71,9 @@ function exposeLoginPageApi(): void {
             ipcRenderer.off(channel, wrapped);
             listenerWrappers.get(channel)?.delete(listener);
         },
+        // 沙箱里没有 shell，地址和来源都由主进程校验（src/main/handlers/plugins/externalLink.ts）。
         async openExternal(url: string) {
-            const target = new URL(url);
-            if (target.protocol !== 'https:' || target.hostname !== 'github.com') {
-                throw new Error('仅允许打开 GitHub HTTPS 链接');
-            }
-            await shell.openExternal(target.toString());
+            await invokeAllowed('open-external', url);
         },
     };
 

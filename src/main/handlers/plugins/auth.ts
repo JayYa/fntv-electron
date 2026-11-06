@@ -1,6 +1,5 @@
-import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { IpcMainEvent } from 'electron';
+import { isLoginPage } from '../../common/loginPage';
 import { getMainWindow } from '../../common/mainwin';
 import * as fn from '../../../modules/fn_api/api';
 import { HTTPS_PORT_MISMATCH_MESSAGE, isHttpsPortMismatch } from '../../../modules/fn_api/httpsPortMismatch';
@@ -33,20 +32,7 @@ interface HistoryItem {
     account: string;
 }
 
-const LOGIN_PAGE_PATH = path.join(__dirname, '../../../../resource/login/index.html');
-
 let fnIdLoginInProgress = false;
-
-// 明文凭据只回给本地登录页。preload 的 file: 判断在渲染进程里，主进程要自己再查一次。
-function isLoginPage(event: IpcMainEvent): boolean {
-    try {
-        const url = new URL(event.senderFrame?.url ?? '');
-        // path.relative 在 Windows 上不区分大小写，盘符写法不同也算同一个文件。
-        return url.protocol === 'file:' && path.relative(LOGIN_PAGE_PATH, fileURLToPath(url)) === '';
-    } catch {
-        return false;
-    }
-}
 
 // 获取配置处理
 function handleGetConfig(event: IpcMainEvent): void {
@@ -69,7 +55,7 @@ function handleGetConfig(event: IpcMainEvent): void {
     }
 }
 
-// 按需读取一条历史记录的凭据。回复带上域名和账号，登录页靠它丢弃连点时迟到的回复。
+// 按需读取一条历史记录的凭据，明文只回给本地登录页。回复带上域名和账号，登录页靠它丢弃连点时迟到的回复。
 function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partial<HistoryItem>): void {
     if (!isLoginPage(event)) {
         log.warn('拒绝了非登录页的历史凭据请求');
