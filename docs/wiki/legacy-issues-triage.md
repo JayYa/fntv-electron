@@ -145,3 +145,9 @@
 - `fnid_login.ts` 只留 `isFnId` 和入口，注入脚本、bridge 消息和 OAuth 窗口流程在 `src/main/handlers/core/` 的 `fnIdScripts.ts`、`fnIdOauthMessages.ts`、`fnIdOauthWindow.ts`。
 - 登录页样式在 `resource/login/index.css`，脚本按 `index.html` 的 `<script src>` 顺序加载。
 - `tests/credentialStorage.test.cjs` 按行为拆成 `tests/credential*.test.cjs`，假对象在 `tests/helpers/credentialConfig.cjs`。
+
+## 2026-11-07 拆分和 #49 合并（`JayYa/fntv-electron@f36e184`）
+
+- 维护者用真实 FN ID 和直连登录验证后合并了 PR #52（文件拆分），随后合并了 PR #53（#49）。
+- 登录页改为 7 个经典脚本加 `index.css`，`file:` 下不能用 `type="module"`。
+- HTTPS 连到 HTTP 端口时不再重试，直连登录有可读提示。访问码和 FN ID 路径的文案未改。
