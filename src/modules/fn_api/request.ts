@@ -5,6 +5,7 @@ import https from 'https';
 import log from '../logger';
 import { isTrusted, isCertificateError } from '../cert_trust';
 import { composeCookieHeader, getAccessCookieHeader } from './accessGrant';
+import { isHttpsPortMismatch } from './httpsPortMismatch';
 
 // 全局配置
 const api_key = 'NDzZTVxnRKP8Z0jXg1VAMonaG8akvh';
@@ -218,8 +219,8 @@ export async function request<T = any>(
                 } as ApiResponse<T> & { certificateError?: boolean };
             }
 
-            // 如果是最后一次尝试，返回错误
-            if (attempt >= tryTimes) {
+            // 最后一次尝试时返回错误。协议不匹配重试也不会变，不再尝试。
+            if (attempt >= tryTimes || isHttpsPortMismatch(errorMsg)) {
                 return { success: false, message: errorMsg };
             }
 
