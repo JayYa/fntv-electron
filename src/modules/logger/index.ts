@@ -13,7 +13,7 @@ interface ILogger {
     info: LogMethod;
     warn: LogMethod;
     error: LogMethod;
-    noformat: LogMethod;
+    noformat(message: string): void;
     log: LogMethod;
     d: LogMethod;
     i: LogMethod;

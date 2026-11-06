@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import * as fn from '../../../modules/fn_api/api';
+import { HTTPS_PORT_MISMATCH_MESSAGE, isHttpsPortMismatch } from '../../../modules/fn_api/httpsPortMismatch';
 import { restoreCookies } from '../../../modules/fn_config/cookie';
 import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
@@ -213,7 +214,9 @@ async function handleLogin(
             log.error('登录失败:', msg);
             event.reply('login-error', {
                 title: '登录失败',
-                message: msg || '登录时发生未知错误，请稍后重试。'
+                message: isHttpsPortMismatch(msg)
+                    ? HTTPS_PORT_MISMATCH_MESSAGE
+                    : msg || '登录时发生未知错误，请稍后重试。'
             });
             return;
         }
