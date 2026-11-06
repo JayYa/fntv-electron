@@ -22,7 +22,7 @@
 
 - `pnpm test` 67/67 通过，`go test ./...` 通过。
 - `tests/` 没有 auth、preload、winctrl 的测试，也没有 DOM 或 Electron 运行时测试。
-- safeStorage 可用 `Module._load` mock（`tests/credentialStorage.test.cjs:18`）。
+- safeStorage 可用 `Module._load` mock（`tests/helpers/credentialConfig.cjs`）。
 - 用假 `ipcMain` 可以跑真实 `auth.init()`。
 
 #29：
@@ -138,3 +138,10 @@
 - 维护者用真实 FN ID 走局域网登录成功后合并了 PR #50。这次走的是 OAuth 授权码路径，“检测到有效登录 Cookie”路径未被真实流程覆盖。
 - 维护者要求在继续其他 issue 前加 pre-commit 检查：暂存文件不超过 5,000 tokens（字节数 / 4），跳过非 agent 写的文件，错误信息要写清拆分方法。
 - 截至 `cc1d785`，agent 写的超限文件有 `fnid_login.ts`、`resource/login/index.html`、`resource/login/index.js`、`tests/credentialStorage.test.cjs`。下次改动它们时要先拆分。
+
+## 2026-11-07 超限文件拆分
+
+- 上面列出的 4 个超限文件已按职责拆分，纯搬移。本文更早条目里的行号是当时的快照，不再对应现在的文件。
+- `fnid_login.ts` 只留 `isFnId` 和入口，注入脚本、bridge 消息和 OAuth 窗口流程在 `src/main/handlers/core/` 的 `fnIdScripts.ts`、`fnIdOauthMessages.ts`、`fnIdOauthWindow.ts`。
+- 登录页样式在 `resource/login/index.css`，脚本按 `index.html` 的 `<script src>` 顺序加载。
+- `tests/credentialStorage.test.cjs` 按行为拆成 `tests/credential*.test.cjs`，假对象在 `tests/helpers/credentialConfig.cjs`。

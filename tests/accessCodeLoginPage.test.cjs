@@ -2,9 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { loginPageScriptText, loginPageStyles } = require('./helpers/loginPage.cjs');
 
 const loginPage = fs.readFileSync(path.join(__dirname, '../resource/login/index.html'), 'utf8');
-const loginScript = fs.readFileSync(path.join(__dirname, '../resource/login/index.js'), 'utf8');
+const loginScript = loginPageScriptText();
+const loginStyles = loginPageStyles();
 
 test('login page exposes an optional password-style access-code control', () => {
     assert.match(loginPage, /<label for="accessCode">访问码（可选）<\/label>/);
@@ -14,9 +16,9 @@ test('login page exposes an optional password-style access-code control', () => 
 });
 
 test('compact login panel remains scrollable on short windows', () => {
-    assert.match(loginPage, /max-height: calc\(100vh - 24px\)/);
-    assert.match(loginPage, /overflow-y: auto/);
-    assert.match(loginPage, /scrollbar-gutter: stable/);
+    assert.match(loginStyles, /max-height: calc\(100vh - 24px\)/);
+    assert.match(loginStyles, /overflow-y: auto/);
+    assert.match(loginStyles, /scrollbar-gutter: stable/);
 });
 
 test('login page credits the original author and the current maintainer', () => {

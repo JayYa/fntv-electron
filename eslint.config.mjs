@@ -43,7 +43,7 @@ export default [
     },
     {
         // 登录页用普通 <script> 加载，不是模块。
-        files: ['resource/login/index.js'],
+        files: ['resource/login/*.js'],
         languageOptions: {
             parser: tseslint.parser,
             sourceType: 'script'

@@ -21,7 +21,7 @@
 
 ## 进程边界
 
-- 窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnid_login.ts`，`tests/rendererIsolation.test.cjs`）。
+- 窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnIdOauthWindow.ts`，`tests/rendererIsolation.test.cjs`）。
 - 本地页面只通过 `window.electronAPI` 访问主进程。这个桥只暴露给 `file:` 页面，远程页面拿不到（`src/preload/index.ts`）。
 - 新增 IPC 频道时加进 `src/preload/index.ts` 的 `SEND_CHANNELS` 或 `RECEIVE_CHANNELS`。
 - IPC 处理器用 `registerHandler` 注册，不直接调 `ipcMain.on`。它捕获同步和异步错误并写日志，处理器不用自己防未捕获异常。需要告诉渲染进程失败时才写 `try`/`catch` 并回复（`src/main/handlers/core/ipcHandler.ts`，`tests/ipcHandler.test.cjs`）。
@@ -30,7 +30,7 @@
 - 明文凭据只走按需频道发给本地登录页。这类频道的处理器用 `isLoginPage` 校验 `senderFrame`，回复带域名和账号，登录页丢弃对不上的回复（`auth.ts`，`tests/loginPageCredentials.test.cjs`）。
 - 配置里的 token 不经 IPC 发给渲染进程。`Trim-MC-token` Cookie 是 `httpOnly: false`，飞牛网页前端要读取它，远程页面的脚本能读到 token，这是有意的（`src/modules/fn_config/cookie.ts`）。
 - 需要用户确认或输入时走主进程的 `dialog`，或用页面内组件，浏览器原生弹窗在 Electron 里不可靠（`eslint.config.mjs` 的 `no-alert`，`tests/standards.test.cjs`）。
-- 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 只放行这个域（`src/preload/index.ts`），点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`、`resource/login/index.js`，`tests/accessCodeLoginPage.test.cjs`）。
+- 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 只放行这个域（`src/preload/index.ts`），点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`、`resource/login/pageEvents.js`，`tests/accessCodeLoginPage.test.cjs`）。
 
 ## 署名
 
@@ -53,8 +53,8 @@
 ## 凭据
 
 - 落盘的凭据走 `config.ts` 的 `writeConfig`，由 `encryptCredential` 加密。新增凭据字段时，同时补上读写两边。
-- 解不开的凭据读出来是空值，按未登录处理，密文留在 `config.ts` 内部由 `writeConfig` 原样写回，只有新值才替换。新增凭据字段时读写两边用 `readCredential` 和 `storeCredential`（`tests/credentialStorage.test.cjs`）。
-- 历史记录超过上限时先淘汰能解开的条目，解不开的留到最后，刚添加的条目不淘汰（`tests/credentialStorage.test.cjs`）。
+- 解不开的凭据读出来是空值，按未登录处理，密文留在 `config.ts` 内部由 `writeConfig` 原样写回，只有新值才替换。新增凭据字段时读写两边用 `readCredential` 和 `storeCredential`（`tests/credentialDecryptFailure.test.cjs`、`tests/credentialPreservation.test.cjs`）。
+- 历史记录超过上限时先淘汰能解开的条目，解不开的留到最后，刚添加的条目不淘汰（`tests/credentialHistoryLimit.test.cjs`）。
 - Linux 上 `safeStorage` 后端是 `basic_text` 时拒绝保存，不降级为明文。
 - Proxy 密钥、访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时要脱敏（`src/modules/logger/masking.ts`，`tests/sessionMasking.test.cjs`）。
 
@@ -66,6 +66,7 @@
 ## 模块
 
 - TS 源文件用 ES `export`，不写 `module.exports =`。这种写法会覆盖 `export` 的结果，新函数没加进表时运行时是 `undefined`，`tsc` 查不出（`eslint.config.mjs`）。
+- 登录页脚本是按顺序加载的经典脚本，不用 `type="module"`，`file:` 下会被拦。顶层 `const`、`let` 和函数跨文件共享，给其它脚本用的名字写进文件头的 `/* exported */`；顶层语句只能用已加载脚本里的名字。会重新赋值的状态放在唯一写它的脚本里（`resource/login/index.html`，`tests/loginPageCredentials.test.cjs`）。
 
 ## 跨层改动
 

@@ -47,7 +47,7 @@ MPV 接管默认开启。入口是 `isMpvPlaybackEnabled`（`src/modules/fn_conf
 - `src/modules/fn_config/config.ts` 读配置。
 - `src/main/handlers/plugins/config.ts` 写配置，缺失值按 `true` 保存。
 - `src/preload/core/playback.ts` 读配置，2 秒内没收到回复时回退为 `true`。
-- `resource/login/index.html` 的开关默认勾选，`resource/login/index.js` 只有明确收到 `false` 才取消。
+- `resource/login/index.html` 的开关默认勾选，`resource/login/settings.js` 只有明确收到 `false` 才取消。
 
 ```ts
 // 错：缺失值被当成关闭，没有保存过偏好的用户会丢掉 MPV 默认。

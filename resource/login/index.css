@@ -1,0 +1,880 @@
+body {
+    background: url("./image/bg-login.webp") no-repeat center center fixed;
+    background-size: cover;
+    /* 拉伸铺满整个页面 */
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+        'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
+        sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 12px;
+    box-sizing: border-box;
+    color: #fff;
+}
+
+.login-container {
+    width: 380px;
+    background: rgba(37, 43, 55, 0.5);
+    /* 半透明背景 */
+    border-radius: 12px;
+    padding: 24px 30px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    box-sizing: border-box;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+
+    backdrop-filter: blur(12px);
+    /* 毛玻璃模糊效果 */
+    -webkit-backdrop-filter: blur(12px);
+    /* 兼容 Safari */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    /* 轻微边框，增强质感 */
+}
+
+.logo {
+    text-align: center;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.logo img {
+    width: 120px;
+    height: auto;
+}
+
+.logo-info {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.code-by {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+    white-space: nowrap;
+}
+
+.github-link {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    white-space: nowrap;
+}
+
+.github-link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    text-decoration: none;
+}
+
+/* 在小屏幕上垂直排列 */
+@media (max-width: 400px) {
+    .logo-info {
+        flex-direction: column;
+        gap: 8px;
+    }
+}
+
+.form-group {
+    margin-bottom: 14px;
+    position: relative;
+}
+
+label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+input[type='text'],
+input[type='password'] {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(47, 53, 66, 0.4);
+    /* 半透明输入框 */
+    backdrop-filter: blur(6px);
+    color: #fff;
+    box-sizing: border-box;
+    font-size: 14px;
+}
+
+input[type='text']:focus,
+input[type='password']:focus {
+    outline: none;
+    border-color: #3370ff;
+}
+
+.switch-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.switch-label {
+    margin-left: 10px;
+    font-size: 14px;
+}
+
+/* 开关样式 */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #3c4250;
+    transition: 0.4s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: '';
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+}
+
+input:checked+.slider {
+    background-color: #3370ff;
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+.login-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #3370ff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: not-allowed;
+    opacity: 0.6;
+    transition: background-color 0.2s, opacity 0.2s, cursor 0.2s;
+}
+
+.login-btn.enabled {
+    cursor: pointer;
+    opacity: 1;
+}
+
+.login-btn.enabled:hover {
+    background-color: #2856c4;
+}
+
+/* 版本信息样式 */
+.version-info {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.version-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.update-btn {
+    padding: 6px 12px;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.update-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.update-btn:active {
+    transform: translateY(1px);
+}
+
+.update-btn.checking {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 代理设置按钮样式 */
+.proxy-settings-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    color: rgba(255, 255, 255, 0.8);
+    z-index: 1000;
+}
+
+.proxy-settings-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: white;
+    transform: rotate(90deg);
+}
+
+/* 代理设置面板样式 */
+.proxy-panel {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    width: 280px;
+    background: rgba(37, 43, 55, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+    transform: translateY(10px);
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.proxy-panel.show {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+}
+
+.proxy-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.proxy-close-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.proxy-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.proxy-panel-content {
+    padding: 16px;
+}
+
+.proxy-switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+}
+
+.proxy-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.proxy-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.proxy-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.2);
+    transition: .3s;
+    border-radius: 24px;
+}
+
+.proxy-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+.proxy-switch input:checked + .proxy-slider {
+    background-color: #3370ff;
+}
+
+.proxy-switch input:checked + .proxy-slider:before {
+    transform: translateX(20px);
+}
+
+.proxy-url-row {
+    margin-bottom: 16px;
+}
+
+.proxy-url-row label {
+    display: block;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.proxy-url-row input {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.proxy-url-row input:focus {
+    border-color: #3370ff;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.proxy-url-row input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.proxy-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.proxy-save-btn {
+    padding: 8px 16px;
+    background: #3370ff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.proxy-save-btn:hover {
+    background: #2856c4;
+}
+
+.proxy-save-btn:active {
+    transform: translateY(1px);
+}
+
+.proxy-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+input.error {
+    border: 1px solid red !important;
+    /* 输入框红色边框 */
+}
+
+.error-msg {
+    color: red;
+    /* 提示文字红色 */
+    font-size: 12px;
+    /* 小字体 */
+    margin-top: 5px;
+    /* 上方间距 */
+}
+
+input[type="text"],
+input[type="password"] {
+    -webkit-user-modify: read-write-plaintext-only;
+    /* 取消拼写波浪线 */
+}
+
+/* 禁止所有元素拖拽 */
+* {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+}
+
+/* 特别针对图片禁止拖拽和选中 */
+img {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Logo图片完全禁止交互 */
+.logo img {
+    pointer-events: none;
+}
+
+/* 密码显示按钮 */
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    bottom: 21px;/* input height 42px / 2 */
+    transform: translateY(50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.password-toggle:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 历史记录按钮 */
+.history-btn {
+    position: absolute;
+    right: 12px;
+    bottom: 21px;/* input height 42px / 2 */
+    transform: translateY(50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.history-btn:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 历史记录下拉框 */
+.history-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    background: rgba(37, 43, 55, 0.95);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    max-height: 240px;
+    margin-top: 4px;
+    overflow-y: auto;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(-10px);
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.history-dropdown.show {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+}
+
+.history-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background-color 0.2s;
+    position: relative;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.history-item:last-child {
+    border-bottom: none;
+}
+
+.history-item:hover {
+    background-color: rgba(51, 112, 255, 0.2);
+}
+
+.history-content {
+    flex: 1;
+    cursor: pointer;
+}
+
+.history-delete {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    transition: all 0.2s;
+    margin-left: 8px;
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.history-item:hover .history-delete {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.history-delete:hover {
+    color: #ff4757;
+    background: rgba(255, 71, 87, 0.1);
+}
+
+.history-account {
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.history-domain {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.no-history {
+    padding: 16px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+.clear-history {
+    padding: 8px 16px;
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.clear-history:hover {
+    background-color: rgba(255, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* 为了给按钮留出空间，调整input的右padding */
+.form-group.has-button input {
+    padding-right: 40px;
+}
+
+/* 自定义滚动条 */
+.history-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.history-dropdown::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.history-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.history-dropdown::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* 自定义确认对话框 */
+.custom-confirm {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.custom-confirm.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.confirm-dialog {
+    background: rgba(37, 43, 55, 0.95);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 300px;
+    max-width: 400px;
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.custom-confirm.show .confirm-dialog {
+    transform: scale(1);
+}
+
+.confirm-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #fff;
+    margin-bottom: 16px;
+}
+
+.confirm-message {
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 24px;
+    line-height: 1.5;
+}
+
+.confirm-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.confirm-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.confirm-btn.cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.confirm-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.confirm-btn.confirm {
+    background: #ff4757;
+    color: #fff;
+}
+
+.confirm-btn.confirm:hover {
+    background: #ff3838;
+}
+
+/* 自定义消息弹窗 */
+.custom-message {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.custom-message.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.message-dialog {
+    background: rgba(37, 43, 55, 0.95);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 300px;
+    max-width: 400px;
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.custom-message.show .message-dialog {
+    transform: scale(1);
+}
+
+.message-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    position: relative;
+}
+
+.message-icon.error {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 107, 107, 0.5);
+    color: #ff6b6b;
+    box-shadow: none;
+}
+
+.message-icon.success {
+    background: linear-gradient(135deg, #2ed573, #26d0ce);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(46, 213, 115, 0.3);
+}
+
+.message-icon.warning {
+    background: linear-gradient(135deg, #ffa502, #ff6348);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(255, 165, 2, 0.3);
+}
+
+.message-icon.info {
+    background: linear-gradient(135deg, #3370ff, #2856c4);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(51, 112, 255, 0.3);
+}
+
+.message-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.message-dialog.error .message-title {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.message-content {
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 28px;
+    line-height: 1.6;
+    font-size: 15px;
+}
+
+.message-button {
+    padding: 12px 32px;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #3370ff, #2856c4);
+    color: #fff;
+    min-width: 100px;
+    box-shadow: 0 4px 15px rgba(51, 112, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.message-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(51, 112, 255, 0.4);
+}
+
+.message-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(51, 112, 255, 0.3);
+}

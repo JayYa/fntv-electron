@@ -5,7 +5,7 @@
 - `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。
 - `pnpm run compile`：先清空 `dest/` 再运行 `tsc`，已删除源文件的旧 js 不会留下来被 `readdirSync` 加载。`tsBuildInfoFile` 要留在 `dest/` 里，放到外面时 `tsc` 会认为无需输出，留下空目录。`pnpm run watch` 不清理，删过文件后跑一次 `compile`。
 - `go test ./...`：改 Go 代码时在 `src/modules/proxy` 下运行。
-- `pnpm run lint`：用 ESLint 检查 `src/**/*.ts` 和 `resource/login/index.js`，规则在 `eslint.config.mjs`。
+- `pnpm run lint`：用 ESLint 检查 `src/**/*.ts` 和 `resource/login/*.js`，规则在 `eslint.config.mjs`。
 - CI 三项都跑（`.github/workflows/ci.yml`）。
 
 ### `Electron failed to install correctly`
@@ -19,7 +19,7 @@
 - 测试名用一句英文写清行为，例如 `first initialization does not overwrite pre-existing user state`。
 - 用到文件系统时，在 `fs.mkdtempSync(path.join(os.tmpdir(), ...))` 里操作，并用 `t.after` 清理（`tests/mpvConfigMigration.test.cjs`）。
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
-- 模块直接使用 Electron API 时，替换 `Module._load` 返回 `electron` 的假对象，结束后恢复（`tests/credentialStorage.test.cjs`）。
+- 模块直接使用 Electron API 时，替换 `Module._load` 返回 `electron` 的假对象，结束后恢复（`tests/helpers/credentialConfig.cjs`）。
 - CI 跑在 Linux 上，Electron 假对象要包含平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。只在本机 Windows 通过不算通过。
 - 更新检查的测试替换 `axios.get` 返回 GitHub 响应，HTTP 错误用真实的 `axios.AxiosError` 构造（`tests/updateChecker.test.cjs`）。
 
@@ -27,7 +27,7 @@
 
 - 断言公开入口的输入、输出和落盘结果，不绑定内部函数和调用顺序。例如 `synchronizeMpvConfig` 的测试只看返回值和目录内容。
 - 测试走模块已有的公开入口或依赖参数，不为测试新增接缝。
-- 文本断言只用于没有运行入口的内容：`resource/login/index.html`、`resource/login/index.js` 和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
+- 文本断言只用于没有运行入口的内容：`resource/login/` 下的页面、样式、脚本和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
 - 测试失败时先判断是行为回归还是测试过期，只有测试过期才改断言。
 
 ## 配置和工作流
