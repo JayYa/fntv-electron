@@ -1,1 +1,9 @@
 * text=auto eol=lf
+
+# 不是 agent 写的文件，不受 scripts/check-staged-file-size.cjs 的大小限制。
+LICENSE -agent-authored
+pnpm-lock.yaml -agent-authored
+package-lock.json -agent-authored
+go.sum -agent-authored
+dest/** -agent-authored
+third_party/** -agent-authored
