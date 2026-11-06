@@ -2,7 +2,6 @@ import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
 import { request, HttpMethod } from '../../../modules/fn_api/request';
-import { isTrusted } from '../../../modules/cert_trust';
 import { restoreCookies } from '../../../modules/fn_config/cookie';
 import * as fnConfig from '../../../modules/fn_config/config';
 import * as log from '../../../modules/logger';
@@ -605,7 +604,9 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                             try {
                                 const bodyJson = JSON.parse(messageData.body);
                                 code = bodyJson.data?.code;
-                            } catch (e) { }
+                            } catch {
+                                // 响应体不是 JSON 时没有授权码，按未取到处理。
+                            }
                         }
 
                         if (code) {

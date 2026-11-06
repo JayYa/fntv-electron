@@ -179,7 +179,7 @@ function isHistoryItem(item: unknown): item is HistoryItem {
 }
 
 function hasUnusableHistory(stored: { history?: unknown }): boolean {
-    return stored.history != null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
+    return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
 }
 
 // 这样的文件读出来会丢内容，被替换前要留底。
@@ -518,32 +518,3 @@ export function setExitMode(mode: 'direct' | 'minimize' | 'ask'): void {
     };
     writeConfig(updatedConfig);
 }
-
-// CommonJS导出，确保与现有代码兼容
-module.exports = {
-    saveConfig,
-    readConfig,
-    addHistory,
-    getHistory,
-    getHistoryCredentials,
-    clearHistory,
-    deleteHistoryItem,
-    getDownloadProxyUrl,
-    setDownloadProxyUrl,
-    getDownloadProxyConfig,
-    setDownloadProxyConfig,
-    getHideOriginalPlayButton,
-    setHideOriginalPlayButton,
-    getNasProxyEnabled,
-    setNasProxyEnabled,
-    getMacCloseAction,
-    setMacCloseAction,
-    getTrayNotificationShown,
-    setTrayNotificationShown,
-    getMpvPlayerPath,
-    setMpvPlayerPath,
-    getMpvVolume,
-    setMpvVolume,
-    getExitMode,
-    setExitMode
-};

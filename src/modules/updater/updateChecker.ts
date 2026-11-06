@@ -7,7 +7,7 @@ import log from '../logger';
 let semver: any;
 try {
     semver = require('semver');
-} catch (error) {
+} catch {
     // 如果没有semver，使用简单的版本比较
     semver = null;
 }

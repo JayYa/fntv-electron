@@ -187,7 +187,6 @@ function checkInputs() {
     const domain = domainInput.value.trim();
     const username = usernameInput.value.trim();
     const password = passwordInput.value.trim();
-    const domainError = document.getElementById('domainError');
 
     if (domain && isValidDomainOrIP(domain) && username && password) {
         loginBtn.disabled = false;
@@ -491,7 +490,7 @@ ipcRenderer.on('current-access-code', (event, data) => {
 });
 
 // 监听历史记录删除成功
-ipcRenderer.on('history-item-deleted', (event, data) => {
+ipcRenderer.on('history-item-deleted', () => {
     // 重新加载配置数据
     loadConfigData();
 });

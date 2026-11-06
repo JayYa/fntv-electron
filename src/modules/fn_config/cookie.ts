@@ -75,8 +75,3 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
         return false;
     }
 }
-
-// CommonJS导出，确保与现有代码兼容
-module.exports = {
-    restoreCookies,
-};

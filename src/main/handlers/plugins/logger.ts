@@ -1,4 +1,4 @@
-import { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
+import { IpcMainInvokeEvent } from 'electron';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 

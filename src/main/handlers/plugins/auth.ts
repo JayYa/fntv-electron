@@ -232,7 +232,7 @@ async function handleLogin(
         log.info('登录成功，已获取 token');
 
         // 保存登录信息
-        const { saveConfig, addHistory } = require('../../../modules/fn_config/config');
+        const { saveConfig, addHistory } = fnConfig;
 
         // 保存配置
         saveConfig({

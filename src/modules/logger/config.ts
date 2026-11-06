@@ -91,7 +91,7 @@ export function getLogLevel(): LogLevel {
         
         // 如果成功获取到app对象，则使用isPackaged判断
         return isPackaged ? logConfig.productionLevel : logConfig.developmentLevel;
-    } catch (error) {
+    } catch {
         // 在非Electron环境中，如果没有明确的环境变量，默认为开发环境
         return logConfig.developmentLevel;
     }

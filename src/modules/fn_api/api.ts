@@ -2,13 +2,9 @@ import * as fn from "./request";
 import { HttpMethod } from "./request";
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import axios, { AxiosInstance } from 'axios';
-import https from 'https';
 import { app } from 'electron';
 import log from '../logger';
 import * as types from './types';
-import { isTrusted } from '../cert_trust';
 import NodeCache from 'node-cache';
 import { createApiCacheKey } from './cacheKey';
 

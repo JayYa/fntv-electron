@@ -8,7 +8,7 @@ let app: any;
 try {
     const electron = require('electron');
     app = electron.app;
-} catch (error) {
+} catch {
     // 在非Electron环境中使用备用方案
     app = null;
 }
@@ -218,7 +218,7 @@ export class Logger {
     public log(level: LogLevel, message: string, ...args: any[]): void {
         if (level >= this.logLevel) {
             let formattedMessage = message;
-            if (level != LogLevel.NOFORMAT) {
+            if (level !== LogLevel.NOFORMAT) {
                 formattedMessage = this.formatMessage(level, message, ...args);
             }
 

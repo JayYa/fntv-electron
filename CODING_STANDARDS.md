@@ -1,6 +1,6 @@
 # 编码标准
 
-每条规则都给出本仓库内的依据，新增规则也要能这样验证。
+每条规则都给出本仓库内的依据，新增规则也要能这样验证。能机器检查的规则放进 `eslint.config.mjs` 或 `tests/standards.test.cjs`。留在文档里的“验证：”命令由 `tests/standards.test.cjs` 实际运行，命令本身坏了时测试失败。
 
 改打包的 MPV、MPV 配置同步、默认播放方式或 Proxy 生命周期时，读 `docs/external-runtime.md`。改访问码流程时，读 `docs/adr/0002-access-code-gateway-session.md`。
 
@@ -29,14 +29,14 @@
 - `config-data` 按字段白名单发送，不含密码、访问码和 token（`src/main/handlers/plugins/auth.ts`，`tests/loginCredentials.test.cjs`）。
 - 明文凭据只走按需频道发给本地登录页。这类频道的处理器用 `isLoginPage` 校验 `senderFrame`，回复带域名和账号，登录页丢弃对不上的回复（`auth.ts`，`tests/loginPageCredentials.test.cjs`）。
 - 配置里的 token 不经 IPC 发给渲染进程。`Trim-MC-token` Cookie 是 `httpOnly: false`，飞牛网页前端要读取它，远程页面的脚本能读到 token，这是有意的（`src/modules/fn_config/cookie.ts`）。
-- 需要用户确认或输入时走主进程的 `dialog`，或用页面内组件，浏览器原生弹窗在 Electron 里不可靠。验证：`git grep -n -E '\b(alert|confirm|prompt)\(' -- src resource` 没有结果。
+- 需要用户确认或输入时走主进程的 `dialog`，或用页面内组件，浏览器原生弹窗在 Electron 里不可靠（`eslint.config.mjs` 的 `no-alert`，`tests/standards.test.cjs`）。
 - 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 只放行这个域（`src/preload/index.ts`），点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`、`resource/login/index.js`，`tests/accessCodeLoginPage.test.cjs`）。
 
 ## 署名
 
 - `package.json` 显式设置 `build.copyright`，这一行同时写原作者和修改声明。不设时打包工具可能从 `author` 派生版权行，抹掉原作者。
 - `README.md` 的原作者版权行 `Copyright (c) 2025 Tag mig hånden` 和 `LICENSE` 保持原样，修改声明另起一行。
-- 验证：`git grep -n 'Tag mig hånden' -- package.json README.md resource/login/index.html` 三个文件都有结果。
+- `package.json`、`README.md` 和 `resource/login/index.html` 都保留原作者名（`tests/standards.test.cjs`）。
 
 ## 网络
 
@@ -63,6 +63,10 @@
 - `config.json` 只由 `config.ts` 的 `writeConfig` 写。写入走临时文件、`fsync` 和 `rename`，中途失败时旧文件不变（`tests/configDurability.test.cjs`）。
 - 解析失败或 `history` 不是数组的文件读出来会丢内容，被替换前复制为 `config.json.corrupt-<毫秒时间戳>`，保留最新 3 份，备份失败就放弃这次写入。备份含密文，日志只记文件名。`history` 不是数组时按空列表读取，只读不写时文件不变。
 
+## 模块
+
+- TS 源文件用 ES `export`，不写 `module.exports =`。这种写法会覆盖 `export` 的结果，新函数没加进表时运行时是 `undefined`，`tsc` 查不出（`eslint.config.mjs`）。
+
 ## 跨层改动
 
 - 改字段含义前，用 `git grep` 找全读写处，改完再搜一遍。`hideOriginalPlayButton` 同时被主进程、preload 和登录页读取，默认值必须一致（`docs/external-runtime.md`）。
@@ -73,23 +77,23 @@
 
 ## 依赖
 
-- `pnpm-lock.yaml` 入库，改 `package.json` 的依赖时在同一个提交里更新。工作流用 `pnpm install --frozen-lockfile`，两者不一致时安装直接失败。验证：`git grep -n 'pnpm install' -- .github/workflows` 每行都有 `--frozen-lockfile`。
-- pnpm 版本只写在 `package.json` 的 `packageManager`，`pnpm/action-setup` 读这个字段，工作流不另写一份。验证：`git grep -n -A2 'pnpm/action-setup' -- .github/workflows` 没有 `version:`。
-- pnpm 配置写在 `pnpm-workspace.yaml`，`.npmrc` 只放 `registry`。pnpm 不读 `.npmrc` 里的 `node-linker`，也不把 `electron_mirror` 传给安装脚本；CI 还会删掉 `.npmrc`。验证：`pnpm config get nodeLinker` 输出 `hoisted`。
+- `pnpm-lock.yaml` 入库，改 `package.json` 的依赖时在同一个提交里更新。工作流用 `pnpm install --frozen-lockfile`，两者不一致时安装直接失败（`tests/standards.test.cjs`）。
+- pnpm 版本只写在 `package.json` 的 `packageManager`，`pnpm/action-setup` 读这个字段，工作流不另写一份（`tests/standards.test.cjs`）。
+- pnpm 配置写在 `pnpm-workspace.yaml`，`.npmrc` 只放 `registry`。pnpm 不读 `.npmrc` 里的 `node-linker`，也不把 `electron_mirror` 传给安装脚本；CI 还会删掉 `.npmrc`（`tests/standards.test.cjs`）。
 - `nodeLinker` 保持 `hoisted`，这个布局打包出的生产依赖和迁移前一致。改依赖布局时解开产物的 `app.asar`，核对 `node_modules` 里生产依赖齐全，构建成功不算验证。
-- 有安装脚本的依赖要在 `allowBuilds` 里写明，否则 `pnpm install` 报 `ERR_PNPM_IGNORED_BUILDS` 并跳过脚本。`electron` 必须放行，它的 postinstall 下载二进制。验证：`node_modules/electron/path.txt` 存在。
+- 有安装脚本的依赖要在 `allowBuilds` 里写明，否则 `pnpm install` 报 `ERR_PNPM_IGNORED_BUILDS` 并跳过脚本。`electron` 必须放行，它的 postinstall 下载二进制（`tests/standards.test.cjs`）。
 - 保留 `extract-zip>yauzl` 的 override，等 `extract-zip` 改用 `yauzl` 3 后再去掉。`yauzl` 2.10 在 Node 26 上读不出 zip 内容，进程却以 0 退出，`electron` 的 postinstall 显示成功，留下只有空 `locales` 的 `dist`。
 
 ## GitHub Workflow
 
 - 提交信息、PR 标题、分支名这类不可信内容先放进 `env:`，再在 shell 里用 `"$VAR"` 读取。范例是 `release.yml` 的 `Select build matrix` 步骤（`PLATFORM`）。
-- 第三方 action 固定到 commit SHA，行尾注释版本号（`ci.yml`、`release.yml`）。
+- 第三方 action 固定到 commit SHA，行尾注释版本号（`ci.yml`、`release.yml`，`tests/standards.test.cjs`）。
 - Go 版本用 `go-version-file: src/modules/proxy/go.mod` 读取。
 - 工作流权限只给 `contents: read`。`release.yml` 只手动触发，产物留在 Actions artifacts。
-- `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub。验证：`git grep -n 'electron-builder --' -- package.json` 每行都有 `--publish never`。
+- `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub（`tests/standards.test.cjs`）。
 - 构建依赖的外部资产固定 tag 和 sha256（`release.yml` 的 `Download third-party dependencies`）。
 - `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
-- 验证：`git grep -n -E 'head_commit|releases/latest|secrets\.' -- .github/workflows` 没有结果。
+- 工作流不出现 `head_commit`、`releases/latest` 和 `secrets.`（`tests/standards.test.cjs`）。
 
 ## 文档
 

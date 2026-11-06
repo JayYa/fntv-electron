@@ -112,3 +112,17 @@
 - PR #46 未运行打包版，只确认 `app.asar` 里有 `index.html` 和 `index.js`。
 - #37 的遗留点开成 #45。
 - chief of staff 把 #38 排到 #34 之前，理由是它修配置被覆盖的风险，用户影响更大。
+
+## 2026-11-06 #38 合并（`JayYa/fntv-electron@8fc218c`）
+
+- 维护者合并了 PR #47，含配置损坏备份、原子写、IPC 统一捕获、`compile` 清理 `dest`、`history` 形状校验。维护者接受了三点取舍：配置损坏时不弹提示；备份留 3 份、含密文；解不开的历史条目最后淘汰。
+- 未验证：打包版、真实 Electron 的失败路径、杀毒软件占用时的 rename。
+
+## 2026-11-06 复盘（chief of staff）
+
+取样 #37、#38 两次子代理工作，以及 CODING_STANDARDS 坏命令的来源。
+
+- 信息获取：#37 的冒烟清单靠 FN ID 日志判断，但日志当时不记录页面判断，chief of staff 因此对路径作了错误猜测，维护者多跑了一轮。PR `222f47e` 已补日志。教训：写手工冒烟清单时，同时确认每一项能从日志判定。
+- 自动检查：`config.ts` 的 `module.exports =` 会让新函数运行时为 undefined，tsc 查不出。这是机械问题，交给 #34 处理。
+- 自动检查：`CODING_STANDARDS.md` 的验证命令坏了也没人发现（`46340cc`）。文档里的验证命令应当由测试实际运行，交给 #34 处理。
+- 审查：本轮 PR 只有 chief of staff 抽查和维护者审查，没有独立的 code-review 子代理。安全相关 PR 开出后先跑 `code-review`，从 #31 sandbox 开始执行。

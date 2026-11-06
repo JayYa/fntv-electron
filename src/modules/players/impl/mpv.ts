@@ -1,4 +1,3 @@
-import { ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -53,7 +52,7 @@ export class MpvPlayer extends BasePlayer {
                 ...args || []
             );
 
-            let mpvOptions = {
+            const mpvOptions = {
                 debug: this.config.debug,
                 binary: this.config.playerPath.length > 0 ? this.config.playerPath : undefined,
             };
@@ -208,7 +207,7 @@ export class MpvPlayer extends BasePlayer {
         if (index >= 0 && index < this.playlistItems.length) {
             const currentItem = this.playlistItems[index];
 
-            let st = this.getStatus();
+            const st = this.getStatus();
             st.itemGuid = currentItem.itemGuid;
             st.ts = currentItem.ts;
             st.duration = currentItem.duration;
