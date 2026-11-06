@@ -21,7 +21,7 @@
 
 ## 进程边界
 
-- 窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnid_login.ts`，`tests/rendererIsolation.test.cjs`）。
+- 窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnIdOauthWindow.ts`，`tests/rendererIsolation.test.cjs`）。
 - 本地页面只通过 `window.electronAPI` 访问主进程。这个桥只暴露给 `file:` 页面，远程页面拿不到（`src/preload/index.ts`）。
 - 新增 IPC 频道时加进 `src/preload/index.ts` 的 `SEND_CHANNELS` 或 `RECEIVE_CHANNELS`。
 - IPC 处理器用 `registerHandler` 注册，不直接调 `ipcMain.on`。它捕获同步和异步错误并写日志，处理器不用自己防未捕获异常。需要告诉渲染进程失败时才写 `try`/`catch` 并回复（`src/main/handlers/core/ipcHandler.ts`，`tests/ipcHandler.test.cjs`）。
