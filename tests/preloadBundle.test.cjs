@@ -14,6 +14,9 @@ test('preload statically imports every plugin in alphabetical order', () => {
         .sort();
 
     assert.deepEqual(imported, plugins);
+
+    const reported = index.match(/const PLUGINS = \[([^\]]+)\]/)[1].match(/[A-Za-z]+/g);
+    assert.deepEqual(reported, plugins);
 });
 
 test('the bundled preload requires nothing but electron', () => {

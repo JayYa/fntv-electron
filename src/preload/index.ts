@@ -12,6 +12,8 @@ import './plugins/playButton';
 import './plugins/playMaskButton';
 import './plugins/titlebar';
 
+const PLUGINS = ['continueWatchingMenu', 'playButton', 'playMaskButton', 'titlebar'];
+
 const SEND_CHANNELS = new Set([
     'login', 'delete-history-item', 'clear-history', 'get-config',
     'get-history-credentials', 'get-current-access-code',
@@ -97,3 +99,6 @@ function initInjector(): void {
 }
 
 initInjector();
+
+// 静态导入先于这里执行，走到这一行时 PLUGINS 里的插件都已加载。
+ipcRenderer.send('preload-started', PLUGINS);

@@ -84,6 +84,7 @@ function findDetailPlayButton(): HTMLElement | null {
 function interceptOriginalButton(button: HTMLElement): void {
     if (button.dataset.mpvDetailIntercepted === 'true') return;
     button.dataset.mpvDetailIntercepted = 'true';
+    logger.info('详情页播放键已接管');
 }
 
 async function setupDetailPlayButton(): Promise<void> {

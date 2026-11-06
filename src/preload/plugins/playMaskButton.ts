@@ -115,9 +115,13 @@ async function setupDelegatedPlayHandler(): Promise<void> {
     if (initialized) return;
 
     const config = await getPlayButtonConfig();
-    if (!config.hideOriginalPlayButton) return;
+    if (!config.hideOriginalPlayButton) {
+        logger.info('MPV 播放接管未启用: 配置为网页播放');
+        return;
+    }
 
     initialized = true;
+    logger.info('MPV 播放接管已启用');
     document.addEventListener('pointerdown', handlePointerDown, true);
     document.addEventListener('pointerup', handlePointerUp, true);
     document.addEventListener('pointercancel', () => {

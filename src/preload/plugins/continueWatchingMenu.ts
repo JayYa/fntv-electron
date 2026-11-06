@@ -102,6 +102,7 @@ function takeoverMenuItem(match: MenuMatch): void {
     clearRememberedGuid();
     if (!guid) return;
 
+    logger.info('继续观看菜单已接管:', match.action);
     sendPlayEvent(guid, 0, match.action === 'restart');
     closeDropdownMenu();
 }
@@ -169,6 +170,7 @@ async function setupContinueWatchingMenuHandler(): Promise<void> {
     if (!config.hideOriginalPlayButton) return;
 
     initialized = true;
+    logger.info('继续观看菜单接管已启用');
     document.addEventListener('pointerdown', handlePointerDown, true);
     document.addEventListener('pointerup', handlePointerUp, true);
     document.addEventListener('pointercancel', () => {

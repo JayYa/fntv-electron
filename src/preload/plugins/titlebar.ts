@@ -89,6 +89,7 @@ function injectTitleBar(): void {
     // 防止出现双重滚动条
     document.documentElement.style.overflowY = 'hidden';
     document.body.appendChild(bar);
+    logger.info('自定义标题栏已注入');
 
     if (isMac) return;
 
