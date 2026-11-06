@@ -1,6 +1,7 @@
 import { getMainWindow } from '../../common/mainwin';
 import { setHalfScreen, setFullScreen } from '../../common/winctrl';
 import { registerHandler } from '../core/ipcHandler';
+import * as log from '../../../modules/logger';
 
 /**
  * 窗口控制插件
@@ -9,12 +10,14 @@ import { registerHandler } from '../core/ipcHandler';
 
 // 窗口最小化处理
 function handleMinimize(): void {
+    log.info('窗口控制: 最小化');
     const mainWindow = getMainWindow();
     if (mainWindow) mainWindow.minimize();
 }
 
 // 窗口最大化/还原处理
 function handleMaximize(): void {
+    log.info('窗口控制: 最大化或还原');
     const mainWindow = getMainWindow();
     if (mainWindow) {
         mainWindow.isMaximized() ? setHalfScreen(mainWindow) : setFullScreen(mainWindow);
@@ -23,6 +26,7 @@ function handleMaximize(): void {
 
 // 窗口关闭处理
 function handleClose(): void {
+    log.info('窗口控制: 关闭');
     const mainWindow = getMainWindow();
     if (mainWindow) mainWindow.close();
 }
