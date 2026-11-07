@@ -113,3 +113,11 @@
 - `formatReleaseNotes` 去掉条目开头的 release-please scope 前缀（Markdown 里的 `**login:** `），只认条目开头加粗的这种写法，正文里的冒号不动。
 - 上限改为 25 行或 1300 个字符，按原来每行约 53 个字符的比例放宽。v2.7.0 的 14 条全部显示，不截断。
 - 测试样例是 `gh api repos/JayYa/fntv-electron/releases/tags/v2.7.0` 返回的 `body`，原样存为 `tests/fixtures/release-v2.7.0.md`（`tests/releaseNotes.test.cjs`）。
+## 2026-11-07 检查更新 403（`JayYa/fntv-electron@17ac14c`，尚未合并）
+
+- 现象：点“检查更新”弹出 `Request failed with status code 403`。
+- 证据：维护者本机日志 `%APPDATA%\fntv\logs\app.log`（不是 `~/.fntv/logs`）里，20:42:33 到 20:48:46 共 7 次检查、28 个请求全部 403，第一次检查的第一个请求就是 403，说明额度在应用请求前已经被同一出口 IP 上的其它请求用掉。旧日志只记了 `error.message`，没有 `x-ratelimit-remaining` 和错误正文，限流没有直接证据。
+- 旁证：20:52 查 `/rate_limit`，`limit` 60、`used` 39、`reset` 21:14，即当时的出口 IP 在 20:14 起的窗口里没有用完。本机有 Mihomo TUN 网卡，出口是代理节点，节点会切换，也和其他用户共用。结论：最可能是出口 IP 触发未认证 API 限流，旧代码 403 也重试 3 次，进一步消耗额度。
+- 实测：未认证时带 `If-None-Match` 得到 304，`x-ratelimit-remaining` 照样减 1（18 → 17）。GitHub 只对带认证的请求免计 304，所以没有做 ETag 缓存。
+- `github.com/JayYa/fntv-electron/releases/latest` 返回 302，`Location` 指向 `/releases/tag/v2.7.0`，不走 API 限流。v2.7.0 的资产名：`FNMedia_2.7.0_win_x64.exe`、`FNMedia_2.7.0_mac_{arm64,x64}.dmg`、`FNMedia_2.7.0_linux_{x86_64,arm64}.AppImage`。
+- 修复：只重试网络错误、超时和 5xx；403/429 限流时记下恢复时间，之前直接查 Release 页面；都失败时提示“GitHub 访问次数暂时用完，大约 HH:mm 之后可以重试”，并提供“打开下载页面”。失败日志现在带状态码、`x-ratelimit-remaining`、`x-ratelimit-reset` 和错误正文，下次能直接确认。
