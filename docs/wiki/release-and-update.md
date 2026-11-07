@@ -67,7 +67,7 @@
 ## 2026-11-07 事实（GitHub 设置）
 
 - 仓库的 Actions 设置 `can_approve_pull_request_reviews` 为 `false`，即未勾选“Allow GitHub Actions to create and approve pull requests”。不勾选时 release-please 用 `GITHUB_TOKEN` 开不了 Release PR。
-- `GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow，CI 和 PR 标题检查都不会跑。
+- `GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow，CI 和 PR 标题检查都不会跑。（已被下方 2026-11-07 v2.7.0 发版验收记录取代：会触发，但状态是 `action_required`，要维护者批准才跑）
 - `main` 没有分支保护。
 
 ## 2026-11-07 合并方式记录（PR #62 分支，`bf273e1`，尚未合并）
