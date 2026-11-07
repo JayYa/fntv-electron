@@ -166,3 +166,13 @@
 - 维护者在真实 fnOS 上走完 7 项冒烟后合并了 PR #54，#31 已关闭。首轮 MPV 失败是 worktree 没有 `third_party/fntv-mpv`，与沙箱无关；这个目录被 git 忽略，只有发版流程下载，本地要从已安装版复制。
 - 冒烟时发现日志有明文内网 IP、FN ID 和用户名，维护者要求修复。`log.noformat` 原来完全不脱敏，所以 proxy 输出全是明文。
 - 已写入的旧日志不会被改写。
+
+## 2026-11-07 #55 合并和本轮收尾（`JayYa/fntv-electron@be5e1a3`）
+
+- 维护者合并了 PR #56，#55 已关闭。FN ID 页面加载日志的脱敏只有单元测试，没有真实登录验证。
+- 上面“`.gitignore` 的 `docs` 规则是否影响新文件”已结案：`docs/wiki/` 已放行，不需要 `git add -f`。
+- `check.fnos.net` 的缺口开成 #57。chief of staff 读代码后修正：这个页面本身拿不到密码，风险是它的下一跳会被确认为目标。这一条未做运行验证。
+- `play-movie` 空数据开成 #58。错误会被 `guardHandler` 捕获并写日志，应用不会崩溃。
+- #54 审查中未修的判断项：OAuth 窗口没有显式设 `sandbox`，靠默认值（推断）；`dest/preload/index.js` 和插件文件仍打进 asar 但不使用；`PLUGINS` 列表和静态导入重复，有测试守护；`describePage` 没有测试。
+- 未处理：`generate-iconset.js` 的回退分支，见 2026-11-05 进度。
+- 未验证：打包版真机冒烟（#43 来源校验、#46 CSP、#47 失败路径、MPV 路径）、macOS、Linux、FN ID 的访问码 NAS 和旧版 NAS。计划在 #32 发版准备时用打包版走一遍 7 项清单。
