@@ -6,7 +6,7 @@
 
 维护者决定独立维护，并确认：
 
-- 暂不公开发版。
+- 暂不公开发版。（已被 2026-11-07 的发版决定取代，见[发布与更新链路](release-and-update.md)）
 - fork `fntv-mpv-config` 到 `JayYa/fntv-mpv-config`（当天已创建）。
 - 爱发电内容直接删除，不换成维护者的账号。
 - 删除 `AGENTS.md`，不保留通用版。
