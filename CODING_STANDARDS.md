@@ -93,7 +93,9 @@
 - 提交信息、PR 标题、分支名这类不可信内容先放进 `env:`，再在 shell 里用 `"$VAR"` 读取。范例是 `release.yml` 的 `Select build matrix` 步骤（`PLATFORM`）。
 - 第三方 action 固定到 commit SHA，行尾注释版本号（`ci.yml`、`release.yml`，`tests/standards.test.cjs`）。
 - Go 版本用 `go-version-file: src/modules/proxy/go.mod` 读取。
-- 工作流权限只给 `contents: read`。`release.yml` 只手动触发，产物留在 Actions artifacts。
+- 工作流顶层权限只给 `contents: read`，需要写权限的 job 单独声明。`release.yml` 里只有 `release-please` 和 `publish` 两个 job 有写权限，构建 job 只读。
+- 发版走 `release.yml`：push 到 `main` 时 release-please 维护 Release PR；合并后建 draft Release，三平台构建成功、`publish` 核对安装包名并上传后才转正式。更新检查只看正式 Release，资产不全时不能公开。GITHUB_TOKEN 创建的 Release 不触发其它 workflow，构建和上传都要用 `needs` 接在同一个 workflow 里。手动触发只构建，产物留在 Actions artifacts。
+- 版本号和 `CHANGELOG.md` 由 Release PR 改，不手动改 `package.json` 的 `version` 和 `.release-please-manifest.json`。release-please 的配置在 `release-please-config.json`。
 - `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub（`tests/standards.test.cjs`）。
 - 构建依赖的外部资产固定 tag 和 sha256（`release.yml` 的 `Download third-party dependencies`）。
 - `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
@@ -108,11 +110,13 @@
 
 ## 提交
 
-格式是 `type(scope): 描述`，描述用中文，一个提交只做一件事。PR 标题用同样的格式。
+格式是 `type(scope): 描述`，描述用中文，一个提交只做一件事。PR 标题用同样的格式。`.githooks/commit-msg` 检查提交信息，CI 的 `pr-title.yml` 检查 PR 标题和 PR 里每个提交的标题（`scripts/check-commit-message.cjs`，`tests/commitMessage.test.cjs`）。
 
-- `type`：`feat`、`fix`、`docs`、`refactor`、`test`、`chore`。
+提交描述会进入用户可见的 changelog，要写成用户能懂的话。release-please 把 `feat` 归入“新功能”、`fix` 归入“问题修复”、`perf` 归入“性能优化”，写进 `CHANGELOG.md` 和 Release 说明，更新提示框也显示这段文字。这三类的描述写用户看到的变化，例如 `fix(player): 剧集详情页的播放键改用 MPV 播放`，不写函数名和实现细节。只改内部实现、用户感觉不到时用 `refactor` 或 `chore`，它们不进 changelog。本仓库用合并提交，PR 里的每个提交都会被收录。
+
+- `type`：`feat`、`fix`、`perf`、`docs`、`refactor`、`test`、`chore`、`ci`、`build`、`style`、`revert`。不兼容的改动在 `type` 后加 `!`，会提升主版本号。
 - `scope`：受影响的模块或领域，例如 `player`、`media`、`playback`、`agents`。没有明确模块时可以省略。
 
 ## 文件大小
 
-agent 写的文件不超过 5,000 tokens（字节数 / 4）。`pnpm install` 会启用 `.githooks/pre-commit`，它只检查暂存文件，超限时按错误信息拆分。二进制文件自动跳过，锁文件和生成文件在 `.gitattributes` 里标 `-agent-authored`（`scripts/check-staged-file-size.cjs`，`tests/stagedFileSize.test.cjs`）。
+agent 写的文件不超过 5,000 tokens（字节数 / 4）。`pnpm install` 会启用 `.githooks/`（`pre-commit` 和 `commit-msg`），`pre-commit` 只检查暂存文件，超限时按错误信息拆分。二进制文件自动跳过，锁文件和生成文件在 `.gitattributes` 里标 `-agent-authored`（`scripts/check-staged-file-size.cjs`，`tests/stagedFileSize.test.cjs`）。
