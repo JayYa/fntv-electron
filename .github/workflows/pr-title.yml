@@ -1,0 +1,25 @@
+name: PR Title
+
+# 仓库只允许 squash 合并，标题取 PR 标题、正文留空，进入 main 的只有 PR 标题，release-please 据此生成
+# CHANGELOG。PR 里的提交不进 main，CI 不检查，本地 commit-msg hook 仍会检查。edited 让改标题后重新检查。
+# 不按目标分支过滤，理由同 ci.yml。
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | node scripts/check-commit-message.cjs -

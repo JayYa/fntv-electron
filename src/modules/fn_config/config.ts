@@ -396,13 +396,13 @@ export function deleteHistoryItem({ domain, account }: DeleteHistoryParams): boo
 export function getDownloadProxyConfig(): DownloadProxyConfig {
     const config: Config = readConfig() || {};
     return {
-        enabled: config.downloadProxyEnabled !== false, // 默认开启
+        enabled: config.downloadProxyEnabled === true, // 默认关闭，只有用户显式开启过才用
         proxyUrl: config.downloadProxy || 'https://ghfast.top'
     };
 }
 
 // 设置下载代理配置
-export function setDownloadProxyConfig({ enabled = true, proxyUrl = 'https://ghfast.top' }: SetDownloadProxyConfigParams = {}): void {
+export function setDownloadProxyConfig({ enabled = false, proxyUrl = 'https://ghfast.top' }: SetDownloadProxyConfigParams = {}): void {
     const config: Config = readConfig() || {};
     config.downloadProxyEnabled = enabled;
     config.downloadProxy = proxyUrl;

@@ -8,11 +8,11 @@ const axios = require('axios');
 
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/JayYa/fntv-electron/releases/latest';
 
-function setupUpdateChecker(t, { respond, version = '2.6.2' }) {
+function setupUpdateChecker(t, { respond, version = '2.6.2', config = { downloadProxyEnabled: false } }) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-update-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     fs.mkdirSync(paths.userData, { recursive: true });
-    fs.writeFileSync(path.join(paths.userData, 'config.json'), JSON.stringify({ downloadProxyEnabled: false }));
+    fs.writeFileSync(path.join(paths.userData, 'config.json'), JSON.stringify(config));
 
     const dialogs = [];
     const opened = [];
@@ -209,4 +209,100 @@ test('Linux arm64 rejects names that end in AppImage without the .AppImage exten
         'FNMedia_2.7.0_linux_arm64AppImage',
         'FNMedia_2.7.0_linux_arm64-AppImage',
     ]), null);
+});
+
+// 2.6.2 在 Release Build（actions/runs/41963636062）里的真实产物名，版本号换成 2.7.0。
+const PUBLISHED_ASSETS = [
+    'FNMedia_2.7.0_linux_arm64.AppImage',
+    'FNMedia_2.7.0_linux_x86_64.AppImage',
+    'FNMedia_2.7.0_mac_arm64.dmg',
+    'FNMedia_2.7.0_mac_arm64.dmg.blockmap',
+    'FNMedia_2.7.0_mac_x64.dmg',
+    'FNMedia_2.7.0_mac_x64.dmg.blockmap',
+    'FNMedia_2.7.0_win_x64.exe',
+    'FNMedia_2.7.0_win_x64.exe.blockmap',
+];
+
+for (const [platform, arch, expected] of [
+    ['win32', 'x64', 'FNMedia_2.7.0_win_x64.exe'],
+    ['darwin', 'x64', 'FNMedia_2.7.0_mac_x64.dmg'],
+    ['darwin', 'arm64', 'FNMedia_2.7.0_mac_arm64.dmg'],
+    ['linux', 'x64', 'FNMedia_2.7.0_linux_x86_64.AppImage'],
+    ['linux', 'arm64', 'FNMedia_2.7.0_linux_arm64.AppImage'],
+]) {
+    test(`${platform} ${arch} picks its installer from a full release, not a blockmap`, async (t) => {
+        simulateHost(t, platform, arch);
+
+        assert.equal(await downloadFileName(t, PUBLISHED_ASSETS), expected);
+    });
+}
+
+for (const [tagName, current, hasUpdate] of [
+    ['v2.7.0', '2.6.2', true],
+    ['v2.7.0', '2.7.0', false],
+    ['v2.6.2', '2.7.0', false],
+    ['v2.10.0', '2.9.0', true],
+]) {
+    test(`release tag ${tagName} against installed ${current} reports hasUpdate ${hasUpdate}`, async (t) => {
+        const { checker } = setupUpdateChecker(t, { version: current, respond: () => release(tagName) });
+
+        const info = await checker.checkForUpdates();
+
+        assert.equal(info.hasUpdate, hasUpdate);
+        assert.equal(info.latestVersion, tagName.slice(1));
+    });
+}
+
+test('download link goes straight to GitHub when the proxy was never configured', async (t) => {
+    simulateHost(t, 'win32', 'x64');
+    const { checker } = setupUpdateChecker(t, { config: {}, respond: () => release('v2.7.0', PUBLISHED_ASSETS) });
+
+    const { downloadUrl } = await checker.checkForUpdates();
+
+    assert.equal(downloadUrl, 'https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe');
+});
+
+test('download link keeps the proxy a user explicitly turned on', async (t) => {
+    simulateHost(t, 'win32', 'x64');
+    const { checker } = setupUpdateChecker(t, {
+        config: { downloadProxyEnabled: true, downloadProxy: 'https://ghfast.top' },
+        respond: () => release('v2.7.0', PUBLISHED_ASSETS),
+    });
+
+    const { downloadUrl } = await checker.checkForUpdates();
+
+    assert.equal(downloadUrl, 'https://ghfast.top/https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe');
+});
+
+test('update dialog shows release-please notes as plain text', async (t) => {
+    const body = [
+        '## [2.7.0](https://github.com/JayYa/fntv-electron/compare/v2.6.2...v2.7.0) (2026-11-07)',
+        '',
+        '',
+        '### 问题修复',
+        '',
+        '* **updater:** 新版本下载链接默认直连 GitHub ([ac6a39a](https://github.com/JayYa/fntv-electron/commit/ac6a39a))',
+        '',
+    ].join('\n');
+    const { checker, dialogs } = setupUpdateChecker(t, {
+        respond: () => ({ data: { ...release('v2.7.0').data, body } }),
+    });
+
+    await checker.manualCheckForUpdates();
+
+    assert.equal(dialogs.length, 1);
+    assert.equal(
+        dialogs[0].detail,
+        '当前版本: 2.6.2\n最新版本: 2.7.0\n\n更新内容:\n问题修复\n• updater: 新版本下载链接默认直连 GitHub',
+    );
+});
+
+test('update dialog shows a placeholder when the release has no notes', async (t) => {
+    const { checker, dialogs } = setupUpdateChecker(t, {
+        respond: () => ({ data: { ...release('v2.7.0').data, body: '' } }),
+    });
+
+    await checker.manualCheckForUpdates();
+
+    assert.match(dialogs[0].detail, /更新内容:\n暂无更新说明$/);
 });

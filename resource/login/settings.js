@@ -94,7 +94,7 @@ document.addEventListener('click', (e) => {
 // 监听代理设置响应
 ipcRenderer.on('download-proxy-info', (event, data) => {
     if (data) {
-        proxyEnabledSwitch.checked = data.enabled !== false; // 默认开启
+        proxyEnabledSwitch.checked = data.enabled === true; // 默认关闭
         proxyUrlInput.value = data.proxyUrl || 'https://ghfast.top';
     }
 });

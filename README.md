@@ -24,9 +24,9 @@
 
 ## 📦 安装方法
 
-### 构建产物
+### 下载安装包
 
-本仓库暂无公开 Release，请按下文[从源码构建](#从源码构建)自行构建，产物在 `release/` 目录：
+正式版发布在 [Releases](https://github.com/JayYa/fntv-electron/releases)，选对应平台的文件下载。也可以按下文[从源码构建](#从源码构建)，产物在 `release/` 目录。
 
 - 文件名：`FNMedia_${version}_${os}_${arch}.${ext}`
 
@@ -48,7 +48,20 @@ brew install mpv
 sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null
 ```
 
-- Linux 请先安装 MPV 播放器（版本 > 0.37.0）再使用，插件前往 [fntv-mpv](https://github.com/JayYa/fntv-mpv-config/releases) 自行安装。
+- Linux 请先安装 MPV 播放器（版本 > 0.37.0）再使用，插件前往 [fntv-mpv](https://github.com/JayYa/fntv-mpv-config/releases) 自行安装。AppImage 下载后先执行 `chmod +x` 加上可执行权限。
+
+应用只提示新版本并打开下载链接，不会自动安装。下载链接默认直连 GitHub；GitHub 下载慢时，可以在托盘菜单的“设置”里打开“下载代理”，链接会经第三方 `ghfast.top` 中转，代理地址可在登录页的代理设置里修改。
+
+### 安装包没有签名
+
+安装包没有代码签名，macOS 版也没有经过 Apple 公证，首次打开时系统会拦截：
+
+- Windows：SmartScreen 提示“Windows 已保护你的电脑”。点“更多信息”，再点“仍要运行”。
+- macOS：Gatekeeper 提示“无法验证开发者”或“已损坏，无法打开”。先把应用拖进“应用程序”，然后任选一种：
+  - 打开“系统设置 → 隐私与安全性”，在页面下方找到被拦截的“飞牛影视”，点“仍要打开”。
+  - 在终端执行上面的 `xattr` 命令，去掉下载时加上的隔离标记。
+
+只从本仓库的 Releases 下载安装包。来源不明的安装包同样会出现这些提示，提示本身不能证明文件可信。
 
 ### 从源码构建
 
