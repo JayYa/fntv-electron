@@ -113,6 +113,7 @@
 - `formatReleaseNotes` 去掉条目开头的 release-please scope 前缀（Markdown 里的 `**login:** `），只认条目开头加粗的这种写法，正文里的冒号不动。
 - 上限改为 25 行或 1300 个字符，按原来每行约 53 个字符的比例放宽。v2.7.0 的 14 条全部显示，不截断。
 - 测试样例是 `gh api repos/JayYa/fntv-electron/releases/tags/v2.7.0` 返回的 `body`，原样存为 `tests/fixtures/release-v2.7.0.md`（`tests/releaseNotes.test.cjs`）。
+
 ## 2026-11-07 检查更新 403（`JayYa/fntv-electron@17ac14c`，尚未合并）
 
 - 现象：点“检查更新”弹出 `Request failed with status code 403`。
