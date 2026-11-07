@@ -5,9 +5,7 @@
 // 用法：
 //   check-commit-message.cjs <文件>      commit-msg hook，检查文件第一行有效内容
 //   check-commit-message.cjs -           从 stdin 读，CI 检查 PR 标题
-//   check-commit-message.cjs --range A..B  检查范围内每个非合并提交的标题
 const fs = require('node:fs');
-const { execFileSync } = require('node:child_process');
 
 const TYPES = ['feat', 'fix', 'perf', 'docs', 'refactor', 'test', 'chore', 'ci', 'build', 'style', 'revert'];
 const CONVENTIONAL = new RegExp(`^(${TYPES.join('|')})(\\([A-Za-z0-9._/-]+\\))?!?: \\S`);
@@ -37,23 +35,9 @@ function hint() {
     ].join('\n'));
 }
 
-function subjectsInRange(range) {
-    return execFileSync('git', ['log', '--no-merges', '--format=%H %s', range], { encoding: 'utf8' })
-        .split('\n')
-        .filter(Boolean)
-        .map(line => ({ sha: line.slice(0, 40), subject: line.slice(41) }));
-}
-
 function main(args) {
-    if (args[0] === '--range' && args[1]) {
-        const bad = subjectsInRange(args[1]).filter(({ subject }) => !isValid(subject));
-        bad.forEach(({ sha, subject }) => report(subject, `提交 ${sha.slice(0, 7)} 的标题`));
-        if (bad.length > 0) hint();
-        return bad.length === 0 ? 0 : 1;
-    }
-
     if (args.length !== 1) {
-        console.error('用法：check-commit-message.cjs <文件> | - | --range A..B');
+        console.error('用法：check-commit-message.cjs <文件> | -');
         return 2;
     }
 

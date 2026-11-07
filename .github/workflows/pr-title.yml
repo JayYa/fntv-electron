@@ -1,7 +1,8 @@
 name: PR Title
 
-# release-please 从 main 上的提交生成 CHANGELOG：合并提交带 PR 标题，PR 里的提交原样进入 main，
-# squash 时多数情况用 PR 标题。两者都检查。edited 让改标题后重新检查。不按目标分支过滤，理由同 ci.yml。
+# 仓库只允许 squash 合并，标题取 PR 标题、正文留空，进入 main 的只有 PR 标题，release-please 据此生成
+# CHANGELOG。PR 里的提交不进 main，CI 不检查，本地 commit-msg hook 仍会检查。edited 让改标题后重新检查。
+# 不按目标分支过滤，理由同 ci.yml。
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
@@ -17,16 +18,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - name: Check PR title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$PR_TITLE" | node scripts/check-commit-message.cjs -
-
-      - name: Check commit titles
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/check-commit-message.cjs --range "$BASE_SHA..$HEAD_SHA"
