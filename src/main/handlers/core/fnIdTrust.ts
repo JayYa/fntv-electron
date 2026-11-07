@@ -12,12 +12,9 @@ export interface FnIdTrust {
     targetOrigin: string | null;
 }
 
-// check.fnos.net 是 FN Connect 给旧版 NAS 用的 HTTP 探测页，只在这里允许明文。
-const FN_CONNECT_HOSTS: ReadonlyMap<string, readonly string[]> = new Map([
-    ['5ddd.com', ['https:']],
-    ['www.5ddd.com', ['https:']],
-    ['check.fnos.net', ['http:', 'https:']],
-]);
+// 只认 HTTPS。离开这些页面后到达的第一个地址会被确认为目标，明文页面的跳转可以被篡改。
+// check.fnos.net 是旧版 NAS 的探测页，它的 HTTP 地址因此被拒绝，旧版 NAS 不再支持 FN ID 登录（#57）。
+const FN_CONNECT_HOSTS: ReadonlySet<string> = new Set(['5ddd.com', 'www.5ddd.com', 'check.fnos.net']);
 
 // FN Connect 页脚的外链，不是 NAS 地址。
 const FN_CONNECT_EXTERNAL_LINK_HOSTS: ReadonlySet<string> = new Set([
@@ -40,7 +37,7 @@ function parseWebUrl(url: string): URL | null {
 }
 
 function isFnConnectPage(url: URL): boolean {
-    return FN_CONNECT_HOSTS.get(url.hostname)?.includes(url.protocol) ?? false;
+    return url.protocol === 'https:' && FN_CONNECT_HOSTS.has(url.hostname);
 }
 
 function isDowngrade(from: URL, to: URL): boolean {

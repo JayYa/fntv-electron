@@ -176,3 +176,9 @@
 - #54 审查中未修的判断项：OAuth 窗口没有显式设 `sandbox`，靠默认值（推断）；`dest/preload/index.js` 和插件文件仍打进 asar 但不使用；`PLUGINS` 列表和静态导入重复，有测试守护；`describePage` 没有测试。
 - 未处理：`generate-iconset.js` 的回退分支，见 2026-11-05 进度。
 - 未验证：打包版真机冒烟（#43 来源校验、#46 CSP、#47 失败路径、MPV 路径）、macOS、Linux、FN ID 的访问码 NAS 和旧版 NAS。计划在 #32 发版准备时用打包版走一遍 7 项清单。
+
+## 2026-11-07 #57 收紧 FN Connect 页面（`JayYa/fntv-electron@b00ccdd` 之后）
+
+- 维护者决定不考虑旧版 NAS，以安全性为重。FN Connect 页面只认 HTTPS，`http://check.fnos.net` 被拒绝，这取代了上面“已知缺口”的说法。
+- 当天 `5ddd.com` 的 bundle 显示，只有 NAS 版本低于 1.4.0 或没有 `checkSum` 时才跳这个地址。这类 NAS 的 FN ID 登录窗口会停在 FN Connect 页面，要改用直连登录。
+- 未改：FN Connect 确认的目标本身可以是 HTTP，局域网 HTTP NAS 的密码仍是明文传输。

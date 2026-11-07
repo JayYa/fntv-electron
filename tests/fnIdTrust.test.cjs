@@ -111,7 +111,7 @@ test('confirms the first address FN Connect leaves for, including plain HTTP LAN
 test('keeps the trust state while moving between FN Connect pages', () => {
     const trust = createFnIdTrust(FN_CONNECT_URL);
 
-    assert.deepEqual(resolveFnIdNavigation('http://check.fnos.net/demo123', trust), trust);
+    assert.deepEqual(resolveFnIdNavigation('https://check.fnos.net/demo123', trust), trust);
     assert.deepEqual(resolveFnIdNavigation('https://www.5ddd.com/demo123', trust), trust);
 });
 
@@ -126,6 +126,7 @@ test('refuses to confirm non-web, credentialed, downgraded or vendor footer addr
         'https://user@nas.example.com/',
         'http://5ddd.com/demo123',
         'http://www.5ddd.com/demo123',
+        'http://check.fnos.net/demo123',
         'https://fnnas.com/fn-connect',
         'https://beian.miit.gov.cn',
     ]) {
