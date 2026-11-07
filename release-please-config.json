@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "0c4ed46c2235c4be212cc9eb4f2d55c928f737e1",
+  "release-type": "node",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "draft": true,
+  "force-tag-creation": true,
+  "changelog-sections": [
+    { "type": "feat", "section": "新功能" },
+    { "type": "fix", "section": "问题修复" },
+    { "type": "perf", "section": "性能优化" },
+    { "type": "revert", "section": "回退", "hidden": true },
+    { "type": "docs", "section": "文档", "hidden": true },
+    { "type": "chore", "section": "杂项", "hidden": true },
+    { "type": "refactor", "section": "重构", "hidden": true },
+    { "type": "test", "section": "测试", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "build", "section": "构建", "hidden": true },
+    { "type": "style", "section": "代码风格", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "package-name": "fntv",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
