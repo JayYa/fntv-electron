@@ -54,6 +54,16 @@
 - 提交规范（`b7a7515`）：`.githooks/commit-msg` 和 `pr-title.yml` 共用 `scripts/check-commit-message.cjs`，CI 检查 PR 标题和 PR 里每个非合并提交的标题。
 - `CODING_STANDARDS.md` 写明发版流程，以及提交描述会进入用户可见的 changelog（`e98650e`）；`README.md` 写明下载方式和未签名安装包的打开方法（`dbe6adf`）。
 
+## 2026-11-07 决定（维护者）
+
+- 保留 `CHANGELOG.md`，release-please 继续在原有内容上方追加新版本。
+
+## 2026-11-07 实现记录（PR #62 分支，`51c60a8`，尚未合并）
+
+- 更新提示框的正文原来直接显示 Release 的 Markdown，release-please 生成的版本标题行、`**scope:**`、提交哈希和 PR 链接都按原始文本显示。现在由 `src/modules/updater/releaseNotes.ts` 的 `formatReleaseNotes` 转成纯文本：去掉版本标题行，分组标题只留文字（如“新功能”），列表项以 `• ` 开头，去掉条目末尾的提交和 PR 括注以及 `, closes #N`，其它链接只留链接文字，去掉 `**` 和反引号，合并多余空行。
+- 原生对话框不能滚动，原来没有长度限制。现在超过 15 行或 800 个字符时截断，末尾提示点“查看详情”打开 Release 页面。正文为空时仍显示“暂无更新说明”。
+- 测试样例按 `googleapis/release-please` v17.11 的 Release 正文格式编写，分区换成本仓库的中文分区（`tests/releaseNotes.test.cjs`、`tests/updateChecker.test.cjs`）。
+
 ## 2026-11-07 事实（GitHub 设置）
 
 - 仓库的 Actions 设置 `can_approve_pull_request_reviews` 为 `false`，即未勾选“Allow GitHub Actions to create and approve pull requests”。不勾选时 release-please 用 `GITHUB_TOKEN` 开不了 Release PR。
