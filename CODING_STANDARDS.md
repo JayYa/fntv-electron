@@ -58,6 +58,7 @@
 - 解不开的凭据读出来是空值，按未登录处理，密文留在 `config.ts` 内部由 `writeConfig` 原样写回，只有新值才替换。新增凭据字段时读写两边用 `readCredential` 和 `storeCredential`（`tests/credentialDecryptFailure.test.cjs`、`tests/credentialPreservation.test.cjs`）。
 - 历史记录超过上限时先淘汰能解开的条目，解不开的留到最后，刚添加的条目不淘汰（`tests/credentialHistoryLimit.test.cjs`）。
 - Linux 上 `safeStorage` 后端是 `basic_text` 时拒绝保存，不降级为明文。
+- FN ID、用户名和完整 NAS 地址不进日志。`log.noformat` 同样经过脱敏，但脱敏只是兜底，写日志时不要拼这些值。
 - Proxy 密钥、访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时要脱敏（`src/modules/logger/masking.ts`，`tests/sessionMasking.test.cjs`）。
 
 ## 配置文件

@@ -178,8 +178,8 @@ function isFilePath(text: string): boolean {
     const filePathPatterns = [
         /[A-Za-z]:\\/, // Windows盘符路径
         /\/[^\/\s]+\//, // Unix风格路径
-        /\.(js|exe|log|txt|json|xml|html|css|png|jpg|gif|pdf|doc|docx|zip|rar|dll|so)$/i, // 文件扩展名
-        /\w+\.(js|exe|log|txt|json|xml|html|css|png|jpg|gif|pdf|doc|docx|zip|rar|dll|so)\b/i, // 文件名
+        /\.(js|go|exe|log|txt|json|xml|html|css|png|jpg|gif|pdf|doc|docx|zip|rar|dll|so)$/i, // 文件扩展名
+        /\w+\.(js|go|exe|log|txt|json|xml|html|css|png|jpg|gif|pdf|doc|docx|zip|rar|dll|so)\b/i, // 文件名
     ];
     
     return filePathPatterns.some(pattern => pattern.test(text));

@@ -88,14 +88,12 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
         maskType: 'email' // 特殊的邮箱脱敏规则
     },
 
-    // IP地址 - 部分脱敏
+    // IP地址 - 只显示前两段。不用 \b：URL 编码的 %2F192.168.0.1 里 F 和 1 之间没有词边界
     ip: {
         patterns: [
-            /\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g,
+            /(?<![\d.])(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?!\d)/g,
         ],
-        maskType: 'partial',
-        showStart: 7, // 显示前两段
-        showEnd: 0
+        maskType: 'domain'
     },
 
     // 域名 - 部分脱敏
@@ -130,7 +128,7 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
     // URL中的敏感参数
     urlParams: {
         patterns: [
-            /[?&](?:token|session|key|secret|password|pwd)=([^&\s]+)/gi,
+            /[?&](?:token|session|key|secret|password|pwd|redirect_uri)=([^&\s]+)/gi,
         ],
         maskType: 'partial',
         showStart: 4,
@@ -159,6 +157,6 @@ export const maskingEnabled: boolean = true;
 export const sensitiveKeywords: string[] = [
     'password', 'pwd', 'passwd', 'token', 'session', 'secret', 'key', 'auth',
     'phone', 'mobile', 'email', 'id_card', 'idcard', 'bank_card',
-    'address', 'location',
+    'address', 'location', 'username',
     'domain', 'host', 'url', 'hostname', 'endpoint', 'server'
 ];

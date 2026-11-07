@@ -77,7 +77,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                         sysConfigLoaded = true;
                         const redirectUri = `${baseUrl}/v/oauth/result`;
                         const targetUrl = `${baseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-                        log.info(`[FN ID] 跳转到 OAuth 授权页面: ${targetUrl}`);
+                        log.info('[FN ID] 跳转到 OAuth 授权页面');
 
                         // 转发 Cookie 到新域名
                         if (cookieString) {
@@ -196,7 +196,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                 const appId = oauth.app_id;
                 const redirectUri = `${targetBaseUrl}/v/oauth/result`;
                 const targetUrl = `${targetBaseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-                log.info(`[FN ID] 通过 API 获取 OAuth 配置，跳转: ${targetUrl}`);
+                log.info('[FN ID] 通过 API 获取 OAuth 配置，跳转到授权页面');
 
                 // 转发 Cookie
                 const domain = targetBaseUrl.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];

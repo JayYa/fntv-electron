@@ -66,6 +66,20 @@ function cookieDomainCovers(domain: string, host: string): boolean {
     return normalized.startsWith('.') && !isIP(host) && host.endsWith(normalized);
 }
 
+// 只记路径和 hash 路由：查询串里可能有授权码和 state。FN Connect 的路径就是 FN ID，也不记。
+export function describeFnIdPageForLog(pageUrl: string, fnId: string): string {
+    try {
+        const page = new URL(pageUrl);
+        const pathname = page.pathname
+            .split('/')
+            .map(segment => (segment.toLowerCase() === fnId.toLowerCase() ? '(FN ID)' : segment))
+            .join('/');
+        return `${pathname}${page.hash.split('?')[0]}`;
+    } catch {
+        return '(无效地址)';
+    }
+}
+
 export function createFnIdTrust(fnConnectUrl: string): FnIdTrust {
     return { fnConnectUrl, targetOrigin: null };
 }

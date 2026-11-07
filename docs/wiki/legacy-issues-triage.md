@@ -160,3 +160,9 @@
 - 教训：打包版不要直接运行，除非入口强制隔离 home。
 - `code-review` 发现后已修：桥拆到 `loginPageApi.ts` 并排在插件之前；外链拒绝账号密码和非默认端口；外链日志不记路径；logger 的回退改为等待 invoke；`package.json` 断言移到 `tests/standards.test.cjs`。
 - 这些修复之后没有再跑真实 Electron，只跑了 lint 和 `pnpm test`。
+
+## 2026-11-07 #31 关闭，日志脱敏漏洞
+
+- 维护者在真实 fnOS 上走完 7 项冒烟后合并了 PR #54，#31 已关闭。首轮 MPV 失败是 worktree 没有 `third_party/fntv-mpv`，与沙箱无关；这个目录被 git 忽略，只有发版流程下载，本地要从已安装版复制。
+- 冒烟时发现日志有明文内网 IP、FN ID 和用户名，维护者要求修复。`log.noformat` 原来完全不脱敏，所以 proxy 输出全是明文。
+- 已写入的旧日志不会被改写。

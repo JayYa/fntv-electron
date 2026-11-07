@@ -28,7 +28,7 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
             log.warn('已保存的 token 无效');
             return false;
         }
-        log.info('Token 验证通过, username:', response.data?.username || '无用户信息');
+        log.info('已保存的登录状态验证通过');
     }
 
     // 使用 token 设置 cookie
