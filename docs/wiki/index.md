@@ -5,7 +5,7 @@
 ## 决策
 
 - [独立维护](independent-maintenance.md)：2026-11-05 决定脱离上游维护的范围和取舍。
-- [历史遗留 issue 分诊](legacy-issues-triage.md)：2026-11-05 对 #28 至 #35 的核实结果和推荐修复顺序。
+- [历史遗留 issue 分诊](legacy-issues-triage.md)：2026-11-05 至 11-07 处理 #28 至 #55 的核实结果、决定和进度。
 
 ## 子系统
 
