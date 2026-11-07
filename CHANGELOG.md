@@ -1,5 +1,13 @@
 # 更新日志
 
+## [2.7.1](https://github.com/JayYa/fntv-electron/compare/v2.7.0...v2.7.1) (2026-11-07)
+
+
+### 问题修复
+
+* **updater:** 更新提示框显示完整的更新说明，条目前不再带英文模块名 ([#66](https://github.com/JayYa/fntv-electron/issues/66)) ([5b63e64](https://github.com/JayYa/fntv-electron/commit/5b63e64b01f2edec4496466622bf7088801266a2))
+* **updater:** 检查更新遇到 GitHub 访问次数用完时，提示几点可重试并改用备用方式查新版本 ([#68](https://github.com/JayYa/fntv-electron/issues/68)) ([5570836](https://github.com/JayYa/fntv-electron/commit/557083622ed5727f2eb101b66c96a39dcb37254a))
+
 ## [2.7.0](https://github.com/JayYa/fntv-electron/compare/v2.6.2...v2.7.0) (2026-11-07)
 
 
