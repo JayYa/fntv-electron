@@ -18,16 +18,12 @@ import { createProxyPlaybackUrl, registerPlaybackSession } from '../../common/pr
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
 import { isNearEnd } from '../../../modules/playback/nearEnd';
 import { applyRestart } from '../../../modules/playback/restart';
+import { isPlayRequest, PlayRequest } from '../../../modules/playback/playRequest';
 
 /**
 * 媒体播放插件
 * 处理视频播放相关功能
 */
-interface PlayRequest {
-    id: string;
-    sourceIndex: number; // 可选，播放源
-    restart?: boolean; // 从头播放：清除服务端进度并从 0 秒拉起播放器
-}
 
 // 全局播放器实例引用
 let currentPlayer: ply.BasePlayer | null = null;
@@ -307,7 +303,12 @@ function eventHandler(fnapi: fn.ApiService) {
 }
 
 // 处理播放事件
-async function handlePlayMovie(_event: IpcMainEvent, request: PlayRequest): Promise<void> {
+async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<void> {
+    if (!isPlayRequest(request)) {
+        log.warn('忽略无效的播放请求：缺少播放项 id');
+        return;
+    }
+
     if (playbackStarting || currentPlayer?.isPlaying()) {
         log.warn('播放器正在启动或播放，忽略重复播放请求');
         return;
