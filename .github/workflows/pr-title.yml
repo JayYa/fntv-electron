@@ -1,7 +1,7 @@
 name: PR Title
 
-# 本仓库用合并提交，release-please 从 PR 里的每个提交生成 CHANGELOG；改用 squash 时用的是 PR 标题。
-# 两者都检查。edited 让改标题后重新检查。不按目标分支过滤，理由同 ci.yml。
+# release-please 从 main 上的提交生成 CHANGELOG：合并提交带 PR 标题，PR 里的提交原样进入 main，
+# squash 时多数情况用 PR 标题。两者都检查。edited 让改标题后重新检查。不按目标分支过滤，理由同 ci.yml。
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]

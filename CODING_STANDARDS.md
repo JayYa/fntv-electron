@@ -112,7 +112,7 @@
 
 格式是 `type(scope): 描述`，描述用中文，一个提交只做一件事。PR 标题用同样的格式。`.githooks/commit-msg` 检查提交信息，CI 的 `pr-title.yml` 检查 PR 标题和 PR 里每个提交的标题（`scripts/check-commit-message.cjs`，`tests/commitMessage.test.cjs`）。
 
-提交描述会进入用户可见的 changelog，要写成用户能懂的话。release-please 把 `feat` 归入“新功能”、`fix` 归入“问题修复”、`perf` 归入“性能优化”，写进 `CHANGELOG.md` 和 Release 说明，更新提示框也显示这段文字。这三类的描述写用户看到的变化，例如 `fix(player): 剧集详情页的播放键改用 MPV 播放`，不写函数名和实现细节。只改内部实现、用户感觉不到时用 `refactor` 或 `chore`，它们不进 changelog。本仓库用合并提交，PR 里的每个提交都会被收录。
+提交描述会进入用户可见的 changelog，要写成用户能懂的话。release-please 把 `feat` 归入“新功能”、`fix` 归入“问题修复”、`perf` 归入“性能优化”，写进 `CHANGELOG.md` 和 Release 说明，更新提示框也显示这段文字。这三类的描述写用户看到的变化，例如 `fix(player): 剧集详情页的播放键改用 MPV 播放`，不写函数名和实现细节。只改内部实现、用户感觉不到时用 `refactor` 或 `chore`，它们不进 changelog。用合并提交时，合并提交里的 PR 标题和 PR 里的每个提交都会被收录，同一改动在 changelog 里出现两次；squash 合并只收录一条（2026-11-07 对本分支跑 `release-please release-pr --dry-run` 所见）。
 
 - `type`：`feat`、`fix`、`perf`、`docs`、`refactor`、`test`、`chore`、`ci`、`build`、`style`、`revert`。不兼容的改动在 `type` 后加 `!`，会提升主版本号。
 - `scope`：受影响的模块或领域，例如 `player`、`media`、`playback`、`agents`。没有明确模块时可以省略。
