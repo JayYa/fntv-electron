@@ -61,7 +61,7 @@
 ## 2026-11-07 实现记录（PR #62 分支，`51c60a8`，尚未合并）
 
 - 更新提示框的正文原来直接显示 Release 的 Markdown，release-please 生成的版本标题行、`**scope:**`、提交哈希和 PR 链接都按原始文本显示。现在由 `src/modules/updater/releaseNotes.ts` 的 `formatReleaseNotes` 转成纯文本：去掉版本标题行，分组标题只留文字（如“新功能”），列表项以 `• ` 开头，去掉条目末尾的提交和 PR 括注以及 `, closes #N`，其它链接只留链接文字，去掉 `**` 和反引号，合并多余空行。
-- 原生对话框不能滚动，原来没有长度限制。现在超过 15 行或 800 个字符时截断，末尾提示点“查看详情”打开 Release 页面。正文为空时仍显示“暂无更新说明”。
+- 原生对话框不能滚动，原来没有长度限制。现在超过 15 行或 800 个字符时截断，末尾提示点“查看详情”打开 Release 页面。正文为空时仍显示“暂无更新说明”。（上限已被下方 2026-11-07 更新说明截断修正记录取代）
 - 测试样例按 `googleapis/release-please` v17.11 的 Release 正文格式编写，分区换成本仓库的中文分区（`tests/releaseNotes.test.cjs`、`tests/updateChecker.test.cjs`）。
 
 ## 2026-11-07 事实（GitHub 设置）
@@ -106,3 +106,10 @@
 - 更新提示框的正文有 17 行，超过 15 行上限，被截断：只显示到第 8 条问题修复，最后两条 `updater` 条目不显示，末尾提示点“查看详情”。
 - Release PR #63 由 `github-actions[bot]` 开出，`pull_request` 触发的 CI 是 `action_required`，要维护者手动批准才跑（`actions/runs/42371111844` 第 2 次尝试由 `JayYa` 触发，通过）。前面“`GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow”的记录与此不符，实际是触发了但需要批准。
 - changelog 和 Release 正文的 14 条都链接到 #64 的 squash 提交 `d9e675b`，不链接各自原来的 PR。
+
+## 2026-11-07 更新说明截断修正记录（PR 分支 `t3/updater-release-notes-truncation`，`3e3d38f`，尚未合并）
+
+- v2.7.0 的真实 Release 正文转成纯文本后有 17 行、451 个字符，超过 15 行上限，最后两条 `updater` 条目被截掉。字符数没有超。
+- `formatReleaseNotes` 去掉条目开头的 release-please scope 前缀（Markdown 里的 `**login:** `），只认条目开头加粗的这种写法，正文里的冒号不动。
+- 上限改为 25 行或 1300 个字符，按原来每行约 53 个字符的比例放宽。v2.7.0 的 14 条全部显示，不截断。
+- 测试样例是 `gh api repos/JayYa/fntv-electron/releases/tags/v2.7.0` 返回的 `body`，原样存为 `tests/fixtures/release-v2.7.0.md`（`tests/releaseNotes.test.cjs`）。

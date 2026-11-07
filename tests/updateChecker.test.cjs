@@ -293,7 +293,7 @@ test('update dialog shows release-please notes as plain text', async (t) => {
     assert.equal(dialogs.length, 1);
     assert.equal(
         dialogs[0].detail,
-        '当前版本: 2.6.2\n最新版本: 2.7.0\n\n更新内容:\n问题修复\n• updater: 新版本下载链接默认直连 GitHub',
+        '当前版本: 2.6.2\n最新版本: 2.7.0\n\n更新内容:\n问题修复\n• 新版本下载链接默认直连 GitHub',
     );
 });
 
