@@ -273,3 +273,36 @@ test('download link keeps the proxy a user explicitly turned on', async (t) => {
 
     assert.equal(downloadUrl, 'https://ghfast.top/https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe');
 });
+
+test('update dialog shows release-please notes as plain text', async (t) => {
+    const body = [
+        '## [2.7.0](https://github.com/JayYa/fntv-electron/compare/v2.6.2...v2.7.0) (2026-11-07)',
+        '',
+        '',
+        '### 问题修复',
+        '',
+        '* **updater:** 新版本下载链接默认直连 GitHub ([ac6a39a](https://github.com/JayYa/fntv-electron/commit/ac6a39a))',
+        '',
+    ].join('\n');
+    const { checker, dialogs } = setupUpdateChecker(t, {
+        respond: () => ({ data: { ...release('v2.7.0').data, body } }),
+    });
+
+    await checker.manualCheckForUpdates();
+
+    assert.equal(dialogs.length, 1);
+    assert.equal(
+        dialogs[0].detail,
+        '当前版本: 2.6.2\n最新版本: 2.7.0\n\n更新内容:\n问题修复\n• updater: 新版本下载链接默认直连 GitHub',
+    );
+});
+
+test('update dialog shows a placeholder when the release has no notes', async (t) => {
+    const { checker, dialogs } = setupUpdateChecker(t, {
+        respond: () => ({ data: { ...release('v2.7.0').data, body: '' } }),
+    });
+
+    await checker.manualCheckForUpdates();
+
+    assert.match(dialogs[0].detail, /更新内容:\n暂无更新说明$/);
+});

@@ -2,6 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
 import { getDownloadProxyConfig } from '../fn_config/config';
 import log from '../logger';
+import { formatReleaseNotes } from './releaseNotes';
 
 // 尝试获取semver模块
 let semver: any;
@@ -284,7 +285,7 @@ export class UpdateChecker {
             type: 'info',
             title: '发现新版本',
             message: `飞牛影视有新版本可用！`,
-            detail: `当前版本: ${this.currentVersion}\n最新版本: ${latestVersion}\n\n更新内容:\n${releaseNotes || '暂无更新说明'}`,
+            detail: `当前版本: ${this.currentVersion}\n最新版本: ${latestVersion}\n\n更新内容:\n${formatReleaseNotes(releaseNotes)}`,
             buttons: ['立即下载', '查看详情', '稍后提醒'],
             defaultId: 0,
             cancelId: 2
