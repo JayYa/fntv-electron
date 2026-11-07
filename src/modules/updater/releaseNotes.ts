@@ -1,6 +1,6 @@
 // 更新提示框是原生对话框，只能显示纯文本，也不能滚动，正文过长会把按钮挤出屏幕。
-const MAX_LINES = 15;
-const MAX_CHARS = 800;
+const MAX_LINES = 25;
+const MAX_CHARS = 1300;
 
 const NO_NOTES = '暂无更新说明';
 const TRUNCATION_HINT = '更多内容请点“查看详情”打开 Release 页面查看。';
@@ -9,6 +9,8 @@ const TRUNCATION_HINT = '更多内容请点“查看详情”打开 Release 页�
 const VERSION_HEADING = /^#{1,3}\s+\[?v?\d+\.\d+\.\d+[^\]\s]*\]?/;
 const HEADING = /^#{1,6}\s+/;
 const LIST_ITEM = /^(\s*)[*+-]\s+/;
+// release-please 条目开头的 `**scope:** `，只认条目开头，正文里的冒号不动
+const SCOPE_PREFIX = /^(\s*[*+-]\s+)\*\*[^*:]+:\*\*\s*/;
 // 条目末尾的 `([abc1234](commit 链接))` 和 `([#12](issue 链接))`
 const COMMIT_OR_PR_REF = /\s*\(\[(?:[0-9a-f]{7,40}|#\d+)\]\([^)]*\)\)/g;
 // 提交正文里 `Closes #12` 生成的 `, closes [#12](链接) [#13](链接)`
@@ -17,6 +19,7 @@ const LINK = /!?\[([^\]]*)\]\([^)]*\)/g;
 
 function toPlainLine(line: string): string {
     let text = line
+        .replace(SCOPE_PREFIX, '$1')
         .replace(COMMIT_OR_PR_REF, '')
         .replace(CLOSES_REFS, '')
         .replace(LINK, '$1')
