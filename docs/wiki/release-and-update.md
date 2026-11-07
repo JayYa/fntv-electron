@@ -67,7 +67,7 @@
 ## 2026-11-07 事实（GitHub 设置）
 
 - 仓库的 Actions 设置 `can_approve_pull_request_reviews` 为 `false`，即未勾选“Allow GitHub Actions to create and approve pull requests”。不勾选时 release-please 用 `GITHUB_TOKEN` 开不了 Release PR。
-- `GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow，CI 和 PR 标题检查都不会跑。
+- `GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow，CI 和 PR 标题检查都不会跑。（已被下方 2026-11-07 v2.7.0 发版验收记录取代：会触发，但状态是 `action_required`，要维护者批准才跑）
 - `main` 没有分支保护。
 
 ## 2026-11-07 合并方式记录（PR #62 分支，`bf273e1`，尚未合并）
@@ -95,6 +95,17 @@
 - PR 标题用 `chore(release)`，属于隐藏类型。squash 后进 `main` 的只有这个标题，分支里的提交（包括这条 `docs` 记录）不进 `main`。
 - release-please 17.6 源码核实：`github.js` 的 `mergeCommitsGraphQL` 取每个提交关联的 PR，squash 提交的 `mergeCommit.oid` 等于提交本身且只关联一次，所以拿到的是这个 PR 的正文。`commit.js` 的 `preprocessCommitMessage` 用正文里 `BEGIN_COMMIT_OVERRIDE` 和 `END_COMMIT_OVERRIDE` 之间的内容替换提交信息。正文在每次运行时读取，合并后再改 PR 正文，下一次 push 到 `main` 时 Release PR 会跟着更新。
 - 模拟 dry run：release-please 17.6.0 的 `Manifest.buildPullRequests` 连真实仓库，`release-please-config.json` 读 PR 分支，在 `main` 头部之前插入一个带覆盖正文的 squash 提交。结果是 `chore(main): release 2.7.0`，changelog 只有覆盖里的 4 条新功能和 10 条问题修复，`46cba98` 及之前的提交都没收录。条目在分区内按 scope 字母排序，不按覆盖里的顺序。
+
+## 2026-11-07 v2.7.0 发版验收（`JayYa/fntv-electron@fa0c2ee`）
+
+- Release PR #63 squash 合并为 `fa0c2ee`。`main` 上的 `Release` workflow（`actions/runs/42371488957`）成功：`release-please`、`select-matrix`、三个 `Build`（windows、macos、ubuntu）和 `Publish release` 全部通过，用时约 4 分钟。
+- tag `v2.7.0` 指向 `fa0c2ee`。Release 不再是 draft，也不是 prerelease，`published_at` 为 `2026-11-07T12:16:54Z`。`releases/latest` 返回 `v2.7.0`。
+- 资产 8 个：`FNMedia_2.7.0_win_x64.exe`、`FNMedia_2.7.0_mac_x64.dmg`、`FNMedia_2.7.0_mac_arm64.dmg`、`FNMedia_2.7.0_linux_x86_64.AppImage`、`FNMedia_2.7.0_linux_arm64.AppImage`，以及 exe 和两个 dmg 的 `.blockmap`。AppImage 没有单独的 `.blockmap`，electron-builder 把块映射嵌在 AppImage 文件里（构建日志 `building embedded block map`）。
+- 正文是整理后的 14 条：4 条新功能、10 条问题修复。
+- 用 `releases/latest` 的真实返回，mock `electron` 和 `axios.get` 后调用编译后的 `dest/modules/updater/updateChecker.js`：当前版本 2.6.2 时 `hasUpdate` 为 `true`，最新版本 2.7.0。win32/x64、darwin/x64、darwin/arm64、linux/x64、linux/arm64 都匹配到对应安装包，linux/x64 匹配 `x86_64`。win32/arm64 返回 `null`，与代码设计一致。没有配置文件时下载链接直连 GitHub。
+- 更新提示框的正文有 17 行，超过 15 行上限，被截断：只显示到第 8 条问题修复，最后两条 `updater` 条目不显示，末尾提示点“查看详情”。
+- Release PR #63 由 `github-actions[bot]` 开出，`pull_request` 触发的 CI 是 `action_required`，要维护者手动批准才跑（`actions/runs/42371111844` 第 2 次尝试由 `JayYa` 触发，通过）。前面“`GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow”的记录与此不符，实际是触发了但需要批准。
+- changelog 和 Release 正文的 14 条都链接到 #64 的 squash 提交 `d9e675b`，不链接各自原来的 PR。
 
 ## 2026-11-07 更新说明截断修正记录（PR 分支 `t3/updater-release-notes-truncation`，`3e3d38f`，尚未合并）
 
