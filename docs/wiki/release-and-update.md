@@ -87,7 +87,7 @@
 
 ## 2026-11-07 合并 PR #62 后（`JayYa/fntv-electron@46cba98`）
 
-- #62 squash 合并为 `46cba98`。`main` 上的 `Release` workflow（`actions/runs/42370295283`）成功：`release-please` job 通过，`select-matrix`、`build`、`publish` 按预期跳过。它开了 Release PR #63 `chore(main): release 2.7.0`，改 `package.json`、`.release-please-manifest.json` 和 `CHANGELOG.md`。changelog 是整理前的样子：16 条新功能、37 条问题修复，合并提交和 PR 里的提交各收录一次，夹着重构和构建细节。#63 保持打开，没有改。
+- #62 squash 合并为 `46cba98`。`main` 上的 `Release` workflow（`actions/runs/42370295283`）成功：`release-please` job 通过，`select-matrix`、`build`、`publish` 按预期跳过。它开了 Release PR #63 `chore(main): release 2.7.0`，改 `package.json`、`.release-please-manifest.json` 和 `CHANGELOG.md`。changelog 是整理前的样子：16 条新功能、40 条问题修复，合并提交和 PR 里的提交各收录一次，夹着重构和构建细节。#63 保持打开，没有改。
 
 ## 2026-11-07 2.7.0 changelog 整理记录（PR 分支 `t3/6f08b083`，`3f2862e`，尚未合并）
 
