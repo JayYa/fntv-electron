@@ -27,7 +27,7 @@ function handleGetDownloadProxy(event: IpcMainEvent): void {
 function handleSetDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Partial<ProxyConfig>): void {
     try {
         fnConfig.setDownloadProxyConfig({ 
-            enabled: enabled !== false, 
+            enabled: enabled === true, 
             proxyUrl: proxyUrl || 'https://ghfast.top' 
         });
         event.reply('download-proxy-set', { success: true });
