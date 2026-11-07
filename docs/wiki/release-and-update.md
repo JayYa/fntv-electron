@@ -122,3 +122,8 @@
 - 实测：未认证时带 `If-None-Match` 得到 304，`x-ratelimit-remaining` 照样减 1（18 → 17）。GitHub 只对带认证的请求免计 304，所以没有做 ETag 缓存。
 - `github.com/JayYa/fntv-electron/releases/latest` 返回 302，`Location` 指向 `/releases/tag/v2.7.0`，不走 API 限流。v2.7.0 的资产名：`FNMedia_2.7.0_win_x64.exe`、`FNMedia_2.7.0_mac_{arm64,x64}.dmg`、`FNMedia_2.7.0_linux_{x86_64,arm64}.AppImage`。
 - 修复：只重试网络错误、超时和 5xx；403/429 限流时记下恢复时间，之前直接查 Release 页面；都失败时提示“GitHub 访问次数暂时用完，大约 HH:mm 之后可以重试”，并提供“打开下载页面”。失败日志现在带状态码、`x-ratelimit-remaining`、`x-ratelimit-reset` 和错误正文，下次能直接确认。
+
+## 2026-11-07 决定：Release PR 暂不改用 GitHub App token
+
+- 维护者决定暂不处理。每次发版前，维护者在 Release PR 上手动点 “Approve workflows to run”（原因见上方 v2.7.0 验收记录里 `action_required` 一条）。
+- 备选做法：建一个只装在本仓库的 GitHub App（Contents、Pull requests、Issues 读写，不开 webhook），App ID 存为仓库变量、私钥存为仓库 secret，workflow 用 `actions/create-github-app-token` 生成 token 给 release-please。构建和上传仍用 `GITHUB_TOKEN`。个人 fine-grained PAT 也可行，但绑定个人账号且会过期。
