@@ -84,3 +84,14 @@
 - 合并前直接改 Release PR 的 `CHANGELOG.md` 和正文可行，但之后每次 push 到 `main` release-please 都会重新生成 Release PR，改动被覆盖，只能在合并 Release PR 前最后一刻做。
 - 采用的做法：#62 squash 合并得到提交 S 后，再开一个 PR，把 `release-please-config.json` 的 `bootstrap-sha` 改成 S，PR 正文写 `BEGIN_COMMIT_OVERRIDE` … `END_COMMIT_OVERRIDE`，里面每条一个 Conventional 标题，空行分隔。squash 合并后，S 之前的历史都不算，这个 PR 的提交按覆盖内容展开成整理好的条目；S 之后合并的其它 PR 照常收录。没有正式 Release 时才看 `bootstrap-sha`，发出 2.7.0 后它不再起作用。
 - 验证：用 release-please 17.6.0 的 `Manifest.buildPullRequests`，读真实的 PR 分支配置，模拟在分支头之后 squash 进一个带覆盖正文的提交，`bootstrapSha` 设为分支头。结果是 2.6.2 → 2.7.0，changelog 只有覆盖里的 3 条新功能和 6 条问题修复，没有重复。每条都链接到这个整理提交的哈希，更新提示框会去掉哈希（`releaseNotes.ts`）。
+
+## 2026-11-07 合并 PR #62 后（`JayYa/fntv-electron@46cba98`）
+
+- #62 squash 合并为 `46cba98`。`main` 上的 `Release` workflow（`actions/runs/42370295283`）成功：`release-please` job 通过，`select-matrix`、`build`、`publish` 按预期跳过。它开了 Release PR #63 `chore(main): release 2.7.0`，改 `package.json`、`.release-please-manifest.json` 和 `CHANGELOG.md`。changelog 是整理前的样子：16 条新功能、37 条问题修复，合并提交和 PR 里的提交各收录一次，夹着重构和构建细节。#63 保持打开，没有改。
+
+## 2026-11-07 2.7.0 changelog 整理记录（PR 分支 `t3/6f08b083`，`3f2862e`，尚未合并）
+
+- `release-please-config.json` 的 `bootstrap-sha` 改成 `46cba98`（`3f2862e`）。PR 正文的 `BEGIN_COMMIT_OVERRIDE` 列出 2.7.0 的 14 个条目：4 条 `feat`、10 条 `fix`，来自 2.6.2 之后到 #62 的面向用户改动，对照表在 PR 描述里。没写进去的：构建脚本修正（#40）、日志里新增的 preload 和窗口按钮记录（#54）、`play-movie` 空请求防护（#60，只有异常调用会触发）、IPC 错误捕获和 `compile` 清理 `dest/`（#47），以及文档、重构、CI 和工具链。
+- PR 标题用 `chore(release)`，属于隐藏类型。squash 后进 `main` 的只有这个标题，分支里的提交（包括这条 `docs` 记录）不进 `main`。
+- release-please 17.6 源码核实：`github.js` 的 `mergeCommitsGraphQL` 取每个提交关联的 PR，squash 提交的 `mergeCommit.oid` 等于提交本身且只关联一次，所以拿到的是这个 PR 的正文。`commit.js` 的 `preprocessCommitMessage` 用正文里 `BEGIN_COMMIT_OVERRIDE` 和 `END_COMMIT_OVERRIDE` 之间的内容替换提交信息。正文在每次运行时读取，合并后再改 PR 正文，下一次 push 到 `main` 时 Release PR 会跟着更新。
+- 模拟 dry run：release-please 17.6.0 的 `Manifest.buildPullRequests` 连真实仓库，`release-please-config.json` 读 PR 分支，在 `main` 头部之前插入一个带覆盖正文的 squash 提交。结果是 `chore(main): release 2.7.0`，changelog 只有覆盖里的 4 条新功能和 10 条问题修复，`46cba98` 及之前的提交都没收录。条目在分区内按 scope 字母排序，不按覆盖里的顺序。
