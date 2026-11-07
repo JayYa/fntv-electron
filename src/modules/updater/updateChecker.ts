@@ -2,6 +2,16 @@ import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
 import { getDownloadProxyConfig } from '../fn_config/config';
 import log from '../logger';
+import {
+    assetDownloadUrl,
+    describeGitHubError,
+    expectedAssetName,
+    fetchLatestTagFromReleasePage,
+    formatClock,
+    isRetryable,
+    rateLimitResetAt,
+    releasePageUrl
+} from './githubRelease';
 import { formatReleaseNotes } from './releaseNotes';
 
 // 尝试获取semver模块
@@ -57,9 +67,13 @@ export class UpdateChecker {
     private githubApiUrl: string;
     private maxRetries: number;
     private baseRetryDelay: number;
+    private userAgent: string;
+    // GitHub API 额度恢复前不再请求 API，只存在内存里
+    private rateLimitedUntil: Date | null = null;
 
     constructor() {
         this.currentVersion = app.getVersion();
+        this.userAgent = `fntv-electron/${this.currentVersion}`;
         this.githubApiUrl = `https://api.github.com/repos/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/latest`;
         // 重试配置
         this.maxRetries = 3;
@@ -67,46 +81,64 @@ export class UpdateChecker {
     }
 
     /**
-     * 检查是否有新版本
+     * 检查是否有新版本。
+     * 先查 GitHub API；API 失败或额度用完时改查 Release 页面的重定向。
      * @returns 更新信息
      */
     async checkForUpdates(): Promise<UpdateInfo> {
-        return await this.checkForUpdatesWithRetry();
+        let apiError: any = null;
+        if (this.isRateLimited()) {
+            log.info(`GitHub API 额度要到 ${formatClock(this.rateLimitedUntil as Date)} 才恢复，直接查 Release 页面`);
+        } else {
+            try {
+                return await this.checkForUpdatesWithRetry();
+            } catch (error: any) {
+                // 仓库还没有 Release 时 GitHub 返回 404，这不是检查失败
+                if (error.response?.status === 404) {
+                    log.info('更新源暂无 Release');
+                    return { hasUpdate: false };
+                }
+                apiError = error;
+                const resetAt = rateLimitResetAt(error);
+                if (resetAt) {
+                    this.rateLimitedUntil = resetAt;
+                    log.warn(`GitHub API 额度已用完，预计 ${formatClock(resetAt)} 恢复`);
+                }
+            }
+        }
+
+        try {
+            return await this.checkViaReleasePage();
+        } catch (fallbackError: any) {
+            log.error('Release 页面回退失败:', describeGitHubError(fallbackError));
+            throw new Error(this.failureMessage(apiError));
+        }
     }
 
     /**
-     * 带梯度重试机制的检查更新
+     * 带梯度重试机制的 API 检查。只重试网络错误和 5xx，4xx 原样抛出。
      * @param retryCount - 当前重试次数
      * @returns 更新信息
      */
     async checkForUpdatesWithRetry(retryCount: number = 0): Promise<UpdateInfo> {
         try {
             log.info(`检查更新: 当前版本 ${this.currentVersion}${retryCount > 0 ? ` (重试 ${retryCount}/${this.maxRetries})` : ''}`);
-            
+
             const response: AxiosResponse<GitHubRelease> = await axios.get(this.githubApiUrl, {
                 timeout: 10000,
                 headers: {
-                    'User-Agent': `fntv-electron/${this.currentVersion}`
+                    'User-Agent': this.userAgent
                 }
             });
 
             const release = response.data;
             const latestVersion = release.tag_name.replace(/^v/, ''); // 移除 'v' 前缀
             const downloadUrl = this.getDownloadUrl(release.assets);
-            
+
             log.info(`最新版本: ${latestVersion}`);
-            
-            // 使用 semver 比较版本，如果没有semver则使用简单比较
-            let hasUpdate: boolean;
-            if (semver) {
-                hasUpdate = semver.gt(latestVersion, this.currentVersion);
-            } else {
-                // 简单的版本比较（仅用于测试）
-                hasUpdate = this.compareVersions(latestVersion, this.currentVersion) > 0;
-            }
-            
+
             return {
-                hasUpdate,
+                hasUpdate: this.isNewer(latestVersion),
                 latestVersion,
                 downloadUrl,
                 releaseNotes: release.body,
@@ -114,26 +146,65 @@ export class UpdateChecker {
                 htmlUrl: release.html_url
             };
         } catch (error: any) {
-            // 仓库还没有 Release 时 GitHub 返回 404，这不是检查失败
-            if (error.response?.status === 404) {
-                log.info('更新源暂无 Release');
-                return { hasUpdate: false };
+            if (error.response?.status !== 404) {
+                log.error(`检查更新失败 (尝试 ${retryCount + 1}/${this.maxRetries + 1}):`, describeGitHubError(error));
             }
 
-            log.error(`检查更新失败 (尝试 ${retryCount + 1}/${this.maxRetries + 1}):`, error.message);
-            
-            // 如果还有重试次数，则等待后重试
-            if (retryCount < this.maxRetries) {
+            if (isRetryable(error) && retryCount < this.maxRetries) {
                 // 梯度延迟
                 const retryDelay = this.baseRetryDelay * Math.pow(2, retryCount);
                 log.info(`等待 ${retryDelay}ms 后重试...`);
                 await delay(retryDelay);
                 return await this.checkForUpdatesWithRetry(retryCount + 1);
             }
-            
-            // 所有重试都失败了，抛出错误
-            throw new Error(`检查更新失败: ${error.message} (已重试 ${this.maxRetries} 次)`);
+
+            throw error;
         }
+    }
+
+    /**
+     * 从 Release 页面的重定向拿最新 tag，安装包链接按构建命名规则拼出
+     */
+    private async checkViaReleasePage(): Promise<UpdateInfo> {
+        const tagName = await fetchLatestTagFromReleasePage(UPDATE_REPOSITORY, this.userAgent);
+        const latestVersion = tagName.replace(/^v/, '');
+        log.info(`Release 页面最新版本: ${latestVersion}`);
+
+        const assetName = expectedAssetName(latestVersion);
+        const assets: GitHubAsset[] = assetName
+            ? [{ name: assetName, browser_download_url: assetDownloadUrl(UPDATE_REPOSITORY, tagName, assetName) }]
+            : [];
+
+        return {
+            hasUpdate: this.isNewer(latestVersion),
+            latestVersion,
+            downloadUrl: this.getDownloadUrl(assets),
+            releaseNotes: '更新说明暂时无法获取，请在 Release 页面查看。',
+            htmlUrl: `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/tag/${encodeURIComponent(tagName)}`
+        };
+    }
+
+    private isRateLimited(): boolean {
+        return this.rateLimitedUntil !== null && Date.now() < this.rateLimitedUntil.getTime();
+    }
+
+    private failureMessage(apiError: any): string {
+        if (this.isRateLimited()) {
+            return `GitHub 访问次数暂时用完，大约 ${formatClock(this.rateLimitedUntil as Date)} 之后可以重试。
+也可以打开下载页面查看最新版本。`;
+        }
+        const reason = apiError?.response?.status ? `GitHub 返回 ${apiError.response.status}` : '无法连接 GitHub';
+        return `检查更新失败：${reason}，请稍后重试，或打开下载页面查看最新版本。`;
+    }
+
+    /**
+     * 使用 semver 比较版本，如果没有semver则使用简单比较
+     */
+    private isNewer(latestVersion: string): boolean {
+        if (semver) {
+            return semver.gt(latestVersion, this.currentVersion);
+        }
+        return this.compareVersions(latestVersion, this.currentVersion) > 0;
     }
 
     /**
@@ -328,13 +399,18 @@ export class UpdateChecker {
      * @param error - 错误信息
      */
     async showUpdateErrorDialog(error: string): Promise<void> {
-        await dialog.showMessageBox({
+        const result: DialogResult = await dialog.showMessageBox({
             type: 'error',
             title: '检查更新失败',
             message: '无法检查更新',
             detail: error,
-            buttons: ['确定']
+            buttons: ['打开下载页面', '确定'],
+            defaultId: 1,
+            cancelId: 1
         });
+        if (result.response === 0) {
+            shell.openExternal(releasePageUrl(UPDATE_REPOSITORY));
+        }
     }
 
     /**

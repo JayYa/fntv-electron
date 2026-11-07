@@ -49,7 +49,10 @@
 ## 更新检查
 
 - 更新源只在 `updateChecker.ts` 的 `UPDATE_REPOSITORY` 改。
-- GitHub 返回 404 表示仓库还没有 Release，按 `hasUpdate: false` 处理，不重试，不报错。其它失败照常重试并提示（`tests/updateChecker.test.cjs`）。
+- GitHub 返回 404 表示仓库还没有 Release，按 `hasUpdate: false` 处理，不重试，不报错。其它失败照常提示（`tests/updateChecker.test.cjs`）。
+- 只重试网络错误、超时和 5xx。4xx 在几秒内不会变，重试只会多耗额度。
+- 未认证的 GitHub API 每个出口 IP 每小时 60 次，代理和 VPN 节点上的用户共用。403 或 429 且额度用完时不重试，在恢复时间前不再请求 API。带 `If-None-Match` 得到 304 也扣额度，条件请求省不了次数。
+- API 失败时改查 `github.com/<owner>/<repo>/releases/latest`，不跟随重定向，从 `Location` 取 tag，安装包链接按 `artifactName` 拼出（`githubRelease.ts`，`tests/updateCheckerRateLimit.test.cjs`）。
 - 安装包匹配按打包工具的真实架构名写：Linux x64 的 AppImage 产物名是 `x86_64`，不是 `x64`。
 
 ## 凭据
