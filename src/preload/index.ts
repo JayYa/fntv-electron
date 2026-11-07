@@ -1,88 +1,17 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { contextBridge, ipcRenderer, shell } from 'electron';
+import { ipcRenderer } from 'electron';
 
 import { HookType, runHooks } from './core/hooks';
+// 登录页的桥要先于插件，插件顶层出错时登录页仍可用（tests/preloadBundle.test.cjs）。
+import './loginPageApi';
 
-// 导入渲染进程日志模块
-import preloadLogger from './core/logger';
+// 沙箱里不能读目录，也不能 require 相对路径，插件只能静态导入。新增插件时在这里加一行。
+// 保持字母序，和原来 readdirSync 的加载顺序一致（tests/preloadBundle.test.cjs）。
+import './plugins/continueWatchingMenu';
+import './plugins/playButton';
+import './plugins/playMaskButton';
+import './plugins/titlebar';
 
-const SEND_CHANNELS = new Set([
-    'login', 'delete-history-item', 'clear-history', 'get-config',
-    'get-history-credentials', 'get-current-access-code',
-    'get-version', 'check-update', 'get-download-proxy', 'get-play-button-config',
-    'set-download-proxy', 'set-play-button-config',
-]);
-const RECEIVE_CHANNELS = new Set([
-    'config-data', 'history-credentials', 'current-access-code',
-    'history-item-deleted', 'login-error', 'login-success',
-    'version-info', 'update-status', 'download-proxy-info', 'play-button-config-info',
-    'download-proxy-set', 'play-button-config-set',
-]);
-type PageListener = (...args: unknown[]) => void;
-const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();
-
-function assertAllowed(channels: Set<string>, channel: string): void {
-    if (!channels.has(channel)) throw new Error(`IPC channel not allowed: ${channel}`);
-}
-
-function wrapListener(channel: string, listener: PageListener): (...args: unknown[]) => void {
-    const wrapped = (_event: unknown, ...args: unknown[]) => listener(undefined, ...args);
-    let channelListeners = listenerWrappers.get(channel);
-    if (!channelListeners) {
-        channelListeners = new Map();
-        listenerWrappers.set(channel, channelListeners);
-    }
-    channelListeners.set(listener, wrapped);
-    return wrapped;
-}
-
-function exposeLoginPageApi(): void {
-    if (window.location.protocol !== 'file:') return;
-
-    const api = {
-        send(channel: string, ...args: unknown[]) {
-            assertAllowed(SEND_CHANNELS, channel);
-            ipcRenderer.send(channel, ...args);
-        },
-        on(channel: string, listener: PageListener) {
-            assertAllowed(RECEIVE_CHANNELS, channel);
-            ipcRenderer.on(channel, wrapListener(channel, listener));
-        },
-        once(channel: string, listener: PageListener) {
-            assertAllowed(RECEIVE_CHANNELS, channel);
-            ipcRenderer.once(channel, wrapListener(channel, listener));
-        },
-        off(channel: string, listener: PageListener) {
-            assertAllowed(RECEIVE_CHANNELS, channel);
-            const wrapped = listenerWrappers.get(channel)?.get(listener);
-            if (!wrapped) return;
-            ipcRenderer.off(channel, wrapped);
-            listenerWrappers.get(channel)?.delete(listener);
-        },
-        async openExternal(url: string) {
-            const target = new URL(url);
-            if (target.protocol !== 'https:' || target.hostname !== 'github.com') {
-                throw new Error('仅允许打开 GitHub HTTPS 链接');
-            }
-            await shell.openExternal(target.toString());
-        },
-    };
-
-    contextBridge.exposeInMainWorld('electronAPI', api);
-    contextBridge.exposeInMainWorld('log', preloadLogger);
-    contextBridge.exposeInMainWorld('logger', preloadLogger);
-}
-
-exposeLoginPageApi();
-
-// 自动加载插件
-const pluginsDir = path.join(__dirname, 'plugins');
-fs.readdirSync(pluginsDir).forEach((file: string) => {
-    if (file.endsWith('.js')) {
-        require(path.join(pluginsDir, file));
-    }
-});
+const PLUGINS = ['continueWatchingMenu', 'playButton', 'playMaskButton', 'titlebar'];
 
 function initInjector(): void {
     if (document.readyState !== 'loading') {
@@ -97,3 +26,6 @@ function initInjector(): void {
 }
 
 initInjector();
+
+// 静态导入先于这里执行，走到这一行时 PLUGINS 里的插件都已加载。
+ipcRenderer.send('preload-started', PLUGINS);

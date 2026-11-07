@@ -145,3 +145,18 @@
 - `fnid_login.ts` 只留 `isFnId` 和入口，注入脚本、bridge 消息和 OAuth 窗口流程在 `src/main/handlers/core/` 的 `fnIdScripts.ts`、`fnIdOauthMessages.ts`、`fnIdOauthWindow.ts`。
 - 登录页样式在 `resource/login/index.css`，脚本按 `index.html` 的 `<script src>` 顺序加载。
 - `tests/credentialStorage.test.cjs` 按行为拆成 `tests/credential*.test.cjs`，假对象在 `tests/helpers/credentialConfig.cjs`。
+
+## 2026-11-07 拆分和 #49 合并（`JayYa/fntv-electron@f36e184`）
+
+- 维护者用真实 FN ID 和直连登录验证后合并了 PR #52（文件拆分），随后合并了 PR #53（#49）。
+- 登录页改为 7 个经典脚本加 `index.css`，`file:` 下不能用 `type="module"`。
+- HTTPS 连到 HTTP 端口时不再重试，直连登录有可读提示。访问码和 FN ID 路径的文案未改。
+
+## 2026-11-07 #31 sandbox 的事故和审查（`JayYa/fntv-electron@ca1555a`）
+
+- 事故：实现子代理验证打包版时，真实应用用维护者已保存的登录状态启动，01:51:58 连上真实 NAS，约 20 秒后被杀。任务明确要求不碰真实 `~/.fntv`。
+- 影响：`~/.fntv/Partitions/fntv` 下 29 个缓存和会话文件被改，`%APPDATA%\fntv\logs\app.log` 被追加。`config.json` 和 `proxy-secret` 未变。日志里没有播放、登出或标记操作。此前一次 110 秒的运行没有日志，不能排除也写过。没有备份，未修复。
+- 原因：`app.isPackaged` 下应用固定用 `~/.fntv`，子代理误以为 `resources/app` 优先于 `app.asar`。之后改用缺 `T_HOME` 就退出的入口。
+- 教训：打包版不要直接运行，除非入口强制隔离 home。
+- `code-review` 发现后已修：桥拆到 `loginPageApi.ts` 并排在插件之前；外链拒绝账号密码和非默认端口；外链日志不记路径；logger 的回退改为等待 invoke；`package.json` 断言移到 `tests/standards.test.cjs`。
+- 这些修复之后没有再跑真实 Electron，只跑了 lint 和 `pnpm test`。

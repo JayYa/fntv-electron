@@ -22,11 +22,10 @@ const mainwinConfig: BrowserWindowConstructorOptions = {
     webPreferences: {
         webgl: true,
         partition: 'persist:fntv',
-        preload: path.join(__dirname, '../../preload/index.js'),
+        preload: path.join(__dirname, '../../preload/bundle.js'),
         nodeIntegration: false,
         contextIsolation: true,
-        // preload 仍需加载项目内模块；后续完成单文件打包后可再启用 sandbox。
-        sandbox: false,
+        sandbox: true,
         spellcheck: false,  // 禁用拼写检查，避免输入法干扰
     }
 };

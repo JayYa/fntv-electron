@@ -145,3 +145,11 @@ test('verification commands in the standards documents still run', () => {
         assert.ok(commandWorks(result), `${command}\nexit ${result.status}\n${result.stderr}`);
     }
 });
+
+test('every script that produces dest also bundles the preload', () => {
+    const { scripts } = JSON.parse(read('package.json'));
+
+    assert.match(scripts.compile, /build:preload/);
+    assert.match(scripts.start, /build:preload/);
+    assert.match(scripts.watch, /build-preload\.cjs --watch/);
+});

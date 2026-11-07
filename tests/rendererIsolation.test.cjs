@@ -4,13 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loginPageScriptText } = require('./helpers/loginPage.cjs');
 
-test('main window disables renderer Node access and enables context isolation', () => {
+test('main window disables renderer Node access and enables isolation and the sandbox', () => {
     const mainWindow = fs.readFileSync(
         path.join(__dirname, '..', 'dest', 'main', 'common', 'mainwin.js'),
         'utf8',
     );
     assert.match(mainWindow, /nodeIntegration:\s*false/);
     assert.match(mainWindow, /contextIsolation:\s*true/);
+    assert.match(mainWindow, /sandbox:\s*true/);
+    assert.match(mainWindow, /preload\/bundle\.js/);
 });
 
 test('login page uses the restricted preload bridge and renders history as text', () => {

@@ -22,15 +22,17 @@
 ## 进程边界
 
 - 窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnIdOauthWindow.ts`，`tests/rendererIsolation.test.cjs`）。
+- 主窗口保持 `sandbox: true`，加载 esbuild 打包的 `dest/preload/bundle.js`。preload 只能 `require('electron')`，不用 `fs`、`path`、`__dirname`、`process` 和 `electron.shell`，需要这些能力时走主进程 IPC。打包用 `platform: 'browser'`，导入 Node 内置模块时构建失败（`scripts/build-preload.cjs`，`tests/preloadBundle.test.cjs`）。
+- preload 插件在 `src/preload/index.ts` 里按字母序静态导入，并写进 `PLUGINS`，放进 `plugins/` 目录不会自动加载（`tests/preloadBundle.test.cjs`）。
 - 本地页面只通过 `window.electronAPI` 访问主进程。这个桥只暴露给 `file:` 页面，远程页面拿不到（`src/preload/index.ts`）。
-- 新增 IPC 频道时加进 `src/preload/index.ts` 的 `SEND_CHANNELS` 或 `RECEIVE_CHANNELS`。
+- 新增页面可用的 IPC 频道时加进 `src/preload/loginPageApi.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
 - IPC 处理器用 `registerHandler` 注册，不直接调 `ipcMain.on`。它捕获同步和异步错误并写日志，处理器不用自己防未捕获异常。需要告诉渲染进程失败时才写 `try`/`catch` 并回复（`src/main/handlers/core/ipcHandler.ts`，`tests/ipcHandler.test.cjs`）。
 - FN ID 窗口加载远程页面。向它注入脚本、处理 bridge 消息、放行导航或采用 `Trim-MC-token` Cookie 前，都要过 `fnIdTrust.ts` 的判断。NAS 地址由 FN Connect 运行时返回，不要改成域名白名单（`tests/fnIdTrust.test.cjs`、`tests/fnIdLogin.test.cjs`）。
 - `config-data` 按字段白名单发送，不含密码、访问码和 token（`src/main/handlers/plugins/auth.ts`，`tests/loginCredentials.test.cjs`）。
 - 明文凭据只走按需频道发给本地登录页。这类频道的处理器用 `isLoginPage` 校验 `senderFrame`，回复带域名和账号，登录页丢弃对不上的回复（`auth.ts`，`tests/loginPageCredentials.test.cjs`）。
 - 配置里的 token 不经 IPC 发给渲染进程。`Trim-MC-token` Cookie 是 `httpOnly: false`，飞牛网页前端要读取它，远程页面的脚本能读到 token，这是有意的（`src/modules/fn_config/cookie.ts`）。
 - 需要用户确认或输入时走主进程的 `dialog`，或用页面内组件，浏览器原生弹窗在 Electron 里不可靠（`eslint.config.mjs` 的 `no-alert`，`tests/standards.test.cjs`）。
-- 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 只放行这个域（`src/preload/index.ts`），点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`、`resource/login/pageEvents.js`，`tests/accessCodeLoginPage.test.cjs`）。
+- 登录页的外链写成 `class="github-link"`，地址用 `https://github.com`，`<a>` 里只放文字。`openExternal` 走 `open-external` 频道，主进程用 `isLoginPage` 校验 `senderFrame`，用 `resolveAllowedExternalUrl` 只放行这个域（`src/main/handlers/plugins/externalLink.ts`，`tests/externalLink.test.cjs`）。点击处理靠 `e.target` 的 class 识别链接，放子元素后点击不到（`resource/login/index.html`、`resource/login/pageEvents.js`，`tests/accessCodeLoginPage.test.cjs`）。
 
 ## 署名
 

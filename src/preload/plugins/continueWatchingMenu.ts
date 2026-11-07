@@ -14,7 +14,7 @@ import {
  * 因此在 capture 阶段监听卡片内「更多」触发器的 pointerdown（不拦截）记下 guid，
  * 待菜单项被按下时消费。记忆在超时、菜单外任意按下、Escape 关闭菜单时清空，避免播错项目。
  *
- * 加载顺序：`src/preload/index.ts` 用 `readdirSync` 按字母序加载插件，本文件的 capture 监听器
+ * 加载顺序：`src/preload/index.ts` 按字母序静态导入插件，本文件的 capture 监听器
  * 先于 `playMaskButton.ts` 注册。这里不依赖该顺序：两者拦截的目标互斥（菜单项 vs 播放键），
  * 「更多」触发器只被动记忆、不阻断传播；即便顺序颠倒也只是播放键按下时不清记忆，
  * 而记忆只会在菜单项被按下时消费。
@@ -102,6 +102,7 @@ function takeoverMenuItem(match: MenuMatch): void {
     clearRememberedGuid();
     if (!guid) return;
 
+    logger.info('继续观看菜单已接管:', match.action);
     sendPlayEvent(guid, 0, match.action === 'restart');
     closeDropdownMenu();
 }
@@ -169,6 +170,7 @@ async function setupContinueWatchingMenuHandler(): Promise<void> {
     if (!config.hideOriginalPlayButton) return;
 
     initialized = true;
+    logger.info('继续观看菜单接管已启用');
     document.addEventListener('pointerdown', handlePointerDown, true);
     document.addEventListener('pointerup', handlePointerUp, true);
     document.addEventListener('pointercancel', () => {
