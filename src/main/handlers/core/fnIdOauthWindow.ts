@@ -7,6 +7,7 @@ import * as log from '../../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl, resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
+    describeFnIdPageForLog,
     isFnIdLoginPage,
     isFnIdNasPage,
     isFnIdTokenCookie,
@@ -35,16 +36,6 @@ interface LoginData {
  */
 function buildFnConnectUrl(fnId: string): string {
     return `https://5ddd.com/${fnId.trim()}`;
-}
-
-// 只记路径和 hash 路由。查询串里可能有授权码和 state。
-function describePageForLog(pageUrl: string): string {
-    try {
-        const page = new URL(pageUrl);
-        return `${page.pathname}${page.hash.split('?')[0]}`;
-    } catch {
-        return '(无效地址)';
-    }
 }
 
 /**
@@ -131,7 +122,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             if (!oauthWindow) return;
             const pageUrl = oauthWindow.webContents.getURL();
             log.info(
-                `[FN ID] 页面加载: ${describePageForLog(pageUrl)}，NAS 页面: ${isFnIdNasPage(pageUrl, trust)}，`
+                `[FN ID] 页面加载: ${describeFnIdPageForLog(pageUrl, fnId)}，NAS 页面: ${isFnIdNasPage(pageUrl, trust)}，`
                 + `登录页: ${isFnIdLoginPage(pageUrl, trust)}，已确认目标: ${trust.targetOrigin !== null}，`
                 + `有密码: ${Boolean(loginData.password)}`,
             );

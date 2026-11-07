@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logConfig, getLogLevel, LogLevel } from './config';
-import { maskLogArguments, maskError } from './masking';
+import { maskLogArguments, maskError, maskStringByPatterns } from './masking';
 
 // 尝试获取app模块，在非Electron环境中可能失败
 let app: any;
@@ -217,10 +217,10 @@ export class Logger {
      */
     public log(level: LogLevel, message: string, ...args: any[]): void {
         if (level >= this.logLevel) {
-            let formattedMessage = message;
-            if (level !== LogLevel.NOFORMAT) {
-                formattedMessage = this.formatMessage(level, message, ...args);
-            }
+            // NOFORMAT 只省略时间和级别前缀，proxy 的输出同样要脱敏
+            const formattedMessage = level === LogLevel.NOFORMAT
+                ? maskStringByPatterns(message)
+                : this.formatMessage(level, message, ...args);
 
             // 写入文件
             this.writeToFile(formattedMessage);
