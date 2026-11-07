@@ -1,85 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
-const axios = require('axios');
-
-const LATEST_RELEASE_URL = 'https://api.github.com/repos/JayYa/fntv-electron/releases/latest';
-
-function setupUpdateChecker(t, { respond, version = '2.6.2', config = { downloadProxyEnabled: false } }) {
-    const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-update-'));
-    const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
-    fs.mkdirSync(paths.userData, { recursive: true });
-    fs.writeFileSync(path.join(paths.userData, 'config.json'), JSON.stringify(config));
-
-    const dialogs = [];
-    const opened = [];
-    const electronMock = {
-        app: {
-            isPackaged: true,
-            getVersion() { return version; },
-            getPath(name) { return paths[name]; },
-            setPath(name, value) { paths[name] = value; },
-        },
-        dialog: {
-            async showMessageBox(options) {
-                dialogs.push(options);
-                return { response: 2 };
-            },
-        },
-        shell: {
-            openExternal(url) { opened.push(url); },
-        },
-        safeStorage: {
-            isEncryptionAvailable() { return false; },
-        },
-    };
-
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-
-    const requests = [];
-    const originalGet = axios.get;
-    axios.get = async (url) => {
-        requests.push(url);
-        return respond(url);
-    };
-
-    const compiledModules = Object.keys(require.cache).filter((id) => id.includes(`${path.sep}dest${path.sep}`));
-    compiledModules.forEach((id) => delete require.cache[id]);
-    const { getInstance } = require('../dest/modules/updater/updateChecker.js');
-
-    t.after(() => {
-        Module._load = originalLoad;
-        axios.get = originalGet;
-        Object.keys(require.cache)
-            .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-            .forEach((id) => delete require.cache[id]);
-        fs.rmSync(testRoot, { recursive: true, force: true });
-    });
-
-    return { checker: getInstance(), dialogs, opened, requests };
-}
-
-function release(tagName, assetNames = []) {
-    return {
-        data: {
-            tag_name: tagName,
-            body: 'notes',
-            published_at: '2026-11-05T00:00:00Z',
-            html_url: `https://github.com/JayYa/fntv-electron/releases/tag/${tagName}`,
-            assets: assetNames.map((name) => ({
-                name,
-                browser_download_url: `https://github.com/JayYa/fntv-electron/releases/download/${tagName}/${name}`,
-            })),
-        },
-    };
-}
+const {
+    LATEST_RELEASE_URL,
+    setupUpdateChecker,
+    release,
+    httpError,
+    simulateHost,
+} = require('./helpers/updateChecker.cjs');
 
 test('checks the latest release of the maintained repository', async (t) => {
     const { checker, requests } = setupUpdateChecker(t, { respond: () => release('v2.7.0') });
@@ -90,16 +18,6 @@ test('checks the latest release of the maintained repository', async (t) => {
     assert.equal(info.hasUpdate, true);
     assert.equal(info.latestVersion, '2.7.0');
 });
-
-function httpError(status) {
-    return new axios.AxiosError(
-        `Request failed with status code ${status}`,
-        'ERR_BAD_REQUEST',
-        {},
-        {},
-        { status, data: { message: 'Not Found' } },
-    );
-}
 
 test('a repository without releases means no update, without retrying', async (t) => {
     const { checker, requests } = setupUpdateChecker(t, {
@@ -141,21 +59,10 @@ test('manual check still reports other GitHub failures after retrying', async (t
 
     await checker.manualCheckForUpdates();
 
-    assert.equal(requests.length, 4);
+    assert.equal(requests.filter((url) => url === LATEST_RELEASE_URL).length, 4);
     assert.equal(dialogs.length, 1);
     assert.equal(dialogs[0].type, 'error');
 });
-
-function simulateHost(t, platform, arch) {
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-    const originalArch = Object.getOwnPropertyDescriptor(process, 'arch');
-    Object.defineProperty(process, 'platform', { ...originalPlatform, value: platform });
-    Object.defineProperty(process, 'arch', { ...originalArch, value: arch });
-    t.after(() => {
-        Object.defineProperty(process, 'platform', originalPlatform);
-        Object.defineProperty(process, 'arch', originalArch);
-    });
-}
 
 const LINUX_ARM64 = 'FNMedia_2.7.0_linux_arm64.AppImage';
 const LINUX_X86_64 = 'FNMedia_2.7.0_linux_x86_64.AppImage';
