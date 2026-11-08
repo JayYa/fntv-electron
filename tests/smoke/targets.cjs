@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 // 用 HOME 和 XDG 目录隔离：userData 是 app.getPath('home') 下的 .fntv
 // （src/public/constants.ts），MPV 用户配置在 ~/.config/mpv。
@@ -70,7 +71,15 @@ function macDmgTarget(builderArch) {
 
 const TARGETS = {
     'darwin-arm64': macDmgTarget('arm64'),
-    'darwin-x64': macDmgTarget('x64'),
+    'darwin-x64': {
+        ...macDmgTarget('x64'),
+        // Rosetta 第一次运行 x64 Electron 时要先转译，只在这台机器上发生一次。#92 在同一台 macos-latest
+        // 上连续直接启动 3 次，DevTools listening 分别在 51952ms、5552ms、6733ms，转译缓存 /var/db/oah
+        // 从 2.7M 涨到 255M；darwin-arm64 三次是 2304ms、192ms、216ms，缓存不变。约 50 秒的首次转译加上
+        // Playwright 自己的开销会贴着或超过 electron.launch 的 60 秒，所以正式测试前先启动一次把转译做完。
+        // 上限取首次实测的两倍多。
+        warmup: { timeoutMs: 120000 },
+    },
     'linux-x64': {
         // 打包工具给 Linux x64 的架构名是 x86_64（CODING_STANDARDS.md 的更新检查一节）。
         installerPattern: /^FNMedia_.+_linux_x86_64\.AppImage$/,
@@ -85,6 +94,34 @@ const TARGETS = {
         // userData（Linux 是 ~/.config/<name>），不在 ~/.fntv/logs。
         logDir: home => path.join(home, '.config', 'fntv', 'logs'),
     },
+    'win32-x64': {
+        installerPattern: /^FNMedia_.+_win_x64\.exe$/,
+        // NSIS 安装包 /S 静默安装到临时目录，从安装目录启动。/D 必须是最后一个参数，路径不加引号。
+        install(installerPath) {
+            const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-install-'));
+            run(installerPath, ['/S', '/currentuser', `/D=${installDir}`]);
+            const names = fs.readdirSync(installDir);
+            const executables = names.filter(name => name.endsWith('.exe') && !name.startsWith('Uninstall '));
+            const uninstaller = names.find(name => name.startsWith('Uninstall ') && name.endsWith('.exe'));
+            if (executables.length !== 1 || !uninstaller) {
+                throw new Error(`安装目录 ${installDir} 里应有一个客户端和一个卸载程序，实际是：${names.join(', ')}`);
+            }
+            return {
+                executablePath: path.join(installDir, executables[0]),
+                // _?= 让卸载程序在原地同步运行，否则它复制到临时目录后立即返回。它不删自己，目录随后删掉。
+                uninstall() {
+                    run(path.join(installDir, uninstaller), ['/S', '/currentuser', `_?=${installDir}`]);
+                    fs.rmSync(installDir, { recursive: true, force: true, maxRetries: 5 });
+                },
+            };
+        },
+        // app.getPath('home') 在 Windows 上不认 USERPROFILE，~/.fntv 靠 --user-data-dir 改到临时目录
+        // （src/public/constants.ts），日志也随之落在这里。USERPROFILE 隔离 os.homedir() 下的 MPV 用户配置。
+        environment: home => ({ USERPROFILE: home }),
+        args: home => [`--user-data-dir=${path.join(home, '.fntv')}`],
+        userDataDir: home => path.join(home, '.fntv'),
+        logDir: home => path.join(home, '.fntv', 'logs'),
+    },
 };
 
 // Linux arm64 和 x64 的安装、隔离、日志位置都一样，只有安装包名不同：arm64 的产物名就是 arm64。
@@ -93,6 +130,18 @@ TARGETS['linux-arm64'] = {
     ...TARGETS['linux-x64'],
     installerPattern: /^FNMedia_.+_linux_arm64\.AppImage$/,
 };
+
+function run(file, args) {
+    const result = spawnSync(file, args, { stdio: 'inherit', timeout: 120000 });
+    if (result.error || result.status !== 0) {
+        throw new Error(`${file} ${args.join(' ')} 失败：${result.error ? result.error.message : `退出码 ${result.status}`}`);
+    }
+}
+
+// 正式测试前要先预热启动一次的目标 id（目标定义里有 warmup 的）。
+function targetsNeedingWarmup() {
+    return Object.keys(TARGETS).filter(id => TARGETS[id].warmup);
+}
 
 function resolveTarget(id) {
     const target = TARGETS[id];
@@ -114,4 +163,4 @@ function findInstaller(target, directory) {
     return path.join(directory, matches[0]);
 }
 
-module.exports = { TARGETS, resolveTarget, findInstaller, findAppExecutable };
+module.exports = { TARGETS, targetsNeedingWarmup, resolveTarget, findInstaller, findAppExecutable };

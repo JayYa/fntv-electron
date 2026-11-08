@@ -7,7 +7,7 @@ const { isPlayRequest } = require('../dest/modules/playback/playRequest.js');
 function loadPlayMovieHandler(t) {
     const handlers = new Map();
     const electron = {
-        app: { getPath: () => os.tmpdir(), getAppPath: () => os.tmpdir(), isPackaged: false, on() {}, setPath() {} },
+        app: { getPath: () => os.tmpdir(), commandLine: { getSwitchValue: () => '' }, getAppPath: () => os.tmpdir(), isPackaged: false, on() {}, setPath() {} },
         dialog: {},
         ipcMain: { on: (channel, handler) => handlers.set(channel, handler), handle() {} },
         safeStorage: {},

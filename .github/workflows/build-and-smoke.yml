@@ -42,6 +42,10 @@ jobs:
               echo 'build-os=macos-latest' >> "$GITHUB_OUTPUT"
               echo 'smoke-matrix={"include":[{"target":"darwin-arm64","runner":"macos-latest"},{"target":"darwin-x64","runner":"macos-latest"}]}' >> "$GITHUB_OUTPUT"
               ;;
+            windows)
+              echo 'build-os=windows-latest' >> "$GITHUB_OUTPUT"
+              echo 'smoke-matrix={"include":[{"target":"win32-x64","runner":"windows-latest"}]}' >> "$GITHUB_OUTPUT"
+              ;;
             *)
               echo "No smoke test targets for platform: $PLATFORM" >&2
               exit 1

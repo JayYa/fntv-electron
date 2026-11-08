@@ -64,6 +64,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
             isPackaged: false,
             getAppPath() { return testRoot; },
             getPath(name) { return paths[name]; },
+            commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
         BrowserWindow: FakeBrowserWindow,

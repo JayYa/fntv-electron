@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { resolveTarget, findInstaller, findAppExecutable } = require('./smoke/targets.cjs');
+const { targetsNeedingWarmup, resolveTarget, findInstaller, findAppExecutable } = require('./smoke/targets.cjs');
 
 function tempDir(t) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-targets-'));
@@ -64,4 +64,12 @@ test('each Linux smoke target picks the AppImage of its own architecture from th
 
     assert.equal(findInstaller(resolveTarget('linux-x64'), release), path.join(release, 'FNMedia_2.7.1_linux_x86_64.AppImage'));
     assert.equal(findInstaller(resolveTarget('linux-arm64'), release), path.join(release, 'FNMedia_2.7.1_linux_arm64.AppImage'));
+});
+
+test('only darwin-x64 is warmed up before the smoke test, with its own launch limit', () => {
+    // x64 包在 Apple Silicon 上第一次启动要等 Rosetta 转译约 50 秒（#92），其余目标首次启动只要几秒。
+    assert.deepEqual(targetsNeedingWarmup(), ['darwin-x64']);
+    const { warmup } = resolveTarget('darwin-x64');
+    assert.ok(warmup.timeoutMs > 60000, '预热上限要比 electron.launch 的 60 秒宽');
+    assert.equal(resolveTarget('darwin-arm64').warmup, undefined);
 });

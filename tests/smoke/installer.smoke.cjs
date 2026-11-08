@@ -13,6 +13,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
+const { spawn } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
@@ -60,6 +61,67 @@ function requestProxyHealth(secret) {
     });
 }
 
+// 预热启动（targets.cjs 的 warmup）：不经 Playwright 直接启动客户端，等 stderr 出现 DevTools listening
+// （electron.launch 等的也是这一行）后杀掉整个进程组，再确认客户端和 Proxy 都已退出。用自己的临时用户数据目录。
+// 进程组只在 macOS 和 Linux 上有，目前只有 darwin-x64 开启预热。
+async function warmUp(executablePath, { timeoutMs }) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-warmup-'));
+    const startedAt = Date.now();
+    const client = spawn(executablePath, [...(target.args ? target.args(home) : []), '--remote-debugging-port=0'], {
+        cwd: home,
+        env: { ...process.env, ...target.environment(home) },
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    const exited = new Promise(resolve => client.once('exit', (code, signal) => resolve(`退出码 ${code}，信号 ${signal}`)));
+    const spawnFailed = new Promise(resolve => client.once('error', error => resolve(error)));
+    const ready = new Promise(resolve => {
+        for (const stream of [client.stdout, client.stderr]) {
+            stream.on('data', chunk => {
+                output += chunk.toString('utf8');
+                if (/DevTools listening/.test(output)) resolve();
+            });
+        }
+    });
+    let failure;
+    try {
+        const outcome = await Promise.race([
+            ready.then(() => ({ ok: true })),
+            exited.then(detail => ({ detail: `客户端在就绪前退出（${detail}）` })),
+            spawnFailed.then(error => ({ detail: `启动失败：${error.message}` })),
+            delay(timeoutMs).then(() => ({ detail: `${timeoutMs / 1000} 秒内没有出现 DevTools listening` })),
+        ]);
+        if (outcome.ok) {
+            console.log(`::notice::smoke ${target.id} warmup: DevTools listening at ${Date.now() - startedAt}ms`);
+        } else {
+            failure = fail('预热启动', `${outcome.detail}\n客户端输出：\n${output.slice(-4000)}`);
+        }
+    } finally {
+        // Proxy 由主进程直接 spawn（src/main/common/proxy.ts，detached: false），和客户端在同一个进程组。
+        if (client.pid) {
+            try { process.kill(-client.pid, 'SIGKILL'); } catch { /* 进程组已经没了 */ }
+        }
+        const clientExited = !client.pid || client.exitCode !== null || client.signalCode !== null
+            || await Promise.race([exited.then(() => true), delay(10000).then(() => false)]);
+        const proxy = await poll(async () => {
+            const response = await requestProxyHealth();
+            return { done: Boolean(response.error), detail: JSON.stringify(response) };
+        }, 10000);
+        fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 });
+        // 预热本身失败时，清理问题附在后面，不盖掉原因。
+        const leftovers = [
+            !clientExited && '杀掉进程组 10 秒后客户端仍在运行',
+            !proxy.done && `杀掉进程组 10 秒后端口 ${PROXY_PORT} 仍有响应：${proxy.detail}`,
+        ].filter(Boolean);
+        if (leftovers.length) {
+            const cleanup = fail('预热后退出', leftovers.join('；'));
+            failure = failure ? `${failure}\n${cleanup}` : cleanup;
+        }
+    }
+    if (failure) throw new Error(failure);
+}
+
 describe(`installer smoke test (${target.id})`, () => {
     let home;
     let installation;
@@ -81,6 +143,8 @@ describe(`installer smoke test (${target.id})`, () => {
             ? { executablePath: path.resolve(process.env.FNTV_SMOKE_EXECUTABLE), uninstall() {} }
             : target.install(findInstaller(target, path.resolve(process.env.FNTV_SMOKE_INSTALLER_DIR || path.join(root, 'release'))));
 
+        if (target.warmup) await warmUp(installation.executablePath, target.warmup);
+
         const outputFile = fs.createWriteStream(path.join(artifactsDir, 'main-process.log'));
         try {
             app = await electron.launch({
@@ -88,6 +152,7 @@ describe(`installer smoke test (${target.id})`, () => {
                 // 工作目录放在临时目录，像从桌面图标启动一样，不依赖仓库目录。
                 cwd: home,
                 env: { ...process.env, ...target.environment(home) },
+                args: target.args ? target.args(home) : [],
                 timeout: 60000,
             });
         } catch (error) {
