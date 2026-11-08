@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as crypto from 'crypto';
 import { app, safeStorage } from 'electron';
 import { USER_DATA_PATH } from '../../public/constants';
+import { platformBehavior } from '../../public/platform';
 import { isMpvPlaybackEnabled } from './playbackPreference';
 
 const HISTORY_LIMIT = 5;
@@ -118,7 +119,7 @@ function encryptCredential(value: string): string {
     if (!safeStorage.isEncryptionAvailable()) {
         throw new Error('操作系统安全存储不可用，无法保存登录凭据');
     }
-    if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text') {
+    if (platformBehavior().rejectsBasicTextStorage && safeStorage.getSelectedStorageBackend() === 'basic_text') {
         throw new Error('Linux 系统未提供可用的密钥环，拒绝以明文方式保存登录凭据');
     }
     return SAFE_STORAGE_PREFIX + safeStorage.encryptString(value).toString('base64');

@@ -17,6 +17,12 @@ const sharedRules = {
     }]
 };
 
+const PLATFORM_PROPERTIES = ['platform', 'arch'].map((property) => ({
+    object: 'process',
+    property,
+    message: `用 src/public/platform.ts 的 currentPlatform()、currentArch() 和 platformBehavior()，不要直接读 process.${property}。`
+}));
+
 export default [
     {
         linterOptions: {
@@ -38,7 +44,17 @@ export default [
             'no-restricted-syntax': ['error', {
                 selector: "AssignmentExpression[left.object.name='module'][left.property.name='exports']",
                 message: '用 ES export，不要写 module.exports =。'
-            }]
+            }],
+            // 平台判断散在各处时，macOS 和 Linux 分支只能在对应系统上验证。集中到 platform.ts，
+            // 由接收平台参数的纯函数决定，在 Windows 上也能测三条分支（tests/platform.test.cjs）。
+            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES]
+        }
+    },
+    {
+        // 唯一读取当前平台的地方。
+        files: ['src/public/platform.ts'],
+        rules: {
+            'no-restricted-properties': 'off'
         }
     },
     {

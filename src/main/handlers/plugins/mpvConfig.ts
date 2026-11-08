@@ -1,11 +1,11 @@
 import { app } from 'electron';
-import * as path from 'path';
 import * as os from 'os';
 import * as logger from '../../../modules/logger';
 import {
     resolvePortableConfigDir,
     synchronizeMpvConfig,
 } from '../../common/mpvConfigHelpers';
+import { currentPlatform, mpvUserConfigDir } from '../../../public/platform';
 
 /**
  * MPV配置文件管理插件
@@ -14,12 +14,7 @@ import {
 
 // 获取用户MPV配置目录
 export function getMpvConfigDir(): string {
-    const homeDir = os.homedir();
-    if (process.platform === 'win32') {
-        return path.join(homeDir, 'AppData', 'Roaming', 'mpv');
-    } else {
-        return path.join(homeDir, '.config', 'mpv');
-    }
+    return mpvUserConfigDir(currentPlatform(), os.homedir());
 }
 
 // 获取应用中的portable_config目录

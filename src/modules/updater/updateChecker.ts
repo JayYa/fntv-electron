@@ -13,6 +13,7 @@ import {
     releasePageUrl
 } from './githubRelease';
 import { formatReleaseNotes } from './releaseNotes';
+import { currentArch, currentPlatform } from '../../public/platform';
 
 // 尝试获取semver模块
 let semver: any;
@@ -241,8 +242,8 @@ export class UpdateChecker {
         }
 
         // 获取当前平台和架构信息
-        const platform = process.platform;
-        const arch = process.arch;
+        const platform = currentPlatform();
+        const arch = currentArch();
         
         log.info(`当前平台: ${platform}, 架构: ${arch}`);
 

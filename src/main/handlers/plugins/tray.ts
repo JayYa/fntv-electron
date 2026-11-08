@@ -13,22 +13,12 @@ declare global {
 }
 
 // 注册 window-all-closed 事件
+// 各平台相同：没有明确退出时保持运行（Windows、Linux 留在托盘，macOS 留在状态栏和 dock）。
 function handleWindowAllClosed(): void {
-    if (process.platform !== 'darwin') {
-        // 在非 macOS 平台上，如果没有明确退出，则不退出应用
-        if (!(app as any).isQuiting) {
-            return;
-        }
-        app.quit();
-    } else {
-        // macOS 上的特殊处理：
-        // 如果所有窗口都关闭了，但应用没有明确退出，保持应用运行
-        // 这符合 macOS 应用的标准行为
-        if (!(app as any).isQuiting) {
-            return;
-        }
-        app.quit();
+    if (!(app as any).isQuiting) {
+        return;
     }
+    app.quit();
 }
 
 // 注册 before-quit 事件

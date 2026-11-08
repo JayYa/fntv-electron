@@ -1,7 +1,8 @@
 import { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 import * as path from 'path';
+import { platformBehavior } from '../../public/platform';
 
-const isMac = process.platform === 'darwin';
+const isMac = platformBehavior().titleBar === 'hiddenInset';
 
 const mainwinConfig: BrowserWindowConstructorOptions = {
     width: 1400,

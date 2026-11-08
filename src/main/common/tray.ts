@@ -4,6 +4,7 @@ import { getInstance as getUpdateChecker } from '../../modules/updater/updateChe
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
 import * as fnConfig from '../../modules/fn_config/config';
+import { platformBehavior } from '../../public/platform';
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null; // 主窗口引用
@@ -71,7 +72,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
                         title: '选择MPV播放器',
                         properties: ['openFile'],
                         filters: [
-                            { name: '可执行文件', extensions: process.platform === 'win32' ? ['exe'] : [] },
+                            { name: '可执行文件', extensions: platformBehavior().mpvExecutableExtensions },
                             { name: '所有文件', extensions: ['*'] }
                         ]
                     });
@@ -124,6 +125,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
  */
 async function updateTrayMenu(): Promise<void> {
     if (!tray) return;
+    const behavior = platformBehavior();
 
     // 创建托盘菜单
     const menuTemplate: Electron.MenuItemConstructorOptions[] = [
@@ -135,7 +137,7 @@ async function updateTrayMenu(): Promise<void> {
             type: 'separator'
         },
         {
-            label: process.platform === 'darwin' ? '显示窗口' : '显示主窗口',
+            label: behavior.tray.showWindowLabel,
             click: () => {
                 if (mainWindow) {
                     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -143,7 +145,7 @@ async function updateTrayMenu(): Promise<void> {
                     mainWindow.focus();
 
                     // macOS 特有：确保应用在 dock 中显示
-                    if (process.platform === 'darwin') {
+                    if (behavior.hasDock) {
                         app.dock?.show();
                     }
                 }
@@ -163,7 +165,7 @@ async function updateTrayMenu(): Promise<void> {
     ];
 
     // 在 macOS 上添加偏好设置选项
-    if (process.platform === 'darwin') {
+    if (behavior.closeBehaviorSetting === 'macCloseAction') {
         menuTemplate.push(
             {
                 type: 'separator'
@@ -239,7 +241,7 @@ async function updateTrayMenu(): Promise<void> {
             type: 'separator'
         },
         {
-            label: process.platform === 'darwin' ? '退出飞牛影视' : '退出',
+            label: behavior.tray.quitLabel,
             click: () => {
                 // 托盘菜单中的退出按钮直接退出应用
                 (app as any).isQuiting = true;
@@ -263,18 +265,15 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     mainWindow = mainWindowInstance;
 
     // 根据平台选择合适的图标
-    let iconPath: string;
-    let icon: Electron.NativeImage;
+    const behavior = platformBehavior();
+    const buildDir = path.join(__dirname, '../../../build');
+    let icon = nativeImage.createFromPath(path.join(buildDir, behavior.tray.icon.file));
 
-    if (process.platform === 'darwin') {
+    if (behavior.tray.icon.template) {
         // macOS 推荐用 template 图标
-        iconPath = path.join(__dirname, '../../../build/iconTemplate2.png');
-        icon = nativeImage.createFromPath(iconPath);
-
         if (icon.isEmpty()) {
             // fallback: 用通用图标
-            iconPath = path.join(__dirname, '../../../build/icon.png');
-            icon = nativeImage.createFromPath(iconPath);
+            icon = nativeImage.createFromPath(path.join(buildDir, 'icon.png'));
 
             if (!icon.isEmpty()) {
                 // 尺寸适配状态栏（通常 16x16 即可，Retina 自动缩放）
@@ -285,20 +284,9 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
         if (!icon.isEmpty()) {
             icon.setTemplateImage(true); // 关键：启用 macOS 自动浅色/深色模式适配
         }
-    } else if (process.platform === 'win32') {
-        // Windows 使用 ICO 格式
-        iconPath = path.join(__dirname, '../../../build/icon.ico');
-        icon = nativeImage.createFromPath(iconPath);
-        if (!icon.isEmpty()) {
-            icon = icon.resize({ width: 16, height: 16 });
-        }
-    } else {
-        // Linux 使用 PNG 格式
-        iconPath = path.join(__dirname, '../../../build/icon.png');
-        icon = nativeImage.createFromPath(iconPath);
-        if (!icon.isEmpty()) {
-            icon = icon.resize({ width: 16, height: 16 });
-        }
+    } else if (!icon.isEmpty()) {
+        // Windows 用 ICO，Linux 用 PNG
+        icon = icon.resize({ width: 16, height: 16 });
     }
 
     // 如果图标仍然为空，记录错误但继续创建托盘
@@ -316,24 +304,15 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     // 初始创建菜单
     await updateTrayMenu();
 
-    // 根据平台设置不同的点击行为
-    if (process.platform === 'darwin') {
-        // macOS 上单击托盘图标恢复窗口
-        tray.on('click', () => {
+    // 根据平台设置不同的点击行为：macOS 单击、Windows 双击恢复窗口，Linux 不绑定
+    const restoreEvent = behavior.tray.restoreEvent;
+    if (restoreEvent) {
+        tray.on(restoreEvent as 'click', () => {
             if (mainWindow) {
                 if (mainWindow.isMinimized()) mainWindow.restore();
                 if (!mainWindow.isVisible()) mainWindow.show();
                 mainWindow.focus();
-                app.dock?.show();
-            }
-        });
-    } else if (process.platform === 'win32') {
-        // Windows上双击托盘图标恢复窗口
-        tray.on('double-click', () => {
-            if (mainWindow) {
-                if (mainWindow.isMinimized()) mainWindow.restore();
-                if (!mainWindow.isVisible()) mainWindow.show();
-                mainWindow.focus();
+                if (behavior.hasDock) app.dock?.show();
             }
         });
     }
@@ -345,7 +324,7 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
  * 显示托盘通知（仅在Windows上首次显示）
  */
 export function showTrayNotification(): void {
-    if (process.platform === 'win32' && !getTrayNotificationShown() && tray) {
+    if (platformBehavior().tray.showsMinimizeBalloon && !getTrayNotificationShown() && tray) {
         tray.displayBalloon({
             iconType: 'info',
             title: '飞牛影视',
