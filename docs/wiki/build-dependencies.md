@@ -33,7 +33,12 @@
 - 环境变量：3.1.0 不读 `ELECTRON_CACHE`。`electron_config_cache` 只在 `node_modules/electron/install.js:46`（postinstall，用 2.0.3）读取，和打包无关。`ELECTRON_BUILDER_CACHE` 不影响 Electron zip。要改 Electron zip 目录只能配 `build.electronDownload.cache`。Windows 本地实测：同时设 `ELECTRON_CACHE` 和 `electron_config_cache`，`cacheRoot` 仍为 undefined，zip 落在 `%LOCALAPPDATA%\electron\Cache`（`electron-v38.0.0-win32-x64.zip`，125,665,776 B）。
 - 打包工具（nsis、nsis-resources、7zip、appimage、dmgbuild、winCodeSign）走 `binDownload.js:85-104` 的 `getBin`，目录由 `electronGet.js:41-46` 的 `getCacheDirectory({allowEnvVarOverride:true})` 决定：`ELECTRON_BUILDER_CACHE` 为绝对路径时直接用。`macCodeSign.js:100` 也读这个变量。
 - `actions/runs/42469305936` 第 3 次尝试的 `packaging-*` 保存：Linux 238,074,531 B（electron x64、arm64，appimage-12.0.1，7zip-linux-x64）；Windows 133,774,532 B（electron，7zip-win-x64，nsis-3.0.4.1，nsis-resources-3.4.1）；macOS 297,740,746 B（electron ×2，dmgbuild-bundle-arm64）。三个平台都没有路径不存在的警告。Windows 的大小约等于一个 Electron zip 加约 8 MB 工具，说明 Electron 目录被存进去了。
-- 命中尚未验证：这三份缓存的 ref 是 `refs/pull/101/merge`，按 actions/cache 的 ref 隔离，main 和其它 PR 用不上。#101 合并后，截至 `d9cf99a`，release.yml 的运行 `42476442255`、`42476908063`、`42478821622` 都跳过了构建，main 上还没跑过打包。main 上第一次构建一定不命中。
+- 命中尚未验证：这三份缓存的 ref 是 `refs/pull/101/merge`，按 actions/cache 的 ref 隔离，main 和其它 PR 用不上。#101 合并后，截至 `d9cf99a`，release.yml 的运行 `42476442255`、`42476908063`、`42478821622` 都跳过了构建，main 上还没跑过打包。main 上第一次构建一定不命中。（2026-11-08 已在 main 上验证 Windows，见下一条。）
+- 2026-11-08 在 main 上手动触发 Smoke Test（`platform=windows`）验证 Windows 命中：
+  - `actions/runs/42481000292`：被同组并发设置取消（触发第二次时它还在跑），不算。
+  - `actions/runs/42481067560`：`mpv-archive-Windows-*` 和 `packaging-Windows-*` 都未命中，构建后保存。打包下载了 7zip-win-x64、nsis-3.0.4.1、nsis-resources-3.4.1。build job 2 分 57 秒。
+  - `actions/runs/42481513994`：两个缓存都命中（`Cache restored from key`），`packaging-Windows-*` 恢复 133,774,377 B，MPV 压缩包 56,918,539 B，日志出现 `Using cached archive`，打包没有再下载 7zip、nsis。build job 2 分 5 秒。
+  - 两次运行里 electron-builder 的 `downloaded label=electron` 都在 `packaging` 后约 0.1 到 0.4 秒出现，未命中的那次也一样，不像真的下载了 125 MB。推测 Electron zip 在 `pnpm install` 时已由 `electron` 包的 postinstall 放进同一个默认目录，没有核实。macOS、Linux 的命中没有验证。
 
 ## 2026-11-08 事实：插件同步（`7586698`）
 
