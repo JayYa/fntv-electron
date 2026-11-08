@@ -149,7 +149,7 @@
   - 同步前后检查 `main.lua`，缺失时抛错，记 ERROR，不记“已同步”。
   - 测试在 `mkdtemp` 里建真实目录（`tests/mpvConfigMigration.test.cjs`）。
   - 合并前要人工实测：用附带的 MPV 作为自选 MPV 启动，插件目录不被清空，弹幕生效。
-- 另一个现象：`%APPDATA%\mpv\scripts\uosc_danmaku\` 从 2026-11-08 18:43 起只剩 `.gitignore`。原因不明，开了 #119（`needs-triage`）。
+- 已被取代（2026-11-08，见“#119 关闭”一节）：~~另一个现象：`%APPDATA%\mpv\scripts\uosc_danmaku\` 从 2026-11-08 18:43 起只剩 `.gitignore`。原因不明，开了 #119（`needs-triage`）。~~
   - 和 #118 不是同一个问题：#118 清出的是空目录，不留 `.gitignore`（实测）。
   - 18:43 早于 #113（22:38）和 #117（23:20）合并。
   - MPV 归档里的插件是完整的 18 个文件（实测 `unzip -l`）。
@@ -162,7 +162,7 @@
   1. 23:42，自选 MPV 是另一个目录的附带 MPV：正常同步，目标 `uosc_danmaku` 里有 `main.lua`。
   2. 23:43，自选 MPV 是这个 worktree 自己附带的 MPV：日志记“MPV配置目录就是便携配置，跳过同步”，插件完整；mpv 日志显示 `uosc_danmaku/main.lua` 正常加载，没有 `Cannot find main.*`。
   - 弹幕画面是否显示，以维护者的观察为准，日志看不出来。
-- 同日更早的一次实测无效：维护者在 `813e805` 的旧代码 worktree 里启动，worktree 里没有 `third_party/fntv-mpv`，启动时同步报 “Portable config directory not found”。worktree 缺 `third_party/fntv-mpv` 导致测不成，这是第二次，第一次见 #54 的冒烟测试。chief of staff 建议改进环境：加 `pnpm setup:mpv`，或者开发模式下缺失时给出明确提示。维护者尚未决定。
+- 已被取代（2026-11-08，见“#119 关闭”一节）：~~同日更早的一次实测无效：维护者在 `813e805` 的旧代码 worktree 里启动，worktree 里没有 `third_party/fntv-mpv`，启动时同步报 “Portable config directory not found”。worktree 缺 `third_party/fntv-mpv` 导致测不成，这是第二次，第一次见 #54 的冒烟测试。chief of staff 建议改进环境：加 `pnpm setup:mpv`，或者开发模式下缺失时给出明确提示。维护者尚未决定。~~
 
 ### 核实 #119（只读，2026-11-08 约 23:50，待维护者确认）
 
@@ -173,6 +173,14 @@
 - 实测（客户端日志 `%APPDATA%\fntv\logs\app.log`）：18:43:45.117 启动的是安装版 2.7.1，18:43:45.433 记“MPV托管插件已同步: uosc_danmaku”。2.7.1 的代码早于 #113，目标是 `%APPDATA%\mpv`，目标已有 `scripts`，所以删掉 `uosc_danmaku` 重新复制。18:43 就是这次正常同步，不是删除。
 - 实测（`%APPDATA%\mpv\mpv.log`，最后写入 18:55:53）：mpv 带 `--config-dir=C:\Users\xiaos\AppData\Roaming\mpv` 启动，加载了 `uosc_danmaku/main.lua`，插件报版本 2.1.0，没有 `Cannot find main.*`。
 - 推断：如果 18:43:45 之后目录被删到只剩 `.gitignore` 又被恢复，各个目录的修改时间会晚于 18:43:45。实际没有，所以 18:43 以后目录一直完整。
-- 推断：issue 里的“只剩 `.gitignore`”可能是观察出错，比如看错了目录（例如被 #118 清空的某个 worktree 里的 `portable_config`），或者用的列目录方式漏掉了文件。具体是哪种，没有查到。目录不在 git 仓库里，`.gitignore` 的规则（`danmaku/*`、`*.toml`、`.*`）不会影响 mpv 或客户端读取，也不会隐藏 `.lua` 文件（读规则，推断）。
+- 已被取代（2026-11-08，见“#119 关闭”一节）：~~推断：issue 里的“只剩 `.gitignore`”可能是观察出错，比如看错了目录（例如被 #118 清空的某个 worktree 里的 `portable_config`），或者用的列目录方式漏掉了文件。具体是哪种，没有查到。目录不在 git 仓库里，`.gitignore` 的规则（`danmaku/*`、`*.toml`、`.*`）不会影响 mpv 或客户端读取，也不会隐藏 `.lua` 文件（读规则，推断）。~~
 - issue 里列的其它方向都可以排除：#113、#117 之前的同步代码在 18:43 正常复制了全部文件（日志和创建时间，实测）；插件自更新没有触发的记录（实测 `mpv.log` 里没有 `check-update`，但这个日志只记最后一次 18:55 的运行，18:43 到 18:55 之间是否触发过看不到；即使触发，附带的 2.1.0 已是最新版，不会替换目录，读代码，推断）；开发版启动会写 `~/.fntv/logs`，本机没有这个目录（实测），`app.log` 里 14:30 之后、23 点之前的启动只有 18:43 这一次安装版（实测）。
-- 修复方案：不需要改代码，规模为 0。建议在 #119 评论里写明上面的实测结果，标 `wontfix` 关闭（复现不了）。维护者如果当时看到的确实是另一个目录，可以补一句说明再关闭。
+- 已被取代（2026-11-08，见“#119 关闭”一节）：~~修复方案：不需要改代码，规模为 0。建议在 #119 评论里写明上面的实测结果，标 `wontfix` 关闭（复现不了）。维护者如果当时看到的确实是另一个目录，可以补一句说明再关闭。~~
+
+## 2026-11-08 #119 关闭，本页 issue 全部关闭
+
+- “`uosc_danmaku` 只剩 `.gitignore`”是 chief of staff 的误判。当时用 `ls -la <两个目录> | head -14` 同时列两个目录，输出在第 14 行截断，`uosc_danmaku` 排在最后，只显示到 `.gitignore`。这个错误结论被写进了 #119 和 #120 的子代理任务说明。
+  - 教训：判断目录内容时单独列这个目录，不要用 `head` 截断。
+- 维护者确认后，#119 以 not planned 关闭，不打 `wontfix` 标签，关闭评论贴了核实结果。#119 上仍留着 `needs-triage` 标签（实测）。
+- 维护者 2026-11-08 决定暂时不做 `pnpm setup:mpv`，也不做开发模式下缺少 `third_party/fntv-mpv` 时的提示。
+- 截至这一节，本页涉及的 issue 都已关闭（`gh issue view` 逐个核对）：#74 至 #78、#87、#94、#114、#115、#118 为 completed，#119 为 not planned。
