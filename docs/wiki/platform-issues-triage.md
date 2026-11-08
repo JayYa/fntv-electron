@@ -134,3 +134,23 @@
   - 没处理：scoop shim；同步只在启动时进行，改 MPV 播放器路径后要重启客户端。
   - 测试在 `mkdtemp` 里建真实目录（`tests/platform.test.cjs`）。Windows 分支的三条测试要在 Windows 主机上跑，其它主机上 skip，由 CI 的 Windows job 覆盖。
   - 合并前要人工实测：Windows 上把一个旁边带 `portable_config` 的 mpv 设为用户自选 mpv，确认弹幕插件生效。
+
+## 2026-11-08 #117 合并后实测：自选附带 MPV 时插件被清空（#118）
+
+- 维护者合并了 PR #117（#114、#115，commit `cfef805`，squash 合并）。
+- 维护者当天在 main `cfef805` 上实测，自选 MPV 设为仓库附带的 `third_party\fntv-mpv\mpv.exe`：
+  - 同步目标正确，是这个 mpv.exe 旁边的 `portable_config`。
+  - `%APPDATA%\mpv` 没有被这次同步改动。
+  - 但 `portable_config\scripts\uosc_danmaku\` 被清空，客户端日志仍记“MPV托管插件已同步: uosc_danmaku”，mpv 日志报 `Cannot find main.* ... uosc_danmaku`。
+- 根因，已在临时目录实测复现：目标和来源是同一个目录。`synchronizeMpvConfig`（`cfef805` 的 `mpvConfigHelpers.ts:72-73`）先 `rmSync` 目标插件目录，再从已被删掉的来源复制；`copyDirectoryRecursive` 先重建了空目录，读到空列表，不报错，返回 `updated`。安装版用户把自选 MPV 指向安装目录里附带的 `mpv.exe`，也会触发。
+- 开了 #118（`ready-for-agent`），由 PR #120 修复：
+  - 来源和目标 realpath 相同时返回 `same-directory`，跳过同步并记日志。
+  - 先在用户配置根目录的 `.fntv-sync-*` 暂存目录里复制，再换掉旧插件目录。
+  - 同步前后检查 `main.lua`，缺失时抛错，记 ERROR，不记“已同步”。
+  - 测试在 `mkdtemp` 里建真实目录（`tests/mpvConfigMigration.test.cjs`）。
+  - 合并前要人工实测：用附带的 MPV 作为自选 MPV 启动，插件目录不被清空，弹幕生效。
+- 另一个现象：`%APPDATA%\mpv\scripts\uosc_danmaku\` 从 2026-11-08 18:43 起只剩 `.gitignore`。原因不明，开了 #119（`needs-triage`）。
+  - 和 #118 不是同一个问题：#118 清出的是空目录，不留 `.gitignore`（实测）。
+  - 18:43 早于 #113（22:38）和 #117（23:20）合并。
+  - MPV 归档里的插件是完整的 18 个文件（实测 `unzip -l`）。
+  - 插件自更新只在手动触发时运行；附带的 2.1.0 已是上游最新版，不会替换目录（读代码，推断）。

@@ -25,13 +25,15 @@
 | 状态 | 行为 | 返回值 |
 | --- | --- | --- |
 | 便携配置目录不存在 | 抛错 | 无 |
-| 用户配置没有 `scripts` | 复制便携配置，已存在的文件一律跳过 | `initialized` |
-| 用户配置已有 `scripts` | 删除并重建 `scripts/uosc_danmaku`，其它文件不动 | `updated` |
-| 已有 `scripts`，但便携配置缺 `scripts/uosc_danmaku` | 抛错 | 无 |
+| 用户配置就是便携配置（按 realpath 比较，例如自选 mpv 就是附带的 mpv，#118） | 什么都不动 | `same-directory` |
+| 用户配置没有 `scripts` | 复制便携配置，已存在的文件一律跳过；之后 `scripts/uosc_danmaku/main.lua` 不存在时抛错 | `initialized` |
+| 用户配置已有 `scripts` | 在用户配置根目录的 `.fntv-sync-*` 暂存目录里复制出新的 `uosc_danmaku`，再换掉旧目录，其它文件不动 | `updated` |
+| 已有 `scripts`，但便携配置缺 `scripts/uosc_danmaku` 或其中的 `main.lua` | 抛错，旧插件不动 | 无 |
 
 - 只有 `scripts/uosc_danmaku` 由应用托管。
 - `danmaku-history.json`、`script-opts` 和其它脚本归用户所有，同步时逐字节保留。内容为空或损坏也不修复。
-- 同步抛错时 `mpvConfig.ts` 只记录日志，不阻塞启动。
+- 同步抛错时 `mpvConfig.ts` 只记录 ERROR 日志，不阻塞启动，也不记“已同步”。
+- 不要改回先删目标再复制：目标和来源是同一目录时，这样会把附带的插件删光（#118）。
 
 ## 默认播放方式
 
