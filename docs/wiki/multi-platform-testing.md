@@ -73,8 +73,8 @@
 
 ### 待验证
 
-- 2026-11-08 时，真实的发版门禁（合并 Release PR → draft → 5 个目标冒烟测试 → publish）还没跑过。#96 合并后第一次发版时要检查：
-  - publish 是否等待冒烟测试；
+- 已被取代（2026-11-08，见下方“发版门禁首次实战”，v2.7.2 已跑过）：~~2026-11-08 时，真实的发版门禁（合并 Release PR → draft → 5 个目标冒烟测试 → publish）还没跑过。#96 合并后第一次发版时要检查：~~
+  - 已被取代（2026-11-08，见下方“发版门禁首次实战”，已验证）：~~publish 是否等待冒烟测试；~~
   - 已被取代（2026-11-08，见下方“2026-11-08 决定：删掉 Release PR 冒烟路径”）：~~Release PR 的冒烟测试是否出现在 push 到 main 的那次运行里。~~
 
 ## Agent 权限边界
@@ -114,3 +114,9 @@
 ### 待验证（2026-11-08 追加）
 
 - Release PR 经 `smoke-test.yml` 跑冒烟测试（维护者批准后）还没实际发生过。要等下一个有内容变更的 Release PR：批准后看 5 个目标是否都出现在 PR 上并通过。
+
+## 2026-11-08 第二次核对（wiki 检查，`JayYa/fntv-electron@dff30b2`）
+
+- `gh issue list --state open`：#74、#75、#76、#77、#78、#87、#94 仍为 OPEN，标签都只有 `needs-triage`，和上一次核对相同，没有分诊。
+- Release PR 经 `smoke-test.yml` 跑冒烟测试（上方“待验证（2026-11-08 追加）”）仍没有发生：截至 `dff30b2` 没有新的 Release PR。
+- 打包缓存在 main 上的命中只验证了 Windows（见[构建依赖与 MPV 插件同步](build-dependencies.md)），macOS、Linux 要等下次发版看 `Build on macos-latest`、`Build on ubuntu-latest` 的日志。
