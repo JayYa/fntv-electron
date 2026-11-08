@@ -30,6 +30,37 @@
 - 文本断言只用于没有运行入口的内容：`resource/login/` 下的页面、样式、脚本和窗口安全选项（`tests/rendererIsolation.test.cjs`）。
 - 测试失败时先判断是行为回归还是测试过期，只有测试过期才改断言。
 
+## 冒烟测试
+
+`tests/smoke/` 把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。测试不引入源码，`pnpm test` 不包含它。
+
+- `tests/smoke/targets.cjs` 列出目标平台（目前只有 `linux-x64`）：安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再在 `build-and-smoke.yml` 的 `select-targets` 和 `smoke-test.yml` 的平台列表里加上。
+- 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，这样隔离不了。
+- 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（应用日志目录的副本，Linux 上是 `~/.config/fntv/logs`，不在 `~/.fntv` 里）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
+- 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
+- 在主进程里执行代码（`app.evaluate`）前先等 `app.firstWindow()`。客户端启动时创建主窗口期间收到的 `app.evaluate` 会以 `Resulting promise was garbage collected` 失败，主窗口页面出现后就不会了。
+
+### 在 CI 上跑
+
+`smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建（发版也用这一份），再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、Release PR、改了 `tests/smoke/`、这三个 workflow 或 `package.json` 的 PR。
+
+```bash
+gh workflow run smoke-test.yml -f platform=linux
+gh run download <run-id> -n smoke-linux-x64
+```
+
+### 在本地跑
+
+先构建对应平台的安装包（`pnpm run build:linux:x64`），再在同一平台上运行。Linux 没有显示器时用 `xvfb-run`：
+
+```bash
+FNTV_SMOKE_TARGET=linux-x64 xvfb-run -a pnpm run test:smoke
+```
+
+CI 装了 `libfuse2t64`，AppImage 通过 FUSE 挂载运行。本地用 Docker 时也走这条路：容器加 `--device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined`，装 `libfuse2t64`。`APPIMAGE_EXTRACT_AND_RUN=1` 先解压再运行，不需要 FUSE，但从解压目录读文件比从 FUSE 挂载快，启动时序和 CI 不同，和时序有关的问题可能在本地复现不出来。
+
+`FNTV_SMOKE_INSTALLER_DIR` 改安装包目录（默认 `release/`），`FNTV_SMOKE_EXECUTABLE` 跳过安装直接启动某个可执行文件，`FNTV_SMOKE_ARTIFACTS` 改输出目录。
+
 ## 配置和工作流
 
 - 配置类改动用 `git grep` 做静态验收，结果只能剩下有意保留的内容。能写成断言的放进 `tests/standards.test.cjs`。

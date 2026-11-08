@@ -1,0 +1,44 @@
+name: Smoke Test
+
+# 构建安装包并启动它做冒烟测试，比普通 CI 慢得多，只在这几种情况跑：
+# - 手动触发，可选平台；
+# - release-please 的 Release PR，它总会改 package.json 的版本号；
+# - PR 改了冒烟测试、构建相关的 workflow 或 package.json，开发时在 PR 上验证。
+# 其它 PR 不跑，日常 CI 见 ci.yml。
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platforms to smoke test
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - linux
+  pull_request:
+    paths:
+      - tests/smoke/**
+      - .github/workflows/build.yml
+      - .github/workflows/build-and-smoke.yml
+      - .github/workflows/smoke-test.yml
+      - package.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # all 和 PR 时测全部已支持的平台，加平台时加进这个列表。
+        platform: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.platform != 'all') && format('["{0}"]', inputs.platform) || '["linux"]') }}
+    uses: ./.github/workflows/build-and-smoke.yml
+    with:
+      platform: ${{ matrix.platform }}

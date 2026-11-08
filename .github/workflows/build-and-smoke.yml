@@ -1,0 +1,122 @@
+name: Build and Smoke Test
+
+# 构建一个平台的安装包，再对其中每个架构跑冒烟测试（tests/smoke/）。
+# 冒烟测试下载构建 job 上传的 artifact，测的就是要发布的那个文件，不另外构建。
+# 普通 PR 的 CI（ci.yml）不调用这里，调用方见 smoke-test.yml。
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: windows, macos or linux
+        required: true
+        type: string
+      ref:
+        description: Commit to build and test; empty means the triggering commit
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # 平台对应的构建机器和要测的目标。加平台或架构时改这里和 tests/smoke/targets.cjs。
+  select-targets:
+    runs-on: ubuntu-latest
+    outputs:
+      build-os: ${{ steps.targets.outputs.build-os }}
+      smoke-matrix: ${{ steps.targets.outputs.smoke-matrix }}
+    steps:
+      - name: Select build runner and smoke targets
+        id: targets
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          case "$PLATFORM" in
+            linux)
+              echo 'build-os=ubuntu-latest' >> "$GITHUB_OUTPUT"
+              echo 'smoke-matrix={"include":[{"target":"linux-x64","runner":"ubuntu-latest"}]}' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "No smoke test targets for platform: $PLATFORM" >&2
+              exit 1
+              ;;
+          esac
+
+  build:
+    needs: select-targets
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ needs.select-targets.outputs.build-os }}
+      platform: ${{ inputs.platform }}
+      ref: ${{ inputs.ref }}
+
+  smoke:
+    name: Smoke test ${{ matrix.target }}
+    needs: [select-targets, build]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select-targets.outputs.smoke-matrix) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Remove local registry config
+        run: rm -f .npmrc
+        shell: bash
+
+      # 测试只用 playwright-core 启动已打包的客户端，不需要 Electron 自带的二进制，也不下载浏览器。
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Download installers
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.platform }}-build
+          path: release
+
+      # AppImage 靠 FUSE 挂载自身，ubuntu-24.04 默认没有 libfuse2。xvfb 提供虚拟显示，
+      # 没有中文字体时截图里的中文是方框。
+      - name: Install Linux runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libfuse2t64 xvfb fonts-noto-cjk
+
+      - name: Run smoke test
+        shell: bash
+        env:
+          FNTV_SMOKE_TARGET: ${{ matrix.target }}
+          FNTV_SMOKE_INSTALLER_DIR: release
+          FNTV_SMOKE_ARTIFACTS: smoke-artifacts/${{ matrix.target }}
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" pnpm run test:smoke
+          else
+            pnpm run test:smoke
+          fi
+
+      # 失败时也上传，截图和日志是排查的主要依据。
+      - name: Upload screenshot and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-${{ matrix.target }}
+          path: smoke-artifacts/${{ matrix.target }}
+          if-no-files-found: warn
+          retention-days: 14

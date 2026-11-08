@@ -62,6 +62,12 @@ test('third-party actions are pinned to a commit SHA with a version comment', ()
 
     assert.ok(actions.length > 0, 'no actions found in workflows');
     for (const { name, line } of actions) {
+        // 本仓库的可复用 workflow 随提交一起变，不固定 SHA，但文件必须存在。
+        const local = line.match(/uses: \.\/(\S+)$/);
+        if (local) {
+            assert.ok(fs.existsSync(path.join(root, local[1])), `${name}: ${line}`);
+            continue;
+        }
         assert.match(line, /uses: [^@\s]+@[0-9a-f]{40} # v\d/, `${name}: ${line}`);
     }
 });

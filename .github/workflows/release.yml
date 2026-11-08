@@ -89,135 +89,18 @@ jobs:
 
   build:
     name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
     needs: [release-please, select-matrix]
     if: ${{ !cancelled() && needs.select-matrix.result == 'success' }}
-    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select-matrix.outputs.build-matrix) }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # 发版时构建 release-please 打 tag 的那个提交，package.json 里已是新版本号。
-          ref: ${{ needs.release-please.outputs.sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '22'
-          cache: pnpm
-
-      - name: Remove local registry config
-        run: |
-          rm -f .npmrc
-        shell: bash
-        continue-on-error: true
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 10
-
-      - name: Setup Python (for native modules)
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.11'
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: src/modules/proxy/go.mod
-          cache-dependency-path: src/modules/proxy/go.sum
-
-      - name: Setup build environment (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        continue-on-error: true
-
-      - name: Download third-party dependencies
-        shell: bash
-        env:
-          MPV_CONFIG_REPO: JayYa/fntv-mpv-config
-          MPV_CONFIG_TAG: fntv-mpv-v20260826_013404
-          MPV_CONFIG_ASSET: mpv-package-20260825_173358.zip
-          MPV_CONFIG_SHA256: 1d9f5fe6411e08710e2cdc5f76286ff2667bfa53acee6f0cfa8572ed5bb05c5b
-        run: |
-          DOWNLOAD_URL="https://github.com/$MPV_CONFIG_REPO/releases/download/$MPV_CONFIG_TAG/$MPV_CONFIG_ASSET"
-          echo "Downloading from: $DOWNLOAD_URL"
-          curl -fsSL --retry 3 -o mpv-config.zip "$DOWNLOAD_URL"
-
-          SHA256_TOOL=$(command -v sha256sum || echo "shasum -a 256")
-          echo "$MPV_CONFIG_SHA256  mpv-config.zip" | $SHA256_TOOL -c -
-
-          mkdir -p third_party/fntv-mpv
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            powershell -Command "Expand-Archive -Path mpv-config.zip -DestinationPath third_party/fntv-mpv -Force"
-          else
-            unzip -q mpv-config.zip -d third_party/fntv-mpv
-          fi
-          rm -f mpv-config.zip
-
-          echo "Final structure:"
-          find third_party/fntv-mpv -maxdepth 2 -type d
-
-      - name: Compile TypeScript
-        run: pnpm run compile
-        timeout-minutes: 5
-
-      - name: Build application
-        run: |
-          if [ "${{ matrix.platform }}" = "windows" ]; then
-            pnpm run build:win
-          elif [ "${{ matrix.platform }}" = "macos" ]; then
-            pnpm run build:mac
-          else
-            pnpm run build:linux
-          fi
-        shell: bash
-        timeout-minutes: 15
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ matrix.platform }}-build
-          path: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
-            release/*.blockmap
-          if-no-files-found: error
-          retention-days: 30
-      # —— 构建后：兜底清理（避免影响后续/下次流水线）——
-      - name: Post-clean DMG volumes (FNMedia_* / 飞牛影视*)
-        if: always() && runner.os == 'macOS'
-        shell: bash
-        run: |
-            set -euo pipefail
-            matches="$(
-            hdiutil info | awk -F': ' '/mount-point/ {print $2}' | \
-            grep -E '^(\/Volumes\/FNMedia_|\/Volumes\/飞牛影视)' || true
-            )"
-            if [ -n "$matches" ]; then
-            echo "$matches" | while IFS= read -r V; do
-                [ -z "$V" ] && continue
-                echo "==> Force detaching leftover: $V"
-                lsof +D "$V" || true
-                hdiutil detach -force "$V" || true
-                diskutil unmount force "$V" || true
-            done
-            else
-            echo "No leftover volumes."
-            fi
+    # 构建步骤在 build.yml，冒烟测试（build-and-smoke.yml）也用它。
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      platform: ${{ matrix.platform }}
+      # 发版时构建 release-please 打 tag 的那个提交，package.json 里已是新版本号。
+      ref: ${{ needs.release-please.outputs.sha || github.sha }}
 
   publish:
     name: Publish release
