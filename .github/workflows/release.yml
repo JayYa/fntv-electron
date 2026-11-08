@@ -30,6 +30,8 @@ on:
 permissions:
   contents: read
 
+# 同一分支只保留一个排队中的运行，再来一次 push 时前一个排队的运行会被取消。
+# 被取消的即使是合并 Release PR 那次，release-please 在下次 push 时也会补建 Release，能自愈。
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
