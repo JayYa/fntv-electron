@@ -80,3 +80,12 @@
   - 被拦下的操作：`gh pr merge`、创建 ruleset、建 draft PR 时同时 `gh workflow run`。
   - 放行的操作：普通 `gh pr create`、`gh issue create`、`gh run rerun`、push 到非 main 分支。
 - 合进集成分支用的是本地 `git merge` 加 push。合进 main 一律由用户操作。
+
+## 发版门禁首次实战（2026-11-08）
+
+- #96 合并后，push 到 main 的那次 Release 运行（`actions/runs/42462528362`）没有跑 Release PR 冒烟测试。原因：`ci:` 提交不进 changelog，release-please 日志为 `PR #70 remained the same`，`prs_created` 为 false。符合设计，但这意味着只有 Release PR 内容变化时才会跑冒烟测试。
+- 用户合并 Release PR #70 后，`actions/runs/42463066829` 发布 v2.7.2：
+  - 三平台构建和 5 个目标冒烟测试全部通过，最后完成的是 darwin-x64（08:33:41Z）；
+  - 之后 `Publish release` 才完成（08:33:58Z）；
+  - Release 不是 draft，是 latest，8 个资产齐全（5 个安装包，加上 exe 和两个 dmg 的 blockmap）。
+- 上文"待验证"中的第一条（publish 等待冒烟测试）已在这次发布中得到验证。第二条（Release PR 冒烟测试）要等下一次 Release PR 内容变化时再看。
