@@ -44,6 +44,8 @@
 
 `smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建（发版也用这一份），再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、Release PR、改了 `tests/smoke/`、这三个 workflow 或 `package.json` 的 PR。
 
+Linux 构建 job 在 x64 机器上一次构建出 x64 和 arm64 两个 AppImage，`linux-arm64` 的冒烟 job 在原生 `ubuntu-24.04-arm` 机器上下载同一个 `linux-build` artifact 运行，不用 QEMU，也不在 arm 机器上重新构建。
+
 ```bash
 gh workflow run smoke-test.yml -f platform=linux
 gh run download <run-id> -n smoke-linux-x64
