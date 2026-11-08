@@ -29,6 +29,9 @@ const TARGETS = {
         },
         environment: posixHomeEnvironment,
         userDataDir: home => path.join(home, '.fntv'),
+        // 日志器在 config.ts 把 userData 改到 ~/.fntv 之前就取了路径，日志落在 Electron 默认的
+        // userData（Linux 是 ~/.config/<name>），不在 ~/.fntv/logs。
+        logDir: home => path.join(home, '.config', 'fntv', 'logs'),
     },
 };
 

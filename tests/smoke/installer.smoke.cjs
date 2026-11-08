@@ -64,6 +64,7 @@ describe(`installer smoke test (${target.id})`, () => {
     let home;
     let installation;
     let app;
+    let child;
     let page;
     let mainOutput = '';
     let launchedAt;
@@ -90,16 +91,18 @@ describe(`installer smoke test (${target.id})`, () => {
                 timeout: 60000,
             });
         } catch (error) {
-            throw new Error(fail('启动客户端', error.message));
+            throw new Error(fail('启动客户端', `${error.message}
+主进程可能停在错误弹窗上，原因看 logs/app.log`));
         }
         launchedAt = Date.now();
-        for (const stream of [app.process().stdout, app.process().stderr]) {
+        child = app.process();
+        for (const stream of [child.stdout, child.stderr]) {
             stream.on('data', chunk => {
                 mainOutput += chunk.toString('utf8');
                 outputFile.write(chunk);
             });
         }
-        app.process().once('exit', () => outputFile.end());
+        child.once('exit', () => outputFile.end());
 
         // 连上调试端口后才能装监听，更早的异常靠 stderr 里的 UNCAUGHT_PATTERN 发现。
         await app.evaluate(() => {
@@ -114,12 +117,12 @@ describe(`installer smoke test (${target.id})`, () => {
         if (page && !page.isClosed()) {
             await page.screenshot({ path: path.join(artifactsDir, 'screenshot.png') }).catch(() => {});
         }
-        if (app && app.process().exitCode === null && app.process().signalCode === null) {
+        if (child && child.exitCode === null && child.signalCode === null) {
             await Promise.race([app.close(), delay(15000)]).catch(() => {});
-            app.process().kill('SIGKILL');
+            child.kill('SIGKILL');
         }
         if (home) {
-            const logsDir = path.join(target.userDataDir(home), 'logs');
+            const logsDir = target.logDir(home);
             if (fs.existsSync(logsDir)) {
                 fs.cpSync(logsDir, path.join(artifactsDir, 'logs'), { recursive: true });
                 const appLog = path.join(logsDir, 'app.log');
