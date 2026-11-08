@@ -2,8 +2,10 @@ name: Smoke Test
 
 # 构建安装包并启动它做冒烟测试，比普通 CI 慢得多，只在这几种情况跑：
 # - 手动触发，可选平台；
-# - release-please 的 Release PR，它总会改 package.json 的版本号，合并前就能看到 5 个平台的结果和截图；
 # - PR 改了冒烟测试、构建相关的 workflow 或 package.json，开发时在 PR 上验证。
+# release-please 的 Release PR 由 GITHUB_TOKEN 创建，不会触发这里。它的冒烟测试在 release.yml 里：
+# 建好或更新 Release PR 的那次 push 到 main 的 Release 运行，对 PR 的 head 分支构建并测 5 个目标，
+# 截图在那次运行的 smoke-<目标> artifact 里。
 # 其它 PR 不跑，日常 CI 见 ci.yml。
 on:
   workflow_dispatch:
@@ -39,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # all 和 PR 时测全部已支持的平台，加平台时加进这个列表。
+        # all 和 PR 时测全部已支持的平台，和 tests/smoke/targets.cjs 的 platform 一致（tests/releaseGate.test.cjs 核对）。
         platform: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.platform != 'all') && format('["{0}"]', inputs.platform) || '["linux","macos","windows"]') }}
     uses: ./.github/workflows/build-and-smoke.yml
     with:

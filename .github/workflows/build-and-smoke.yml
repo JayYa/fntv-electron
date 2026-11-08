@@ -2,8 +2,8 @@ name: Build and Smoke Test
 
 # 构建一个平台的安装包，再对其中每个架构跑冒烟测试（tests/smoke/）。
 # 冒烟测试下载构建 job 上传的 artifact，测的就是要发布的那个文件，不另外构建。
-# 普通 PR 的 CI（ci.yml）不调用这里。调用方：smoke-test.yml（手动触发、Release PR），
-# release.yml（发版门禁，publish 等这里全部成功，上传的也是这里构建的 artifact）。
+# 普通 PR 的 CI（ci.yml）不调用这里。调用方：smoke-test.yml（手动触发、改了冒烟测试或构建的 PR），
+# release.yml（Release PR 的 head 分支；发版门禁，publish 等这里全部成功，上传的也是这里构建的 artifact）。
 on:
   workflow_call:
     inputs:
@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       ref:
-        description: Commit to build and test; empty means the triggering commit
+        description: Commit or branch to build and test; empty means the triggering commit
         required: false
         default: ''
         type: string
@@ -21,7 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  # 平台对应的构建机器和要测的目标。加平台或架构时改这里和 tests/smoke/targets.cjs。
+  # 平台对应的构建机器和要测的目标，目标必须和 tests/smoke/targets.cjs 里 platform 相同的那些一致
+  # （tests/releaseGate.test.cjs 运行这一步核对）。
   select-targets:
     runs-on: ubuntu-latest
     outputs:

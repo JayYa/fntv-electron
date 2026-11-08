@@ -14,7 +14,7 @@ on:
         required: true
         type: string
       ref:
-        description: Commit to build; empty means the triggering commit
+        description: Commit or branch to build; empty means the triggering commit
         required: false
         default: ''
         type: string
@@ -32,7 +32,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # 发版时构建 release-please 打 tag 的那个提交，package.json 里已是新版本号。
+          # 发版时构建 release-please 打 tag 的那个提交，Release PR 时构建它的 head 分支（release.yml）。
           ref: ${{ inputs.ref }}
           fetch-depth: 0
 
