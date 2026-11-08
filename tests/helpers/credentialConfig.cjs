@@ -22,6 +22,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret' } = {}) {
             isPackaged: false,
             getAppPath() { return testRoot; },
             getPath(name) { return paths[name]; },
+            commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
         dialog: {

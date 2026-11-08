@@ -11,7 +11,7 @@
 ## MPV 归档
 
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
-- Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/release.yml` 的 `Download third-party dependencies` 步骤。
+- Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/build.yml` 的 `Download third-party dependencies` 步骤。
 - 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20260826_013404`，并校验 sha256。这个 Release 是上游同 tag 的镜像，因为 GitHub fork 不带 Release。
 - 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再同时改这个步骤的 tag、资产名和 sha256，以及 `README.md` 的准备步骤。
 - Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
@@ -105,4 +105,4 @@ const secret = loadOrCreateProxySecret(app.getPath('userData'))
 | 健康检查响应 | `tests/proxyHealth.test.cjs`、`src/modules/proxy/internal/logic/register_test.go` |
 | 播放地址不暴露密钥 | `tests/proxySession.test.cjs` |
 
-`release.yml` 不覆盖上游插件这一条没有自动化测试，改工作流时用 `grep -n -i danmaku .github/workflows/release.yml` 确认没有结果。
+构建（`build.yml`）不覆盖上游插件这一条没有自动化测试，改工作流时用 `grep -n -i danmaku .github/workflows/build.yml .github/workflows/release.yml` 确认没有结果。

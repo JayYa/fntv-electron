@@ -20,3 +20,4 @@ docs/*
 !docs/adr/
 !docs/wiki/
 !docs/external-runtime.md
+smoke-artifacts

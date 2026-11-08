@@ -1,10 +1,14 @@
 name: Release
 
-# push 到 main：release-please 维护 Release PR；合并 Release PR 后先建 draft Release，
-# 三平台构建全部成功、资产上传齐全后才转为正式。更新检查只看最新的正式 Release，
-# 资产不全时不能公开。GITHUB_TOKEN 创建的 Release 不会触发其它 workflow，所以构建和
-# 发布都放在这一个 workflow 里，用 needs 串起来。
-# workflow_dispatch：只构建，产物留在 Actions artifacts，不发布。
+# push 到 main：release-please 维护 Release PR。它建好或更新 Release PR 时，这次运行对 PR 的
+# head 分支构建并跑 5 个安装包的冒烟测试，结果和截图 artifact 就在这次运行里，不发布。
+# GITHUB_TOKEN 开的 Release PR 不会触发 pull_request workflow，smoke-test.yml 在它上面不跑。
+# 合并 Release PR 后先建 draft Release，
+# 三平台构建、5 个安装包的冒烟测试全部成功、资产上传齐全后才转为正式。更新检查只看
+# 最新的正式 Release，有一个安装包启动不了或资产不全时都不能公开，Release 停在 draft。
+# GITHUB_TOKEN 创建的 Release 不会触发其它 workflow，所以构建、冒烟测试和发布都放在
+# 这一个 workflow 里，用 needs 串起来。门禁关系由 tests/releaseGate.test.cjs 锁住。
+# workflow_dispatch：只构建并跑冒烟测试，产物留在 Actions artifacts，不发布。
 on:
   push:
     branches:
@@ -43,6 +47,9 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
+      prs_created: ${{ steps.release.outputs.prs_created }}
+      # Release PR 的 JSON，headBranchName 是它的分支。
+      pr: ${{ steps.release.outputs.pr }}
     steps:
       # 配置在 release-please-config.json：draft + force-tag-creation，tag 形如 v2.7.0。
       - name: Run release-please
@@ -55,31 +62,27 @@ jobs:
   select-matrix:
     needs: release-please
     # 手动触发时 release-please 被跳过，!cancelled() 让这里照常运行。
-    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true' || needs.release-please.outputs.prs_created == 'true') }}
     runs-on: ubuntu-latest
     outputs:
-      build-matrix: ${{ steps.matrix.outputs.value }}
+      platforms: ${{ steps.matrix.outputs.platforms }}
     steps:
-      - name: Select build matrix
+      # 构建机器和每个平台要测的架构在 build-and-smoke.yml 的 select-targets 里。
+      # 发版和 Release PR 都是 push 触发，没有 platform 输入，按 all 走：三个平台、5 个安装包都要测。
+      - name: Select platforms
         id: matrix
         env:
           PLATFORM: ${{ github.event.inputs.platform || 'all' }}
         run: |
           case "$PLATFORM" in
-            windows)
-              echo 'value={"include":[{"os":"windows-latest","platform":"windows"}]}' >> "$GITHUB_OUTPUT"
-              ;;
-            macos)
-              echo 'value={"include":[{"os":"macos-latest","platform":"macos"}]}' >> "$GITHUB_OUTPUT"
-              ;;
-            linux)
-              echo 'value={"include":[{"os":"ubuntu-latest","platform":"linux"}]}' >> "$GITHUB_OUTPUT"
+            windows|macos|linux)
+              echo "platforms=[\"$PLATFORM\"]" >> "$GITHUB_OUTPUT"
               ;;
             unix)
-              echo 'value={"include":[{"os":"macos-latest","platform":"macos"},{"os":"ubuntu-latest","platform":"linux"}]}' >> "$GITHUB_OUTPUT"
+              echo 'platforms=["macos","linux"]' >> "$GITHUB_OUTPUT"
               ;;
             all)
-              echo 'value={"include":[{"os":"windows-latest","platform":"windows"},{"os":"macos-latest","platform":"macos"},{"os":"ubuntu-latest","platform":"linux"}]}' >> "$GITHUB_OUTPUT"
+              echo 'platforms=["windows","macos","linux"]' >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "Unsupported platform selection: $PLATFORM" >&2
@@ -87,142 +90,31 @@ jobs:
               ;;
           esac
 
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  # 每个平台构建一次（build.yml，上传 <platform>-build），再对其中每个安装包跑冒烟测试。
+  # publish 上传的就是这份 artifact，冒烟测试测的和发布的是同一批文件，不另外构建。
+  build-and-smoke:
+    name: ${{ matrix.platform }}
     needs: [release-please, select-matrix]
     if: ${{ !cancelled() && needs.select-matrix.result == 'success' }}
-    timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.select-matrix.outputs.build-matrix) }}
+      matrix:
+        platform: ${{ fromJSON(needs.select-matrix.outputs.platforms) }}
+    uses: ./.github/workflows/build-and-smoke.yml
+    with:
+      platform: ${{ matrix.platform }}
+      # 发版时构建 release-please 打 tag 的那个提交（sha 只在建了 Release 时有值）；只更新了
+      # Release PR 时构建它的 head 分支，两者都是 package.json 里已是新版本号的代码。
+      # 同一次运行既发版又建新 Release PR 时只测发版，新 PR 等下一次 push 到 main 再测：
+      # 再调用一次 build-and-smoke.yml 会上传同名的 <platform>-build，publish 分不清。
+      ref: ${{ needs.release-please.outputs.sha || (needs.release-please.outputs.prs_created == 'true' && fromJSON(needs.release-please.outputs.pr || '{}').headBranchName) || github.sha }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # 发版时构建 release-please 打 tag 的那个提交，package.json 里已是新版本号。
-          ref: ${{ needs.release-please.outputs.sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '22'
-          cache: pnpm
-
-      - name: Remove local registry config
-        run: |
-          rm -f .npmrc
-        shell: bash
-        continue-on-error: true
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 10
-
-      - name: Setup Python (for native modules)
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.11'
-
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: src/modules/proxy/go.mod
-          cache-dependency-path: src/modules/proxy/go.sum
-
-      - name: Setup build environment (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        continue-on-error: true
-
-      - name: Download third-party dependencies
-        shell: bash
-        env:
-          MPV_CONFIG_REPO: JayYa/fntv-mpv-config
-          MPV_CONFIG_TAG: fntv-mpv-v20260826_013404
-          MPV_CONFIG_ASSET: mpv-package-20260825_173358.zip
-          MPV_CONFIG_SHA256: 1d9f5fe6411e08710e2cdc5f76286ff2667bfa53acee6f0cfa8572ed5bb05c5b
-        run: |
-          DOWNLOAD_URL="https://github.com/$MPV_CONFIG_REPO/releases/download/$MPV_CONFIG_TAG/$MPV_CONFIG_ASSET"
-          echo "Downloading from: $DOWNLOAD_URL"
-          curl -fsSL --retry 3 -o mpv-config.zip "$DOWNLOAD_URL"
-
-          SHA256_TOOL=$(command -v sha256sum || echo "shasum -a 256")
-          echo "$MPV_CONFIG_SHA256  mpv-config.zip" | $SHA256_TOOL -c -
-
-          mkdir -p third_party/fntv-mpv
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            powershell -Command "Expand-Archive -Path mpv-config.zip -DestinationPath third_party/fntv-mpv -Force"
-          else
-            unzip -q mpv-config.zip -d third_party/fntv-mpv
-          fi
-          rm -f mpv-config.zip
-
-          echo "Final structure:"
-          find third_party/fntv-mpv -maxdepth 2 -type d
-
-      - name: Compile TypeScript
-        run: pnpm run compile
-        timeout-minutes: 5
-
-      - name: Build application
-        run: |
-          if [ "${{ matrix.platform }}" = "windows" ]; then
-            pnpm run build:win
-          elif [ "${{ matrix.platform }}" = "macos" ]; then
-            pnpm run build:mac
-          else
-            pnpm run build:linux
-          fi
-        shell: bash
-        timeout-minutes: 15
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ matrix.platform }}-build
-          path: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
-            release/*.blockmap
-          if-no-files-found: error
-          retention-days: 30
-      # —— 构建后：兜底清理（避免影响后续/下次流水线）——
-      - name: Post-clean DMG volumes (FNMedia_* / 飞牛影视*)
-        if: always() && runner.os == 'macOS'
-        shell: bash
-        run: |
-            set -euo pipefail
-            matches="$(
-            hdiutil info | awk -F': ' '/mount-point/ {print $2}' | \
-            grep -E '^(\/Volumes\/FNMedia_|\/Volumes\/飞牛影视)' || true
-            )"
-            if [ -n "$matches" ]; then
-            echo "$matches" | while IFS= read -r V; do
-                [ -z "$V" ] && continue
-                echo "==> Force detaching leftover: $V"
-                lsof +D "$V" || true
-                hdiutil detach -force "$V" || true
-                diskutil unmount force "$V" || true
-            done
-            else
-            echo "No leftover volumes."
-            fi
-
+  # 发版门禁：任何一个平台的构建或任何一个安装包的冒烟测试失败，矩阵 job 的结果就不是
+  # success，publish 跳过，Release 停在 draft。不要给这里加 always() 或 !cancelled()。
   publish:
     name: Publish release
-    needs: [release-please, build]
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    needs: [release-please, build-and-smoke]
+    if: ${{ needs.release-please.outputs.release_created == 'true' && needs.build-and-smoke.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -240,6 +132,7 @@ jobs:
           merge-multiple: true
 
       # 更新检查按这些名字匹配安装包（src/modules/updater/updateChecker.ts），缺一个就不发布。
+      # 每个冒烟目标一个（tests/smoke/targets.cjs 的 installerPattern，tests/releaseGate.test.cjs 核对）。
       - name: Check installers
         shell: bash
         run: |
