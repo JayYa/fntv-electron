@@ -32,7 +32,7 @@
 
 ## 冒烟测试
 
-`tests/smoke/` 把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。测试不引入源码，`pnpm test` 不包含它。
+`tests/smoke/` 把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主窗口图标能用 `nativeImage` 加载（#74）、客户端只有一个 `window-all-closed` 监听（#76，不算 Electron 在 `lib/browser/init.ts` 自带的那个）、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。测试不引入源码，`pnpm test` 不包含它。
 
 - `tests/smoke/targets.cjs` 是目标平台的唯一来源（id 是 `<process.platform>-<process.arch>`，如 `linux-x64`、`darwin-arm64`、`win32-x64`，测试默认取当前机器）：在哪个 workflow 平台构建、安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再同步 `build-and-smoke.yml` 的 `select-targets`、`release.yml` 的 `Select platforms` 和 `Check installers`、`smoke-test.yml` 的平台列表，以及两个 workflow 的手动触发选项。漏改哪一处，`tests/releaseGate.test.cjs` 都会失败。
 - 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，本地改用启动参数 `--user-data-dir` 指定 `~/.fntv` 的位置（`src/public/constants.ts`）；`USERPROFILE` 只用来隔离 MPV 用户配置。

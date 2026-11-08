@@ -304,18 +304,15 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     // 初始创建菜单
     await updateTrayMenu();
 
-    // 根据平台设置不同的点击行为：macOS 单击、Windows 双击恢复窗口，Linux 不绑定
-    const restoreEvent = behavior.tray.restoreEvent;
-    if (restoreEvent) {
-        tray.on(restoreEvent as 'click', () => {
-            if (mainWindow) {
-                if (mainWindow.isMinimized()) mainWindow.restore();
-                if (!mainWindow.isVisible()) mainWindow.show();
-                mainWindow.focus();
-                if (behavior.hasDock) app.dock?.show();
-            }
-        });
-    }
+    // 根据平台设置不同的恢复窗口操作：Windows 双击，macOS 和 Linux 单击
+    tray.on(behavior.tray.restoreEvent as 'click', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            if (!mainWindow.isVisible()) mainWindow.show();
+            mainWindow.focus();
+            if (behavior.hasDock) app.dock?.show();
+        }
+    });
 
     log.info('系统托盘创建成功');
 }

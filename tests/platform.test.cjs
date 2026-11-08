@@ -19,6 +19,7 @@ test('macOS keeps running in the status bar and dock and asks about closing the 
     assert.equal(behavior.quitsWhenAllWindowsClosed, false);
     assert.equal(behavior.hasDock, true);
     assert.equal(behavior.titleBar, 'hiddenInset');
+    assert.equal(behavior.windowIcon, 'icon.png');
     assert.deepEqual(behavior.tray, {
         showWindowLabel: '显示窗口',
         quitLabel: '退出飞牛影视',
@@ -36,6 +37,7 @@ test('Windows minimizes to the tray, restores on double-click and announces it o
     assert.equal(behavior.quitsWhenAllWindowsClosed, true);
     assert.equal(behavior.hasDock, false);
     assert.equal(behavior.titleBar, 'frameless');
+    assert.equal(behavior.windowIcon, 'icon.ico');
     assert.deepEqual(behavior.tray, {
         showWindowLabel: '显示主窗口',
         quitLabel: '退出',
@@ -47,16 +49,19 @@ test('Windows minimizes to the tray, restores on double-click and announces it o
     assert.equal(behavior.rejectsBasicTextStorage, false);
 });
 
-test('Linux uses the exit mode, binds no tray click and refuses the basic_text credential backend', () => {
+test('Linux uses the exit mode, a PNG window icon, restores on tray click and refuses the basic_text credential backend', () => {
     const behavior = platformBehavior('linux');
     assert.equal(behavior.closeBehaviorSetting, 'exitMode');
     assert.equal(behavior.quitsWhenAllWindowsClosed, true);
     assert.equal(behavior.hasDock, false);
     assert.equal(behavior.titleBar, 'frameless');
+    // Electron 的 nativeImage 只在 Windows 上读 ICO，其它平台读 PNG（#74）。
+    assert.equal(behavior.windowIcon, 'icon.png');
     assert.deepEqual(behavior.tray, {
         showWindowLabel: '显示主窗口',
         quitLabel: '退出',
-        restoreEvent: null,
+        // Linux 上用户激活托盘图标时发 click，没有 double-click（#75）。
+        restoreEvent: 'click',
         icon: { file: 'icon.png', template: false },
         showsMinimizeBalloon: false,
     });
