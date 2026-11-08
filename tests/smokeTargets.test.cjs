@@ -49,3 +49,19 @@ test('a mounted dmg without exactly one .app is reported with what it contains',
 
     assert.throws(() => findAppExecutable(volume), /\.app.*README\.txt/s);
 });
+
+test('each Linux smoke target picks the AppImage of its own architecture from the Linux build', t => {
+    // build:linux 一次产出两个 AppImage，x64 的文件名架构是 x86_64（package.json 的 artifactName）。
+    const release = tempDir(t);
+    for (const name of [
+        'FNMedia_2.7.1_linux_x86_64.AppImage',
+        'FNMedia_2.7.1_linux_x86_64.AppImage.blockmap',
+        'FNMedia_2.7.1_linux_arm64.AppImage',
+        'FNMedia_2.7.1_linux_arm64.AppImage.blockmap',
+    ]) {
+        touch(path.join(release, name));
+    }
+
+    assert.equal(findInstaller(resolveTarget('linux-x64'), release), path.join(release, 'FNMedia_2.7.1_linux_x86_64.AppImage'));
+    assert.equal(findInstaller(resolveTarget('linux-arm64'), release), path.join(release, 'FNMedia_2.7.1_linux_arm64.AppImage'));
+});
