@@ -110,3 +110,27 @@
 - #113 没处理的两种情况开了新 issue，都标 `needs-triage`：
   - #114：用户自己指定的 `mpv.exe` 旁边有 `portable_config` 时，mpv 只读那个目录，同步过去的配置不生效。
   - #115：mpv 还会读旧的 `~/.mpv` 目录，客户端没有考虑。
+
+## 2026-11-08 核实 #114、#115
+
+在 `origin/main` 的 `03cd5e0` 上核实，两个问题都仍然存在。依据是子代理读 mpv 源码和手册，没有实测。
+
+- #114：
+  - `media.ts:452-455`：用户自己指定 mpv 时，不传 `--config-dir`。
+  - `platform.ts:107-111`：同步目标不考虑 `portable_config`。
+  - `osdep/path-win.c`：mpv.exe 旁边有 `portable_config` 时，mpv 只读它，不读 `%APPDATA%/mpv`。
+  - `options/path.c` 的 `mp_init_paths`：`MPV_HOME` 和 `--config-dir` 优先于 portable。
+  - 推断，未实测：用户指定的是 scoop shim 时，按 `dirname(mpvPath)/portable_config` 推断会落空。
+- #115：
+  - `platform.ts:113-115` 没有处理 `~/.mpv`。
+  - `osdep/path-unix.c:109-113` 和 `osdep/path-darwin.c`：`~/.mpv` 存在而标准目录（`$XDG_CONFIG_HOME/mpv` 或 `~/.config/mpv`）不存在时，只用 `~/.mpv`。Windows 不读 `~/.mpv`。
+  - `options/configfiles.c:75`：两个目录都存在时以标准目录为准，并发出告警。
+  - 影响：客户端新建标准目录会让用户 `~/.mpv` 里的配置失效。
+- 维护者 2026-11-08 确认 #114、#115 合成一个 PR。两个 issue 已发核实评论，标签从 `needs-triage` 改为 `ready-for-agent`。
+- 本 PR：
+  - `mpvUserConfigDir(platform, dirs, env, userMpvPath, pathExists)`。顺序：`MPV_HOME`；Windows 上 `userMpvPath` 旁边有 `portable_config` 时用它，否则 `appDataDir` 下的 `mpv`；其它平台标准目录不存在而 `~/.mpv` 存在时用 `~/.mpv`，否则标准目录。
+  - 存在性检查由调用方传入（`mpvConfig.ts` 传 `fs.existsSync`），函数仍是纯函数，和其它平台函数一样接收参数。
+  - 同步时传配置里的用户 mpv 路径。打包 mpv 的 `--config-dir` 不传，路径不变。
+  - 没处理：scoop shim；同步只在启动时进行，改 MPV 播放器路径后要重启客户端。
+  - 测试在 `mkdtemp` 里建真实目录（`tests/platform.test.cjs`）。Windows 分支的三条测试要在 Windows 主机上跑，其它主机上 skip，由 CI 的 Windows job 覆盖。
+  - 合并前要人工实测：Windows 上把一个旁边带 `portable_config` 的 mpv 设为用户自选 mpv，确认弹幕插件生效。

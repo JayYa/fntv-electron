@@ -97,20 +97,38 @@ export interface UserDirs {
  * osdep/path-win.c）：MPV_HOME 优先，各平台都读；否则 Windows 是漫游 AppData 下的 mpv，其它平台是
  * $XDG_CONFIG_HOME/mpv（mpv 只认绝对路径），否则 ~/.config/mpv。
  * 空的 MPV_HOME 在 mpv 里等于不读用户配置，这里按未设处理，同步仍有地方可写。
- * 不处理用户自己的 mpv.exe 旁边有 portable_config（mpv 只读那里），也不处理 ~/.mpv 旧目录。
+ * Windows 上用户自己指定的 mpv.exe（userMpvPath）旁边有 portable_config 时，mpv 只读那里（#114）；
+ * MPV_HOME 优先于它（options/path.c 的 mp_init_paths）。打包的 mpv 有 --config-dir，不传 userMpvPath。
+ * 其它平台上标准目录不存在而 ~/.mpv 存在时，mpv 只读 ~/.mpv；两者都在时以标准目录为准（#115，
+ * osdep/path-unix.c、osdep/path-darwin.c、options/configfiles.c）。Windows 不读 ~/.mpv。
+ * pathExists 由调用方传入（通常是 fs.existsSync），本函数不碰文件系统，测试可以用临时目录或假函数。
+ * scoop 之类的 shim 不在真实 mpv.exe 旁边，按 shim 所在目录找不到 portable_config，这里不处理。
  */
 export function mpvUserConfigDir(
     platform: NodeJS.Platform,
     dirs: UserDirs,
     env: Record<string, string | undefined>,
+    userMpvPath: string | undefined,
+    pathExists: (target: string) => boolean,
 ): string {
     if (env.MPV_HOME) {
         return env.MPV_HOME;
     }
     if (platform === 'win32') {
+        if (userMpvPath) {
+            const portableDir = path.win32.join(path.win32.dirname(userMpvPath), 'portable_config');
+            if (pathExists(portableDir)) {
+                return portableDir;
+            }
+        }
         return path.win32.join(dirs.appDataDir, 'mpv');
     }
     const xdgConfigHome = env.XDG_CONFIG_HOME;
     const configHome = xdgConfigHome?.startsWith('/') ? xdgConfigHome : path.posix.join(dirs.homeDir, '.config');
-    return path.posix.join(configHome, 'mpv');
+    const standardDir = path.posix.join(configHome, 'mpv');
+    const legacyDir = path.posix.join(dirs.homeDir, '.mpv');
+    if (!pathExists(standardDir) && pathExists(legacyDir)) {
+        return legacyDir;
+    }
+    return standardDir;
 }

@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 const {
     currentPlatform,
@@ -100,34 +103,79 @@ test('the unpackaged proxy executable is under the project directory, not the wo
 const windowsDirs = { homeDir: 'C:\\Users\\me', appDataDir: 'D:\\Profiles\\me\\Roaming' };
 const macDirs = { homeDir: '/Users/me', appDataDir: '/Users/me/Library/Application Support' };
 const linuxDirs = { homeDir: '/home/me', appDataDir: '/home/me/.config' };
+const noPaths = () => false;
 
 test('without environment overrides the user MPV config is in the roaming AppData folder on Windows and ~/.config elsewhere', () => {
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}), 'D:\\Profiles\\me\\Roaming\\mpv');
-    assert.equal(mpvUserConfigDir('darwin', macDirs, {}), '/Users/me/.config/mpv');
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, {}), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, noPaths), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, {}, undefined, noPaths), '/Users/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, {}, undefined, noPaths), '/home/me/.config/mpv');
 });
 
 test('macOS and Linux put the user MPV config under XDG_CONFIG_HOME when it is set', () => {
     const env = { XDG_CONFIG_HOME: '/data/config' };
-    assert.equal(mpvUserConfigDir('darwin', macDirs, env), '/data/config/mpv');
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, env), '/data/config/mpv');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, env, undefined, noPaths), '/data/config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, env, undefined, noPaths), '/data/config/mpv');
 });
 
 test('MPV_HOME is the user MPV config itself and wins over XDG_CONFIG_HOME and AppData', () => {
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '/opt/mpv-home', XDG_CONFIG_HOME: '/data/config' }), '/opt/mpv-home');
-    assert.equal(mpvUserConfigDir('darwin', macDirs, { MPV_HOME: '/opt/mpv-home' }), '/opt/mpv-home');
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: 'E:\\mpv-home' }), 'E:\\mpv-home');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '/opt/mpv-home', XDG_CONFIG_HOME: '/data/config' }, undefined, noPaths), '/opt/mpv-home');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, { MPV_HOME: '/opt/mpv-home' }, undefined, noPaths), '/opt/mpv-home');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: 'E:\\mpv-home' }, undefined, noPaths), 'E:\\mpv-home');
 });
 
 test('a relative XDG_CONFIG_HOME is ignored, as mpv only accepts an absolute one', () => {
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, { XDG_CONFIG_HOME: 'config' }), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { XDG_CONFIG_HOME: 'config' }, undefined, noPaths), '/home/me/.config/mpv');
 });
 
 test('empty MPV_HOME and XDG_CONFIG_HOME count as unset', () => {
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '', XDG_CONFIG_HOME: '' }), '/home/me/.config/mpv');
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: '' }), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '', XDG_CONFIG_HOME: '' }, undefined, noPaths), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: '' }, undefined, noPaths), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
 
 test('Windows ignores XDG_CONFIG_HOME for the user MPV config', () => {
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, { XDG_CONFIG_HOME: 'E:\\xdg' }), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { XDG_CONFIG_HOME: 'E:\\xdg' }, undefined, noPaths), 'D:\\Profiles\\me\\Roaming\\mpv');
+});
+
+function tempHome(t) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-home-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    return dir;
+}
+
+test('macOS and Linux keep using ~/.mpv when it exists and the standard MPV config does not', t => {
+    const home = tempHome(t);
+    fs.mkdirSync(path.join(home, '.mpv'));
+    for (const platform of ['darwin', 'linux']) {
+        assert.equal(mpvUserConfigDir(platform, { homeDir: home, appDataDir: home }, {}, undefined, fs.existsSync), `${home}/.mpv`);
+    }
+});
+
+test('the standard MPV config wins over ~/.mpv when both exist, and Windows never reads ~/.mpv', t => {
+    const home = tempHome(t);
+    fs.mkdirSync(path.join(home, '.mpv'));
+    fs.mkdirSync(path.join(home, '.config', 'mpv'), { recursive: true });
+    assert.equal(mpvUserConfigDir('linux', { homeDir: home, appDataDir: home }, {}, undefined, fs.existsSync), `${home}/.config/mpv`);
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, fs.existsSync), 'D:\\Profiles\\me\\Roaming\\mpv');
+});
+
+// Windows 路径要在 Windows 上才能对应到真实目录。
+const onWindowsHost = { skip: process.platform !== 'win32' && 'Windows paths only resolve on a Windows host' };
+
+test('a user-chosen mpv.exe with portable_config next to it reads only that folder', onWindowsHost, t => {
+    const mpvDir = tempHome(t);
+    fs.mkdirSync(path.join(mpvDir, 'portable_config'));
+    const mpvPath = path.join(mpvDir, 'mpv.exe');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, mpvPath, fs.existsSync), path.join(mpvDir, 'portable_config'));
+});
+
+test('a user-chosen mpv.exe without portable_config uses the roaming AppData folder', onWindowsHost, t => {
+    const mpvPath = path.join(tempHome(t), 'mpv.exe');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, mpvPath, fs.existsSync), 'D:\\Profiles\\me\\Roaming\\mpv');
+});
+
+test('MPV_HOME wins over portable_config', onWindowsHost, t => {
+    const mpvDir = tempHome(t);
+    fs.mkdirSync(path.join(mpvDir, 'portable_config'));
+    const env = { MPV_HOME: 'E:\\mpv-home' };
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, env, path.join(mpvDir, 'mpv.exe'), fs.existsSync), 'E:\\mpv-home');
 });
