@@ -20,7 +20,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
 
     const submenu: Electron.MenuItemConstructorOptions[] = [
         {
-            label: `下载代理: ${proxyConfig.enabled ? '开启' : '关闭'}`,
+            label: `应用更新下载加速: ${proxyConfig.enabled ? '开启' : '关闭'}`,
             type: 'checkbox',
             checked: proxyConfig.enabled,
             click: () => {
@@ -50,7 +50,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'separator'
         },
         {
-            label: `NAS 中转: ${nasProxyEnabled ? '开启' : '关闭'}`,
+            label: `NAS 中转 网盘/STRM: ${nasProxyEnabled ? '开启' : '关闭'}`,
             type: 'checkbox',
             checked: nasProxyEnabled,
             click: () => {
