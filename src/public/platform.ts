@@ -72,14 +72,14 @@ function pathFor(platform: NodeJS.Platform): path.PlatformPath {
 }
 
 /**
- * Proxy 可执行文件路径。Windows 和未打包时是相对当前工作目录的路径；
- * macOS 和 Linux 打包后在 app.asar 上两级目录的 third_party/proxy 下（package.json 的 extraFiles）。
+ * Proxy 可执行文件的绝对路径，不依赖当前工作目录（从快捷方式、开机自启或命令行启动时工作目录不一定是安装目录）。
+ * 打包后 package.json 的 extraFiles 把 third_party/proxy 放在 app.asar 上两级目录：
+ * Windows 和 Linux 是安装目录，macOS 是 .app/Contents。未打包时 appPath 是项目根目录。
  */
 export function proxyExecutablePath(platform: NodeJS.Platform, app: { isPackaged: boolean; appPath: string }): string {
-    if (platform === 'win32') return '.\\third_party\\proxy\\proxy.exe';
-    if (!app.isPackaged) return './third_party/proxy/proxy';
     const p = pathFor(platform);
-    return p.join(p.dirname(p.dirname(app.appPath)), 'third_party', 'proxy', 'proxy');
+    const baseDir = app.isPackaged ? p.dirname(p.dirname(app.appPath)) : app.appPath;
+    return p.join(baseDir, 'third_party', 'proxy', platform === 'win32' ? 'proxy.exe' : 'proxy');
 }
 
 /** 用户 MPV 配置目录：Windows 是 ~/AppData/Roaming/mpv，其它平台是 ~/.config/mpv（docs/external-runtime.md）。 */
