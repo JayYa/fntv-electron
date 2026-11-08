@@ -34,11 +34,12 @@
 
 `tests/smoke/` 把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。测试不引入源码，`pnpm test` 不包含它。
 
-- `tests/smoke/targets.cjs` 列出目标平台（目前只有 `linux-x64`）：安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再在 `build-and-smoke.yml` 的 `select-targets` 和 `smoke-test.yml` 的平台列表里加上。
+- `tests/smoke/targets.cjs` 列出目标平台（id 是 `<process.platform>-<process.arch>`，如 `linux-x64`、`darwin-arm64`，测试默认取当前机器）：安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再在 `build-and-smoke.yml` 的 `select-targets` 和 `smoke-test.yml` 的平台列表里加上。
 - 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，这样隔离不了。
 - 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（应用日志目录的副本，Linux 上是 `~/.config/fntv/logs`，不在 `~/.fntv` 里）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
 - 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
 - 在主进程里执行代码（`app.evaluate`）前先等 `app.firstWindow()`。客户端启动时创建主窗口期间收到的 `app.evaluate` 会以 `Resulting promise was garbage collected` 失败，主窗口页面出现后就不会了。
+- macOS：`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。两个都在 Apple Silicon 的 `macos-latest` 上跑，x64 包经 Rosetta 运行，`process.arch` 断言证明客户端是 x64 进程。用户数据隔离另加 `CFFIXED_USER_HOME`，日志在 `~/Library/Application Support/fntv/logs`。
 
 ### 在 CI 上跑
 

@@ -4,7 +4,9 @@
 // 怎样把用户数据隔离到临时目录。断言在 installer.smoke.cjs 里，所有目标共用一套。
 // 加平台时只在这里加一项，并在 .github/workflows/build-and-smoke.yml 的目标表里加一行。
 
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 // 用 HOME 和 XDG 目录隔离：userData 是 app.getPath('home') 下的 .fntv
@@ -18,7 +20,57 @@ function posixHomeEnvironment(home) {
     };
 }
 
+// 挂载后的 dmg 根目录里有唯一一个 .app，Electron 应用的 Contents/MacOS 下只有主可执行文件。
+function findAppExecutable(volume) {
+    const entries = fs.readdirSync(volume);
+    const apps = entries.filter(name => name.endsWith('.app'));
+    if (apps.length !== 1) {
+        throw new Error(`${volume} 里应有且只有一个 .app，实际内容：${entries.join(', ')}`);
+    }
+    const macosDir = path.join(volume, apps[0], 'Contents', 'MacOS');
+    const executables = fs.readdirSync(macosDir);
+    if (executables.length !== 1) {
+        throw new Error(`${macosDir} 里应有且只有一个可执行文件，实际内容：${executables.join(', ')}`);
+    }
+    return path.join(macosDir, executables[0]);
+}
+
+function detachDmg(mountPoint) {
+    try {
+        execFileSync('hdiutil', ['detach', mountPoint], { stdio: 'inherit' });
+    } catch {
+        execFileSync('hdiutil', ['detach', '-force', mountPoint], { stdio: 'inherit' });
+    }
+    fs.rmSync(mountPoint, { recursive: true, force: true });
+}
+
+// macOS：挂载 dmg，启动里面 .app 的可执行文件，和用户双击 dmg 里的应用一样。builderArch 是打包
+// 工具写进文件名的架构名。两个目标都在 Apple Silicon 机器上跑，x64 包经 Rosetta 运行。
+function macDmgTarget(builderArch) {
+    return {
+        installerPattern: new RegExp(`^FNMedia_.+_mac_${builderArch}\\.dmg$`),
+        install(installerPath) {
+            // 挂到自己的临时目录，不进 /Volumes，不会和同名卷或构建残留冲突。
+            const mountPoint = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-dmg-'));
+            execFileSync('hdiutil', ['attach', '-nobrowse', '-readonly', '-noautoopen', '-mountpoint', mountPoint, installerPath], { stdio: 'inherit' });
+            try {
+                return { executablePath: findAppExecutable(mountPoint), uninstall: () => detachDmg(mountPoint) };
+            } catch (error) {
+                detachDmg(mountPoint);
+                throw error;
+            }
+        },
+        // CFFIXED_USER_HOME 让 Foundation 的目录查询（Electron 默认 userData 靠它）也落在临时目录。
+        environment: home => ({ ...posixHomeEnvironment(home), CFFIXED_USER_HOME: home }),
+        userDataDir: home => path.join(home, '.fntv'),
+        // 和 Linux 一样，日志落在 Electron 默认的 userData，macOS 是 ~/Library/Application Support/<name>。
+        logDir: home => path.join(home, 'Library', 'Application Support', 'fntv', 'logs'),
+    };
+}
+
 const TARGETS = {
+    'darwin-arm64': macDmgTarget('arm64'),
+    'darwin-x64': macDmgTarget('x64'),
     'linux-x64': {
         // 打包工具给 Linux x64 的架构名是 x86_64（CODING_STANDARDS.md 的更新检查一节）。
         installerPattern: /^FNMedia_.+_linux_x86_64\.AppImage$/,
@@ -62,4 +114,4 @@ function findInstaller(target, directory) {
     return path.join(directory, matches[0]);
 }
 
-module.exports = { TARGETS, resolveTarget, findInstaller };
+module.exports = { TARGETS, resolveTarget, findInstaller, findAppExecutable };

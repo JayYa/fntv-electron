@@ -37,6 +37,11 @@ jobs:
               echo 'build-os=ubuntu-latest' >> "$GITHUB_OUTPUT"
               echo 'smoke-matrix={"include":[{"target":"linux-x64","runner":"ubuntu-latest"},{"target":"linux-arm64","runner":"ubuntu-24.04-arm"}]}' >> "$GITHUB_OUTPUT"
               ;;
+            macos)
+              # 一次构建出 x64 和 arm64 两个 dmg，都在 Apple Silicon 机器上测，x64 包经 Rosetta 运行。
+              echo 'build-os=macos-latest' >> "$GITHUB_OUTPUT"
+              echo 'smoke-matrix={"include":[{"target":"darwin-arm64","runner":"macos-latest"},{"target":"darwin-x64","runner":"macos-latest"}]}' >> "$GITHUB_OUTPUT"
+              ;;
             *)
               echo "No smoke test targets for platform: $PLATFORM" >&2
               exit 1
@@ -98,6 +103,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libfuse2t64 xvfb fonts-noto-cjk
 
+      # x64 包要靠 Rosetta 才能在 Apple Silicon 上运行，机器上没装时先装。
+      - name: Install Rosetta
+        if: runner.os == 'macOS'
+        run: /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+
       - name: Run smoke test
         shell: bash
         env:
@@ -110,6 +120,18 @@ jobs:
           else
             pnpm run test:smoke
           fi
+
+      # 测试结束时应已卸载 dmg（targets.cjs 的 uninstall），还挂着就报错。
+      - name: Check dmg is detached
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          attached="$(hdiutil info | awk -F' *: *' '/^image-path/ {print $2}' | grep -F "$GITHUB_WORKSPACE/release/" || true)"
+          if [ -n "$attached" ]; then
+            echo "::error::dmg still attached after the smoke test: $attached"
+            exit 1
+          fi
+          echo 'No smoke test dmg attached.'
 
       # 失败时也上传，截图和日志是排查的主要依据。
       - name: Upload screenshot and logs
