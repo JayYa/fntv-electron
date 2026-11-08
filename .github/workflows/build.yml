@@ -27,6 +27,12 @@ jobs:
     name: Build on ${{ inputs.os }}
     runs-on: ${{ inputs.os }}
     timeout-minutes: 30
+    env:
+      # 构建依赖的 MPV 归档，固定 tag 和 sha256。缓存 key 也用这里的 sha256。
+      MPV_CONFIG_REPO: JayYa/fntv-mpv-config
+      MPV_CONFIG_TAG: fntv-mpv-v20260826_013404
+      MPV_CONFIG_ASSET: mpv-package-20260825_173358.zip
+      MPV_CONFIG_SHA256: 1d9f5fe6411e08710e2cdc5f76286ff2667bfa53acee6f0cfa8572ed5bb05c5b
 
     steps:
       - name: Checkout code
@@ -73,31 +79,70 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         continue-on-error: true
 
+      # 压缩包按 sha256 缓存，换版本时 key 跟着变。Release 下载偶尔返回 5xx，命中缓存就不用下载。
+      # restore 和 save 分开：下载校验通过就保存，后面的构建失败也不丢缓存。
+      - name: Restore MPV archive cache
+        id: mpv-archive-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/mpv-archive
+          key: mpv-archive-${{ runner.os }}-${{ env.MPV_CONFIG_SHA256 }}
+
       - name: Download third-party dependencies
         shell: bash
-        env:
-          MPV_CONFIG_REPO: JayYa/fntv-mpv-config
-          MPV_CONFIG_TAG: fntv-mpv-v20260826_013404
-          MPV_CONFIG_ASSET: mpv-package-20260825_173358.zip
-          MPV_CONFIG_SHA256: 1d9f5fe6411e08710e2cdc5f76286ff2667bfa53acee6f0cfa8572ed5bb05c5b
+        timeout-minutes: 10
         run: |
-          DOWNLOAD_URL="https://github.com/$MPV_CONFIG_REPO/releases/download/$MPV_CONFIG_TAG/$MPV_CONFIG_ASSET"
-          echo "Downloading from: $DOWNLOAD_URL"
-          curl -fsSL --retry 3 -o mpv-config.zip "$DOWNLOAD_URL"
-
+          ARCHIVE="$RUNNER_TEMP/mpv-archive/mpv-config.zip"
+          mkdir -p "$(dirname "$ARCHIVE")"
           SHA256_TOOL=$(command -v sha256sum || echo "shasum -a 256")
-          echo "$MPV_CONFIG_SHA256  mpv-config.zip" | $SHA256_TOOL -c -
+          verify() { (cd "$(dirname "$ARCHIVE")" && echo "$MPV_CONFIG_SHA256  mpv-config.zip" | $SHA256_TOOL -c -); }
+
+          # 缓存命中也要校验，不通过就重新下载。
+          if [ -f "$ARCHIVE" ] && verify; then
+            echo "Using cached archive"
+          else
+            rm -f "$ARCHIVE"
+            DOWNLOAD_URL="https://github.com/$MPV_CONFIG_REPO/releases/download/$MPV_CONFIG_TAG/$MPV_CONFIG_ASSET"
+            echo "Downloading from: $DOWNLOAD_URL"
+            # 5 次重试各隔 10 秒，所有错误都重试，总时长不超过 5 分钟。
+            curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors --retry-max-time 300 --connect-timeout 30 -o "$ARCHIVE" "$DOWNLOAD_URL"
+            verify
+          fi
 
           mkdir -p third_party/fntv-mpv
           if [ "$RUNNER_OS" = "Windows" ]; then
-            powershell -Command "Expand-Archive -Path mpv-config.zip -DestinationPath third_party/fntv-mpv -Force"
+            powershell -Command "Expand-Archive -Path '$(cygpath -w "$ARCHIVE")' -DestinationPath third_party/fntv-mpv -Force"
           else
-            unzip -q mpv-config.zip -d third_party/fntv-mpv
+            unzip -q "$ARCHIVE" -d third_party/fntv-mpv
           fi
-          rm -f mpv-config.zip
 
           echo "Final structure:"
           find third_party/fntv-mpv -maxdepth 2 -type d
+
+      - name: Save MPV archive cache
+        if: steps.mpv-archive-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/mpv-archive
+          key: ${{ steps.mpv-archive-cache.outputs.cache-primary-key }}
+
+      # electron-builder 打包时下载 Electron zip 和打包工具（AppImage、NSIS 等），GitHub 偶尔返回 504。
+      # electron 和 electron-builder 的版本都在锁文件里，key 用锁文件 hash。
+      # Electron zip 由 @electron/get 存到它的默认目录（不读 ELECTRON_CACHE），三个平台的默认目录都列上，
+      # 不存在的会被忽略；打包工具存到 ELECTRON_BUILDER_CACHE，由 Build application 显式指定。
+      - name: Restore packaging download cache
+        id: packaging-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: |
+            ${{ runner.temp }}/electron-builder-cache
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+          key: packaging-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Compile TypeScript
         run: pnpm run compile
@@ -107,6 +152,7 @@ jobs:
         env:
           PLATFORM: ${{ inputs.platform }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder-cache
         run: |
           if [ "$PLATFORM" = "windows" ]; then
             pnpm run build:win
@@ -117,6 +163,18 @@ jobs:
           fi
         shell: bash
         timeout-minutes: 15
+
+      - name: Save packaging download cache
+        if: steps.packaging-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: |
+            ${{ runner.temp }}/electron-builder-cache
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+          key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -218,3 +218,104 @@ test('smoke test annotations are printed at the start of a line so GitHub picks 
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /^::notice::smoke warmup: 1ms$/m);
 });
+
+// MPV 归档按 sha256 缓存：换版本时 key 跟着变，命中缓存也要校验，不通过就重新下载。
+function mpvArchiveSteps() {
+    const job = workflow('build.yml').jobs.build;
+    const cache = job.steps.find(step => step.id === 'mpv-archive-cache');
+    const download = job.steps.find(step => step.name === 'Download third-party dependencies');
+    const save = job.steps.find(step => step.name === 'Save MPV archive cache');
+    return { job, cache, download, save };
+}
+
+// 缓存的 restore 和 save 分开写，save 只在未命中时运行，紧跟在产生缓存内容的步骤后面；两步都不能让构建失败。
+function assertRestoreAndSave(job, restore, save, after) {
+    assert.ok(restore && save, 'cache restore or save step missing');
+    assert.match(restore.uses, /^actions\/cache\/restore@[0-9a-f]{40}$/);
+    assert.match(save.uses, /^actions\/cache\/save@[0-9a-f]{40}$/);
+    assert.equal(restore.uses.split('@')[1], save.uses.split('@')[1]);
+    assert.equal(restore['continue-on-error'], true);
+    assert.equal(save['continue-on-error'], true);
+    assert.equal(save.if, `steps.${restore.id}.outputs.cache-hit != 'true'`);
+    assert.equal(save.with.key, `\${{ steps.${restore.id}.outputs.cache-primary-key }}`);
+    assert.equal(save.with.path, restore.with.path);
+    assert.equal(job.steps.indexOf(save), job.steps.indexOf(after) + 1, `${save.name} must run right after ${after.name}`);
+}
+
+function posixPath(file) {
+    return process.platform === 'win32'
+        ? file.replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`).replace(/\\/g, '/')
+        : file;
+}
+
+// 在临时目录里放好缓存的压缩包，用桩代替 curl 和 unzip 运行下载步骤，返回桩被调用的记录。
+function runMpvDownload(t, archive, sha256) {
+    const { job } = mpvArchiveSteps();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-archive-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const bin = path.join(dir, 'bin');
+    const temp = path.join(dir, 'temp');
+    const calls = path.join(dir, 'calls');
+    fs.mkdirSync(bin);
+    fs.mkdirSync(path.join(temp, 'mpv-archive'), { recursive: true });
+    fs.writeFileSync(path.join(temp, 'mpv-archive', 'mpv-config.zip'), archive);
+    fs.writeFileSync(calls, '');
+    for (const tool of ['curl', 'unzip']) {
+        fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\necho ${tool} >> "${posixPath(calls)}"\n`, { mode: 0o755 });
+    }
+    const result = runStep(t, job, step => step.name === 'Download third-party dependencies', {
+        PATH: `${posixPath(bin)}:/usr/bin:${process.env.PATH}`,
+        RUNNER_TEMP: posixPath(temp),
+        RUNNER_OS: 'Linux',
+        MPV_CONFIG_SHA256: sha256,
+    });
+    return { result, calls: fs.readFileSync(calls, 'utf8').split(/\r?\n/).filter(Boolean) };
+}
+
+test('the MPV archive cache key changes with the archive sha256', () => {
+    const { job, cache, download } = mpvArchiveSteps();
+    assert.ok(cache, 'build.yml has no mpv-archive-cache step');
+    assert.match(cache.with.key, /\$\{\{\s*env\.MPV_CONFIG_SHA256\s*\}\}/);
+    assert.match(job.env.MPV_CONFIG_SHA256, /^[0-9a-f]{64}$/);
+    assert.ok(job.steps.indexOf(cache) < job.steps.indexOf(download), 'cache must be restored before the download step');
+    assert.equal(cache.with.path, '${{ runner.temp }}/mpv-archive');
+    assert.match(download.run, /\$RUNNER_TEMP\/mpv-archive\/mpv-config\.zip/);
+});
+
+test('the MPV archive is cached as soon as it is downloaded and verified', () => {
+    // 后面的构建失败也要保住已下载的压缩包。
+    const { job, cache, download, save } = mpvArchiveSteps();
+    assertRestoreAndSave(job, cache, save, download);
+});
+
+test('electron-builder and Electron downloads are cached per lockfile', () => {
+    const job = workflow('build.yml').jobs.build;
+    const restore = job.steps.find(step => step.id === 'packaging-cache');
+    const save = job.steps.find(step => step.name === 'Save packaging download cache');
+    const build = job.steps.find(step => step.name === 'Build application');
+    assertRestoreAndSave(job, restore, save, build);
+    assert.ok(job.steps.indexOf(restore) < job.steps.indexOf(build), 'packaging cache must be restored before the build');
+    assert.match(restore.with.key, /\$\{\{\s*runner\.os\s*\}\}/);
+    assert.match(restore.with.key, /hashFiles\('pnpm-lock\.yaml'\)/);
+    // 打包工具存到 ELECTRON_BUILDER_CACHE；Electron zip 存到 @electron/get 的默认目录，它不读 ELECTRON_CACHE。
+    const paths = restore.with.path.trim().split('\n');
+    assert.ok(paths.includes(build.env.ELECTRON_BUILDER_CACHE), 'ELECTRON_BUILDER_CACHE is not cached');
+    for (const dir of ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache']) {
+        assert.ok(paths.includes(dir), `${dir} is not cached`);
+    }
+});
+
+test('a cached MPV archive is verified and used without downloading', t => {
+    const archive = Buffer.from('cached archive');
+    const sha256 = require('node:crypto').createHash('sha256').update(archive).digest('hex');
+    const { result, calls } = runMpvDownload(t, archive, sha256);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(calls, ['unzip']);
+});
+
+test('a cached MPV archive that fails verification is downloaded again', t => {
+    const { result, calls } = runMpvDownload(t, Buffer.from('corrupted archive'), '0'.repeat(64));
+    // 桩 curl 不写文件，重新下载后的校验失败，步骤也要失败。
+    assert.notEqual(result.status, 0);
+    assert.deepEqual(calls, ['curl']);
+});
