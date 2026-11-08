@@ -81,4 +81,4 @@
 - #74、#75、#76 合成一个 PR 实现：
   - #74：`platformBehavior` 加 `windowIcon`，Windows 是 `icon.ico`，其它平台是 `icon.png`。`build/` 整个打进 app.asar（`package.json` 的 `files`），PNG 在打包产物里。主窗口创建前把图标路径写进 `app.log`，冒烟测试读出路径，在主进程里用 `nativeImage.createFromPath` 加载，断言不为空。
   - #75：Linux 的 `restoreEvent` 改为 `click`，`tray.ts` 在所有平台都绑定。哪些 Linux 桌面真的会发 `click` 没有上桌面验证。
-  - #76：保留 `src/main/main.ts` 里按 `quitsWhenAllWindowsClosed` 退出的监听，删掉 `handlers/plugins/tray.ts` 的监听和 `appHook` 的 `windowAllClosed` 钩子。读 Electron 38 的 `shell/browser/browser.cc`：`app.quit()` 进行中所有窗口关闭时直接退出，不发 `window-all-closed`；不在退出途中时主窗口的 `close` 被拦下改为隐藏。所以删掉的监听只在 `isQuiting` 为真却没在退出时才有作用，代码里没有这种情况，三个平台的行为不变。冒烟测试断言 `window-all-closed` 只有 1 个监听。
+  - #76：保留 `src/main/main.ts` 里按 `quitsWhenAllWindowsClosed` 退出的监听，删掉 `handlers/plugins/tray.ts` 的监听和 `appHook` 的 `windowAllClosed` 钩子。读 Electron 38 的 `shell/browser/browser.cc`：`app.quit()` 进行中所有窗口关闭时直接退出，不发 `window-all-closed`；不在退出途中时主窗口的 `close` 被拦下改为隐藏。所以删掉的监听只在 `isQuiting` 为真却没在退出时才有作用，代码里没有这种情况，三个平台的行为不变。冒烟测试断言 `window-all-closed` 一共 2 个监听：Electron 在 `lib/browser/init.ts` 自带 1 个（只有它一个监听时才退出），客户端 1 个。PR 第一次冒烟测试按 1 个断言，5 个目标都得到 2，改成 2。

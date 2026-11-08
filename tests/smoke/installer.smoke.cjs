@@ -321,9 +321,10 @@ ${mainOutput.slice(-4000)}`));
     });
 
     it('keeps a single window-all-closed listener', async () => {
-        // 曾有两个监听，Windows 和 Linux 上一个直接退出、一个只在 isQuiting 时退出（#76）。
+        // 客户端曾有两个监听，Windows 和 Linux 上一个直接退出、一个只在 isQuiting 时退出（#76）。
+        // Electron 自己在 lib/browser/init.ts 先注册一个：只有它一个监听时才退出。所以总数是它加上客户端的 1 个。
         const count = await app.evaluate(({ app: electronApp }) => electronApp.listenerCount('window-all-closed'));
-        assert.equal(count, 1, fail('window-all-closed 监听检查', `应有 1 个监听，实际是 ${count} 个`));
+        assert.equal(count, 2, fail('window-all-closed 监听检查', `应有 Electron 自带的 1 个加客户端的 1 个，实际一共 ${count} 个`));
     });
 
     it('raises no uncaught exception in the main process', async () => {
