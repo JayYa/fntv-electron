@@ -112,9 +112,19 @@ jobs:
         if: runner.os == 'macOS'
         run: /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
 
+      # 实验（不合入）：测试前连续 3 次直接启动客户端，记录就绪耗时和 oahd CPU。
+      - name: Diagnose launch timing
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        env:
+          FNTV_SMOKE_TARGET: ${{ matrix.target }}
+          FNTV_SMOKE_INSTALLER_DIR: release
+        run: node tests/smoke/diag-launch-timing.cjs
+
       - name: Run smoke test
         shell: bash
         env:
+          DEBUG: pw:browser*
           FNTV_SMOKE_TARGET: ${{ matrix.target }}
           FNTV_SMOKE_INSTALLER_DIR: release
           FNTV_SMOKE_ARTIFACTS: smoke-artifacts/${{ matrix.target }}
