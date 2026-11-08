@@ -9,9 +9,14 @@ permissions:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    # 维护者只有 Windows 电脑，macOS 和 Linux 的问题靠 CI 暴露。fail-fast 关掉，一个平台失败时其它平台照样跑完。
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,9 +37,10 @@ jobs:
           go-version-file: src/modules/proxy/go.mod
           cache-dependency-path: src/modules/proxy/go.sum
 
-      # .npmrc 指向国内镜像，只给本地开发用。
+      # .npmrc 指向国内镜像，只给本地开发用。Windows 默认 shell 是 PowerShell，rm -f 要用 bash。
       - name: Remove local registry config
         run: rm -f .npmrc
+        shell: bash
 
       # 不加 --ignore-scripts：electron 的 postinstall 要下载二进制，tests/accessCodeSession.test.cjs 依赖它。
       - name: Install dependencies

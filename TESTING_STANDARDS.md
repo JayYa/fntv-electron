@@ -6,7 +6,7 @@
 - `pnpm run compile`：先清空 `dest/` 再运行 `tsc`，然后打包 preload 到 `dest/preload/bundle.js`，已删除源文件的旧 js 不会留下来被 `readdirSync` 加载。`tsBuildInfoFile` 要留在 `dest/` 里，放到外面时 `tsc` 会认为无需输出，留下空目录。`pnpm run watch` 同时运行 `tsc --watch` 和 esbuild 监听，不清理，删过文件后跑一次 `compile`。
 - `go test ./...`：改 Go 代码时在 `src/modules/proxy` 下运行。
 - `pnpm run lint`：用 ESLint 检查 `src/**/*.ts` 和 `resource/login/*.js`，规则在 `eslint.config.mjs`。
-- CI 三项都跑（`.github/workflows/ci.yml`）。
+- CI 在 Windows、macOS 和 Linux 上各跑一遍这三项（`.github/workflows/ci.yml`）。
 
 ### `Electron failed to install correctly`
 
@@ -20,7 +20,7 @@
 - 用到文件系统时，在 `fs.mkdtempSync(path.join(os.tmpdir(), ...))` 里操作，并用 `t.after` 清理（`tests/mpvConfigMigration.test.cjs`）。
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
 - 模块直接使用 Electron API 时，替换 `Module._load` 返回 `electron` 的假对象，结束后恢复（`tests/helpers/credentialConfig.cjs`）。
-- CI 跑在 Linux 上，Electron 假对象要包含平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。只在本机 Windows 通过不算通过。
+- CI 在 Windows、macOS 和 Linux 上都跑，Electron 假对象要包含各平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。只在本机 Windows 通过不算通过。
 - 更新检查的测试替换 `axios.get` 返回 GitHub 响应，HTTP 错误用真实的 `axios.AxiosError` 构造（`tests/updateChecker.test.cjs`）。
 
 ## 只测外部行为
