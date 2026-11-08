@@ -1,5 +1,13 @@
 # 更新日志
 
+## [2.7.2](https://github.com/JayYa/fntv-electron/compare/v2.7.1...v2.7.2) (2026-11-08)
+
+
+### 问题修复
+
+* **proxy:** 不从安装目录启动时（如快捷方式改了起始位置），Windows 版也能正常启动 Proxy，不再弹「文件不存在」后卡住 ([#91](https://github.com/JayYa/fntv-electron/issues/91)) ([99ae40d](https://github.com/JayYa/fntv-electron/commit/99ae40d3cc41d4383a812d5feff9be8ae8d3a053))
+* **ui:** 托盘菜单和登录页设置面板写明是哪种代理，并按代码整理领域词汇表 ([#69](https://github.com/JayYa/fntv-electron/issues/69)) ([eb90632](https://github.com/JayYa/fntv-electron/commit/eb906323d0420d3301691de3f9f4dac82888ada9))
+
 ## [2.7.1](https://github.com/JayYa/fntv-electron/compare/v2.7.0...v2.7.1) (2026-11-07)
 
 
