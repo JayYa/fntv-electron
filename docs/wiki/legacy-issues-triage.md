@@ -78,7 +78,7 @@
 - 维护者合并了 PR #39（#33，merge commit `905d2de`，保留了 `5c0edbb`，`.git-blame-ignore-revs` 有效）、PR #40（#30）、PR #41（#35）。
 - 未实际运行：`generate-icns`（需要 macOS 的 `iconutil`）和 Linux 打包。
 - `CODING_STANDARDS.md:28` 原来的 `\b` 是 0x08 退格字节，PR #40 一并修正。
-- 待确认：`.gitignore` 的 `docs` 规则是否影响 `docs/` 下的新文件。`docs/wiki/legacy-issues-triage.md` 新增时 `git status` 能看到，子代理的“需要 `git add -f`”未验证。
+- 已被取代（2026-11-08，见下方“2026-11-08 第二次核对”）：~~待确认：`.gitignore` 的 `docs` 规则是否影响 `docs/` 下的新文件。`docs/wiki/legacy-issues-triage.md` 新增时 `git status` 能看到，子代理的“需要 `git add -f`”未验证。~~
 - 未处理：`generate-iconset.js` 的回退分支写死“在 Windows 环境下”，还会写入假 PNG 占位文件。
 
 ## 2026-11-05 #29 合并（`JayYa/fntv-electron@f0d3cad`）
@@ -191,3 +191,10 @@
 - `generate-iconset.js` 的回退分支（2026-11-05 进度、2026-11-07 收尾里的“未处理”）在 `ab43e4d` 上仍未处理：`scripts/generate-iconset.js:35` 仍写死“由于在 Windows 环境下”，第 47 行起仍创建占位文件。当天没有对应的 issue。
 - 2026-11-05 进度里“未实际运行 Linux 打包”已被取代：v2.7.0 起 `release.yml` 在 `ubuntu-latest` 上打出两个 AppImage（见[发布与更新链路](release-and-update.md)），v2.7.2 起发版前还会启动它们做冒烟测试（见[多平台测试策略](multi-platform-testing.md)）。`generate-icns` 是否在 macOS 构建里实际运行，当天没有核对。
 - 2026-11-07 收尾里的“未验证：打包版真机冒烟……macOS、Linux”部分有了进展：2026-11-08 起五个安装包在 CI 上做启动冒烟测试（只到启动和截图，见[多平台测试策略](multi-platform-testing.md)）。#43 来源校验、#46 CSP、#47 失败路径、MPV 路径和 FN ID 的访问码 NAS 在打包版上是否走过 7 项清单，wiki 里没有记录，按未验证处理。
+
+## 2026-11-08 第二次核对（wiki 检查，`JayYa/fntv-electron@dff30b2`）
+
+- `.gitignore` 的 `docs` 规则：第 8 行忽略 `docs`，第 16 至 22 行用 `!docs/`、`docs/*` 和 `!docs/wiki/` 等把 `docs/agents/`、`docs/adr/`、`docs/wiki/`、`docs/external-runtime.md` 重新包含。`git check-ignore -v docs/wiki/new-test.md` 无输出，`docs/wiki/` 下的新文件不需要 `git add -f`。`docs/` 下这四项之外的新文件仍被忽略。
+- `generate-icns` 是否在 macOS 构建里运行：不运行。截至 `dff30b2`，`generate-iconset` 和 `generate-icns` 只在 `package.json` 的 `scripts` 里定义，没有被其它脚本或任何 workflow 调用；`build/icon.icns` 和 `build/icon.iconset/*.png` 已提交，`mac.icon` 直接用 `build/icon.icns`。
+- `generate-iconset.js` 的回退分支仍未处理（`scripts/generate-iconset.js:35` 仍写死“由于在 Windows 环境下”，第 47 行起仍写占位文件），仍没有对应 issue。因为构建不调用它，只影响手动重新生成图标的人。
+- 打包版 7 项清单（#43、#46、#47、MPV 路径、FN ID 访问码 NAS 等）仍没有记录，按未验证处理。
