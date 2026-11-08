@@ -43,6 +43,9 @@ function initializeMpvConfig(): void {
         const result = synchronizeMpvConfig(portableConfigDir, mpvConfigDir);
         if (result === 'initialized') {
             logger.info(`MPV配置初始化完成: ${mpvConfigDir}`);
+        } else if (result === 'same-directory') {
+            // 自选 mpv 就是附带的 mpv：它读的就是来源目录，同步会把来源自己删掉。
+            logger.info(`MPV配置目录就是便携配置，跳过同步: ${mpvConfigDir}`);
         } else {
             logger.info('MPV托管插件已同步: uosc_danmaku');
         }
