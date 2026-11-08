@@ -73,3 +73,12 @@
 - #94 加注释，不按 wontfix 关闭。
 - 不加 wiki 检查和 issue 分诊的定期任务。
 - 依赖按改动文件冲突来定：#74 被 #87 阻塞，因为两者都改 `tests/smoke/targets.cjs`；#77 被 #74 阻塞，因为两者都改 `src/public/platform.ts`。#75、#76 跟 #74 在同一个 PR 里。#78、#94 不依赖其它 issue。
+
+## 2026-11-08 进度
+
+- 维护者合并了 PR #107（merge commit `3ad9ef9`）和 #108（merge commit `a364c2f`）。
+- #108 的冒烟测试（`actions/runs/42484110972`）在 5 个安装包上都实际跑了两条日志目录断言（`writes app.log under ~/.fntv/logs`、`leaves no logs directory under the Electron default userData`），每个目标都是 pass 8、skipped 0。Windows 上第二条没有显示为 skip，说明走的是 `targets.cjs` 里 `CI=true` 的分支，用的是 runner 的真实用户目录。
+- #74、#75、#76 合成一个 PR 实现：
+  - #74：`platformBehavior` 加 `windowIcon`，Windows 是 `icon.ico`，其它平台是 `icon.png`。`build/` 整个打进 app.asar（`package.json` 的 `files`），PNG 在打包产物里。主窗口创建前把图标路径写进 `app.log`，冒烟测试读出路径，在主进程里用 `nativeImage.createFromPath` 加载，断言不为空。
+  - #75：Linux 的 `restoreEvent` 改为 `click`，`tray.ts` 在所有平台都绑定。哪些 Linux 桌面真的会发 `click` 没有上桌面验证。
+  - #76：保留 `src/main/main.ts` 里按 `quitsWhenAllWindowsClosed` 退出的监听，删掉 `handlers/plugins/tray.ts` 的监听和 `appHook` 的 `windowAllClosed` 钩子。读 Electron 38 的 `shell/browser/browser.cc`：`app.quit()` 进行中所有窗口关闭时直接退出，不发 `window-all-closed`；不在退出途中时主窗口的 `close` 被拦下改为隐藏。所以删掉的监听只在 `isQuiting` 为真却没在退出时才有作用，代码里没有这种情况，三个平台的行为不变。冒烟测试断言 `window-all-closed` 只有 1 个监听。
