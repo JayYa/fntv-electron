@@ -8,12 +8,13 @@
 //   FNTV_SMOKE_INSTALLER_DIR 安装包所在目录，默认 release/
 //   FNTV_SMOKE_EXECUTABLE    跳过安装，直接启动这个可执行文件（本地调试用）
 //   FNTV_SMOKE_ARTIFACTS     截图和日志的输出目录，默认 smoke-artifacts/<目标>
+//   FNTV_SMOKE_ALLOW_INSTALL 设为 1 时，本机已装同一 appId 的客户端也照样安装（targets.cjs）
 
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
@@ -48,6 +49,23 @@ async function poll(check, timeoutMs, intervalMs = 250) {
     return last;
 }
 
+// 客户端退出后 Proxy 应随之退出，端口不再响应。
+function waitProxyStopped(timeoutMs) {
+    return poll(async () => {
+        const response = await requestProxyHealth();
+        return { done: Boolean(response.error), detail: JSON.stringify(response) };
+    }, timeoutMs);
+}
+
+// Windows 上 kill 只结束客户端主进程，Proxy 子进程会留下来锁住安装目录、占着端口，要结束整个进程树。
+function killProcessTree(child) {
+    if (process.platform === 'win32') {
+        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+        child.kill('SIGKILL');
+    }
+}
+
 function requestProxyHealth(secret) {
     return new Promise(resolve => {
         const headers = secret ? { 'X-FNTV-Proxy-Secret': secret } : {};
@@ -67,7 +85,7 @@ function requestProxyHealth(secret) {
 async function warmUp(executablePath, { timeoutMs }) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-warmup-'));
     const startedAt = Date.now();
-    const client = spawn(executablePath, [...(target.args ? target.args(home) : []), '--remote-debugging-port=0'], {
+    const client = spawn(executablePath, [...target.args(home), '--remote-debugging-port=0'], {
         cwd: home,
         env: { ...process.env, ...target.environment(home) },
         detached: true,
@@ -104,10 +122,7 @@ async function warmUp(executablePath, { timeoutMs }) {
         }
         const clientExited = !client.pid || client.exitCode !== null || client.signalCode !== null
             || await Promise.race([exited.then(() => true), delay(10000).then(() => false)]);
-        const proxy = await poll(async () => {
-            const response = await requestProxyHealth();
-            return { done: Boolean(response.error), detail: JSON.stringify(response) };
-        }, 10000);
+        const proxy = await waitProxyStopped(10000);
         fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 });
         // 预热本身失败时，清理问题附在后面，不盖掉原因。
         const leftovers = [
@@ -152,7 +167,7 @@ describe(`installer smoke test (${target.id})`, () => {
                 // 工作目录放在临时目录，像从桌面图标启动一样，不依赖仓库目录。
                 cwd: home,
                 env: { ...process.env, ...target.environment(home) },
-                args: target.args ? target.args(home) : [],
+                args: target.args(home),
                 timeout: 60000,
             });
         } catch (error) {
@@ -171,11 +186,15 @@ describe(`installer smoke test (${target.id})`, () => {
 
         // 主进程在 new BrowserWindow 期间收到的 app.evaluate 会以“Resulting promise was garbage
         // collected”失败。主窗口页面出现说明主进程已经从创建窗口的同步代码里返回，之后才在主进程里执行代码。
+        // 主进程在窗口出现前抛异常时，Electron 默认弹错误框，不一定打印 UNCAUGHT_PATTERN 能匹配的文字，
+        // 超时报错附上主进程输出的末尾，原因多半在里面或在 logs/app.log。
         page = await app.firstWindow({ timeout: 30000 }).catch(error => {
-            throw new Error(fail('主窗口打开', `30 秒内没有创建主窗口：${error.message}`));
+            throw new Error(fail('主窗口打开', `30 秒内没有创建主窗口：${error.message}
+主进程输出末尾：
+${mainOutput.slice(-4000)}`));
         });
 
-        // 主窗口出现后才装监听，更早的异常靠 stderr 里的 UNCAUGHT_PATTERN 发现。
+        // 主窗口出现后才装监听，更早的异常只能靠 stderr 里的 UNCAUGHT_PATTERN 发现。
         await app.evaluate(() => {
             globalThis.__fntvSmokeErrors = [];
             const record = kind => error => globalThis.__fntvSmokeErrors.push(`${kind}: ${(error && error.stack) || error}`);
@@ -190,7 +209,7 @@ describe(`installer smoke test (${target.id})`, () => {
         }
         if (child && child.exitCode === null && child.signalCode === null) {
             await Promise.race([app.close(), delay(15000)]).catch(() => {});
-            child.kill('SIGKILL');
+            killProcessTree(child);
         }
         if (home) {
             const logsDir = target.logDir(home);
@@ -265,10 +284,7 @@ describe(`installer smoke test (${target.id})`, () => {
         await page?.screenshot({ path: path.join(artifactsDir, 'screenshot.png') }).catch(() => {});
         const exited = await Promise.race([app.close().then(() => true), delay(20000).then(() => false)]);
         assert.ok(exited, fail('退出客户端', '20 秒内客户端没有退出'));
-        const result = await poll(async () => {
-            const response = await requestProxyHealth();
-            return { done: Boolean(response.error), detail: JSON.stringify(response) };
-        }, 10000);
+        const result = await waitProxyStopped(10000);
         assert.ok(result.done, fail('退出后 Proxy 检查', `客户端退出 10 秒后端口 ${PROXY_PORT} 仍有响应：${result.detail}`));
     });
 });
