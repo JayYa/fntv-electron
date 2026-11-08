@@ -164,6 +164,6 @@ _Avoid_: 自动更新、auto update
 新版本提示框里显示给用户的变更条目。
 _Avoid_: 更新日志、changelog
 
-**下载代理 (download proxy)**：
+**应用更新下载加速 (app download proxy)**：
 可选的第三方中转，用于加速从 GitHub 下载安装包；与 Proxy 无关。
-_Avoid_: 代理、GitHub 代理
+_Avoid_: 下载代理、代理、GitHub 代理、download proxy
