@@ -66,7 +66,7 @@
   - 证据：同一台 `macos-latest` 上连续直接启动 3 次，DevTools listening 分别在 51952ms、5552ms、6733ms；`/var/db/oah` 从 2.7M 涨到 255M。
   - 修法：对 darwin-x64 先预热一次，上限 120 秒。#89 上预热实测 47 秒。
 - **Windows 用户数据隔离**：`app.getPath('home')` 不读 `USERPROFILE`。改用启动参数 `--user-data-dir`，它同时也是 Chromium 的开关，见审查记录 L1。
-- **Release PR 不触发 CI**：release-please 用 `GITHUB_TOKEN` 开的 PR 不会触发 `pull_request` workflow。#70 上没有任何检查。（已被下方 2026-11-08 核对补记取代：`pull_request` workflow 会触发，但状态是 `action_required`，与[发布与更新链路](release-and-update.md) v2.7.0 验收记录一致）#95 改为在 `release.yml` 同一次运行里对 Release PR 分支跑冒烟测试。
+- 已被取代（2026-11-08，见下方核对补记和“2026-11-08 决定：删掉 Release PR 冒烟路径”：会触发，`action_required`，维护者批准后才跑；`release.yml` 里的 Release PR 冒烟路径已删）：~~**Release PR 不触发 CI**：release-please 用 `GITHUB_TOKEN` 开的 PR 不会触发 `pull_request` workflow。#70 上没有任何检查。#95 改为在 `release.yml` 同一次运行里对 Release PR 分支跑冒烟测试。~~
 - **本地验证**：本机 WSL 里只有 docker-desktop。Linux 冒烟测试用 Docker Desktop 的 Ubuntu 24.04 容器跑，要走和 CI 一样的 FUSE 路径。arm64 的 AppImage 在 QEMU 下因为魔数问题跑不起来，改了魔数后又太慢，不值得尝试。
 - **派任务的教训**：派修复任务前，先用 `gh pr view --json headRefName` 查出 PR 的实际分支。2026-11-08 有一次照着 thread 元数据写错了分支名。
 
@@ -74,7 +74,7 @@
 
 - 2026-11-08 时，真实的发版门禁（合并 Release PR → draft → 5 个目标冒烟测试 → publish）还没跑过。#96 合并后第一次发版时要检查：
   - publish 是否等待冒烟测试；
-  - Release PR 的冒烟测试是否出现在 push 到 main 的那次运行里。
+  - 已被取代（2026-11-08，见下方“2026-11-08 决定：删掉 Release PR 冒烟路径”）：~~Release PR 的冒烟测试是否出现在 push 到 main 的那次运行里。~~
 
 ## Agent 权限边界
 
@@ -85,19 +85,26 @@
 
 ## 发版门禁首次实战（2026-11-08）
 
-- #96 合并后，push 到 main 的那次 Release 运行（`actions/runs/42462528362`）没有跑 Release PR 冒烟测试。原因：`ci:` 提交不进 changelog，release-please 日志为 `PR #70 remained the same`，`prs_created` 为 false。符合设计，但这意味着只有 Release PR 内容变化时才会跑冒烟测试。
+- #96 合并后，push 到 main 的那次 Release 运行（`actions/runs/42462528362`）没有跑 Release PR 冒烟测试。原因：`ci:` 提交不进 changelog，release-please 日志为 `PR #70 remained the same`，`prs_created` 为 false。已被取代（2026-11-08，见下方“2026-11-08 决定：删掉 Release PR 冒烟路径”）：~~符合设计，但这意味着只有 Release PR 内容变化时才会跑冒烟测试。~~
 - 用户合并 Release PR #70 后，`actions/runs/42463066829` 发布 v2.7.2：
   - 三平台构建和 5 个目标冒烟测试全部通过，最后完成的是 darwin-x64（08:33:41Z）；
   - 之后 `Publish release` 才完成（08:33:58Z）；
   - Release 不是 draft，是 latest，8 个资产齐全（5 个安装包，加上 exe 和两个 dmg 的 blockmap）。
-- 上文"待验证"中的第一条（publish 等待冒烟测试）已在这次发布中得到验证。第二条（Release PR 冒烟测试）要等下一次 Release PR 内容变化时再看。
+- 上文"待验证"中的第一条（publish 等待冒烟测试）已在这次发布中得到验证。已被取代（2026-11-08，见下方“2026-11-08 决定：删掉 Release PR 冒烟路径”）：~~第二条（Release PR 冒烟测试）要等下一次 Release PR 内容变化时再看。~~
 
 ## 2026-11-08 核对补记（wiki 检查，`JayYa/fntv-electron@ab43e4d`）
 
-- Release PR 的检查：#70 的 CI 和 PR Title 运行在 `4d04c66` 上是 `action_required`；在 `5eab479` 上由 `JayYa` 批准，第 2 次尝试通过（`actions/runs/42455333345`，三个 `Test (...)` 和 `Conventional Commits` 均成功）。上文“#70 上没有任何检查”不准确：检查已触发，只是等待批准。#95 在 `release.yml` 里跑冒烟测试的理由（批准前 `pull_request` 运行不会自动执行）不受影响。
+- Release PR 的检查：#70 的 CI 和 PR Title 运行在 `4d04c66` 上是 `action_required`；在 `5eab479` 上由 `JayYa` 批准，第 2 次尝试通过（`actions/runs/42455333345`，三个 `Test (...)` 和 `Conventional Commits` 均成功）。上文“#70 上没有任何检查”不准确：检查已触发，只是等待批准。已被取代（2026-11-08，见下方“2026-11-08 决定：删掉 Release PR 冒烟路径”）：~~#95 在 `release.yml` 里跑冒烟测试的理由（批准前 `pull_request` 运行不会自动执行）不受影响。~~
 - issue 状态（`gh issue view`）：
   - #73 已于 2026-11-08 关闭（#91 合并为 `99ae40d`）。
   - #74 至 #78 仍为 OPEN，标签仍是 `needs-triage`，尚未分诊。
   - #87、#94 仍为 OPEN，`needs-triage`。
   - spec #80 和 ticket #81 至 #85 已于 2026-11-08 随 #96 合并关闭；#92（实验，不合入）已关闭。
-- “待验证”第二条（Release PR 的冒烟测试是否出现在 push 到 main 的那次运行里）当天仍没有结果：v2.7.2 发布后没有新的 Release PR（`gh pr list --state open` 为空），之后 push 到 main 的 `actions/runs/42463841974`（`ab43e4d`，`docs` 提交）是隐藏类型，不会开 Release PR。
+- 已被取代（2026-11-08，见下方“2026-11-08 决定：删掉 Release PR 冒烟路径”，这一条不再需要验证）：~~“待验证”第二条（Release PR 的冒烟测试是否出现在 push 到 main 的那次运行里）当天仍没有结果：~~v2.7.2 发布后没有新的 Release PR（`gh pr list --state open` 为空），之后 push 到 main 的 `actions/runs/42463841974`（`ab43e4d`，`docs` 提交）是隐藏类型，不会开 Release PR。
+
+## 2026-11-08 决定：删掉 Release PR 冒烟路径
+
+- 维护者决定删掉 #95 在 `release.yml` 里加的“对 Release PR 分支构建并跑冒烟测试”的路径（`prs_created`、`pr` 输出，`select-matrix` 里的 Release PR 条件，`build-and-smoke` 的 `ref` 里取 `headBranchName` 的分支）。由 PR_PLACEHOLDER 实现。
+- 理由：这条路径建立在“Release PR 不触发 `pull_request` workflow”的错误前提上（见上方核对补记）。事实是 release-please 开的 Release PR 会触发 `pull_request` workflow，要维护者批准后才运行；Release PR 一定改 `package.json`，批准后 `smoke-test.yml` 跑 5 个目标的冒烟测试，结果直接显示在 PR 上，不用再到 push 到 main 的 Release 运行里找。
+- 不变的部分：发版门禁（`publish` 等 5 个目标冒烟测试全部成功）、手动触发只构建和冒烟测试不发布、只有 `release-please` 和 `publish` 有写权限，仍由 `tests/releaseGate.test.cjs` 锁住。`build.yml`、`build-and-smoke.yml` 的 `ref` 输入保留：发版时要构建 release-please 打 tag 的提交（#62 起就有）。
+- 规范同步改正：`TESTING_STANDARDS.md`、`CODING_STANDARDS.md`、`release.yml`、`smoke-test.yml` 和 `tests/releaseGate.test.cjs` 里“Release PR 不触发 CI”的说法都改为“会触发、需维护者批准”。

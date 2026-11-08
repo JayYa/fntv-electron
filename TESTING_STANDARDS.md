@@ -47,7 +47,7 @@
 
 `smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建（发版也用这一份），再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、改了 `tests/smoke/`、这三个 workflow 或 `package.json` 的 PR。
 
-Release PR 不走 `smoke-test.yml`：release-please 用 GITHUB_TOKEN 开的 PR 不触发 `pull_request` workflow。`release.yml` 在 release-please 建好或更新 Release PR 的那次运行里（push 到 `main` 触发），用 `prs_created` 和 `pr` 输出调用 `build-and-smoke.yml`，对 PR 的 head 分支构建并测 5 个目标，不发布。合并 Release PR 前，到 Actions 里最近一次 Release 运行看结果，截图在它的 `smoke-<目标>` artifact 里。同一次运行既发版又建了新的 Release PR 时只测发版，新 PR 等下一次 push 到 `main` 再测。
+Release PR 也走 `smoke-test.yml`：release-please 用 GITHUB_TOKEN 开的 PR 会触发 `pull_request` workflow，但结论是 `action_required`，维护者在 PR 上点 “Approve workflows to run” 后才跑（`docs/wiki/release-and-update.md` 2026-11-07 v2.7.0 验收；#70 批准后 `actions/runs/42455333345` 通过）。Release PR 总会改 `package.json`，批准后 `smoke-test.yml` 测 5 个目标，结果直接显示在 PR 上。`release.yml` 不对 Release PR 构建（2026-11-08 维护者决定，见 `docs/wiki/multi-platform-testing.md`）。合并 Release PR 前先批准并等这些检查通过。
 
 发版门禁：`release.yml` 也调用 `build-and-smoke.yml`，三个平台各一份，`publish` 要等它们全部成功才上传安装包、把 draft Release 转为正式，任何一个目标失败 Release 就停在 draft。上传的就是冒烟测试下载的那份 `<platform>-build` artifact，不另外构建。手动触发 `release.yml` 只构建和跑冒烟测试，不发布。这些依赖关系由 `tests/releaseGate.test.cjs` 读 workflow 文件检查，改 `release.yml` 的 job 时先跑它。
 
@@ -60,7 +60,7 @@ Release PR 不走 `smoke-test.yml`：release-please 用 GITHUB_TOKEN 开的 PR �
 
 `test:smoke` 固定用 `spec` reporter：Node 22 在非终端下默认是 TAP，会在测试打印的每行前加 `# `，`::notice::` 之类的注解就不会被 GitHub 识别。
 
-Linux 构建 job 在 x64 机器上一次构建出 x64 和 arm64 两个 AppImage，`linux-arm64` 的冒烟 job 在原生 `ubuntu-24.04-arm` 机器上下载同一个 `linux-build` artifact 运行，不用 QEMU，也不在 arm 机器上重新构建。
+Linux 构建 job 在 x64 机器上一次构建出 x64 和 arm64 两个 AppImage，`linux-arm64` 的冒烟 job 在原生 `ubuntu-24.04-arm` 机器上下载同一个 `linux-build` artifact 运行，不用 QEMU，也不在 arm 机器上重新构建。本地跑不了 `linux-arm64`，见下面“在本地跑”。
 
 ```bash
 gh workflow run smoke-test.yml -f platform=linux
@@ -88,6 +88,8 @@ FNTV_SMOKE_ALLOW_INSTALL=1 pnpm run test:smoke
 CI 装了 `libfuse2t64`，AppImage 通过 FUSE 挂载运行。本地用 Docker 时也走这条路：容器加 `--device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined`，装 `libfuse2t64`。`APPIMAGE_EXTRACT_AND_RUN=1` 先解压再运行，不需要 FUSE，但从解压目录读文件比从 FUSE 挂载快，启动时序和 CI 不同，和时序有关的问题可能在本地复现不出来。
 
 `FNTV_SMOKE_ALLOW_INSTALL=1` 跳过上面的已安装检查，只在确认安装包用的是测试专用 `appId` 时设。`FNTV_SMOKE_INSTALLER_DIR` 改安装包目录（默认 `release/`），`FNTV_SMOKE_EXECUTABLE` 跳过安装直接启动某个可执行文件，`FNTV_SMOKE_ARTIFACTS` 改输出目录。
+
+`linux-arm64` 在本地 x64 机器上用 Docker `--platform linux/arm64` 加 QEMU 跑不起来，不要用它验证，也不要排查：AppImage 在 ELF 头偏移 8 写了魔数 `AI`，binfmt 认不出，直接执行时被当成 shell 脚本（`Syntax error: "(" unexpected`）；清掉这 3 个字节后能启动，但模拟太慢，60 秒内主窗口不出现（2026-11-08，#90）。arm64 只以 CI 的 `ubuntu-24.04-arm` job 为准。
 
 ## 配置和工作流
 

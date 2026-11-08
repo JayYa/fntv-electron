@@ -1,8 +1,8 @@
 name: Release
 
-# push 到 main：release-please 维护 Release PR。它建好或更新 Release PR 时，这次运行对 PR 的
-# head 分支构建并跑 5 个安装包的冒烟测试，结果和截图 artifact 就在这次运行里，不发布。
-# GITHUB_TOKEN 开的 Release PR 不会触发 pull_request workflow，smoke-test.yml 在它上面不跑。
+# push 到 main：release-please 维护 Release PR，这里不对 Release PR 构建。Release PR 会触发
+# pull_request workflow，但要维护者在 PR 上批准后才运行；它总会改 package.json，批准后
+# smoke-test.yml 跑 5 个目标的冒烟测试，结果显示在 PR 上。
 # 合并 Release PR 后先建 draft Release，
 # 三平台构建、5 个安装包的冒烟测试全部成功、资产上传齐全后才转为正式。更新检查只看
 # 最新的正式 Release，有一个安装包启动不了或资产不全时都不能公开，Release 停在 draft。
@@ -47,9 +47,6 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
-      prs_created: ${{ steps.release.outputs.prs_created }}
-      # Release PR 的 JSON，headBranchName 是它的分支。
-      pr: ${{ steps.release.outputs.pr }}
     steps:
       # 配置在 release-please-config.json：draft + force-tag-creation，tag 形如 v2.7.0。
       - name: Run release-please
@@ -62,13 +59,13 @@ jobs:
   select-matrix:
     needs: release-please
     # 手动触发时 release-please 被跳过，!cancelled() 让这里照常运行。
-    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true' || needs.release-please.outputs.prs_created == 'true') }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.release_created == 'true') }}
     runs-on: ubuntu-latest
     outputs:
       platforms: ${{ steps.matrix.outputs.platforms }}
     steps:
       # 构建机器和每个平台要测的架构在 build-and-smoke.yml 的 select-targets 里。
-      # 发版和 Release PR 都是 push 触发，没有 platform 输入，按 all 走：三个平台、5 个安装包都要测。
+      # 发版是 push 触发，没有 platform 输入，按 all 走：三个平台、5 个安装包都要测。
       - name: Select platforms
         id: matrix
         env:
@@ -103,11 +100,8 @@ jobs:
     uses: ./.github/workflows/build-and-smoke.yml
     with:
       platform: ${{ matrix.platform }}
-      # 发版时构建 release-please 打 tag 的那个提交（sha 只在建了 Release 时有值）；只更新了
-      # Release PR 时构建它的 head 分支，两者都是 package.json 里已是新版本号的代码。
-      # 同一次运行既发版又建新 Release PR 时只测发版，新 PR 等下一次 push 到 main 再测：
-      # 再调用一次 build-and-smoke.yml 会上传同名的 <platform>-build，publish 分不清。
-      ref: ${{ needs.release-please.outputs.sha || (needs.release-please.outputs.prs_created == 'true' && fromJSON(needs.release-please.outputs.pr || '{}').headBranchName) || github.sha }}
+      # 发版时构建 release-please 打 tag 的那个提交（sha 只在建了 Release 时有值），手动触发时构建当前提交。
+      ref: ${{ needs.release-please.outputs.sha || github.sha }}
 
   # 发版门禁：任何一个平台的构建或任何一个安装包的冒烟测试失败，矩阵 job 的结果就不是
   # success，publish 跳过，Release 停在 draft。不要给这里加 always() 或 !cancelled()。

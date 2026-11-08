@@ -116,31 +116,32 @@ test('a release is smoke tested on all five targets', t => {
     assert.equal(Object.keys(TARGETS).length, 5);
 });
 
-// GITHUB_TOKEN 开的 Release PR 不触发 pull_request workflow，所以由 release.yml 在 release-please
-// 建好或更新 Release PR 的那次运行里，直接对 PR 的 head 分支构建并跑冒烟测试。
-test('a Release PR opened or updated by release-please is smoke tested on its head branch in the same run', () => {
+// Release PR 会触发 pull_request workflow（要维护者批准后才运行），它的冒烟测试由 smoke-test.yml 跑，
+// release.yml 不对 Release PR 构建（2026-11-08 维护者决定）。release.yml 只在发版和手动触发时构建，
+// 构建的是 release-please 打 tag 的提交或当前提交。
+test('release.yml builds only for a release or a manual run, never for a Release PR branch', () => {
     const release = workflow('release.yml');
     const releasePlease = release.jobs['release-please'];
-    assert.equal(releasePlease.outputs.prs_created, '${{ steps.release.outputs.prs_created }}');
-    assert.equal(releasePlease.outputs.pr, '${{ steps.release.outputs.pr }}');
+    assert.ok(!('prs_created' in releasePlease.outputs), 'release-please exposes prs_created');
+    assert.ok(!('pr' in releasePlease.outputs), 'release-please exposes pr');
 
     const [[name, job]] = smokeJobsOf(release);
     const selectMatrix = release.jobs[asList(job.needs).find(need => need !== 'release-please')];
-    assert.match(selectMatrix.if, /needs\.release-please\.outputs\.prs_created == 'true'/);
-    // 发版优先：release_created 时 sha 有值，测打 tag 的提交；否则有 Release PR 时测它的 head 分支；手动触发测当前提交。
-    assert.equal(
-        job.with.ref,
-        "${{ needs.release-please.outputs.sha || (needs.release-please.outputs.prs_created == 'true' && fromJSON(needs.release-please.outputs.pr || '{}').headBranchName) || github.sha }}",
-        name
-    );
-    // 只是 Release PR 时不发布。
-    assert.match(release.jobs.publish.if, /needs\.release-please\.outputs\.release_created == 'true'/);
+    assert.doesNotMatch(selectMatrix.if, /prs_created/);
+    assert.equal(job.with.ref, '${{ needs.release-please.outputs.sha || github.sha }}', name);
+    assert.doesNotMatch(fs.readFileSync(path.join(root, '.github', 'workflows', 'release.yml'), 'utf8'), /headBranchName|prs_created/);
 });
 
-test('smoke-test.yml does not claim to run on Release PRs', () => {
-    // Release PR 由 GITHUB_TOKEN 创建，smoke-test.yml 的 pull_request 不会被触发。
-    const text = fs.readFileSync(path.join(root, '.github', 'workflows', 'smoke-test.yml'), 'utf8');
-    assert.doesNotMatch(text, /Release PR，它总会改/);
+test('a Release PR is smoke tested by smoke-test.yml because it always changes package.json', () => {
+    const smoke = workflow('smoke-test.yml');
+    const pullRequest = smoke.on.pull_request;
+    assert.ok(pullRequest, 'smoke-test.yml has no pull_request trigger');
+    // release-please 的 Release PR 改 package.json、.release-please-manifest.json 和 CHANGELOG.md。
+    assert.ok(pullRequest.paths.includes('package.json'), 'smoke-test.yml does not run when package.json changes');
+    assert.equal(pullRequest.branches, undefined, 'smoke-test.yml filters pull_request by base branch');
+    assert.equal(pullRequest['paths-ignore'], undefined);
+    // PR 时测全部平台。
+    assert.match(smoke.jobs.smoke.strategy.matrix.platform, /'\["linux","macos","windows"\]'/);
 });
 
 test('each platform in the workflows smoke tests exactly its targets from targets.cjs', t => {
