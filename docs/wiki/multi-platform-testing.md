@@ -41,3 +41,42 @@
 - 2026-11-08，用户说"都做"后，agent 执行 `gh pr merge 71` 和创建 ruleset（三个 `Test (...)` 加 `Conventional Commits` 设为必需检查，管理员可绕过）都被 Claude Code auto mode 的权限检查拦下，分别归为 Merge Without Review 和 Account & Standing-Rule Changes。合并 PR 和改仓库设置要用户本人操作，或者在 Claude Code 设置里加允许规则。
 - 2026-11-08，用户手动合并 #71（`a80bd69`），并启用了名为 `main` 的 ruleset。#72 rebase 到 main 后 head 为 `c51158a`，Windows 本地 lint 通过，测试 288 个：287 通过、1 个跳过、0 失败。
 - 2026-11-08，#72 在 `c51158a` 上三平台 CI 和 `Conventional Commits` 共 4 项必需检查全部通过，等用户合并。第 3 层（CI 上启动打包后的应用）尚未写 spec。
+- 2026-11-08，用户手动合并 #72 和 #79。
+
+## 第 3 层：安装包冒烟测试（spec #80）
+
+- 2026-11-08，用户同意以下设计，写成 spec #80，拆成 ticket #81 到 #85：
+  - 把安装包当黑盒，用 Playwright `_electron` 启动；
+  - 5 个目标都覆盖；
+  - 做成可复用的 workflow，发版时作为门禁，Release PR 上也跑；
+  - 普通 PR 不跑。
+- 实现流程：集成分支 `feat/smoke-tests`。每个 ticket 开一个 PR 合进集成分支，CI 通过后由 agent 在本地 `git merge` 再 push。合并到 main 的 PR 是 #96。
+- 子 PR：#86（Linux x64）、#88（macOS）、#89（Windows）、#90（Linux arm64）、#93（发版门禁）、#95（审查修复）。
+- 冒烟测试顺带发现的问题：
+  - #73 在 #89 中复现（Windows 上从非安装目录启动找不到 Proxy），由 #91 修复并合进 main；
+  - #87：打包后日志目录不在 `~/.fntv`；
+  - #94：`release.yml` 的并发设置会丢掉排队中的运行。
+
+### 踩过的坑（2026-11-08）
+
+- **Linux FUSE 时序（#86）**：主进程在创建主窗口期间，`app.evaluate` 必然失败。用 FUSE 运行 AppImage 时，这段约 350ms；用 extract-and-run 时约 50ms。规则：先 `await app.firstWindow()`，再 `app.evaluate`。
+- **macOS x64 首次转译（#92）**：Rosetta 首次转译 x64 Electron 约需 50 秒。
+  - 证据：同一台 `macos-latest` 上连续直接启动 3 次，DevTools listening 分别在 51952ms、5552ms、6733ms；`/var/db/oah` 从 2.7M 涨到 255M。
+  - 修法：对 darwin-x64 先预热一次，上限 120 秒。#89 上预热实测 47 秒。
+- **Windows 用户数据隔离**：`app.getPath('home')` 不读 `USERPROFILE`。改用启动参数 `--user-data-dir`，它同时也是 Chromium 的开关，见审查记录 L1。
+- **Release PR 不触发 CI**：release-please 用 `GITHUB_TOKEN` 开的 PR 不会触发 `pull_request` workflow。#70 上没有任何检查。#95 改为在 `release.yml` 同一次运行里对 Release PR 分支跑冒烟测试。
+- **本地验证**：本机 WSL 里只有 docker-desktop。Linux 冒烟测试用 Docker Desktop 的 Ubuntu 24.04 容器跑，要走和 CI 一样的 FUSE 路径。arm64 的 AppImage 在 QEMU 下因为魔数问题跑不起来，改了魔数后又太慢，不值得尝试。
+- **派任务的教训**：派修复任务前，先用 `gh pr view --json headRefName` 查出 PR 的实际分支。2026-11-08 有一次照着 thread 元数据写错了分支名。
+
+### 待验证
+
+- 2026-11-08 时，真实的发版门禁（合并 Release PR → draft → 5 个目标冒烟测试 → publish）还没跑过。#96 合并后第一次发版时要检查：
+  - publish 是否等待冒烟测试；
+  - Release PR 的冒烟测试是否出现在 push 到 main 的那次运行里。
+
+## Agent 权限边界
+
+- 2026-11-08 在 Claude Code auto mode 下：
+  - 被拦下的操作：`gh pr merge`、创建 ruleset、建 draft PR 时同时 `gh workflow run`。
+  - 放行的操作：普通 `gh pr create`、`gh issue create`、`gh run rerun`、push 到非 main 分支。
+- 合进集成分支用的是本地 `git merge` 加 push。合进 main 一律由用户操作。
