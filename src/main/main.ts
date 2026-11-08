@@ -9,6 +9,7 @@ import * as log from '../modules/logger';
 import { getMainWindow } from './common/mainwin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
+import { platformBehavior } from '../public/platform';
 
 // 禁用输入法自动切换
 app.commandLine.appendSwitch('--lang', 'en-US');
@@ -109,7 +110,7 @@ function setupWindowEvents(mainWindow: BrowserWindow): void {
             if (!(app as any).isQuiting) {
                 event.preventDefault();
 
-                if (process.platform === 'darwin') {
+                if (platformBehavior().closeBehaviorSetting === 'macCloseAction') {
                     // macOS 上的特殊处理
                     const action = getMacCloseAction();
 
@@ -235,7 +236,7 @@ app.on('before-quit', async () => {
 
 app.on('window-all-closed', () => {
     // 在 macOS 上，除非明确退出，否则应用程序及其菜单栏通常会保持活动状态
-    if (process.platform !== 'darwin') {
+    if (platformBehavior().quitsWhenAllWindowsClosed) {
         app.quit();
     }
 });
@@ -243,7 +244,7 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
     // 在 macOS 上，当点击 dock 图标且没有其他窗口打开时，
     // 通常会重新创建一个窗口
-    if (process.platform === 'darwin') {
+    if (platformBehavior().hasDock) {
         if (BrowserWindow.getAllWindows().length === 0) {
             mainWindow = getMainWindow();
             setupWindowEvents(mainWindow);

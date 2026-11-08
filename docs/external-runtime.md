@@ -6,7 +6,7 @@
 
 - **MPV 归档**：`fntv-mpv-config` 发布的完整 zip，解压到 `third_party/fntv-mpv`。
 - **便携配置**：归档里的 `portable_config`，是同步的来源，由 `resolvePortableConfigDir` 定位。
-- **用户配置**：同步的目标。Windows 是 `~/AppData/Roaming/mpv`，其它平台是 `~/.config/mpv`（`src/main/handlers/plugins/mpvConfig.ts`）。
+- **用户配置**：同步的目标。Windows 是 `~/AppData/Roaming/mpv`，其它平台是 `~/.config/mpv`（`mpvUserConfigDir`，`src/public/platform.ts`）。
 
 ## MPV 归档
 
@@ -99,6 +99,7 @@ const secret = loadOrCreateProxySecret(app.getPath('userData'))
 | 行为 | 测试 |
 | --- | --- |
 | 用户配置同步 | `tests/mpvConfigMigration.test.cjs` |
+| 用户配置目录、Proxy 可执行文件路径 | `tests/platform.test.cjs` |
 | 默认播放方式 | `tests/playbackPreference.test.cjs` |
 | 密钥持久化、权限、孤儿 Proxy 认证 | `tests/proxySecret.test.cjs` |
 | 健康检查响应 | `tests/proxyHealth.test.cjs`、`src/modules/proxy/internal/logic/register_test.go` |

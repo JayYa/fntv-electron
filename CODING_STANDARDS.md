@@ -74,6 +74,12 @@
 - TS 源文件用 ES `export`，不写 `module.exports =`。这种写法会覆盖 `export` 的结果，新函数没加进表时运行时是 `undefined`，`tsc` 查不出（`eslint.config.mjs`）。
 - 登录页脚本是按顺序加载的经典脚本，不用 `type="module"`，`file:` 下会被拦。顶层 `const`、`let` 和函数跨文件共享，给其它脚本用的名字写进文件头的 `/* exported */`；顶层语句只能用已加载脚本里的名字。会重新赋值的状态放在唯一写它的脚本里（`resource/login/index.html`，`tests/loginPageCredentials.test.cjs`）。
 
+## 平台差异
+
+- 只有 `src/public/platform.ts` 读取 `process.platform` 和 `process.arch`，其它文件用 `currentPlatform()`、`currentArch()`（`eslint.config.mjs` 的 `no-restricted-properties`）。维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。
+- 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`proxyExecutablePath`、`mpvUserConfigDir`、`expectedAssetName`），调用处只读结果。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`tests/platform.test.cjs`）。
+- `currentPlatform()` 每次调用时读取，不在模块加载时缓存。已有测试靠改写 `process.platform` 模拟 Linux（`tests/helpers/credentialConfig.cjs`）。
+
 ## 跨层改动
 
 - 改字段含义前，用 `git grep` 找全读写处，改完再搜一遍。`hideOriginalPlayButton` 同时被主进程、preload 和登录页读取，默认值必须一致（`docs/external-runtime.md`）。
