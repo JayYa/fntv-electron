@@ -69,6 +69,7 @@
 - 已被取代（2026-11-08，见下方核对补记和“2026-11-08 决定：删掉 Release PR 冒烟路径”：会触发，`action_required`，维护者批准后才跑；`release.yml` 里的 Release PR 冒烟路径已删）：~~**Release PR 不触发 CI**：release-please 用 `GITHUB_TOKEN` 开的 PR 不会触发 `pull_request` workflow。#70 上没有任何检查。#95 改为在 `release.yml` 同一次运行里对 Release PR 分支跑冒烟测试。~~
 - **本地验证**：本机 WSL 里只有 docker-desktop。Linux 冒烟测试用 Docker Desktop 的 Ubuntu 24.04 容器跑，要走和 CI 一样的 FUSE 路径。arm64 的 AppImage 在 QEMU 下因为魔数问题跑不起来，改了魔数后又太慢，不值得尝试。
 - **派任务的教训**：派修复任务前，先用 `gh pr view --json headRefName` 查出 PR 的实际分支。2026-11-08 有一次照着 thread 元数据写错了分支名。
+- **写任务说明（2026-11-08 复盘第 7 条，见 #100）**：不再写“只作参考”这类没有约束力的话，改成明确的停止条件，例如“最多试一次，失败就收尾并在报告里写明原因”。起因是 #84 的说明写了“本地 QEMU 只作参考”，子任务仍然连续试了 3 次，多花了约 37 分钟。
 
 ### 待验证
 
