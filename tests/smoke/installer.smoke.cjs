@@ -88,6 +88,7 @@ describe(`installer smoke test (${target.id})`, () => {
                 // 工作目录放在临时目录，像从桌面图标启动一样，不依赖仓库目录。
                 cwd: home,
                 env: { ...process.env, ...target.environment(home) },
+                args: target.args ? target.args(home) : [],
                 timeout: 60000,
             });
         } catch (error) {

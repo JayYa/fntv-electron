@@ -34,8 +34,8 @@
 
 `tests/smoke/` 把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。测试不引入源码，`pnpm test` 不包含它。
 
-- `tests/smoke/targets.cjs` 列出目标平台（目前只有 `linux-x64`）：安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再在 `build-and-smoke.yml` 的 `select-targets` 和 `smoke-test.yml` 的平台列表里加上。
-- 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，这样隔离不了。
+- `tests/smoke/targets.cjs` 列出目标平台（`linux-x64`、`windows-x64`）：安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再在 `build-and-smoke.yml` 的 `select-targets` 和 `smoke-test.yml` 的平台列表里加上。
+- 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，改用启动参数 `--user-data-dir` 指定 `~/.fntv` 的位置（`src/public/constants.ts`），日志也随之写在它的 `logs/` 下；`USERPROFILE` 只用来隔离 MPV 用户配置。
 - 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（应用日志目录的副本，Linux 上是 `~/.config/fntv/logs`，不在 `~/.fntv` 里）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
 - 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
 - 在主进程里执行代码（`app.evaluate`）前先等 `app.firstWindow()`。客户端启动时创建主窗口期间收到的 `app.evaluate` 会以 `Resulting promise was garbage collected` 失败，主窗口页面出现后就不会了。
@@ -55,6 +55,15 @@ gh run download <run-id> -n smoke-linux-x64
 
 ```bash
 FNTV_SMOKE_TARGET=linux-x64 xvfb-run -a pnpm run test:smoke
+```
+
+Windows 上先 `pnpm run build:win`，再运行 `FNTV_SMOKE_TARGET=windows-x64 pnpm run test:smoke`。测试用 `/S /currentuser /D=<临时目录>` 静默安装，结束后用卸载程序原地卸载并删掉安装目录。
+
+本机已经装了客户端时，不要直接装测试用的安装包：安装标识由 `appId` 决定，相同时安装程序会先卸载已有的那份，快捷方式名由 `productName` 决定，卸载时会删掉同名快捷方式。本地构建时改掉这两项，产物名不变，测试照样找得到：
+
+```bash
+pnpm run build:proxy:win && pnpm run compile
+npx electron-builder --win --publish never -c.appId=com.qiaokes.fntv.smoketest -c.productName=FNMediaSmoke
 ```
 
 CI 装了 `libfuse2t64`，AppImage 通过 FUSE 挂载运行。本地用 Docker 时也走这条路：容器加 `--device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined`，装 `libfuse2t64`。`APPIMAGE_EXTRACT_AND_RUN=1` 先解压再运行，不需要 FUSE，但从解压目录读文件比从 FUSE 挂载快，启动时序和 CI 不同，和时序有关的问题可能在本地复现不出来。

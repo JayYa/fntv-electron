@@ -37,6 +37,10 @@ jobs:
               echo 'build-os=ubuntu-latest' >> "$GITHUB_OUTPUT"
               echo 'smoke-matrix={"include":[{"target":"linux-x64","runner":"ubuntu-latest"}]}' >> "$GITHUB_OUTPUT"
               ;;
+            windows)
+              echo 'build-os=windows-latest' >> "$GITHUB_OUTPUT"
+              echo 'smoke-matrix={"include":[{"target":"windows-x64","runner":"windows-latest"}]}' >> "$GITHUB_OUTPUT"
+              ;;
             *)
               echo "No smoke test targets for platform: $PLATFORM" >&2
               exit 1

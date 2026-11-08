@@ -22,6 +22,7 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
             isPackaged: true,
             getVersion() { return version; },
             getPath(name) { return paths[name]; },
+            commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
         dialog: {

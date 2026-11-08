@@ -16,6 +16,7 @@ function setupIpc(t) {
             isPackaged: false,
             getAppPath() { return testRoot; },
             getPath(name) { return paths[name]; },
+            commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
         safeStorage: { isEncryptionAvailable() { return true; } },

@@ -16,6 +16,7 @@ on:
         options:
           - all
           - linux
+          - windows
   pull_request:
     paths:
       - tests/smoke/**
@@ -38,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         # all 和 PR 时测全部已支持的平台，加平台时加进这个列表。
-        platform: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.platform != 'all') && format('["{0}"]', inputs.platform) || '["linux"]') }}
+        platform: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.platform != 'all') && format('["{0}"]', inputs.platform) || '["linux","windows"]') }}
     uses: ./.github/workflows/build-and-smoke.yml
     with:
       platform: ${{ matrix.platform }}

@@ -5,7 +5,9 @@
 // 加平台时只在这里加一项，并在 .github/workflows/build-and-smoke.yml 的目标表里加一行。
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 // 用 HOME 和 XDG 目录隔离：userData 是 app.getPath('home') 下的 .fntv
 // （src/public/constants.ts），MPV 用户配置在 ~/.config/mpv。
@@ -33,7 +35,42 @@ const TARGETS = {
         // userData（Linux 是 ~/.config/<name>），不在 ~/.fntv/logs。
         logDir: home => path.join(home, '.config', 'fntv', 'logs'),
     },
+    'windows-x64': {
+        installerPattern: /^FNMedia_.+_win_x64\.exe$/,
+        // NSIS 安装包 /S 静默安装到临时目录，从安装目录启动。/D 必须是最后一个参数，路径不加引号。
+        install(installerPath) {
+            const installDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-install-'));
+            run(installerPath, ['/S', '/currentuser', `/D=${installDir}`]);
+            const names = fs.readdirSync(installDir);
+            const executables = names.filter(name => name.endsWith('.exe') && !name.startsWith('Uninstall '));
+            const uninstaller = names.find(name => name.startsWith('Uninstall ') && name.endsWith('.exe'));
+            if (executables.length !== 1 || !uninstaller) {
+                throw new Error(`安装目录 ${installDir} 里应有一个客户端和一个卸载程序，实际是：${names.join(', ')}`);
+            }
+            return {
+                executablePath: path.join(installDir, executables[0]),
+                // _?= 让卸载程序在原地同步运行，否则它复制到临时目录后立即返回。它不删自己，目录随后删掉。
+                uninstall() {
+                    run(path.join(installDir, uninstaller), ['/S', '/currentuser', `_?=${installDir}`]);
+                    fs.rmSync(installDir, { recursive: true, force: true, maxRetries: 5 });
+                },
+            };
+        },
+        // app.getPath('home') 在 Windows 上不认 USERPROFILE，~/.fntv 靠 --user-data-dir 改到临时目录
+        // （src/public/constants.ts），日志也随之落在这里。USERPROFILE 隔离 os.homedir() 下的 MPV 用户配置。
+        environment: home => ({ USERPROFILE: home }),
+        args: home => [`--user-data-dir=${path.join(home, '.fntv')}`],
+        userDataDir: home => path.join(home, '.fntv'),
+        logDir: home => path.join(home, '.fntv', 'logs'),
+    },
 };
+
+function run(file, args) {
+    const result = spawnSync(file, args, { stdio: 'inherit', timeout: 120000 });
+    if (result.error || result.status !== 0) {
+        throw new Error(`${file} ${args.join(' ')} 失败：${result.error ? result.error.message : `退出码 ${result.status}`}`);
+    }
+}
 
 function resolveTarget(id) {
     const target = TARGETS[id];
