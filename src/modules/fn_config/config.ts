@@ -84,7 +84,7 @@ export interface DeleteHistoryParams {
 /**
  * 下载代理配置接口
  */
-export interface DownloadProxyConfig {
+export interface AppDownloadProxyConfig {
     enabled: boolean;
     proxyUrl: string;
 }
@@ -92,7 +92,7 @@ export interface DownloadProxyConfig {
 /**
  * 设置下载代理配置参数接口
  */
-export interface SetDownloadProxyConfigParams {
+export interface SetAppDownloadProxyConfigParams {
     enabled?: boolean;
     proxyUrl?: string;
 }
@@ -393,7 +393,7 @@ export function deleteHistoryItem({ domain, account }: DeleteHistoryParams): boo
 }
 
 // 获取下载代理配置
-export function getDownloadProxyConfig(): DownloadProxyConfig {
+export function getAppDownloadProxyConfig(): AppDownloadProxyConfig {
     const config: Config = readConfig() || {};
     return {
         enabled: config.downloadProxyEnabled === true, // 默认关闭，只有用户显式开启过才用
@@ -402,7 +402,7 @@ export function getDownloadProxyConfig(): DownloadProxyConfig {
 }
 
 // 设置下载代理配置
-export function setDownloadProxyConfig({ enabled = false, proxyUrl = 'https://ghfast.top' }: SetDownloadProxyConfigParams = {}): void {
+export function setAppDownloadProxyConfig({ enabled = false, proxyUrl = 'https://ghfast.top' }: SetAppDownloadProxyConfigParams = {}): void {
     const config: Config = readConfig() || {};
     config.downloadProxyEnabled = enabled;
     config.downloadProxy = proxyUrl;
@@ -496,13 +496,13 @@ export function setMpvVolume(volume: number): void {
 }
 
 // 向后兼容的函数
-export function getDownloadProxyUrl(): string {
-    return getDownloadProxyConfig().proxyUrl;
+export function getAppDownloadProxyUrl(): string {
+    return getAppDownloadProxyConfig().proxyUrl;
 }
 
-export function setDownloadProxyUrl(proxyUrl: string): void {
-    const current = getDownloadProxyConfig();
-    setDownloadProxyConfig({ enabled: current.enabled, proxyUrl });
+export function setAppDownloadProxyUrl(proxyUrl: string): void {
+    const current = getAppDownloadProxyConfig();
+    setAppDownloadProxyConfig({ enabled: current.enabled, proxyUrl });
 }
 
 export function getExitMode(): 'direct' | 'minimize' | 'ask' {

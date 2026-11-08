@@ -18,7 +18,7 @@ test('startup getters keep working when every credential is undecryptable', (t) 
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
 
     assert.equal(config.getMpvPlayerPath(), '/usr/bin/mpv');
-    assert.equal(config.getDownloadProxyConfig().enabled, false);
+    assert.equal(config.getAppDownloadProxyConfig().enabled, false);
     assert.equal(config.getHideOriginalPlayButton(), true);
     assert.equal(config.getNasProxyEnabled(), false);
 });

@@ -13,7 +13,7 @@ let mainWindow: BrowserWindow | null = null; // 主窗口引用
  */
 async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
     // 获取当前配置
-    const proxyConfig = fnConfig.getDownloadProxyConfig();
+    const proxyConfig = fnConfig.getAppDownloadProxyConfig();
     const mpvEnabled = fnConfig.getHideOriginalPlayButton();
     const nasProxyEnabled = fnConfig.getNasProxyEnabled();
     const currentMpvPath = fnConfig.getMpvPlayerPath();
@@ -25,7 +25,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             checked: proxyConfig.enabled,
             click: () => {
                 const newEnabled = !proxyConfig.enabled;
-                fnConfig.setDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
+                fnConfig.setAppDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
             }
