@@ -1,6 +1,6 @@
 # 独立维护
 
-相关：[发布与更新链路](release-and-update.md)。来源：Spec #18，工单 #19、#20、#21。
+相关：[发布与更新链路](release-and-update.md)、[历史遗留 issue 分诊](legacy-issues-triage.md)。来源：Spec #18，工单 #19、#20、#21。
 
 ## 2026-11-05 决策
 
@@ -27,7 +27,7 @@ Chief of staff 同日作出的取舍：
 
 ## 2026-11-05 实施结果
 
-- 三个工单分别对应堆叠 PR #22、#23、#24，当天全部开出，等待维护者审查。
+- 三个工单分别对应堆叠 PR #22、#23、#24，当天全部开出，等待维护者审查。（已被下方“2026-11-05 合并与清理”取代：三个 PR 当天已合并）
 - 经验：测试此前只在 Windows 上跑过，`tests/credentialStorage.test.cjs` 的 Linux 分支在首次 CI 才暴露问题。
 - 经验：`npm` 11 本地会拦截 electron postinstall，`tests/accessCodeSession.test.cjs` 本地失败属环境问题，CI 上通过。
 - 经验：`.gitignore` 默认忽略 `docs/`，在 `docs/` 新增路径要先放行。
@@ -41,3 +41,8 @@ Chief of staff 同日作出的取舍：
 
 - 维护者合并了 PR #25（`2fd08f2`），`package-lock.json` 入库，CI 改用 `npm ci`。
 - 维护者删除了远端 `release` 分支和已合并的 `t3/*` 分支，上一节“由维护者处理”的待办已完成。`release-and-update.md` 里关于 `release` 分支的待办同时被取代。
+
+## 2026-11-08 核对（wiki 检查）
+
+- `gh pr view 158 -R QiaoKes/fntv-electron`：上游 PR #158 仍是 OPEN，head 仍为 `JayYa:pr/auto-mark-watched`。上游仓库未归档，`pushed_at` 仍是 2026-08-26，最新 Release 仍是 v2.6.2。上面“暂不脱离 GitHub fork 网络”的理由在当天依然成立。
+- “暂不公开发版”之后的实际发版：v2.7.0（2026-11-07）、v2.7.1（`published_at` 2026-11-07T16:43:08Z，北京时间 11-08 00:43）、v2.7.2（2026-11-08），见[发布与更新链路](release-and-update.md)和[多平台测试策略](multi-platform-testing.md)。

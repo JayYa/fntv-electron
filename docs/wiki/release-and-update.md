@@ -1,6 +1,6 @@
 # 发布与更新链路
 
-相关：[独立维护](independent-maintenance.md)。
+相关：[独立维护](independent-maintenance.md)、[多平台测试策略](multi-platform-testing.md)（2026-11-08 起的发版门禁和冒烟测试）、[历史遗留 issue 分诊](legacy-issues-triage.md)（#32 发版准备）。
 
 ## 2026-11-05 事实（`JayYa/fntv-electron@af416c0`）
 
@@ -21,7 +21,7 @@
 - 版本号必须高于 2.6.2，tag 必须是合法 semver。（已解决，见下方 2026-11-07 记录）
 - 重新评估 `ghfast.top` 默认代理和未签名安装包。（已解决，见下方 2026-11-07 记录）
 
-## 2026-11-05 PR #24 记录（`JayYa/fntv-electron@f71ea84`，尚未合并）
+## 2026-11-05 PR #24 记录（`JayYa/fntv-electron@f71ea84`，尚未合并）（“尚未合并”已被取代：PR #24 于 2026-11-05 合并，见[独立维护](independent-maintenance.md)）
 
 - 更新源收敛为 `UPDATE_REPOSITORY`，指向 `JayYa/fntv-electron`。404 视为暂无更新。Linux x64 同时匹配 `x64` 和 `x86_64`。
 - Release Build 只能手动触发，不创建 Release，产物留在 Actions artifacts。（已被下方 2026-11-07 记录取代）
@@ -42,7 +42,7 @@
 - 图标继续使用。
 - `release` 分支已删除。
 
-## 2026-11-07 实现记录（PR 分支 `t3/release-please-release-flow`，尚未合并）
+## 2026-11-07 实现记录（PR 分支 `t3/release-please-release-flow`，尚未合并）（“尚未合并”已被取代：该分支即 PR #62，2026-11-07 squash 合并为 `46cba98`）
 
 - `release.yml`（`a18033e`）：push 到 `main` 时跑 release-please（`googleapis/release-please-action` v5.0.0，内含 release-please 17.6）。配置在 `release-please-config.json`：`draft: true` 加 `force-tag-creation: true`，合并 Release PR 后先建 draft Release 并立即打 tag。同一 workflow 里 `select-matrix`、`build` 用 `needs` 和 `release_created` 接在后面，`publish` 等三平台构建都成功后核对 5 个安装包名，`gh release upload` 上传 exe、dmg、AppImage 和 blockmap，最后 `gh release edit --draft=false --latest`。写权限只给 `release-please` 和 `publish` 两个 job。手动触发仍只构建。
 - 版本起点：`.release-please-manifest.json` 写 2.6.2，`bootstrap-sha` 是上游 v2.6.2 发版说明提交 `0c4ed46`。没有用 `release-as`，它要在发版后手动删掉，否则下一版还是 2.7.0。2026-11-07 对 PR 分支跑 `release-please release-pr --dry-run`，结果是 2.6.2 → 2.7.0。之后如有带 `!` 的提交合进 `main`，版本会变成 3.0.0，合并 Release PR 前看一眼标题。
@@ -58,7 +58,7 @@
 
 - 保留 `CHANGELOG.md`，release-please 继续在原有内容上方追加新版本。
 
-## 2026-11-07 实现记录（PR #62 分支，`51c60a8`，尚未合并）
+## 2026-11-07 实现记录（PR #62 分支，`51c60a8`，尚未合并）（“尚未合并”已被取代：PR #62 合并为 `46cba98`）
 
 - 更新提示框的正文原来直接显示 Release 的 Markdown，release-please 生成的版本标题行、`**scope:**`、提交哈希和 PR 链接都按原始文本显示。现在由 `src/modules/updater/releaseNotes.ts` 的 `formatReleaseNotes` 转成纯文本：去掉版本标题行，分组标题只留文字（如“新功能”），列表项以 `• ` 开头，去掉条目末尾的提交和 PR 括注以及 `, closes #N`，其它链接只留链接文字，去掉 `**` 和反引号，合并多余空行。
 - 原生对话框不能滚动，原来没有长度限制。现在超过 15 行或 800 个字符时截断，末尾提示点“查看详情”打开 Release 页面。正文为空时仍显示“暂无更新说明”。（上限已被下方 2026-11-07 更新说明截断修正记录取代）
@@ -68,9 +68,9 @@
 
 - 仓库的 Actions 设置 `can_approve_pull_request_reviews` 为 `false`，即未勾选“Allow GitHub Actions to create and approve pull requests”。不勾选时 release-please 用 `GITHUB_TOKEN` 开不了 Release PR。
 - `GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow，CI 和 PR 标题检查都不会跑。（已被下方 2026-11-07 v2.7.0 发版验收记录取代：会触发，但状态是 `action_required`，要维护者批准才跑）
-- `main` 没有分支保护。
+- `main` 没有分支保护。（已被取代：2026-11-08 用户启用了名为 `main` 的 ruleset，见[多平台测试策略](multi-platform-testing.md)的进展）
 
-## 2026-11-07 合并方式记录（PR #62 分支，`bf273e1`，尚未合并）
+## 2026-11-07 合并方式记录（PR #62 分支，`bf273e1`，尚未合并）（“尚未合并”已被取代：PR #62 合并为 `46cba98`）
 
 - 方案 A：保留合并提交，正文留空，提交里只剩 PR 标题。dry run 验证可行，每个 PR 只收录一条。GitHub 不接受 `merge_commit_title=MERGE_MESSAGE` 加 `merge_commit_message=BLANK` 的组合，返回 422 `invalid_merge_commit_setting_combo`，设置没改成，方案 A 放弃。
 - 决定（维护者）：改用 squash 合并。
@@ -89,7 +89,7 @@
 
 - #62 squash 合并为 `46cba98`。`main` 上的 `Release` workflow（`actions/runs/42370295283`）成功：`release-please` job 通过，`select-matrix`、`build`、`publish` 按预期跳过。它开了 Release PR #63 `chore(main): release 2.7.0`，改 `package.json`、`.release-please-manifest.json` 和 `CHANGELOG.md`。changelog 是整理前的样子：16 条新功能、40 条问题修复，合并提交和 PR 里的提交各收录一次，夹着重构和构建细节。#63 保持打开，没有改。
 
-## 2026-11-07 2.7.0 changelog 整理记录（PR 分支 `t3/6f08b083`，`3f2862e`，尚未合并）
+## 2026-11-07 2.7.0 changelog 整理记录（PR 分支 `t3/6f08b083`，`3f2862e`，尚未合并）（“尚未合并”已被取代：该分支即 PR #64，合并为 `d9e675b`）
 
 - `release-please-config.json` 的 `bootstrap-sha` 改成 `46cba98`（`3f2862e`）。PR 正文的 `BEGIN_COMMIT_OVERRIDE` 列出 2.7.0 的 14 个条目：4 条 `feat`、10 条 `fix`，来自 2.6.2 之后到 #62 的面向用户改动，对照表在 PR 描述里。没写进去的：构建脚本修正（#40）、日志里新增的 preload 和窗口按钮记录（#54）、`play-movie` 空请求防护（#60，只有异常调用会触发）、IPC 错误捕获和 `compile` 清理 `dest/`（#47），以及文档、重构、CI 和工具链。
 - PR 标题用 `chore(release)`，属于隐藏类型。squash 后进 `main` 的只有这个标题，分支里的提交（包括这条 `docs` 记录）不进 `main`。
@@ -107,14 +107,14 @@
 - Release PR #63 由 `github-actions[bot]` 开出，`pull_request` 触发的 CI 是 `action_required`，要维护者手动批准才跑（`actions/runs/42371111844` 第 2 次尝试由 `JayYa` 触发，通过）。前面“`GITHUB_TOKEN` 开的 Release PR 不触发 `pull_request` workflow”的记录与此不符，实际是触发了但需要批准。
 - changelog 和 Release 正文的 14 条都链接到 #64 的 squash 提交 `d9e675b`，不链接各自原来的 PR。
 
-## 2026-11-07 更新说明截断修正记录（PR 分支 `t3/updater-release-notes-truncation`，`3e3d38f`，尚未合并）
+## 2026-11-07 更新说明截断修正记录（PR 分支 `t3/updater-release-notes-truncation`，`3e3d38f`，尚未合并）（“尚未合并”已被取代：该分支即 PR #66，合并为 `5b63e64`，随 v2.7.1 发布）
 
 - v2.7.0 的真实 Release 正文转成纯文本后有 17 行、451 个字符，超过 15 行上限，最后两条 `updater` 条目被截掉。字符数没有超。
 - `formatReleaseNotes` 去掉条目开头的 release-please scope 前缀（Markdown 里的 `**login:** `），只认条目开头加粗的这种写法，正文里的冒号不动。
 - 上限改为 25 行或 1300 个字符，按原来每行约 53 个字符的比例放宽。v2.7.0 的 14 条全部显示，不截断。
 - 测试样例是 `gh api repos/JayYa/fntv-electron/releases/tags/v2.7.0` 返回的 `body`，原样存为 `tests/fixtures/release-v2.7.0.md`（`tests/releaseNotes.test.cjs`）。
 
-## 2026-11-07 检查更新 403（`JayYa/fntv-electron@17ac14c`，尚未合并）
+## 2026-11-07 检查更新 403（`JayYa/fntv-electron@17ac14c`，尚未合并）（“尚未合并”已被取代：分支 `t3/updater-rate-limit` 即 PR #68，合并为 `5570836`，随 v2.7.1 发布）
 
 - 现象：点“检查更新”弹出 `Request failed with status code 403`。
 - 证据：维护者本机日志 `%APPDATA%\fntv\logs\app.log`（不是 `~/.fntv/logs`）里，20:42:33 到 20:48:46 共 7 次检查、28 个请求全部 403，第一次检查的第一个请求就是 403，说明额度在应用请求前已经被同一出口 IP 上的其它请求用掉。旧日志只记了 `error.message`，没有 `x-ratelimit-remaining` 和错误正文，限流没有直接证据。
@@ -127,3 +127,10 @@
 
 - 维护者决定暂不处理。每次发版前，维护者在 Release PR 上手动点 “Approve workflows to run”（原因见上方 v2.7.0 验收记录里 `action_required` 一条）。
 - 备选做法：建一个只装在本仓库的 GitHub App（Contents、Pull requests、Issues 读写，不开 webhook），App ID 存为仓库变量、私钥存为仓库 secret，workflow 用 `actions/create-github-app-token` 生成 token 给 release-please。构建和上传仍用 `GITHUB_TOKEN`。个人 fine-grained PAT 也可行，但绑定个人账号且会过期。
+
+## 2026-11-08 核对补记（wiki 检查，`ab43e4d`）
+
+- 补记 v2.7.1：Release PR #67 合并为 `f77f6a5`，`actions/runs/42392368238` 成功，`published_at` 为 `2026-11-07T16:43:08Z`，不是 draft，8 个资产（5 个安装包加 3 个 `.blockmap`）。含 #66 和 #68。
+- v2.7.2（#70，`a5e7c85`）是第一次过冒烟测试门禁的发版，见[多平台测试策略](multi-platform-testing.md)。当天 `releases/latest` 是 v2.7.2。
+- #63、#67、#70 的 `pull_request` 运行都先是 `action_required`，`JayYa` 批准后第 2 次尝试通过（如 `actions/runs/42455333345`）。手动批准的做法一直在执行。
+- 当天 `branches/main` 的 `protected` 为 `true`（ruleset `main`）。
