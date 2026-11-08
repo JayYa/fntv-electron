@@ -4,10 +4,10 @@
 
 ## 决策
 
-- [独立维护](independent-maintenance.md)：2026-11-05 决定脱离上游维护的范围和取舍。
-- [历史遗留 issue 分诊](legacy-issues-triage.md)：2026-11-05 至 11-07 处理 #28 至 #55 的核实结果、决定和进度。
+- [独立维护](independent-maintenance.md)：2026-11-05 决定脱离上游维护的范围和取舍，以及当天的合并和清理。
+- [历史遗留 issue 分诊](legacy-issues-triage.md)：2026-11-05 至 11-07 处理 #28 至 #58 的核实结果、决定和进度，2026-11-08 核对时都已关闭。
 
 ## 子系统
 
-- [发布与更新链路](release-and-update.md)：构建、MPV 配置依赖、更新检查的事实和约束，以及 2026-11-07 起用 release-please 发版的决定和实现。
-- [多平台测试策略](multi-platform-testing.md)：只有 Windows 电脑时怎样覆盖 macOS 和 Linux，2026-11-08 决定分四层推进。
+- [发布与更新链路](release-and-update.md)：构建、MPV 配置依赖、更新检查的事实和约束，2026-11-07 起用 release-please 发版的决定和实现，v2.7.0、v2.7.1 的发版记录，以及检查更新 403 的排查。
+- [多平台测试策略](multi-platform-testing.md)：只有 Windows 电脑时怎样覆盖 macOS 和 Linux。2026-11-08 决定分四层推进，当天完成第 1、2 层（三平台 CI、平台判断集中）和第 3 层（安装包冒烟测试，spec #80），v2.7.2 是第一次过冒烟测试门禁的发版。

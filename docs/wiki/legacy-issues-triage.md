@@ -12,7 +12,7 @@
 6. #34 lint。
 7. #31 的 sandbox 部分。
 
-#32 按维护者 2026-11-05 的决定暂缓。
+#32 按维护者 2026-11-05 的决定暂缓。（已被取代：2026-11-07 维护者在 #32 决定公开发版，见[发布与更新链路](release-and-update.md)；#32 于 2026-11-07 关闭）
 
 核实报告原本建议先做 #29 和 #28。chief of staff 把 #33 提前，理由是项目未公开发版、时间不紧，而 renormalize 要避开跨分支冲突。
 
@@ -94,7 +94,7 @@
 - 未验证：打包版 `app.asar` 路径下的来源校验。读代码判断与 `loadFile` 同基准。
 - PR #44（#37）实测修复前假恶意站点能收到密码和访问码。NAS 地址由 FN Connect 运行时返回，列不出白名单，改为确认首个目标 origin 后只允许同主机跳转。
 - PR #44 未用真实 FN ID 账号验证，跳转链和登录路径是读 bundle 推断的。`http://check.fnos.net` 仍被信任，是已知缺口。
-- 待开 issue：取 `Trim-MC-token` 时不限定 origin；`isFnId` 不排除 `/`、`?`、`#`。
+- 待开 issue：取 `Trim-MC-token` 时不限定 origin；`isFnId` 不排除 `/`、`?`、`#`。（已被取代：2026-11-06 开成 #45，由 PR #50 修复，见下方 2026-11-07 #45 合并）
 
 ## 2026-11-05 #37 真实冒烟（`JayYa/fntv-electron@222f47e`）
 
@@ -108,7 +108,7 @@
 
 ## 2026-11-06 进度（`JayYa/fntv-electron@f2a4db0`）
 
-- 维护者合并了 PR #44（#37）和 PR #46（#31 的 CSP 部分）。#31 仍开着，等 sandbox 部分。
+- 维护者合并了 PR #44（#37）和 PR #46（#31 的 CSP 部分）。#31 仍开着，等 sandbox 部分。（已被取代：PR #54 合并后 #31 于 2026-11-07 关闭）
 - PR #46 未运行打包版，只确认 `app.asar` 里有 `index.html` 和 `index.js`。
 - #37 的遗留点开成 #45。
 - chief of staff 把 #38 排到 #34 之前，理由是它修配置被覆盖的风险，用户影响更大。
@@ -140,6 +140,8 @@
 - 截至 `cc1d785`，agent 写的超限文件有 `fnid_login.ts`、`resource/login/index.html`、`resource/login/index.js`、`tests/credentialStorage.test.cjs`。下次改动它们时要先拆分。
 
 ## 2026-11-07 超限文件拆分
+
+（2026-11-08 补注：这次拆分是 PR #52，合并为 `JayYa/fntv-electron@e4e750c`。下文“现在的文件”指 `e4e750c` 时的文件。）
 
 - 上面列出的 4 个超限文件已按职责拆分，纯搬移。本文更早条目里的行号是当时的快照，不再对应现在的文件。
 - `fnid_login.ts` 只留 `isFnId` 和入口，注入脚本、bridge 消息和 OAuth 窗口流程在 `src/main/handlers/core/` 的 `fnIdScripts.ts`、`fnIdOauthMessages.ts`、`fnIdOauthWindow.ts`。
@@ -175,10 +177,17 @@
 - `play-movie` 空数据开成 #58。错误会被 `guardHandler` 捕获并写日志，应用不会崩溃。
 - #54 审查中未修的判断项：OAuth 窗口没有显式设 `sandbox`，靠默认值（推断）；`dest/preload/index.js` 和插件文件仍打进 asar 但不使用；`PLUGINS` 列表和静态导入重复，有测试守护；`describePage` 没有测试。
 - 未处理：`generate-iconset.js` 的回退分支，见 2026-11-05 进度。
-- 未验证：打包版真机冒烟（#43 来源校验、#46 CSP、#47 失败路径、MPV 路径）、macOS、Linux、FN ID 的访问码 NAS 和旧版 NAS。计划在 #32 发版准备时用打包版走一遍 7 项清单。
+- 未验证：打包版真机冒烟（#43 来源校验、#46 CSP、#47 失败路径、MPV 路径）、macOS、Linux、FN ID 的访问码 NAS 和旧版 NAS。计划在 #32 发版准备时用打包版走一遍 7 项清单。（2026-11-08 核对：#32 已于 2026-11-07 关闭，wiki 里没有这次 7 项清单的记录，见下方补记）
 
 ## 2026-11-07 #57 收紧 FN Connect 页面（`JayYa/fntv-electron@b00ccdd` 之后）
 
 - 维护者决定不考虑旧版 NAS，以安全性为重。FN Connect 页面只认 HTTPS，`http://check.fnos.net` 被拒绝，这取代了上面“已知缺口”的说法。
 - 当天 `5ddd.com` 的 bundle 显示，只有 NAS 版本低于 1.4.0 或没有 `checkSum` 时才跳这个地址。这类 NAS 的 FN ID 登录窗口会停在 FN Connect 页面，要改用直连登录。
 - 未改：FN Connect 确认的目标本身可以是 HTTP，局域网 HTTP NAS 的密码仍是明文传输。
+
+## 2026-11-08 核对补记（wiki 检查，`JayYa/fntv-electron@ab43e4d`）
+
+- `gh issue view`：本页涉及的 #28 至 #35、#37、#38、#45、#49、#55、#57、#58 当天全部是 CLOSED。
+- `generate-iconset.js` 的回退分支（2026-11-05 进度、2026-11-07 收尾里的“未处理”）在 `ab43e4d` 上仍未处理：`scripts/generate-iconset.js:35` 仍写死“由于在 Windows 环境下”，第 47 行起仍创建占位文件。当天没有对应的 issue。
+- 2026-11-05 进度里“未实际运行 Linux 打包”已被取代：v2.7.0 起 `release.yml` 在 `ubuntu-latest` 上打出两个 AppImage（见[发布与更新链路](release-and-update.md)），v2.7.2 起发版前还会启动它们做冒烟测试（见[多平台测试策略](multi-platform-testing.md)）。`generate-icns` 是否在 macOS 构建里实际运行，当天没有核对。
+- 2026-11-07 收尾里的“未验证：打包版真机冒烟……macOS、Linux”部分有了进展：2026-11-08 起五个安装包在 CI 上做启动冒烟测试（只到启动和截图，见[多平台测试策略](multi-platform-testing.md)）。#43 来源校验、#46 CSP、#47 失败路径、MPV 路径和 FN ID 的访问码 NAS 在打包版上是否走过 7 项清单，wiki 里没有记录，按未验证处理。
