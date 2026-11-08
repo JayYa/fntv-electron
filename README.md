@@ -87,10 +87,10 @@ pnpm install
 
 3. 准备 MPV：
 
-`third_party/fntv-mpv` 不入库，开发运行和打包都依赖它。从固定版本的 [fntv-mpv-config Release](https://github.com/JayYa/fntv-mpv-config/releases/tag/fntv-mpv-v20260826_013404) 下载归档，解压到这个目录：
+`third_party/fntv-mpv` 不入库，开发运行和打包都依赖它。从固定版本的 [fntv-mpv-config Release](https://github.com/JayYa/fntv-mpv-config/releases/tag/fntv-mpv-v20261108_233327) 下载归档，解压到这个目录：
 
 ```bash
-curl -fL -o mpv-config.zip https://github.com/JayYa/fntv-mpv-config/releases/download/fntv-mpv-v20260826_013404/mpv-package-20260825_173358.zip
+curl -fL -o mpv-config.zip https://github.com/JayYa/fntv-mpv-config/releases/download/fntv-mpv-v20261108_233327/mpv-package-20261108_153320.zip
 mkdir -p third_party/fntv-mpv
 unzip -q mpv-config.zip -d third_party/fntv-mpv
 rm mpv-config.zip

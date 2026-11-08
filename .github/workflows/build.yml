@@ -30,9 +30,9 @@ jobs:
     env:
       # 构建依赖的 MPV 归档，固定 tag 和 sha256。缓存 key 也用这里的 sha256。
       MPV_CONFIG_REPO: JayYa/fntv-mpv-config
-      MPV_CONFIG_TAG: fntv-mpv-v20260826_013404
-      MPV_CONFIG_ASSET: mpv-package-20260825_173358.zip
-      MPV_CONFIG_SHA256: 1d9f5fe6411e08710e2cdc5f76286ff2667bfa53acee6f0cfa8572ed5bb05c5b
+      MPV_CONFIG_TAG: fntv-mpv-v20261108_233327
+      MPV_CONFIG_ASSET: mpv-package-20261108_153320.zip
+      MPV_CONFIG_SHA256: 783cc16db5c70e88cd30f8c16f20843799a6983ef20eae2c562f549b7a67b1fc
 
     steps:
       - name: Checkout code
