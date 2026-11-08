@@ -50,7 +50,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'separator'
         },
         {
-            label: `NAS本地网盘代理: ${nasProxyEnabled ? '开启' : '关闭'}`,
+            label: `NAS 中转: ${nasProxyEnabled ? '开启' : '关闭'}`,
             type: 'checkbox',
             checked: nasProxyEnabled,
             click: () => {

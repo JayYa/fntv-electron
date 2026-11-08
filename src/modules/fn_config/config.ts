@@ -422,13 +422,13 @@ export function setHideOriginalPlayButton(enabled: boolean): void {
     writeConfig(config);
 }
 
-// 获取NAS本地网盘代理配置
+// 获取NAS 中转开关
 export function getNasProxyEnabled(): boolean {
     const config: Config = readConfig() || {};
     return config.nasProxyEnabled === true; // 默认关闭
 }
 
-// 设置NAS本地网盘代理配置
+// 设置NAS 中转开关
 export function setNasProxyEnabled(enabled: boolean): void {
     const config: Config = readConfig() || {};
     config.nasProxyEnabled = enabled;
