@@ -1,5 +1,22 @@
 # 更新日志
 
+## [2.8.0](https://github.com/JayYa/fntv-electron/compare/v2.7.2...v2.8.0) (2026-11-08)
+
+
+### 新功能
+
+* **mpv:** 附带的 MPV 升级到 20261108，新增缩略图预览 ([#123](https://github.com/JayYa/fntv-electron/issues/123)) ([bfc2f10](https://github.com/JayYa/fntv-electron/commit/bfc2f109002b6f0428706de0c1bfffd1115505f3))
+
+
+### 问题修复
+
+* **logger:** 打包后的日志写在 ~/.fntv/logs ([#108](https://github.com/JayYa/fntv-electron/issues/108)) ([a364c2f](https://github.com/JayYa/fntv-electron/commit/a364c2f3fc43715881e1a3da41bc15896b2c855d))
+* **mpv:** 同步 MPV 配置时识别 portable_config 和旧的 ~/.mpv ([#117](https://github.com/JayYa/fntv-electron/issues/117)) ([cfef805](https://github.com/JayYa/fntv-electron/commit/cfef805c77b5c3ec8f612fccec3aff54259cf694))
+* **mpv:** 用户 MPV 配置目录按 MPV_HOME、XDG_CONFIG_HOME 和漫游 AppData 取 ([#77](https://github.com/JayYa/fntv-electron/issues/77)) ([#113](https://github.com/JayYa/fntv-electron/issues/113)) ([0e411a9](https://github.com/JayYa/fntv-electron/commit/0e411a98dd2d7821e30d0aae6141a8da96800245))
+* **mpv:** 自选 MPV 是附带的 MPV 时不再清空弹幕插件 ([#120](https://github.com/JayYa/fntv-electron/issues/120)) ([626a979](https://github.com/JayYa/fntv-electron/commit/626a9797d667fc5b1d917a9e689f4e37868a00f7))
+* **platform:** Linux 和 macOS 用 PNG 窗口图标，Linux 托盘单击恢复窗口，只留一个 window-all-closed 监听 ([#110](https://github.com/JayYa/fntv-electron/issues/110)) ([2f84796](https://github.com/JayYa/fntv-electron/commit/2f847963e55f5c990ff7349d4302706cf6ce0bb3))
+* **updater:** 按 expectedAssetName 精确查找安装包 ([#111](https://github.com/JayYa/fntv-electron/issues/111)) ([c63d4d2](https://github.com/JayYa/fntv-electron/commit/c63d4d240b1904e575b90bc6efd19e3b24f7efbe))
+
 ## [2.7.2](https://github.com/JayYa/fntv-electron/compare/v2.7.1...v2.7.2) (2026-11-08)
 
 
