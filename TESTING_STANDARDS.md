@@ -46,6 +46,10 @@
 
 `smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建（发版也用这一份），再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、Release PR、改了 `tests/smoke/`、这三个 workflow 或 `package.json` 的 PR。
 
+发版门禁：`release.yml` 也调用 `build-and-smoke.yml`，三个平台各一份，`publish` 要等它们全部成功才上传安装包、把 draft Release 转为正式，任何一个目标失败 Release 就停在 draft。上传的就是冒烟测试下载的那份 `<platform>-build` artifact，不另外构建。手动触发 `release.yml` 只构建和跑冒烟测试，不发布。这些依赖关系由 `tests/releaseGate.test.cjs` 读 workflow 文件检查，改 `release.yml` 的 job 时先跑它。
+
+`test:smoke` 固定用 `spec` reporter：Node 22 在非终端下默认是 TAP，会在测试打印的每行前加 `# `，`::notice::` 之类的注解就不会被 GitHub 识别。
+
 Linux 构建 job 在 x64 机器上一次构建出 x64 和 arm64 两个 AppImage，`linux-arm64` 的冒烟 job 在原生 `ubuntu-24.04-arm` 机器上下载同一个 `linux-build` artifact 运行，不用 QEMU，也不在 arm 机器上重新构建。
 
 ```bash

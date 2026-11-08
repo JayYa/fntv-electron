@@ -2,7 +2,7 @@ name: Smoke Test
 
 # 构建安装包并启动它做冒烟测试，比普通 CI 慢得多，只在这几种情况跑：
 # - 手动触发，可选平台；
-# - release-please 的 Release PR，它总会改 package.json 的版本号；
+# - release-please 的 Release PR，它总会改 package.json 的版本号，合并前就能看到 5 个平台的结果和截图；
 # - PR 改了冒烟测试、构建相关的 workflow 或 package.json，开发时在 PR 上验证。
 # 其它 PR 不跑，日常 CI 见 ci.yml。
 on:
