@@ -153,6 +153,14 @@ describe(`installer smoke test (${target.id})`, () => {
         assert.ok(result.done, fail('主窗口打开', `30 秒内没有可见窗口：${JSON.stringify(result.windows)}`));
     });
 
+    it('runs the client as a process of the target architecture', async t => {
+        // 目标 id 的后半段是架构（targets.cjs）。macOS x64 包在 Apple Silicon 上跑，这里是 x64 就说明它经 Rosetta 运行。
+        const expected = target.id.split('-').pop();
+        const actual = await app.evaluate(() => process.arch);
+        t.diagnostic(`client process.arch=${actual}, test runner process.arch=${process.arch}`);
+        assert.equal(actual, expected, fail('进程架构检查', `客户端进程架构应为 ${expected}，实际是 ${actual}`));
+    });
+
     it('renders the login page with its form and the packaged version', async () => {
         for (const selector of ['#domain', '#username', '#password', '#loginBtn']) {
             await page.locator(selector).waitFor({ state: 'visible', timeout: 30000 }).catch(error => {
