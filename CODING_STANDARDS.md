@@ -1,6 +1,6 @@
 # 编码标准
 
-每条规则都给出本仓库内的依据，新增规则也要能这样验证。能机器检查的规则放进 `eslint.config.mjs` 或 `tests/standards.test.cjs`。留在文档里的“验证：”命令由 `tests/standards.test.cjs` 实际运行，命令本身坏了时测试失败。
+每条规则都给出本仓库内的依据，新增规则也要能这样验证。能机器检查的规则放进 `eslint.config.mjs` 或 `tests/standards.test.cjs`。留在文档里的“验证：”命令由 `tests/standards.test.cjs` 实际运行，命令本身坏了时测试失败。CI 在 Windows（Git Bash）、macOS 和 Linux 上都跑这些命令，只用三个平台都有的写法，例如 macOS 的 `grep` 不支持 `-P`，改用 `perl`。
 
 改打包的 MPV、MPV 配置同步、默认播放方式或 Proxy 生命周期时，读 `docs/external-runtime.md`。改访问码流程时，读 `docs/adr/0002-access-code-gateway-session.md`。
 
@@ -109,7 +109,7 @@
 - 中文和英文、数字之间加一个空格，行内代码和链接的两侧也一样。中文句子用全角标点。
 - 产品名用官方写法：Windows、macOS、Linux、PotPlayer、Anime4K、NAS。说播放器时写 MPV，只有命令才写 `mpv`。
 - 文件名、路径和配置项放进行内代码。
-- 验证：`LC_ALL=C.UTF-8 grep -nP '\p{Han}[A-Za-z0-9]|[A-Za-z0-9]\p{Han}' README.md` 只剩代码块和链接锚点里的内容。
+- 验证：`perl -CSD -ne 'print "$.:$_" if /\p{sc=Han}[A-Za-z0-9]|[A-Za-z0-9]\p{sc=Han}/' README.md` 只剩代码块和链接锚点里的内容。
 
 ## 提交
 
