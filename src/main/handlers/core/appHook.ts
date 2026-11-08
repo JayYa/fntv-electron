@@ -5,19 +5,18 @@ import * as log from '../../../modules/logger';
  * 应用生命周期钩子管理器
  */
 
-type HookType = 'beforeQuit' | 'ready' | 'windowAllClosed' | 'activate';
+// 没有 windowAllClosed：window-all-closed 只在 src/main/main.ts 监听一处（#76）。
+type HookType = 'beforeQuit' | 'ready' | 'activate';
 
 interface Hooks {
     beforeQuit: Array<(...args: any[]) => void>;
     ready: Array<(...args: any[]) => void>;
-    windowAllClosed: Array<(...args: any[]) => void>;
     activate: Array<(...args: any[]) => void>;
 }
 
 const hooks: Hooks = {
     beforeQuit: [],
     ready: [],
-    windowAllClosed: [],
     activate: []
 };
 
@@ -60,10 +59,6 @@ function initAppHooks(): void {
     
     app.on('ready', () => {
         runAppHooks('ready');
-    });
-    
-    app.on('window-all-closed', () => {
-        runAppHooks('windowAllClosed');
     });
     
     app.on('activate', () => {

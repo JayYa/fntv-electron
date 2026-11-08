@@ -28,11 +28,13 @@ export interface PlatformBehavior {
     hasDock: boolean;
     /** macOS 用系统交通灯按钮（hiddenInset），其它平台是无边框窗口加页面里的自定义按钮。 */
     titleBar: 'hiddenInset' | 'frameless';
+    /** build/ 下的主窗口图标文件。Electron 的 nativeImage 只在 Windows 上读 ICO，其它平台用 PNG（#74）。 */
+    windowIcon: 'icon.ico' | 'icon.png';
     tray: {
         showWindowLabel: string;
         quitLabel: string;
-        /** 哪个托盘事件恢复窗口；Linux 不绑定。 */
-        restoreEvent: 'click' | 'double-click' | null;
+        /** 哪个托盘事件恢复窗口。Linux 上用户激活托盘图标时发 click，没有 double-click（#75）。 */
+        restoreEvent: 'click' | 'double-click';
         /** build/ 下的图标文件。template 为 true 时是 macOS 模板图标，加载失败时回退到 icon.png。 */
         icon: { file: string; template: boolean };
         /** 最小化到托盘后是否弹出一次气泡提示。 */
@@ -52,10 +54,11 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
         quitsWhenAllWindowsClosed: !isMac,
         hasDock: isMac,
         titleBar: isMac ? 'hiddenInset' : 'frameless',
+        windowIcon: isWindows ? 'icon.ico' : 'icon.png',
         tray: {
             showWindowLabel: isMac ? '显示窗口' : '显示主窗口',
             quitLabel: isMac ? '退出飞牛影视' : '退出',
-            restoreEvent: isMac ? 'click' : isWindows ? 'double-click' : null,
+            restoreEvent: isWindows ? 'double-click' : 'click',
             icon: isMac
                 ? { file: 'iconTemplate2.png', template: true }
                 : { file: isWindows ? 'icon.ico' : 'icon.png', template: false },

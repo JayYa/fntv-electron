@@ -302,6 +302,30 @@ ${mainOutput.slice(-4000)}`));
         assert.equal(fs.existsSync(stray), false, fail('日志位置检查', `${stray} 不应存在，日志应只写在 ${isolation.logDir}`));
     });
 
+    it('loads the main window icon from the packaged file', async () => {
+        // 主进程创建主窗口前把图标路径写进 app.log（src/main/common/mainwin.ts）。Linux 和 macOS 上
+        // nativeImage 读不了 ICO，曾经一直用 icon.ico，窗口没有图标（#74）。
+        const appLog = path.join(isolation.logDir, 'app.log');
+        const result = await poll(async () => {
+            const text = fs.existsSync(appLog) ? fs.readFileSync(appLog, 'utf8') : '';
+            const match = /主窗口图标: (.+?)\r?$/m.exec(text);
+            return { done: Boolean(match), iconPath: match && match[1] };
+        }, 10000);
+        assert.ok(result.done, fail('主窗口图标检查', `10 秒内 ${appLog} 里没有“主窗口图标:”这一行`));
+        const icon = await app.evaluate(({ nativeImage }, iconPath) => {
+            const image = nativeImage.createFromPath(iconPath);
+            return { empty: image.isEmpty(), size: image.getSize() };
+        }, result.iconPath);
+        assert.equal(icon.empty, false, fail('主窗口图标检查', `${result.iconPath} 加载后是空图像`));
+        console.log(`::notice::smoke ${target.id} window icon: ${result.iconPath} ${icon.size.width}x${icon.size.height}`);
+    });
+
+    it('keeps a single window-all-closed listener', async () => {
+        // 曾有两个监听，Windows 和 Linux 上一个直接退出、一个只在 isQuiting 时退出（#76）。
+        const count = await app.evaluate(({ app: electronApp }) => electronApp.listenerCount('window-all-closed'));
+        assert.equal(count, 1, fail('window-all-closed 监听检查', `应有 1 个监听，实际是 ${count} 个`));
+    });
+
     it('raises no uncaught exception in the main process', async () => {
         // 启动 3 秒后有一次自动更新检查（src/main/main.ts），等它跑过再看。
         await delay(Math.max(0, launchedAt + 8000 - Date.now()));

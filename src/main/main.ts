@@ -234,6 +234,8 @@ app.on('before-quit', async () => {
     destroyTray();
 });
 
+// 唯一的 window-all-closed 监听（#76）。不在退出途中时，主窗口的 close 被拦下改为隐藏，这个事件很少发生；
+// app.quit() 关掉所有窗口时 Electron 直接退出，不发这个事件（Electron shell/browser/browser.cc 的 Browser::OnWindowAllClosed）。
 app.on('window-all-closed', () => {
     // 在 macOS 上，除非明确退出，否则应用程序及其菜单栏通常会保持活动状态
     if (platformBehavior().quitsWhenAllWindowsClosed) {
