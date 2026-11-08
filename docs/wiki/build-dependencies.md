@@ -15,7 +15,7 @@
 - MPV 压缩包缓存（`build.yml`）：tag、资产名和 sha256 从下载步骤移到 `build` job 的 `env`。`actions/cache/restore` 和 `actions/cache/save` 分开写（v6.1.0），路径 `$RUNNER_TEMP/mpv-archive`，key `mpv-archive-${{ runner.os }}-${{ env.MPV_CONFIG_SHA256 }}`。下载并校验通过后立即保存，命中时不保存，两步都 `continue-on-error`。命中缓存也校验 sha256，不通过就重新下载。
 - 未命中时 `curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors --retry-max-time 300 --connect-timeout 30`，下载步骤 `timeout-minutes: 10`。
 - 打包下载缓存：key `packaging-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}`，`Build application` 设 `ELECTRON_BUILDER_CACHE=$RUNNER_TEMP/electron-builder-cache`，构建成功后保存。#101 的 workflow 注释写的是：Electron zip 由 `@electron/get` 存到默认目录，它不读 `ELECTRON_CACHE`，所以缓存路径同时列出三个平台的默认目录：Linux `~/.cache/electron`、macOS `~/Library/Caches/electron`、Windows `%LOCALAPPDATA%\electron\Cache`（workflow 里写 `~/AppData/Local/electron/Cache`）。
-- 2026-11-08 写本节时看 `pnpm-lock.yaml` 和 `node_modules`：`electron@38.0.0` 依赖 `@electron/get` 2.0.3，`app-builder-lib@26.18.0` 依赖 3.1.0。两个版本的 `dist/cjs/Cache.js` 默认目录都是 `env-paths('electron').cache`，`Cache.js` 和 `index.js` 里都没有 `ELECTRON_CACHE`。打包时实际由哪个版本下载、存到哪里，没有核对；`packaging-*` 缓存是否覆盖 Electron zip，要看下一次命中后的构建日志。
+- 2026-11-08 写本节时看 `pnpm-lock.yaml` 和 `node_modules`：`electron@38.0.0` 依赖 `@electron/get` 2.0.3，`app-builder-lib@26.18.0` 依赖 3.1.0。两个版本的 `dist/cjs/Cache.js` 默认目录都是 `env-paths('electron').cache`，`Cache.js` 和 `index.js` 里都没有 `ELECTRON_CACHE`。打包时实际由哪个版本下载、存到哪里，没有核对；`packaging-*` 缓存是否覆盖 Electron zip，要看下一次命中后的构建日志。（2026-11-08 已核实目录，见下一节；命中仍未验证。）
 - `tests/releaseGate.test.cjs` 新增检查：key 含 sha256、restore 在下载前、save 紧跟产生内容的步骤；用桩 `curl`、`unzip` 实际跑下载步骤，缓存校验通过时只解压，不通过时重新下载。`docs/external-runtime.md` 和 `CODING_STANDARDS.md` 同步写明。
 - #101 自己的 Smoke Test 运行 `actions/runs/42469305936`（head `7bf70c6`）：
   - 第 1 次尝试：macOS 下载 6 次全是 504，重试用完失败；Windows 下载重试 5 次后成功，`Build application` 里 electron-builder 下载也返回 504 失败；Linux 也失败在 `Build application`，同样是 electron-builder 下载返回 504。
@@ -23,6 +23,17 @@
   - 第 3 次尝试通过：Linux、Windows 的 MPV 缓存命中（`Using cached archive`），macOS 未命中，下载后保存；三个平台的 `packaging-*` 缓存都未命中，构建后保存。
 - 504 的原因没有排查。缓存只减少下载次数，第一次未命中时仍依赖重试。
 - 三个平台为什么都要下载 MPV 压缩包，见上方第一节。
+
+## 2026-11-08 核实：打包时 Electron zip 的下载和缓存目录（`d9cf99a`）
+
+本节回答上一节"打包时实际由哪个版本下载、存到哪里，没有核对"。结论：#101 的缓存路径正确，没有改代码。
+
+- 下载方：`electron-builder --win/--mac/--linux` 走 `app-builder-lib/out/electron/ElectronFramework.js:221` 的 `downloadElectronArtifactZip`，不传 `cacheDir`；`out/util/electronGet.js:672-716` 的 `buildElectronArtifactConfig` 里 `cacheRoot` 只来自 `cacheDir` 参数或 `build.electronDownload.cache`，本项目都没配。之后 `electronGet.js:150` 调 `app-builder-lib/node_modules/@electron/get`（3.1.0）的 `downloadArtifact`。
+- 目录：3.1.0 的 `dist/cjs/Cache.js:22-26` 在 `cacheRoot` 为空时用 `env-paths('electron',{suffix:''}).cache`，和 2.0.3 相同：Linux `$XDG_CACHE_HOME/electron`（未设时 `~/.cache/electron`）、macOS `~/Library/Caches/electron`、Windows `%LOCALAPPDATA%\electron\Cache`。
+- 环境变量：3.1.0 不读 `ELECTRON_CACHE`。`electron_config_cache` 只在 `node_modules/electron/install.js:46`（postinstall，用 2.0.3）读取，和打包无关。`ELECTRON_BUILDER_CACHE` 不影响 Electron zip。要改 Electron zip 目录只能配 `build.electronDownload.cache`。Windows 本地实测：同时设 `ELECTRON_CACHE` 和 `electron_config_cache`，`cacheRoot` 仍为 undefined，zip 落在 `%LOCALAPPDATA%\electron\Cache`（`electron-v38.0.0-win32-x64.zip`，125,665,776 B）。
+- 打包工具（nsis、nsis-resources、7zip、appimage、dmgbuild、winCodeSign）走 `binDownload.js:85-104` 的 `getBin`，目录由 `electronGet.js:41-46` 的 `getCacheDirectory({allowEnvVarOverride:true})` 决定：`ELECTRON_BUILDER_CACHE` 为绝对路径时直接用。`macCodeSign.js:100` 也读这个变量。
+- `actions/runs/42469305936` 第 3 次尝试的 `packaging-*` 保存：Linux 238,074,531 B（electron x64、arm64，appimage-12.0.1，7zip-linux-x64）；Windows 133,774,532 B（electron，7zip-win-x64，nsis-3.0.4.1，nsis-resources-3.4.1）；macOS 297,740,746 B（electron ×2，dmgbuild-bundle-arm64）。三个平台都没有路径不存在的警告。Windows 的大小约等于一个 Electron zip 加约 8 MB 工具，说明 Electron 目录被存进去了。
+- 命中尚未验证：这三份缓存的 ref 是 `refs/pull/101/merge`，按 actions/cache 的 ref 隔离，main 和其它 PR 用不上。#101 合并后，截至 `d9cf99a`，release.yml 的运行 `42476442255`、`42476908063`、`42478821622` 都跳过了构建，main 上还没跑过打包。main 上第一次构建一定不命中。
 
 ## 2026-11-08 事实：插件同步（`7586698`）
 
