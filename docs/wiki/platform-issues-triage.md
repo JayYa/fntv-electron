@@ -154,3 +154,25 @@
   - 18:43 早于 #113（22:38）和 #117（23:20）合并。
   - MPV 归档里的插件是完整的 18 个文件（实测 `unzip -l`）。
   - 插件自更新只在手动触发时运行；附带的 2.1.0 已是上游最新版，不会替换目录（读代码，推断）。
+
+## 2026-11-08 #120 合并后实测，核实 #119（待维护者确认）
+
+- 维护者合并了 PR #120（#118，commit `626a979`，squash 合并）。
+- 维护者在 #120 分支（head `dbd70ad`，worktree `t3-07352ab5`）上实测两次，chief of staff 读日志核实：
+  1. 23:42，自选 MPV 是另一个目录的附带 MPV：正常同步，目标 `uosc_danmaku` 里有 `main.lua`。
+  2. 23:43，自选 MPV 是这个 worktree 自己附带的 MPV：日志记“MPV配置目录就是便携配置，跳过同步”，插件完整；mpv 日志显示 `uosc_danmaku/main.lua` 正常加载，没有 `Cannot find main.*`。
+  - 弹幕画面是否显示，以维护者的观察为准，日志看不出来。
+- 同日更早的一次实测无效：维护者在 `813e805` 的旧代码 worktree 里启动，worktree 里没有 `third_party/fntv-mpv`，启动时同步报 “Portable config directory not found”。worktree 缺 `third_party/fntv-mpv` 导致测不成，这是第二次，第一次见 #54 的冒烟测试。chief of staff 建议改进环境：加 `pnpm setup:mpv`，或者开发模式下缺失时给出明确提示。维护者尚未决定。
+
+### 核实 #119（只读，2026-11-08 约 23:50，待维护者确认）
+
+结论：插件没有被删。现在的 `%APPDATA%\mpv\scripts\uosc_danmaku\` 是完整的，issue 里说的“只剩 `.gitignore`”在本机复现不出来。
+
+- 实测：目录里有 17 个文件（`.gitignore`、`main.lua`、`apis/` 2 个、`dicts/` 2 个、`modules/` 11 个），和 `t3-07352ab5` 里 `third_party/fntv-mpv/portable_config/scripts/uosc_danmaku` 逐个比对（`diff -rq`）完全相同。#118 一节里说的“18 个文件”是 `unzip -l` 的条目数，可能把目录条目也算进去了，没有核对。
+- 实测：每个文件和子目录的创建时间都是 18:43:45，文件的修改时间都是 00:42:26（是来源文件的时间）。`uosc_danmaku` 和三个子目录的修改时间也都是 18:43:45，之后再没有增删。
+- 实测（客户端日志 `%APPDATA%\fntv\logs\app.log`）：18:43:45.117 启动的是安装版 2.7.1，18:43:45.433 记“MPV托管插件已同步: uosc_danmaku”。2.7.1 的代码早于 #113，目标是 `%APPDATA%\mpv`，目标已有 `scripts`，所以删掉 `uosc_danmaku` 重新复制。18:43 就是这次正常同步，不是删除。
+- 实测（`%APPDATA%\mpv\mpv.log`，最后写入 18:55:53）：mpv 带 `--config-dir=C:\Users\xiaos\AppData\Roaming\mpv` 启动，加载了 `uosc_danmaku/main.lua`，插件报版本 2.1.0，没有 `Cannot find main.*`。
+- 推断：如果 18:43:45 之后目录被删到只剩 `.gitignore` 又被恢复，各个目录的修改时间会晚于 18:43:45。实际没有，所以 18:43 以后目录一直完整。
+- 推断：issue 里的“只剩 `.gitignore`”可能是观察出错，比如看错了目录（例如被 #118 清空的某个 worktree 里的 `portable_config`），或者用的列目录方式漏掉了文件。具体是哪种，没有查到。目录不在 git 仓库里，`.gitignore` 的规则（`danmaku/*`、`*.toml`、`.*`）不会影响 mpv 或客户端读取，也不会隐藏 `.lua` 文件（读规则，推断）。
+- issue 里列的其它方向都可以排除：#113、#117 之前的同步代码在 18:43 正常复制了全部文件（日志和创建时间，实测）；插件自更新没有触发的记录（实测 `mpv.log` 里没有 `check-update`，但这个日志只记最后一次 18:55 的运行，18:43 到 18:55 之间是否触发过看不到；即使触发，附带的 2.1.0 已是最新版，不会替换目录，读代码，推断）；开发版启动会写 `~/.fntv/logs`，本机没有这个目录（实测），`app.log` 里 14:30 之后、23 点之前的启动只有 18:43 这一次安装版（实测）。
+- 修复方案：不需要改代码，规模为 0。建议在 #119 评论里写明上面的实测结果，标 `wontfix` 关闭（复现不了）。维护者如果当时看到的确实是另一个目录，可以补一句说明再关闭。
