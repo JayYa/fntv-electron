@@ -80,9 +80,11 @@ jobs:
         continue-on-error: true
 
       # 压缩包按 sha256 缓存，换版本时 key 跟着变。Release 下载偶尔返回 5xx，命中缓存就不用下载。
+      # restore 和 save 分开：下载校验通过就保存，后面的构建失败也不丢缓存。
       - name: Restore MPV archive cache
         id: mpv-archive-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
         with:
           path: ${{ runner.temp }}/mpv-archive
           key: mpv-archive-${{ runner.os }}-${{ env.MPV_CONFIG_SHA256 }}
@@ -118,6 +120,30 @@ jobs:
           echo "Final structure:"
           find third_party/fntv-mpv -maxdepth 2 -type d
 
+      - name: Save MPV archive cache
+        if: steps.mpv-archive-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/mpv-archive
+          key: ${{ steps.mpv-archive-cache.outputs.cache-primary-key }}
+
+      # electron-builder 打包时下载 Electron zip 和打包工具（AppImage、NSIS 等），GitHub 偶尔返回 504。
+      # electron 和 electron-builder 的版本都在锁文件里，key 用锁文件 hash。
+      # Electron zip 由 @electron/get 存到它的默认目录（不读 ELECTRON_CACHE），三个平台的默认目录都列上，
+      # 不存在的会被忽略；打包工具存到 ELECTRON_BUILDER_CACHE，由 Build application 显式指定。
+      - name: Restore packaging download cache
+        id: packaging-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: |
+            ${{ runner.temp }}/electron-builder-cache
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+          key: packaging-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Compile TypeScript
         run: pnpm run compile
         timeout-minutes: 5
@@ -126,6 +152,7 @@ jobs:
         env:
           PLATFORM: ${{ inputs.platform }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder-cache
         run: |
           if [ "$PLATFORM" = "windows" ]; then
             pnpm run build:win
@@ -136,6 +163,18 @@ jobs:
           fi
         shell: bash
         timeout-minutes: 15
+
+      - name: Save packaging download cache
+        if: steps.packaging-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: |
+            ${{ runner.temp }}/electron-builder-cache
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~/AppData/Local/electron/Cache
+          key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

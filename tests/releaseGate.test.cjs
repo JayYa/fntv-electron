@@ -224,7 +224,22 @@ function mpvArchiveSteps() {
     const job = workflow('build.yml').jobs.build;
     const cache = job.steps.find(step => step.id === 'mpv-archive-cache');
     const download = job.steps.find(step => step.name === 'Download third-party dependencies');
-    return { job, cache, download };
+    const save = job.steps.find(step => step.name === 'Save MPV archive cache');
+    return { job, cache, download, save };
+}
+
+// 缓存的 restore 和 save 分开写，save 只在未命中时运行，紧跟在产生缓存内容的步骤后面；两步都不能让构建失败。
+function assertRestoreAndSave(job, restore, save, after) {
+    assert.ok(restore && save, 'cache restore or save step missing');
+    assert.match(restore.uses, /^actions\/cache\/restore@[0-9a-f]{40}$/);
+    assert.match(save.uses, /^actions\/cache\/save@[0-9a-f]{40}$/);
+    assert.equal(restore.uses.split('@')[1], save.uses.split('@')[1]);
+    assert.equal(restore['continue-on-error'], true);
+    assert.equal(save['continue-on-error'], true);
+    assert.equal(save.if, `steps.${restore.id}.outputs.cache-hit != 'true'`);
+    assert.equal(save.with.key, `\${{ steps.${restore.id}.outputs.cache-primary-key }}`);
+    assert.equal(save.with.path, restore.with.path);
+    assert.equal(job.steps.indexOf(save), job.steps.indexOf(after) + 1, `${save.name} must run right after ${after.name}`);
 }
 
 function posixPath(file) {
@@ -260,12 +275,34 @@ function runMpvDownload(t, archive, sha256) {
 test('the MPV archive cache key changes with the archive sha256', () => {
     const { job, cache, download } = mpvArchiveSteps();
     assert.ok(cache, 'build.yml has no mpv-archive-cache step');
-    assert.match(cache.uses, /^actions\/cache@/);
     assert.match(cache.with.key, /\$\{\{\s*env\.MPV_CONFIG_SHA256\s*\}\}/);
     assert.match(job.env.MPV_CONFIG_SHA256, /^[0-9a-f]{64}$/);
     assert.ok(job.steps.indexOf(cache) < job.steps.indexOf(download), 'cache must be restored before the download step');
     assert.equal(cache.with.path, '${{ runner.temp }}/mpv-archive');
     assert.match(download.run, /\$RUNNER_TEMP\/mpv-archive\/mpv-config\.zip/);
+});
+
+test('the MPV archive is cached as soon as it is downloaded and verified', () => {
+    // 后面的构建失败也要保住已下载的压缩包。
+    const { job, cache, download, save } = mpvArchiveSteps();
+    assertRestoreAndSave(job, cache, save, download);
+});
+
+test('electron-builder and Electron downloads are cached per lockfile', () => {
+    const job = workflow('build.yml').jobs.build;
+    const restore = job.steps.find(step => step.id === 'packaging-cache');
+    const save = job.steps.find(step => step.name === 'Save packaging download cache');
+    const build = job.steps.find(step => step.name === 'Build application');
+    assertRestoreAndSave(job, restore, save, build);
+    assert.ok(job.steps.indexOf(restore) < job.steps.indexOf(build), 'packaging cache must be restored before the build');
+    assert.match(restore.with.key, /\$\{\{\s*runner\.os\s*\}\}/);
+    assert.match(restore.with.key, /hashFiles\('pnpm-lock\.yaml'\)/);
+    // 打包工具存到 ELECTRON_BUILDER_CACHE；Electron zip 存到 @electron/get 的默认目录，它不读 ELECTRON_CACHE。
+    const paths = restore.with.path.trim().split('\n');
+    assert.ok(paths.includes(build.env.ELECTRON_BUILDER_CACHE), 'ELECTRON_BUILDER_CACHE is not cached');
+    for (const dir of ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache']) {
+        assert.ok(paths.includes(dir), `${dir} is not cached`);
+    }
 });
 
 test('a cached MPV archive is verified and used without downloading', t => {
