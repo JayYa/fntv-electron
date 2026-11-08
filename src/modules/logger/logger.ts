@@ -66,10 +66,12 @@ export class Logger {
             const isPackaged = app.isPackaged;
 
             if (isPackaged) {
-                // 打包后，使用用户数据目录的logs子文件夹
-                // 这样日志文件不会在重新安装时被删除
-                const userDataPath = app.getPath('userData');
-                return path.join(userDataPath, 'logs');
+                // 打包后写在 ~/.fntv/logs，重装不会删掉。日志器在 config.ts 调 app.setPath('userData')
+                // 之前就加载了，不能读 app.getPath('userData')，那时还是 Electron 默认目录（#87）。
+                // constants 只依赖 electron，不会循环导入；放在这个分支里 require，是因为非 Electron
+                // 环境（tests/logMasking.test.cjs）没有 app.commandLine，加载 constants 会抛错。
+                const { USER_DATA_PATH } = require('../../public/constants') as typeof import('../../public/constants');
+                return path.join(USER_DATA_PATH, 'logs');
             } else {
                 // 开发环境，使用项目根目录的log文件夹
                 const appPath = app.getAppPath();

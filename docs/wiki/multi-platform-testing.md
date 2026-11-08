@@ -65,7 +65,7 @@
 - **macOS x64 首次转译（#92）**：Rosetta 首次转译 x64 Electron 约需 50 秒。
   - 证据：同一台 `macos-latest` 上连续直接启动 3 次，DevTools listening 分别在 51952ms、5552ms、6733ms；`/var/db/oah` 从 2.7M 涨到 255M。
   - 修法：对 darwin-x64 先预热一次，上限 120 秒。#89 上预热实测 47 秒。
-- **Windows 用户数据隔离**：`app.getPath('home')` 不读 `USERPROFILE`。改用启动参数 `--user-data-dir`，它同时也是 Chromium 的开关，见审查记录 L1。
+- **Windows 用户数据隔离**：`app.getPath('home')` 不读 `USERPROFILE`。改用启动参数 `--user-data-dir`，它同时也是 Chromium 的开关，见审查记录 L1。修 #87 时发现，带这个参数时 Electron 默认 userData 和 `~/.fntv` 重合，日志目录取早了也看不出来，所以 CI 上的 Windows 冒烟测试不再带它，改用 runner 的真实用户目录（`TESTING_STANDARDS.md` 的“冒烟测试”）。
 - 已被取代（2026-11-08，见下方核对补记和“2026-11-08 决定：删掉 Release PR 冒烟路径”：会触发，`action_required`，维护者批准后才跑；`release.yml` 里的 Release PR 冒烟路径已删）：~~**Release PR 不触发 CI**：release-please 用 `GITHUB_TOKEN` 开的 PR 不会触发 `pull_request` workflow。#70 上没有任何检查。#95 改为在 `release.yml` 同一次运行里对 Release PR 分支跑冒烟测试。~~
 - **本地验证**：本机 WSL 里只有 docker-desktop。Linux 冒烟测试用 Docker Desktop 的 Ubuntu 24.04 容器跑，要走和 CI 一样的 FUSE 路径。arm64 的 AppImage 在 QEMU 下因为魔数问题跑不起来，改了魔数后又太慢，不值得尝试。
 - **派任务的教训**：派修复任务前，先用 `gh pr view --json headRefName` 查出 PR 的实际分支。2026-11-08 有一次照着 thread 元数据写错了分支名。
