@@ -104,7 +104,13 @@ describe(`installer smoke test (${target.id})`, () => {
         }
         child.once('exit', () => outputFile.end());
 
-        // 连上调试端口后才能装监听，更早的异常靠 stderr 里的 UNCAUGHT_PATTERN 发现。
+        // 主进程在 new BrowserWindow 期间收到的 app.evaluate 会以“Resulting promise was garbage
+        // collected”失败。主窗口页面出现说明主进程已经从创建窗口的同步代码里返回，之后才在主进程里执行代码。
+        page = await app.firstWindow({ timeout: 30000 }).catch(error => {
+            throw new Error(fail('主窗口打开', `30 秒内没有创建主窗口：${error.message}`));
+        });
+
+        // 主窗口出现后才装监听，更早的异常靠 stderr 里的 UNCAUGHT_PATTERN 发现。
         await app.evaluate(() => {
             globalThis.__fntvSmokeErrors = [];
             const record = kind => error => globalThis.__fntvSmokeErrors.push(`${kind}: ${(error && error.stack) || error}`);
@@ -147,7 +153,6 @@ describe(`installer smoke test (${target.id})`, () => {
     });
 
     it('renders the login page with its form and the packaged version', async () => {
-        page = await app.firstWindow();
         for (const selector of ['#domain', '#username', '#password', '#loginBtn']) {
             await page.locator(selector).waitFor({ state: 'visible', timeout: 30000 }).catch(error => {
                 throw new Error(fail('登录页渲染', `${selector} 不可见：${error.message}`));

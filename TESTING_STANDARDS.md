@@ -38,6 +38,7 @@
 - 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，这样隔离不了。
 - 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（应用日志目录的副本，Linux 上是 `~/.config/fntv/logs`，不在 `~/.fntv` 里）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
 - 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
+- 在主进程里执行代码（`app.evaluate`）前先等 `app.firstWindow()`。客户端启动时创建主窗口期间收到的 `app.evaluate` 会以 `Resulting promise was garbage collected` 失败，主窗口页面出现后就不会了。
 
 ### 在 CI 上跑
 
@@ -50,11 +51,13 @@ gh run download <run-id> -n smoke-linux-x64
 
 ### 在本地跑
 
-先构建对应平台的安装包（`pnpm run build:linux:x64`），再在同一平台上运行。Linux 没有显示器时用 `xvfb-run`，缺 FUSE 时设 `APPIMAGE_EXTRACT_AND_RUN=1`：
+先构建对应平台的安装包（`pnpm run build:linux:x64`），再在同一平台上运行。Linux 没有显示器时用 `xvfb-run`：
 
 ```bash
 FNTV_SMOKE_TARGET=linux-x64 xvfb-run -a pnpm run test:smoke
 ```
+
+CI 装了 `libfuse2t64`，AppImage 通过 FUSE 挂载运行。本地用 Docker 时也走这条路：容器加 `--device /dev/fuse --cap-add SYS_ADMIN --security-opt apparmor:unconfined`，装 `libfuse2t64`。`APPIMAGE_EXTRACT_AND_RUN=1` 先解压再运行，不需要 FUSE，但从解压目录读文件比从 FUSE 挂载快，启动时序和 CI 不同，和时序有关的问题可能在本地复现不出来。
 
 `FNTV_SMOKE_INSTALLER_DIR` 改安装包目录（默认 `release/`），`FNTV_SMOKE_EXECUTABLE` 跳过安装直接启动某个可执行文件，`FNTV_SMOKE_ARTIFACTS` 改输出目录。
 
