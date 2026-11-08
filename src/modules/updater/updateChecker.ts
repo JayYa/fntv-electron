@@ -1,6 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
-import { getDownloadProxyConfig } from '../fn_config/config';
+import { getAppDownloadProxyConfig } from '../fn_config/config';
 import log from '../logger';
 import {
     assetDownloadUrl,
@@ -321,7 +321,7 @@ export class UpdateChecker {
                 
                 // 尝试获取代理配置并应用到下载链接
                 try {
-                    const proxyConfig = getDownloadProxyConfig();
+                    const proxyConfig = getAppDownloadProxyConfig();
                     if (proxyConfig.enabled && proxyConfig.proxyUrl && proxyConfig.proxyUrl.trim() !== '') {
                         // 如果原始URL包含github.com，则使用代理
                         if (originalUrl.includes('github.com')) {

@@ -13,19 +13,19 @@ let mainWindow: BrowserWindow | null = null; // 主窗口引用
  */
 async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
     // 获取当前配置
-    const proxyConfig = fnConfig.getDownloadProxyConfig();
+    const proxyConfig = fnConfig.getAppDownloadProxyConfig();
     const mpvEnabled = fnConfig.getHideOriginalPlayButton();
     const nasProxyEnabled = fnConfig.getNasProxyEnabled();
     const currentMpvPath = fnConfig.getMpvPlayerPath();
 
     const submenu: Electron.MenuItemConstructorOptions[] = [
         {
-            label: `下载代理: ${proxyConfig.enabled ? '开启' : '关闭'}`,
+            label: `应用更新下载加速: ${proxyConfig.enabled ? '开启' : '关闭'}`,
             type: 'checkbox',
             checked: proxyConfig.enabled,
             click: () => {
                 const newEnabled = !proxyConfig.enabled;
-                fnConfig.setDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
+                fnConfig.setAppDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
             }
@@ -50,7 +50,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'separator'
         },
         {
-            label: `NAS本地网盘代理: ${nasProxyEnabled ? '开启' : '关闭'}`,
+            label: `NAS 中转 网盘/STRM: ${nasProxyEnabled ? '开启' : '关闭'}`,
             type: 'checkbox',
             checked: nasProxyEnabled,
             click: () => {

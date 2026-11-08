@@ -124,7 +124,7 @@ function buildPlayStatusRecord(
     itemGuid: string,
     ts: number,
     duration: number,
-): fn.PlayStatusData {
+): fn.PlayRecord {
     return {
         item_guid: itemGuid,
         media_guid: info.media_guid,
@@ -160,7 +160,7 @@ async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData
 
         log.info('播放进度更新:', record);
 
-        const recorded = await fnapi.recordPlayStatus(record);
+        const recorded = await fnapi.savePlayRecord(record);
         if (!recorded.success) {
             log.error('记录播放状态失败:', recorded.message || '未知错误');
             return false;
@@ -192,7 +192,7 @@ async function clearPlayRecord(fnapi: fn.ApiService, info: fn.PlayInfo, duration
 
         log.info('从头播放，清零服务端播放进度:', record);
 
-        const recorded = await fnapi.recordPlayStatus(record);
+        const recorded = await fnapi.savePlayRecord(record);
         if (!recorded.success) {
             log.warn('清零播放进度失败:', recorded.message || '未知错误');
             return false;

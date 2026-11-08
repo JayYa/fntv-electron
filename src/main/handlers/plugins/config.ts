@@ -18,15 +18,15 @@ interface PlayButtonConfig {
 }
 
 // 获取当前代理设置
-function handleGetDownloadProxy(event: IpcMainEvent): void {
-    const proxyConfig = fnConfig.getDownloadProxyConfig();
+function handleGetAppDownloadProxy(event: IpcMainEvent): void {
+    const proxyConfig = fnConfig.getAppDownloadProxyConfig();
     event.reply('download-proxy-info', proxyConfig);
 }
 
 // 设置代理配置
-function handleSetDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Partial<ProxyConfig>): void {
+function handleSetAppDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Partial<ProxyConfig>): void {
     try {
-        fnConfig.setDownloadProxyConfig({ 
+        fnConfig.setAppDownloadProxyConfig({ 
             enabled: enabled === true, 
             proxyUrl: proxyUrl || 'https://ghfast.top' 
         });
@@ -74,8 +74,8 @@ function handleSetNasProxyConfig(event: IpcMainEvent, { nasProxyEnabled }: { nas
 
 // 注册配置相关处理器
 function init(): void {
-    registerHandler('get-download-proxy', handleGetDownloadProxy);
-    registerHandler('set-download-proxy', handleSetDownloadProxy);
+    registerHandler('get-download-proxy', handleGetAppDownloadProxy);
+    registerHandler('set-download-proxy', handleSetAppDownloadProxy);
     registerHandler('get-play-button-config', handleGetPlayButtonConfig);
     registerHandler('set-play-button-config', handleSetPlayButtonConfig);
     registerHandler('get-nas-proxy', handleGetNasProxyConfig);

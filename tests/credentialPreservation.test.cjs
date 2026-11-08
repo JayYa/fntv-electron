@@ -9,8 +9,8 @@ const {
 } = require('./helpers/credentialConfig.cjs');
 
 const SETTERS = {
-    setDownloadProxyConfig: (config) => config.setDownloadProxyConfig({ enabled: false, proxyUrl: 'https://proxy.example' }),
-    setDownloadProxyUrl: (config) => config.setDownloadProxyUrl('https://proxy.example'),
+    setAppDownloadProxyConfig: (config) => config.setAppDownloadProxyConfig({ enabled: false, proxyUrl: 'https://proxy.example' }),
+    setAppDownloadProxyUrl: (config) => config.setAppDownloadProxyUrl('https://proxy.example'),
     setHideOriginalPlayButton: (config) => config.setHideOriginalPlayButton(false),
     setNasProxyEnabled: (config) => config.setNasProxyEnabled(true),
     setMacCloseAction: (config) => config.setMacCloseAction('quit'),
