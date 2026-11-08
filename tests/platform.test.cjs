@@ -64,11 +64,11 @@ test('Linux uses the exit mode, binds no tray click and refuses the basic_text c
     assert.equal(behavior.rejectsBasicTextStorage, true);
 });
 
-test('the proxy executable sits next to the working directory on Windows, packaged or not', () => {
-    const appPath = 'C:\\Program Files\\飞牛影视\\resources\\app.asar';
-    for (const isPackaged of [false, true]) {
-        assert.equal(proxyExecutablePath('win32', { isPackaged, appPath }), '.\\third_party\\proxy\\proxy.exe');
-    }
+test('the packaged proxy executable sits in the install directory on Windows, whatever the working directory', () => {
+    assert.equal(
+        proxyExecutablePath('win32', { isPackaged: true, appPath: 'D:\\Apps\\飞牛影视\\resources\\app.asar' }),
+        'D:\\Apps\\飞牛影视\\third_party\\proxy\\proxy.exe',
+    );
 });
 
 test('the packaged proxy executable is two levels above app.asar on macOS and Linux', () => {
@@ -82,9 +82,13 @@ test('the packaged proxy executable is two levels above app.asar on macOS and Li
     );
 });
 
-test('the unpackaged proxy executable is relative to the working directory on macOS and Linux', () => {
+test('the unpackaged proxy executable is under the project directory, not the working directory', () => {
+    assert.equal(
+        proxyExecutablePath('win32', { isPackaged: false, appPath: 'D:\\src\\fntv' }),
+        'D:\\src\\fntv\\third_party\\proxy\\proxy.exe',
+    );
     for (const platform of ['darwin', 'linux']) {
-        assert.equal(proxyExecutablePath(platform, { isPackaged: false, appPath: '/src/fntv' }), './third_party/proxy/proxy');
+        assert.equal(proxyExecutablePath(platform, { isPackaged: false, appPath: '/src/fntv' }), '/src/fntv/third_party/proxy/proxy');
     }
 });
 
