@@ -106,3 +106,52 @@ test('every smoke target names the workflow platform it is built on', () => {
         'win32-x64': 'windows',
     });
 });
+
+// 日志器曾在 userData 改到 ~/.fntv 之前取目录，日志落进 Electron 默认的 userData（#87）。冒烟测试要能看出
+// 这个差别，所以每个目标的 Electron 默认 userData 都要是 ~/.fntv 以外的目录。
+test('every POSIX smoke target keeps logs in ~/.fntv/logs, apart from the Electron default userData', () => {
+    const home = path.join(os.tmpdir(), 'fntv-smoke-home');
+    const defaults = {
+        'linux-x64': path.join(home, '.config', 'fntv'),
+        'linux-arm64': path.join(home, '.config', 'fntv'),
+        'darwin-arm64': path.join(home, 'Library', 'Application Support', 'fntv'),
+        'darwin-x64': path.join(home, 'Library', 'Application Support', 'fntv'),
+    };
+    for (const [id, electronUserDataDir] of Object.entries(defaults)) {
+        const isolation = resolveTarget(id, {}).isolation(home);
+        assert.deepEqual(isolation, {
+            userDataDir: path.join(home, '.fntv'),
+            logDir: path.join(home, '.fntv', 'logs'),
+            electronUserDataDir,
+            args: [],
+            realProfile: false,
+        }, id);
+    }
+});
+
+test('the Windows smoke test on CI runs against the real profile so the Electron default userData is a separate directory', () => {
+    // app.getPath('home') 在 Windows 上不认 USERPROFILE，带 --user-data-dir 时 Electron 默认 userData
+    // 又和 ~/.fntv 是同一个目录，看不出日志写错了地方。CI 机器是一次性的，直接用真实的用户目录。
+    const env = { CI: 'true', USERPROFILE: 'C:\Users\runneradmin', APPDATA: 'C:\Users\runneradmin\AppData\Roaming' };
+    const isolation = resolveTarget('win32-x64', env).isolation(path.join(os.tmpdir(), 'fntv-smoke-home'));
+    assert.deepEqual(isolation, {
+        userDataDir: path.join('C:\Users\runneradmin', '.fntv'),
+        logDir: path.join('C:\Users\runneradmin', '.fntv', 'logs'),
+        electronUserDataDir: path.join('C:\Users\runneradmin\AppData\Roaming', 'fntv'),
+        args: [],
+        realProfile: true,
+    });
+});
+
+test('a local Windows smoke test keeps user data in the temporary home through --user-data-dir', () => {
+    const home = path.join(os.tmpdir(), 'fntv-smoke-home');
+    const isolation = resolveTarget('win32-x64', {}).isolation(home);
+    assert.deepEqual(isolation, {
+        userDataDir: path.join(home, '.fntv'),
+        logDir: path.join(home, '.fntv', 'logs'),
+        // Electron 跟着 --user-data-dir 改 userData，默认目录和 ~/.fntv 重合，这条检查在本地做不了。
+        electronUserDataDir: null,
+        args: [`--user-data-dir=${path.join(home, '.fntv')}`],
+        realProfile: false,
+    });
+});

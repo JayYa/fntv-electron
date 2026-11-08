@@ -144,6 +144,18 @@ pnpm run build:linux
 1. NVIDIA 控制面板 > 管理 3D 设置 > 程序设置 > 添加飞牛影视 > 应用
 2. 设置 > 系统 > 屏幕 > 图形显示 > 添加飞牛影视 > 选择高性能
 
+### 7. 日志在哪里？
+
+日志文件是 `app.log`，在用户目录下的 `.fntv/logs` 里。超过大小后会轮转成 `app-<时间>.log`，留在同一目录。
+
+| 平台 | 日志目录 |
+| --- | --- |
+| Windows | `C:\Users\{你的计算机用户名}\.fntv\logs` |
+| macOS | `~/.fntv/logs` |
+| Linux | `~/.fntv/logs` |
+
+旧版本把日志写在另一个目录：Windows 是 `%APPDATA%\fntv\logs`，macOS 是 `~/Library/Application Support/fntv/logs`，Linux 是 `~/.config/fntv/logs`。升级后旧日志留在原处，不再更新，可以手动删除。
+
 ## ⌨️ MPV 播放器
 
 1. 快捷键

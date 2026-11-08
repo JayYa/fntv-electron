@@ -18,6 +18,14 @@ const path = require('node:path');
 
 // 用 HOME 和 XDG 目录隔离：userData 是 app.getPath('home') 下的 .fntv
 // （src/public/constants.ts），MPV 用户配置在 ~/.config/mpv。
+//
+// isolation(home, env) 说明客户端在这次测试里的用户数据放在哪：
+// - userDataDir：客户端的 ~/.fntv，日志在它的 logs/ 下（resolveTarget 补上 logDir）；
+// - electronUserDataDir：Electron 默认的 userData，config.ts 改路径之前 app.getPath('userData') 的值。
+//   日志器曾在改路径前取目录，日志落在这里（#87），冒烟测试检查它下面没有 logs/。和 userDataDir
+//   重合、检查不出差别时是 null；
+// - args：额外的启动参数；
+// - realProfile：用的是这台机器真实的用户目录，测试前要确认两个目录都不存在，测试后删掉。
 function posixHomeEnvironment(home) {
     return {
         HOME: home,
@@ -70,8 +78,7 @@ function macDmgTarget(builderArch) {
         },
         // CFFIXED_USER_HOME 让 Foundation 的目录查询（Electron 默认 userData 靠它）也落在临时目录。
         environment: home => ({ ...posixHomeEnvironment(home), CFFIXED_USER_HOME: home }),
-        // 和 Linux 一样，日志落在 Electron 默认的 userData，macOS 是 ~/Library/Application Support/<name>。
-        logDir: home => path.join(home, 'Library', 'Application Support', 'fntv', 'logs'),
+        isolation: home => posixIsolation(home, path.join(home, 'Library', 'Application Support', 'fntv')),
     };
 }
 
@@ -145,9 +152,7 @@ const TARGETS = {
             return { executablePath: installerPath, uninstall() {} };
         },
         environment: posixHomeEnvironment,
-        // 日志器在 config.ts 把 userData 改到 ~/.fntv 之前就取了路径，日志落在 Electron 默认的
-        // userData（Linux 是 ~/.config/<name>），不在 ~/.fntv/logs。
-        logDir: home => path.join(home, '.config', 'fntv', 'logs'),
+        isolation: home => posixIsolation(home, path.join(home, '.config', 'fntv')),
     },
     'win32-x64': {
         platform: 'windows',
@@ -170,11 +175,9 @@ const TARGETS = {
                 uninstall: () => runUninstaller(installDir, uninstaller),
             };
         },
-        // app.getPath('home') 在 Windows 上不认 USERPROFILE，~/.fntv 靠 --user-data-dir 改到临时目录
-        // （src/public/constants.ts），日志也随之落在这里。USERPROFILE 隔离 os.homedir() 下的 MPV 用户配置。
+        // USERPROFILE 隔离 os.homedir() 下的 MPV 用户配置。
         environment: home => ({ USERPROFILE: home }),
-        args: home => [`--user-data-dir=${path.join(home, '.fntv')}`],
-        logDir: home => path.join(home, '.fntv', 'logs'),
+        isolation: windowsIsolation,
     },
 };
 
@@ -185,6 +188,29 @@ TARGETS['linux-arm64'] = {
     installerPattern: /^FNMedia_.+_linux_arm64\.AppImage$/,
 };
 
+// 日志器曾在 userData 改到 ~/.fntv 之前取目录（#87），Electron 默认 userData 和 ~/.fntv 必须是两个目录，
+// 冒烟测试才看得出日志写错了地方。
+function posixIsolation(home, electronUserDataDir) {
+    return { userDataDir: path.join(home, '.fntv'), electronUserDataDir, args: [], realProfile: false };
+}
+
+// app.getPath('home') 在 Windows 上不认 USERPROFILE，Electron 默认 userData 是 %APPDATA%\fntv。
+// 只能用 --user-data-dir 把 ~/.fntv 改到临时目录（src/public/constants.ts），但 Electron 在 JS 运行前
+// 也把 userData 改到这个目录，两者重合，看不出日志器取早了。CI 机器是一次性的，所以在 CI 上不带这个
+// 参数，用 runner 真实的用户目录；本地照旧放进临时目录，不碰开发者自己的 ~/.fntv。
+function windowsIsolation(home, env) {
+    if (env.CI === 'true') {
+        return {
+            userDataDir: path.join(env.USERPROFILE, '.fntv'),
+            electronUserDataDir: path.join(env.APPDATA, 'fntv'),
+            args: [],
+            realProfile: true,
+        };
+    }
+    const userDataDir = path.join(home, '.fntv');
+    return { userDataDir, electronUserDataDir: null, args: [`--user-data-dir=${userDataDir}`], realProfile: false };
+}
+
 function run(file, args) {
     const result = spawnSync(file, args, { stdio: 'inherit', timeout: 120000 });
     if (result.error || result.status !== 0) {
@@ -192,13 +218,20 @@ function run(file, args) {
     }
 }
 
-// 没写的项取默认值：userData 都是临时 home 下的 .fntv，没有额外启动参数。
-function resolveTarget(id) {
+// env 决定 Windows 目标在 CI 上还是本地的隔离方式（windowsIsolation）。日志都在客户端的 ~/.fntv/logs。
+function resolveTarget(id, env = process.env) {
     const target = TARGETS[id];
     if (!target) {
         throw new Error(`没有冒烟测试目标 ${id}，已有：${Object.keys(TARGETS).join(', ')}`);
     }
-    return { id, userDataDir: home => path.join(home, '.fntv'), args: () => [], ...target };
+    return {
+        id,
+        ...target,
+        isolation(home) {
+            const { userDataDir, electronUserDataDir, args, realProfile } = target.isolation(home, env);
+            return { userDataDir, logDir: path.join(userDataDir, 'logs'), electronUserDataDir, args, realProfile };
+        },
+    };
 }
 
 // 在目录里找唯一一个匹配的安装包。找到 0 个或多个都报错，避免测到旧版本。

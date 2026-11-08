@@ -13,7 +13,7 @@
 | `name`（`fntv`） | `package.json` | 决定应用名。Electron `safeStorage` 在 macOS 和 Linux 上按应用名找密钥，改名后可能解不开已保存的凭据，用户只能重新登录（`src/modules/fn_config/config.ts`）。 |
 | `productName`（`飞牛影视`） | `package.json` 的 `build` | 打包后它决定应用名，风险同 `name`；安装目录和快捷方式名也随之改变。 |
 | `appId`（`com.qiaokes.fntv`） | `package.json` 的 `build` | 打包工具用它生成 macOS bundle id 和 Windows 安装标识。改了会变成另一个应用，而不是升级。 |
-| `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、`proxy-secret` 和 Chromium 会话。改了等于丢配置，已运行的 Proxy 也认证不了。启动参数 `--user-data-dir` 能临时换掉它，只供冒烟测试隔离用户数据，不带参数时仍是 `~/.fntv`。这个开关是 Chromium 自己的，Electron 在 JS 运行前就把 `userData` 改到同一目录，Windows 冒烟测试的日志和 Chromium 数据靠这一点留在临时目录，所以不要换成应用自己的参数名。相对路径按工作目录转成绝对路径。 |
+| `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、`proxy-secret`、Chromium 会话和 `logs/`。改了等于丢配置，已运行的 Proxy 也认证不了。启动参数 `--user-data-dir` 能临时换掉它，只供冒烟测试隔离用户数据，不带参数时仍是 `~/.fntv`。这个开关是 Chromium 自己的，Electron 在 JS 运行前就把 `userData` 改到同一目录，本地 Windows 冒烟测试的日志和 Chromium 数据靠这一点留在临时目录，所以不要换成应用自己的参数名。在 `app.setPath` 之前加载的模块不能读 `app.getPath('userData')`，那时还是 Electron 默认目录，要用 `USER_DATA_PATH`（`src/modules/logger/logger.ts`，`tests/logDirectory.test.cjs`）。相对路径按工作目录转成绝对路径。 |
 | `persist:fntv` | `src/main/common/mainwin.ts` 等，用 `git grep` 找全 | 登录 Cookie 和访问码网关 Cookie 存在这个分区。改了用户要重新登录；只改一处则读写的不是同一个会话。 |
 | `third_party/fntv-mpv` | `package.json` 的 `extraFiles`、`mpvConfigHelpers.ts`、`build.yml` | 构建、打包和运行时都按这个路径找 MPV。 |
 | `FNMedia_*` 产物名 | `package.json` 的 `artifactName` | `src/modules/updater/updateChecker.ts` 按这个前缀和 `_win_x64` 这类后缀匹配下载链接。 |

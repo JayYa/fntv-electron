@@ -85,7 +85,7 @@ function requestProxyHealth(secret) {
 async function warmUp(executablePath, { timeoutMs }) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-warmup-'));
     const startedAt = Date.now();
-    const client = spawn(executablePath, [...target.args(home), '--remote-debugging-port=0'], {
+    const client = spawn(executablePath, [...target.isolation(home).args, '--remote-debugging-port=0'], {
         cwd: home,
         env: { ...process.env, ...target.environment(home) },
         detached: true,
@@ -139,6 +139,7 @@ async function warmUp(executablePath, { timeoutMs }) {
 
 describe(`installer smoke test (${target.id})`, () => {
     let home;
+    let isolation;
     let installation;
     let app;
     let child;
@@ -154,6 +155,13 @@ describe(`installer smoke test (${target.id})`, () => {
         assert.ok(occupied.error, fail('启动前检查', `端口 ${PROXY_PORT} 已被占用，先关掉本机正在运行的客户端`));
 
         home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-'));
+        isolation = target.isolation(home);
+        if (isolation.realProfile) {
+            // 用 CI 机器真实的用户目录（targets.cjs 的 windowsIsolation），已有内容时测试会改写它，
+            // 结束时还会删掉，也分不清日志是不是这次写的。
+            const existing = [isolation.userDataDir, isolation.electronUserDataDir].filter(dir => fs.existsSync(dir));
+            assert.deepEqual(existing, [], fail('启动前检查', `这些目录应当不存在：${existing.join(', ')}`));
+        }
         installation = process.env.FNTV_SMOKE_EXECUTABLE
             ? { executablePath: path.resolve(process.env.FNTV_SMOKE_EXECUTABLE), uninstall() {} }
             : target.install(findInstaller(target, path.resolve(process.env.FNTV_SMOKE_INSTALLER_DIR || path.join(root, 'release'))));
@@ -167,7 +175,7 @@ describe(`installer smoke test (${target.id})`, () => {
                 // 工作目录放在临时目录，像从桌面图标启动一样，不依赖仓库目录。
                 cwd: home,
                 env: { ...process.env, ...target.environment(home) },
-                args: target.args(home),
+                args: isolation.args,
                 timeout: 60000,
             });
         } catch (error) {
@@ -211,8 +219,8 @@ ${mainOutput.slice(-4000)}`));
             await Promise.race([app.close(), delay(15000)]).catch(() => {});
             killProcessTree(child);
         }
-        if (home) {
-            const logsDir = target.logDir(home);
+        if (isolation) {
+            const logsDir = isolation.logDir;
             if (fs.existsSync(logsDir)) {
                 fs.cpSync(logsDir, path.join(artifactsDir, 'logs'), { recursive: true });
                 const appLog = path.join(logsDir, 'app.log');
@@ -224,6 +232,11 @@ ${mainOutput.slice(-4000)}`));
             }
         }
         if (installation) installation.uninstall();
+        if (isolation?.realProfile) {
+            for (const dir of [isolation.userDataDir, isolation.electronUserDataDir]) {
+                fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+            }
+        }
         if (home) fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 });
     });
 
@@ -259,7 +272,7 @@ ${mainOutput.slice(-4000)}`));
     });
 
     it('starts a Proxy that passes the health check', async () => {
-        const secretFile = path.join(target.userDataDir(home), 'proxy-secret');
+        const secretFile = path.join(isolation.userDataDir, 'proxy-secret');
         const result = await poll(async () => {
             const secret = fs.existsSync(secretFile) ? fs.readFileSync(secretFile, 'utf8') : null;
             if (!secret) return { done: false, detail: `${secretFile} 不存在` };
@@ -270,6 +283,23 @@ ${mainOutput.slice(-4000)}`));
             return { done: healthy, detail: JSON.stringify(response) };
         }, 20000);
         assert.ok(result.done, fail('Proxy 健康检查', `20 秒内没有通过：${result.detail}，Proxy 输出见 proxy.log`));
+    });
+
+    it('writes app.log under ~/.fntv/logs', async () => {
+        const appLog = path.join(isolation.logDir, 'app.log');
+        const result = await poll(async () => ({ done: fs.existsSync(appLog) }), 10000);
+        assert.ok(result.done, fail('日志位置检查', `10 秒内 ${appLog} 没有出现`));
+    });
+
+    it('leaves no logs directory under the Electron default userData', t => {
+        // 日志器曾在 config.ts 改 userData 之前取目录，日志落在 Electron 默认的 userData 下（#87）。
+        // 本地 Windows 带 --user-data-dir，两个目录重合，这条在 CI 上检查（targets.cjs 的 windowsIsolation）。
+        if (!isolation.electronUserDataDir) {
+            t.skip('Electron 默认 userData 和 ~/.fntv 是同一个目录，这里分不出来，在 CI 上检查');
+            return;
+        }
+        const stray = path.join(isolation.electronUserDataDir, 'logs');
+        assert.equal(fs.existsSync(stray), false, fail('日志位置检查', `${stray} 不应存在，日志应只写在 ${isolation.logDir}`));
     });
 
     it('raises no uncaught exception in the main process', async () => {

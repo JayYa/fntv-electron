@@ -35,12 +35,13 @@
 `tests/smoke/` 把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。测试不引入源码，`pnpm test` 不包含它。
 
 - `tests/smoke/targets.cjs` 是目标平台的唯一来源（id 是 `<process.platform>-<process.arch>`，如 `linux-x64`、`darwin-arm64`、`win32-x64`，测试默认取当前机器）：在哪个 workflow 平台构建、安装包名、安装方式、用户数据隔离方式。断言在 `tests/smoke/installer.smoke.cjs`，所有目标共用。加平台时在 `targets.cjs` 加一项，再同步 `build-and-smoke.yml` 的 `select-targets`、`release.yml` 的 `Select platforms` 和 `Check installers`、`smoke-test.yml` 的平台列表，以及两个 workflow 的手动触发选项。漏改哪一处，`tests/releaseGate.test.cjs` 都会失败。
-- 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，改用启动参数 `--user-data-dir` 指定 `~/.fntv` 的位置（`src/public/constants.ts`），日志也随之写在它的 `logs/` 下；`USERPROFILE` 只用来隔离 MPV 用户配置。
-- 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（应用日志目录的副本，Linux 上是 `~/.config/fntv/logs`，不在 `~/.fntv` 里）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
+- 用户数据放在临时目录：Linux 和 macOS 改 `HOME` 和 `XDG_*`。Windows 上 `app.getPath('home')` 不认 `USERPROFILE`，本地改用启动参数 `--user-data-dir` 指定 `~/.fntv` 的位置（`src/public/constants.ts`）；`USERPROFILE` 只用来隔离 MPV 用户配置。
+- 日志应写在 `~/.fntv/logs`。测试检查 `app.log` 在那里，Electron 默认 userData（Linux 是 `~/.config/fntv`，macOS 是 `~/Library/Application Support/fntv`，Windows 是 `%APPDATA%ntv`）下没有 `logs/`（#87）。带 `--user-data-dir` 时 Electron 把默认 userData 也改到同一目录，这条检查不出问题，所以 Windows 在 CI 上（`CI=true`）不带这个参数，直接用 runner 的真实用户目录，测试前确认 `~/.fntv` 和 `%APPDATA%ntv` 都不存在，测试后删掉。本地 Windows 跑时这一条显示为 skip（`targets.cjs` 的 `windowsIsolation`）。
+- 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（`~/.fntv/logs` 的副本）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
 - 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
 - 在主进程里执行代码（`app.evaluate`）前先等 `app.firstWindow()`。客户端启动时创建主窗口期间收到的 `app.evaluate` 会以 `Resulting promise was garbage collected` 失败，主窗口页面出现后就不会了。
 - 主进程异常监听在主窗口出现后才装上。更早的异常只能靠 stderr 里的文字发现，而 Electron 默认弹错误框，不一定打印出来，这是已知盲区：表现为主窗口 30 秒内没出现，报错附有主进程输出的末尾，再看 `logs/app.log`。
-- macOS：`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。两个都在 Apple Silicon 的 `macos-latest` 上跑，x64 包经 Rosetta 运行，`process.arch` 断言证明客户端是 x64 进程。用户数据隔离另加 `CFFIXED_USER_HOME`，日志在 `~/Library/Application Support/fntv/logs`。
+- macOS：`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。两个都在 Apple Silicon 的 `macos-latest` 上跑，x64 包经 Rosetta 运行，`process.arch` 断言证明客户端是 x64 进程。用户数据隔离另加 `CFFIXED_USER_HOME`，Electron 默认 userData 也随之落在临时目录。
 - `darwin-x64` 在正式测试前先预热启动一次（`targets.cjs` 的 `warmup`）：不经 Playwright 直接启动客户端，用单独的临时用户数据目录，等 stderr 出现 `DevTools listening` 后杀掉进程组，确认客户端退出、端口 22345 不再响应，耗时打成 `::notice::`，预热超时或失败时测试直接失败。原因是 Rosetta 第一次运行 x64 Electron 要先转译：#92 在同一台 `macos-latest` 上连续直接启动 3 次，`darwin-x64` 到 `DevTools listening` 分别是 51952ms、5552ms、6733ms，转译缓存 `/var/db/oah` 从 2.7M 涨到 255M；`darwin-arm64` 是 2304ms、192ms、216ms，缓存不变。约 50 秒的一次性转译加上 Playwright 的开销会贴着或超过 `electron.launch` 的 60 秒超时。预热上限 120 秒，正式测试的超时和断言不变。
 
 ### 在 CI 上跑
