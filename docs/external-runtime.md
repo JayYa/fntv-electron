@@ -6,7 +6,7 @@
 
 - **MPV 归档**：`fntv-mpv-config` 发布的完整 zip，解压到 `third_party/fntv-mpv`。
 - **便携配置**：归档里的 `portable_config`，是同步的来源，由 `resolvePortableConfigDir` 定位。
-- **用户配置**：同步的目标。Windows 是 `~/AppData/Roaming/mpv`，其它平台是 `~/.config/mpv`（`mpvUserConfigDir`，`src/public/platform.ts`）。
+- **用户配置**：同步的目标，按 mpv 自己的查找规则定（`mpvUserConfigDir`，`src/public/platform.ts`）：设了 `MPV_HOME` 就是它；否则 Windows 是 `app.getPath('appData')` 下的 `mpv`（通常是 `%APPDATA%mpv`），其它平台是 `$XDG_CONFIG_HOME/mpv`，未设或不是绝对路径时 `~/.config/mpv`。Windows 上用打包的 mpv 时，`media.ts` 用 `--config-dir` 把同一个目录传给 mpv。用户自己的 mpv.exe 旁边有 `portable_config` 时 mpv 只读那里，同步不写那里。
 
 ## MPV 归档
 

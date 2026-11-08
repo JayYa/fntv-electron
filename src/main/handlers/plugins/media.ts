@@ -5,13 +5,13 @@ import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
 import { registerAppHook } from '../core/appHook';
 import * as log from '../../../modules/logger';
-import * as os from 'os';
 import * as fs from 'fs';
 import { ItemListRequest } from '../../../modules/fn_api/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
 import { getMpvConfigDir } from './mpvConfig';
+import { currentPlatform } from '../../../public/platform';
 import { resolveBundledMpvPath } from '../../common/mpvConfigHelpers';
 import { getProxySecret } from '../../common/proxy';
 import { createProxyPlaybackUrl, registerPlaybackSession } from '../../common/proxySession';
@@ -47,7 +47,7 @@ function getMpvPlayerPath(): string | undefined {
         return cachedPlayerPath;
     }
 
-    const platform = os.platform();
+    const platform = currentPlatform();
 
     if (platform === 'win32') {
         cachedPlayerPath = resolveBundledMpvPath({
@@ -449,7 +449,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         '--network-timeout=180',
         `--volume=${fnConfig.getMpvVolume()}`,
     ];
-    if (os.platform() === 'win32' && !fnConfig.getMpvPlayerPath()) {
+    if (currentPlatform() === 'win32' && !fnConfig.getMpvPlayerPath()) {
         // bundled mpv.exe 自带 portable_config；显式指向用户目录，避免状态写入安装目录。
         mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
