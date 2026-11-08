@@ -28,6 +28,17 @@ the upstream repo.
 fresh clone loses the setting, re-run that command before continuing. When in doubt, pass the
 repo explicitly: `gh issue list --repo JayYa/fntv-electron`.
 
+## Pushing to an existing PR
+
+A T3 thread's `branch` field is that worktree's local branch (`t3/...`), which is often not the PR's head branch. Before pushing to an existing PR, take the branch name from the PR and check that its head matches your base:
+
+```bash
+gh pr view <n> --json headRefName,headRefOid
+git push origin HEAD:"$(gh pr view <n> --json headRefName -q .headRefName)"
+```
+
+Pushing to the thread's branch name silently creates a new remote branch and leaves the PR unchanged. When writing a task for another agent, give the PR number, not the branch name from thread metadata.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
