@@ -100,3 +100,13 @@
   - Windows 上 `MPV_HOME` 也生效。用户自己指定 mpv 时，同步目录就是 mpv 读的目录；用打包的 mpv 时 `--config-dir` 传的仍是 `getMpvConfigDir()`，没设 `MPV_HOME` 时路径和以前一样。
   - 没有处理用户自己的 mpv.exe 旁边有 `portable_config` 的情况：mpv 只读那里，同步仍写 AppData。
   - `media.ts` 改用 `currentPlatform()`。ESLint 在 `platform.ts` 以外禁止 `os.platform()`、`os.arch()`，以及具名导入、`require('os').platform()`、解构和用别的名字导入 `os` 模块（`tests/eslintPlatformRules.test.cjs`）。
+
+## 2026-11-08 进度（#111、#112、#113 合并后）
+
+- 维护者合并了 PR #111（#78，commit `c63d4d2`）、#112（#94，commit `3059bd9`）、#113（#77，commit `0e411a9`）。三个都是 squash 合并，`git log origin/main` 里没有单独的 merge commit，这里写的是合并到 main 上的那个 commit。
+- 用 `gh issue view` 确认 #74 至 #78、#87、#94 七个 issue 都已关闭。
+- #113 在 Windows 上用 `app.getPath('appData')`，没有用 `%APPDATA%`。理由是 mpv 在 Windows 上调系统 API（`FOLDERID_RoamingAppData`）取这个目录，不读环境变量。这一条来自 #113 的实现报告，没有实测。
+- `MPV_HOME` 为空时按未设处理。
+- #113 没处理的两种情况开了新 issue，都标 `needs-triage`：
+  - #114：用户自己指定的 `mpv.exe` 旁边有 `portable_config` 时，mpv 只读那个目录，同步过去的配置不生效。
+  - #115：mpv 还会读旧的 `~/.mpv` 目录，客户端没有考虑。
