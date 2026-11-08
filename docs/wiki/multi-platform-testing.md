@@ -104,7 +104,7 @@
 
 ## 2026-11-08 决定：删掉 Release PR 冒烟路径
 
-- 维护者决定删掉 #95 在 `release.yml` 里加的“对 Release PR 分支构建并跑冒烟测试”的路径（`prs_created`、`pr` 输出，`select-matrix` 里的 Release PR 条件，`build-and-smoke` 的 `ref` 里取 `headBranchName` 的分支）。由 PR_PLACEHOLDER 实现。
+- 维护者决定删掉 #95 在 `release.yml` 里加的“对 Release PR 分支构建并跑冒烟测试”的路径（`prs_created`、`pr` 输出，`select-matrix` 里的 Release PR 条件，`build-and-smoke` 的 `ref` 里取 `headBranchName` 的分支）。由 #100 实现。
 - 理由：这条路径建立在“Release PR 不触发 `pull_request` workflow”的错误前提上（见上方核对补记）。事实是 release-please 开的 Release PR 会触发 `pull_request` workflow，要维护者批准后才运行；Release PR 一定改 `package.json`，批准后 `smoke-test.yml` 跑 5 个目标的冒烟测试，结果直接显示在 PR 上，不用再到 push 到 main 的 Release 运行里找。
 - 不变的部分：发版门禁（`publish` 等 5 个目标冒烟测试全部成功）、手动触发只构建和冒烟测试不发布、只有 `release-please` 和 `publish` 有写权限，仍由 `tests/releaseGate.test.cjs` 锁住。`build.yml`、`build-and-smoke.yml` 的 `ref` 输入保留：发版时要构建 release-please 打 tag 的提交（#62 起就有）。
 - 规范同步改正：`TESTING_STANDARDS.md`、`CODING_STANDARDS.md`、`release.yml`、`smoke-test.yml` 和 `tests/releaseGate.test.cjs` 里“Release PR 不触发 CI”的说法都改为“会触发、需维护者批准”。
