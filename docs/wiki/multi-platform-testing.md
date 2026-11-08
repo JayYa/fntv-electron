@@ -1,6 +1,6 @@
 # 多平台测试策略
 
-相关：[发布与更新链路](release-and-update.md)
+相关：[发布与更新链路](release-and-update.md)、[构建依赖与 MPV 插件同步](build-dependencies.md)（2026-11-08 构建下载 504 和 CI 缓存）
 
 ## 背景
 
@@ -109,3 +109,8 @@
 - 理由：这条路径建立在“Release PR 不触发 `pull_request` workflow”的错误前提上（见上方核对补记）。事实是 release-please 开的 Release PR 会触发 `pull_request` workflow，要维护者批准后才运行；Release PR 一定改 `package.json`，批准后 `smoke-test.yml` 跑 5 个目标的冒烟测试，结果直接显示在 PR 上，不用再到 push 到 main 的 Release 运行里找。
 - 不变的部分：发版门禁（`publish` 等 5 个目标冒烟测试全部成功）、手动触发只构建和冒烟测试不发布、只有 `release-please` 和 `publish` 有写权限，仍由 `tests/releaseGate.test.cjs` 锁住。`build.yml`、`build-and-smoke.yml` 的 `ref` 输入保留：发版时要构建 release-please 打 tag 的提交（#62 起就有）。
 - 规范同步改正：`TESTING_STANDARDS.md`、`CODING_STANDARDS.md`、`release.yml`、`smoke-test.yml` 和 `tests/releaseGate.test.cjs` 里“Release PR 不触发 CI”的说法都改为“会触发、需维护者批准”。
+- 2026-11-08，#100 squash 合并为 `5bf9504`（`actions/runs/42476908063` 是合并后 push 到 main 的 Release 运行，成功）。查 Release PR 是否在等批准，用 `gh run list --branch <head 分支>`，`gh pr checks` 这时显示 `no checks reported`（见[发布与更新链路](release-and-update.md)的“2026-11-08 Release PR 上的检查”）。
+
+### 待验证（2026-11-08 追加）
+
+- Release PR 经 `smoke-test.yml` 跑冒烟测试（维护者批准后）还没实际发生过。要等下一个有内容变更的 Release PR：批准后看 5 个目标是否都出现在 PR 上并通过。
