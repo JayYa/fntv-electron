@@ -10,3 +10,4 @@
 ## 子系统
 
 - [发布与更新链路](release-and-update.md)：构建、MPV 配置依赖、更新检查的事实和约束，以及 2026-11-07 起用 release-please 发版的决定和实现。
+- [多平台测试策略](multi-platform-testing.md)：只有 Windows 电脑时怎样覆盖 macOS 和 Linux，2026-11-08 决定分四层推进。
