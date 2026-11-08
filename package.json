@@ -18,7 +18,7 @@
         "start:mac": "pnpm run clean && pnpm run build:proxy:mac && pnpm run compile && electron .",
         "compile": "pnpm run clean && tsc && pnpm run build:preload",
         "build:preload": "node scripts/build-preload.cjs",
-        "lint": "eslint src resource/login",
+        "lint": "eslint src resource/login tests",
         "prepare": "git config core.hooksPath .githooks",
         "test": "pnpm run compile && node --test tests/*.test.cjs",
         "test:smoke": "node --test --test-reporter=spec --test-timeout=300000 tests/smoke/installer.smoke.cjs",

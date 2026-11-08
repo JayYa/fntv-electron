@@ -68,5 +68,16 @@ export default [
             '@typescript-eslint': tseslint.plugin
         },
         rules: sharedRules
+    },
+    {
+        // 测试和冒烟测试脚本，CommonJS，在 Node 里运行。
+        files: ['tests/**/*.cjs'],
+        languageOptions: {
+            sourceType: 'commonjs'
+        },
+        plugins: {
+            '@typescript-eslint': tseslint.plugin
+        },
+        rules: sharedRules
     }
 ];
