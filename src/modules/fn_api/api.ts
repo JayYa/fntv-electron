@@ -375,12 +375,12 @@ export class ApiService {
     }
 
     /**
-     * 记录播放状态
-     * @param statusData - 播放状态数据
+     * 保存播放进度
+     * @param record - 播放进度
      * @returns 返回记录结果的Promise
      */
-    recordPlayStatus(statusData: types.PlayStatusData): Promise<fn.ApiResponse<any>> {
-        return fn.request(this.baseURL, '/v/api/v1/play/record', HttpMethod.POST, this.token, statusData);
+    savePlayRecord(record: types.PlayRecord): Promise<fn.ApiResponse<any>> {
+        return fn.request(this.baseURL, '/v/api/v1/play/record', HttpMethod.POST, this.token, record);
     }
 
     /**
