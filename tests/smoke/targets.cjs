@@ -86,7 +86,7 @@ const TARGETS = {
         // userData（Linux 是 ~/.config/<name>），不在 ~/.fntv/logs。
         logDir: home => path.join(home, '.config', 'fntv', 'logs'),
     },
-    'windows-x64': {
+    'win32-x64': {
         installerPattern: /^FNMedia_.+_win_x64\.exe$/,
         // NSIS 安装包 /S 静默安装到临时目录，从安装目录启动。/D 必须是最后一个参数，路径不加引号。
         install(installerPath) {
