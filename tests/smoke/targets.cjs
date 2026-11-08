@@ -87,6 +87,13 @@ const TARGETS = {
     },
 };
 
+// Linux arm64 和 x64 的安装、隔离、日志位置都一样，只有安装包名不同：arm64 的产物名就是 arm64。
+// 在原生 arm64 机器上运行，Proxy 二进制架构不对时启动不了，由 Proxy 健康检查那条断言发现。
+TARGETS['linux-arm64'] = {
+    ...TARGETS['linux-x64'],
+    installerPattern: /^FNMedia_.+_linux_arm64\.AppImage$/,
+};
+
 function resolveTarget(id) {
     const target = TARGETS[id];
     if (!target) {

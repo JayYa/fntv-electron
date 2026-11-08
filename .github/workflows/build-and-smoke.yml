@@ -35,7 +35,7 @@ jobs:
           case "$PLATFORM" in
             linux)
               echo 'build-os=ubuntu-latest' >> "$GITHUB_OUTPUT"
-              echo 'smoke-matrix={"include":[{"target":"linux-x64","runner":"ubuntu-latest"}]}' >> "$GITHUB_OUTPUT"
+              echo 'smoke-matrix={"include":[{"target":"linux-x64","runner":"ubuntu-latest"},{"target":"linux-arm64","runner":"ubuntu-24.04-arm"}]}' >> "$GITHUB_OUTPUT"
               ;;
             macos)
               # 一次构建出 x64 和 arm64 两个 dmg，都在 Apple Silicon 机器上测，x64 包经 Rosetta 运行。
