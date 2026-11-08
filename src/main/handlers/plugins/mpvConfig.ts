@@ -1,5 +1,7 @@
 import { app } from 'electron';
+import * as fs from 'fs';
 import * as os from 'os';
+import * as fnConfig from '../../../modules/fn_config/config';
 import * as logger from '../../../modules/logger';
 import {
     resolvePortableConfigDir,
@@ -13,8 +15,15 @@ import { currentPlatform, mpvUserConfigDir } from '../../../public/platform';
  */
 
 // 获取用户MPV配置目录。打包的 mpv 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
-export function getMpvConfigDir(): string {
-    return mpvUserConfigDir(currentPlatform(), { homeDir: os.homedir(), appDataDir: app.getPath('appData') }, process.env);
+// userMpvPath 是用户自己指定的 mpv；打包的 mpv 不传，它旁边的 portable_config 会被 --config-dir 盖过。
+export function getMpvConfigDir(userMpvPath?: string): string {
+    return mpvUserConfigDir(
+        currentPlatform(),
+        { homeDir: os.homedir(), appDataDir: app.getPath('appData') },
+        process.env,
+        userMpvPath,
+        fs.existsSync,
+    );
 }
 
 // 获取应用中的portable_config目录
@@ -29,7 +38,7 @@ function getPortableConfigDir(): string {
 // 检查并复制配置文件
 function initializeMpvConfig(): void {
     try {
-        const mpvConfigDir = getMpvConfigDir();
+        const mpvConfigDir = getMpvConfigDir(fnConfig.getMpvPlayerPath());
         const portableConfigDir = getPortableConfigDir();
         const result = synchronizeMpvConfig(portableConfigDir, mpvConfigDir);
         if (result === 'initialized') {
