@@ -55,7 +55,7 @@
 - 改正前 README 说 Linux 插件要去 fntv-mpv 自行安装，与上面的代码不符。
 - 改正后：macOS 自己装 MPV，推荐 Homebrew；Linux 自己装 MPV（版本 > 0.37.0）。安装包只带插件和配置，启动时同步到 `~/.config/mpv`。用户配置里已有自己的 `scripts` 目录时只更新 `uosc_danmaku`，其它插件要手动复制一次。
 
-## 2026-11-09 升级 MPV 归档到 fntv-mpv-v20261108_233327（PR #__PR__）
+## 2026-11-09 升级 MPV 归档到 fntv-mpv-v20261108_233327（PR #123）
 
 - 新归档：`JayYa/fntv-mpv-config` tag `fntv-mpv-v20261108_233327`（2026-11-08T15:33Z 发布），资产 `mpv-package-20261108_153320.zip`（57,758,202 B），sha256 `783cc16db5c70e88cd30f8c16f20843799a6983ef20eae2c562f549b7a67b1fc`。本地 `gh release download` 后算的 sha256 和 Release 页面的 digest 一致。旧归档是 `fntv-mpv-v20260826_013404` 的 `mpv-package-20260825_173358.zip`（sha256 `1d9f5fe6…5c5b`）。
 - 来源变了：旧 tag 是上游同 tag 的镜像；新 tag 由 `JayYa/fntv-mpv-config` 的 `release` 分支（`7776970`，"feat: add thumbfast thumbnail plugin"）自己构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 Release，最新仍是 `fntv-mpv-v20260826_013404`，上游 `release` 分支落后 `7776970` 3 个提交。`docs/external-runtime.md` 同步改了这句。
