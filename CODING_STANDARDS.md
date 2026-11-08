@@ -76,7 +76,7 @@
 
 ## 平台差异
 
-- 只有 `src/public/platform.ts` 读取 `process.platform` 和 `process.arch`，其它文件用 `currentPlatform()`、`currentArch()`（`eslint.config.mjs` 的 `no-restricted-properties`）。维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。
+- 只有 `src/public/platform.ts` 读取 `process.platform`、`process.arch`，或调用 `os.platform()`、`os.arch()`，其它文件用 `currentPlatform()`、`currentArch()`（`eslint.config.mjs` 的 `no-restricted-properties` 和 `no-restricted-syntax`）。`os` 模块的具名导入 `platform`、`arch`、`require('os').platform()` 和解构都被拦下；整体导入 `os` 模块时只能用 `os` 这个名字（`tests/eslintPlatformRules.test.cjs`）。维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。
 - 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`proxyExecutablePath`、`mpvUserConfigDir`、`expectedAssetName`），调用处只读结果。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`tests/platform.test.cjs`）。
 - `currentPlatform()` 每次调用时读取，不在模块加载时缓存。已有测试靠改写 `process.platform` 模拟 Linux（`tests/helpers/credentialConfig.cjs`）。
 

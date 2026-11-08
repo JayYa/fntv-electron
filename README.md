@@ -50,7 +50,7 @@ sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {
 
 - Linux 需要自己安装 MPV 播放器（版本 > 0.37.0）。AppImage 下载后先执行 `chmod +x` 加上可执行权限。
 
-macOS 和 Linux 的安装包不带 MPV 播放器，只带 MPV 插件和配置。客户端每次启动会把它们同步到 `~/.config/mpv`，不用自己装插件：
+macOS 和 Linux 的安装包不带 MPV 播放器，只带 MPV 插件和配置。客户端每次启动会把它们同步到 `~/.config/mpv`（设了 `XDG_CONFIG_HOME` 时是 `$XDG_CONFIG_HOME/mpv`，设了 `MPV_HOME` 时是它本身，和 MPV 读取配置的目录一致），不用自己装插件：
 
 - `~/.config/mpv/scripts` 不存在时，复制全部插件和配置，已有的同名文件（例如你自己的 `mpv.conf`、`input.conf`）保留不覆盖。
 - `~/.config/mpv/scripts` 已存在时，只更新弹幕插件 `scripts/uosc_danmaku`，其它文件不动。之前用过 MPV、已经有 `scripts` 目录的话，`uosc`、`smart_skip` 等其它插件不会自动补上，需要从 [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config/releases) 的归档里把 `portable_config` 下缺的文件手动复制过去。

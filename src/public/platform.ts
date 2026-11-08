@@ -85,9 +85,32 @@ export function proxyExecutablePath(platform: NodeJS.Platform, app: { isPackaged
     return p.join(baseDir, 'third_party', 'proxy', platform === 'win32' ? 'proxy.exe' : 'proxy');
 }
 
-/** 用户 MPV 配置目录：Windows 是 ~/AppData/Roaming/mpv，其它平台是 ~/.config/mpv（docs/external-runtime.md）。 */
-export function mpvUserConfigDir(platform: NodeJS.Platform, homeDir: string): string {
-    return platform === 'win32'
-        ? path.win32.join(homeDir, 'AppData', 'Roaming', 'mpv')
-        : path.posix.join(homeDir, '.config', 'mpv');
+export interface UserDirs {
+    /** os.homedir()。 */
+    homeDir: string;
+    /** app.getPath('appData')。Windows 上是漫游 AppData，与 mpv 用的 FOLDERID_RoamingAppData 是同一个目录。 */
+    appDataDir: string;
+}
+
+/**
+ * 用户 MPV 配置目录，按 mpv 的查找规则（#77，docs/external-runtime.md；mpv 源码 options/path.c、osdep/path-unix.c、
+ * osdep/path-win.c）：MPV_HOME 优先，各平台都读；否则 Windows 是漫游 AppData 下的 mpv，其它平台是
+ * $XDG_CONFIG_HOME/mpv（mpv 只认绝对路径），否则 ~/.config/mpv。
+ * 空的 MPV_HOME 在 mpv 里等于不读用户配置，这里按未设处理，同步仍有地方可写。
+ * 不处理用户自己的 mpv.exe 旁边有 portable_config（mpv 只读那里），也不处理 ~/.mpv 旧目录。
+ */
+export function mpvUserConfigDir(
+    platform: NodeJS.Platform,
+    dirs: UserDirs,
+    env: Record<string, string | undefined>,
+): string {
+    if (env.MPV_HOME) {
+        return env.MPV_HOME;
+    }
+    if (platform === 'win32') {
+        return path.win32.join(dirs.appDataDir, 'mpv');
+    }
+    const xdgConfigHome = env.XDG_CONFIG_HOME;
+    const configHome = xdgConfigHome?.startsWith('/') ? xdgConfigHome : path.posix.join(dirs.homeDir, '.config');
+    return path.posix.join(configHome, 'mpv');
 }

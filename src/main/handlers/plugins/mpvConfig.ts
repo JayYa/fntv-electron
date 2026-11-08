@@ -12,9 +12,9 @@ import { currentPlatform, mpvUserConfigDir } from '../../../public/platform';
  * 初始化用户 MPV 配置，并同步由应用托管的插件代码。
  */
 
-// 获取用户MPV配置目录
+// 获取用户MPV配置目录。打包的 mpv 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
 export function getMpvConfigDir(): string {
-    return mpvUserConfigDir(currentPlatform(), os.homedir());
+    return mpvUserConfigDir(currentPlatform(), { homeDir: os.homedir(), appDataDir: app.getPath('appData') }, process.env);
 }
 
 // 获取应用中的portable_config目录

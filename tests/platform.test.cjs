@@ -97,8 +97,37 @@ test('the unpackaged proxy executable is under the project directory, not the wo
     }
 });
 
-test('the user MPV config lives in AppData on Windows and ~/.config elsewhere', () => {
-    assert.equal(mpvUserConfigDir('win32', 'C:\\Users\\me'), 'C:\\Users\\me\\AppData\\Roaming\\mpv');
-    assert.equal(mpvUserConfigDir('darwin', '/Users/me'), '/Users/me/.config/mpv');
-    assert.equal(mpvUserConfigDir('linux', '/home/me'), '/home/me/.config/mpv');
+const windowsDirs = { homeDir: 'C:\\Users\\me', appDataDir: 'D:\\Profiles\\me\\Roaming' };
+const macDirs = { homeDir: '/Users/me', appDataDir: '/Users/me/Library/Application Support' };
+const linuxDirs = { homeDir: '/home/me', appDataDir: '/home/me/.config' };
+
+test('without environment overrides the user MPV config is in the roaming AppData folder on Windows and ~/.config elsewhere', () => {
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, {}), '/Users/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, {}), '/home/me/.config/mpv');
+});
+
+test('macOS and Linux put the user MPV config under XDG_CONFIG_HOME when it is set', () => {
+    const env = { XDG_CONFIG_HOME: '/data/config' };
+    assert.equal(mpvUserConfigDir('darwin', macDirs, env), '/data/config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, env), '/data/config/mpv');
+});
+
+test('MPV_HOME is the user MPV config itself and wins over XDG_CONFIG_HOME and AppData', () => {
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '/opt/mpv-home', XDG_CONFIG_HOME: '/data/config' }), '/opt/mpv-home');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, { MPV_HOME: '/opt/mpv-home' }), '/opt/mpv-home');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: 'E:\\mpv-home' }), 'E:\\mpv-home');
+});
+
+test('a relative XDG_CONFIG_HOME is ignored, as mpv only accepts an absolute one', () => {
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { XDG_CONFIG_HOME: 'config' }), '/home/me/.config/mpv');
+});
+
+test('empty MPV_HOME and XDG_CONFIG_HOME count as unset', () => {
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '', XDG_CONFIG_HOME: '' }), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: '' }), 'D:\\Profiles\\me\\Roaming\\mpv');
+});
+
+test('Windows ignores XDG_CONFIG_HOME for the user MPV config', () => {
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { XDG_CONFIG_HOME: 'E:\\xdg' }), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
