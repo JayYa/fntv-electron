@@ -80,10 +80,11 @@ test('Linux x64 picks the x86_64 AppImage even when arm64 is listed first', asyn
     assert.equal(await downloadFileName(t, [LINUX_ARM64, LINUX_X86_64]), LINUX_X86_64);
 });
 
-test('Linux x64 still picks an AppImage named x64', async (t) => {
+// 发版产物里 Linux x64 叫 x86_64（v2.7.2 的 Release 核对过），不认 x64
+test('Linux x64 ignores an AppImage named x64', async (t) => {
     simulateHost(t, 'linux', 'x64');
 
-    assert.equal(await downloadFileName(t, [LINUX_ARM64, LINUX_X64]), LINUX_X64);
+    assert.equal(await downloadFileName(t, [LINUX_ARM64, LINUX_X64]), null);
 });
 
 test('Linux x64 gets no download link when only arm64 is published', async (t) => {
@@ -143,6 +144,32 @@ for (const [platform, arch, expected] of [
         assert.equal(await downloadFileName(t, PUBLISHED_ASSETS), expected);
     });
 }
+
+for (const [platform, arch] of [
+    ['win32', 'arm64'],
+    ['win32', 'ia32'],
+    ['darwin', 'ia32'],
+    ['linux', 'ia32'],
+    ['freebsd', 'x64'],
+]) {
+    test(`${platform} ${arch} gets no download link because no installer is built for it`, async (t) => {
+        simulateHost(t, platform, arch);
+
+        assert.equal(await downloadFileName(t, PUBLISHED_ASSETS), null);
+    });
+}
+
+test('an installer named for another version is not offered as the latest download', async (t) => {
+    simulateHost(t, 'win32', 'x64');
+
+    assert.equal(await downloadFileName(t, ['FNMedia_2.6.2_win_x64.exe']), null);
+});
+
+test('an asset that only resembles the installer name is not offered', async (t) => {
+    simulateHost(t, 'darwin', 'arm64');
+
+    assert.equal(await downloadFileName(t, ['FNMedia_2.7.0_mac_arm64_debug.dmg', 'fnmedia_2.7.0_mac_arm64.dmg']), null);
+});
 
 for (const [tagName, current, hasUpdate] of [
     ['v2.7.0', '2.6.2', true],
