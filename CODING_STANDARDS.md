@@ -106,7 +106,7 @@
 - 发版走 `release.yml`：push 到 `main` 时 release-please 维护 Release PR；建好或更新 Release PR 的那次运行对 PR 的 head 分支构建并跑冒烟测试，不发布。合并后建 draft Release，三平台构建、5 个安装包的冒烟测试全部成功，`publish` 核对安装包名并上传后才转正式。更新检查只看正式 Release，有安装包启动不了或资产不全时不能公开。GITHUB_TOKEN 创建的 Release 和 Release PR 都不触发其它 workflow，构建、冒烟测试和上传都要用 `needs` 接在同一个 workflow 里。手动触发只构建和跑冒烟测试，不发布，产物留在 Actions artifacts。冒烟测试失败后的处理见 `TESTING_STANDARDS.md` 的“发版门禁失败后”。构建步骤只在 `build.yml` 写一份，`release.yml` 和 `build-and-smoke.yml` 都调用它。
 - 版本号和 `CHANGELOG.md` 由 Release PR 改，不手动改 `package.json` 的 `version` 和 `.release-please-manifest.json`。release-please 的配置在 `release-please-config.json`。
 - `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub（`tests/standards.test.cjs`）。
-- 构建依赖的外部资产固定 tag 和 sha256（`build.yml` 的 `Download third-party dependencies`）。
+- 构建依赖的外部资产固定 tag 和 sha256，按 sha256 缓存，命中缓存也校验（`build.yml` 的 `Download third-party dependencies`，`tests/releaseGate.test.cjs`）。
 - `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
 - 工作流不出现 `head_commit`、`releases/latest` 和 `secrets.`（`tests/standards.test.cjs`）。
 
