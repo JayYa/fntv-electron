@@ -51,6 +51,15 @@ jobs:
       - name: Run lint
         run: pnpm run lint
 
+      # 没用到的依赖、用到却没写进 package.json 的包和命令（配置在 knip.jsonc）。
+      - name: Check unused dependencies
+        run: pnpm run knip
+
+      # go.mod、go.sum 和代码的导入不一致时打印差异并失败，本地用 go mod tidy 修。
+      - name: Check Go modules are tidy
+        run: go mod tidy -diff
+        working-directory: src/modules/proxy
+
       - name: Run Node tests
         run: pnpm test
 

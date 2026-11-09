@@ -6,7 +6,8 @@
 - `pnpm run compile`：先清空 `dest/` 再运行 `tsc`，然后打包 preload 到 `dest/preload/bundle.js`，已删除源文件的旧 js 不会留下来被 `readdirSync` 加载。`tsBuildInfoFile` 要留在 `dest/` 里，放到外面时 `tsc` 会认为无需输出，留下空目录。`pnpm run watch` 同时运行 `tsc --watch` 和 esbuild 监听，不清理，删过文件后跑一次 `compile`。
 - `go test ./...`：改 Go 代码时在 `src/modules/proxy` 下运行。
 - `pnpm run lint`：用 ESLint 检查 `src/**/*.ts`、`resource/login/*.js` 和 `tests/**/*.cjs`，规则在 `eslint.config.mjs`。
-- CI 在 Windows、macOS 和 Linux 上各跑一遍这三项（`.github/workflows/ci.yml`）。
+- `pnpm run knip`：检查没用到的依赖、用到却没写进 `package.json` 的包和命令，配置在 `knip.jsonc`。`go mod tidy -diff`：在 `src/modules/proxy` 下检查 `go.mod`、`go.sum` 是否整洁。
+- CI 在 Windows、macOS 和 Linux 上各跑一遍这五项（`.github/workflows/ci.yml`）。
 
 ### `Electron failed to install correctly`
 

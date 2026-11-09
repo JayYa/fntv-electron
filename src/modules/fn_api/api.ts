@@ -5,14 +5,14 @@ import * as path from 'path';
 import { app } from 'electron';
 import log from '../logger';
 import * as types from './types';
-import NodeCache from 'node-cache';
+import { TtlCache } from './ttlCache';
 import { createApiCacheKey } from './cacheKey';
 
 export class ApiService {
     private baseURL: string;
     private tempDir: string;
     private token: string;
-    private static cache: NodeCache = new NodeCache({ stdTTL: 300 }); // 静态缓存实例，类共享
+    private static cache = new TtlCache({ defaultTtl: 300 }); // 静态缓存实例，类共享
 
     /**
      * 创建api服务实例
