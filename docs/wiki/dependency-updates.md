@@ -62,3 +62,7 @@
   - CI 用的 Node：26 自 2026-10-28 起是 Active LTS。在 PR head 上用 Node 26.13.0 本地跑 install（yauzl override 仍有效）、tsc、lint、test 和 Windows 打包都通过，冒烟测试没跑。
   - `@types/node`：运行时是 Electron 内置的 Node（Electron 38 是 22.22.0，45 是 24.22.2），用 26 的类型会让 tsc 放过运行时没有的 API。
   - 配合改动（本节所在 PR）：`renovate.json` 加规则，`@types/node` 的 `allowedVersions` 为 `<23`，跟随 Electron 38；`platform.ts` 的 `path.PlatformPath` 改成 `typeof path.posix`，以后升 `@types/node` 25+ 不再卡在这里。合并后等 Renovate 重建 #139，预计只剩 workflow 的 Node 26，三平台构建和冒烟测试都绿后再合并。#134 合并时把上限改成 `<25`。
+
+## 2026-11-09 #138、#140 合并
+
+- 2026-11-09 维护者合并 #138（`ffd2e7b`，js-yaml 5）和 #140（`7557fb3`，`@types/node` 上限 `<23`）。#140 的 CI 第 1 次尝试 Windows、macOS 因 Electron 下载 504 失败，重跑后通过；原因和改法见 [构建依赖与 MPV 插件同步](build-dependencies.md) 的“2026-11-09 CI Test job 的 Electron 下载改为单独步骤，带缓存和重试”。
