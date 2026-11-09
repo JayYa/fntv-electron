@@ -162,6 +162,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  node-mpv-2@2.0.0-beta.3: c212d17d7f41b1a15f16844f57405efc39158c9ac19dc1163ad4c314aca66935
+
 importers:
 
   .:
@@ -171,7 +174,7 @@ importers:
         version: 1.21.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
       node-mpv-2:
         specifier: 2.0.0-beta.3
-        version: 2.0.0-beta.3
+        version: 2.0.0-beta.3(patch_hash=c212d17d7f41b1a15f16844f57405efc39158c9ac19dc1163ad4c314aca66935)
       semver:
         specifier: 7.8.6
         version: 7.8.6
@@ -3867,7 +3870,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-mpv-2@2.0.0-beta.3: {}
+  node-mpv-2@2.0.0-beta.3(patch_hash=c212d17d7f41b1a15f16844f57405efc39158c9ac19dc1163ad4c314aca66935): {}
 
   nopt@9.0.0:
     dependencies:

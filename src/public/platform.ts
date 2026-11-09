@@ -132,3 +132,30 @@ export function mpvUserConfigDir(
     }
     return standardDir;
 }
+
+/** MPV JSON IPC 的地址。isFile 为 true 时它是文件系统里的 Unix socket，播放结束后由调用方删除。 */
+export interface MpvIpcSocket {
+    path: string;
+    isFile: boolean;
+}
+
+/** Unix socket 路径的字节上限：macOS 的 sun_path 是 104 字节（含结尾的 0），Linux 是 108。 */
+const UNIX_SOCKET_PATH_MAX_BYTES = 103;
+
+/**
+ * 一次播放用的 MPV IPC 地址，id 由调用方保证唯一（进程号加随机串）。node-mpv-2 默认用固定的
+ * \\.\pipe\mpvserver 或 /tmp/node-mpv.sock，start() 先连这个地址，连上 MPV 就直接接管，
+ * 用户自己开着带同名 IPC 的 MPV 或客户端开了两份时会连错（docs/wiki/mpv-ipc.md）。
+ * Windows 是命名管道，不落盘；其它平台放在 tmpDir 下，超过 sun_path 上限时 MPV 绑定不了，改放 /tmp。
+ */
+export function mpvIpcSocket(platform: NodeJS.Platform, tmpDir: string, id: string): MpvIpcSocket {
+    const name = `fntv-mpv-${id}`;
+    if (platform === 'win32') {
+        return { path: `\\\\.\\pipe\\${name}`, isFile: false };
+    }
+    const socketPath = path.posix.join(tmpDir, `${name}.sock`);
+    if (Buffer.byteLength(socketPath) <= UNIX_SOCKET_PATH_MAX_BYTES) {
+        return { path: socketPath, isFile: true };
+    }
+    return { path: path.posix.join('/tmp', `${name}.sock`), isFile: true };
+}

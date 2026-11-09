@@ -9,6 +9,7 @@ const {
     platformBehavior,
     proxyExecutablePath,
     mpvUserConfigDir,
+    mpvIpcSocket,
 } = require('../dest/public/platform.js');
 
 test('platformBehavior defaults to the platform the app runs on', () => {
@@ -178,4 +179,24 @@ test('MPV_HOME wins over portable_config', onWindowsHost, t => {
     fs.mkdirSync(path.join(mpvDir, 'portable_config'));
     const env = { MPV_HOME: 'E:\\mpv-home' };
     assert.equal(mpvUserConfigDir('win32', windowsDirs, env, path.join(mpvDir, 'mpv.exe'), fs.existsSync), 'E:\\mpv-home');
+});
+
+test('Windows gives each playback its own named pipe instead of the shared mpvserver pipe', () => {
+    const socket = mpvIpcSocket('win32', 'C:\\Users\\me\\AppData\\Local\\Temp', '4242-0a1b2c3d');
+    assert.deepEqual(socket, { path: '\\\\.\\pipe\\fntv-mpv-4242-0a1b2c3d', isFile: false });
+    assert.notEqual(mpvIpcSocket('win32', 'C:\\Temp', '4242-ffffffff').path, socket.path);
+});
+
+test('macOS and Linux put the socket file in the temp directory instead of /tmp/node-mpv.sock', () => {
+    const macTmp = '/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T';
+    assert.deepEqual(mpvIpcSocket('darwin', macTmp, '4242-0a1b2c3d'), {
+        path: `${macTmp}/fntv-mpv-4242-0a1b2c3d.sock`,
+        isFile: true,
+    });
+    assert.deepEqual(mpvIpcSocket('linux', '/tmp', '4242-0a1b2c3d'), { path: '/tmp/fntv-mpv-4242-0a1b2c3d.sock', isFile: true });
+});
+
+test('a temp directory too long for a Unix socket address falls back to /tmp', () => {
+    const longTmp = `/home/me/${'x'.repeat(100)}`;
+    assert.deepEqual(mpvIpcSocket('linux', longTmp, '4242-0a1b2c3d'), { path: '/tmp/fntv-mpv-4242-0a1b2c3d.sock', isFile: true });
 });
