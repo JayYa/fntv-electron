@@ -69,3 +69,15 @@
 - 已有 `scripts` 目录的用户升级后只换 `uosc_danmaku`（见上方“插件同步”），uosc 5.13.0 和 thumbfast 不会自动装上，和 README 已写的手动复制说明一致。
 - 本地用 Git Bash 的 `unzip` 解压新旧两个归档都报 `checkdir error: mpv exists but is not directory`，跳过 `mpv/fonts.conf`。推测是 MSYS 把 `mpv` 当成已解压的 `mpv.exe`，旧归档也一样，不是这次引入的；CI 的 Windows 用 `Expand-Archive`，没有核实它是否受影响。
 - 冒烟测试用新归档跑的结果没有记录，待 CI。
+
+## 2026-11-09 CI Test job 的 Electron 下载改为单独步骤，带缓存和重试
+
+- 起因：PR #140 的 CI 运行 [`42566088223`](https://github.com/JayYa/fntv-electron/actions/runs/42566088223)（head `2c8ed82`）第 1 次尝试，Windows 和 macOS 的 Test 都失败在 `pnpm install`：`node_modules/electron postinstall: HTTPError: Response code 504`，Linux 通过；第 2 次尝试全过。`ci.yml` 的 Test job 每次安装都由 `electron` 的 postinstall 从 GitHub 下载 Electron zip，没有缓存，失败时整个 install 失败。和 #101 的构建下载 504 是同一类问题，504 的原因仍没有排查。
+- 先考虑整个跳过下载（`ELECTRON_SKIP_BINARY_DOWNLOAD=1`）。`electron@38.8.6` 的 `install.js:14` 支持它，设了直接以 0 退出；`electron.d.ts` 在 npm 包里，`tsc` 和 lint 不受影响。但 `node_modules/electron/index.js` 在没有 `path.txt` 时抛 `Electron failed to install correctly`。本地移走 `path.txt` 跑 `node --test tests/*.test.cjs`：345 个里失败 2 个，`tests/accessCodeSession.test.cjs`（`dest/main/common/accessCodeSession.js` 顶层 `import { net, session } from 'electron'`）整个文件加载失败，`tests/standards.test.cjs` 的 `electron finished extracting its binary`（防 `yauzl` 回归）失败。所以 Test job 需要二进制，不能整个跳过。
+- 改法（本节所在 PR，`ci.yml`）：
+  - `Install dependencies` 设 `ELECTRON_SKIP_BINARY_DOWNLOAD: '1'`，postinstall 不下载，其它包的安装脚本照常跑。
+  - 新增 `Download Electron binary`：运行 `node node_modules/electron/install.js`，失败重试，共 5 次，间隔 15、30、45、60 秒，最后检查 `path.txt`，`timeout-minutes: 10`。`install.js` 先看 `dist/version` 和 `path.txt`，已装好时不下载。
+  - 前后各加 `actions/cache/restore`、`actions/cache/save`（v6.1.0，`continue-on-error`，未命中才保存，save 紧跟下载步骤），路径是 #101 核实过的三个平台的 `@electron/get` 默认目录，key `electron-${{ runner.os }}-${{ hashFiles('node_modules/electron/package.json') }}`，只随 Electron 版本变化。
+- 缓存的局限：`ci.yml` 只在 `pull_request` 上跑，缓存按 PR 的 ref 隔离，只在同一个 PR 的后续推送和重跑里命中，新 PR 的第一次运行仍要下载，主要靠重试。没有给 `ci.yml` 加 `push: main` 来预热缓存。
+- 测试（新文件 `tests/ciElectronDownload.test.cjs`）：检查 install 设了跳过、下载步骤在 install 和测试之间、缓存 restore/save 的约定和 key；用桩 `node` 实际跑下载步骤，前 2 次失败时第 3 次成功，一直失败时 5 次后步骤失败。`CODING_STANDARDS.md` 的 GitHub Workflow 节同步写明。提交钩子限制单个文件 20000 字节，`tests/releaseGate.test.cjs` 加上这些测试后超了，所以把 `workflow`、`runStep`、`assertRestoreAndSave`、`posixPath`、`asList` 移到 `tests/helpers/workflowSteps.cjs`，两个测试文件共用。
+- `build.yml` 的 `Install dependencies` 仍在 postinstall 里下载 Electron，没有改。
