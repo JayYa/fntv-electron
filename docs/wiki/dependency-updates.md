@@ -38,3 +38,17 @@
   - 来历（`git log -S`）：`express` 由 `ae48e75`（2025-09-04）加，`http-proxy-middleware` 和 `uuid`（`uuidv5` 生成 ID）由 `54c2452`（2025-09-13）加，`multistream` 和 `http-range-fetcher` 由 `ce934db`（2025-09-14）加，都给 `src/modules/proxy/server.ts`、`utils.ts` 用。`837782f`（`[add] support 302`，2025-09-14）把代理改成 Go 并删掉这些 `.ts`，之后没有代码再导入它们。`http-range-fetcher` 从来没在 `src` 里导入过。
   - 其它 `dependencies` 都有用：`axios`（`fn_api/request.ts`、`updater/*`）、`node-cache`（`fn_api/api.ts`）、`node-mpv-2`（`players/impl/mpv.ts`）、`semver`（`updater/updateChecker.ts`，`try { require('semver') }`，缺失时退回简单比较）。
 - 结论：5 个包从 `dependencies` 删掉，lockfile 少 119 个包。本地 `tsc --noEmit`、`pnpm run lint`、`pnpm test`（351 通过，1 跳过）都通过。Dashboard 里 `http-proxy-middleware` v4、`uuid` v14 两个 major 更新随之不再需要。
+
+## 2026-11-09 评估 Renovate PR #135（eslint 9 → 10）
+
+- #135（`chore(deps): update dependency eslint to v10`，分支 `renovate/major-eslint-monorepo`，head `913fc63`，基于 `b993558`）只改 `package.json` 的 `eslint` `9.39.4` → `10.14.0` 和 `pnpm-lock.yaml`。CI 全部通过，含 `ci.yml` 三平台测试里的 `pnpm run lint`。
+- 对照官方 [migrate-to-10.0.0](https://eslint.org/docs/latest/use/migrate-to-10.0.0)（2026-11-09 查）逐条核对，本项目都不受影响：
+  - Node.js 要求 `^20.19 || ^22.13 || >=24`：三个 workflow 的 `node-version` 都是 `22.23.4`。
+  - 删除 eslintrc：本项目只有 flat config `eslint.config.mjs`，没有 `.eslintrc*`，不用 `FlatCompat`、`@eslint/js`（eslint 10 不再依赖它）。
+  - 配置文件改为从被检查文件所在目录向上查找：`lint` 脚本只查 `src`、`resource/login`、`tests`，下面都没有别的 `eslint.config.*`，仍用根目录那份。
+  - `eslint:recommended` 新增规则：本项目不启用 `eslint:recommended`，规则都是 `eslint.config.mjs` 里显式列出的。
+  - `/* eslint-env */` 报错、`radix`、`func-names`、`no-shadow-restricted-names`、`no-invalid-regexp` 选项变化、glob 的 POSIX 字符类、JSX 引用跟踪、`LintMessage.nodeType` 删除：`git grep` 在 `src`、`tests`、`resource/login`、`scripts` 和配置里都没有用到。
+  - 插件 API 的删除（`context`、`SourceCode` 旧方法等）只影响插件：`typescript-eslint` 8.72.1 及 `@typescript-eslint/{eslint-plugin,parser,utils}` 的 peer 依赖都是 `eslint: ^8.57.0 || ^9.0.0 || ^10.0.0`，`@eslint-community/eslint-utils` 4.10.1 是 `>=8.0.0`，安装没有 peer 警告。
+  - `tests/eslintPlatformRules.test.cjs` 用的 `new ESLint({ cwd })` 和 `lintText` 在 10 里不变。
+- 本地验证（`gh pr checkout 135`，Node 26.13.0）：`pnpm install`、`pnpm run lint` 通过；`--format json` 显示检查了 133 个文件，和 `git ls-files` 列出的 `src/**/*.ts`、`resource/login/*.js`、`tests/**/*.cjs` 数目一致。临时在三个目录各放一个违规文件，`no-var`、`eqeqeq`、`no-empty`、`no-alert`、`prefer-const`、`@typescript-eslint/no-unused-vars`、`no-restricted-properties`、两条 `no-restricted-syntax` 和 `reportUnusedDisableDirectives` 都报错，删掉后恢复干净；`node --test tests/eslintPlatformRules.test.cjs` 12 个全过。规则确实在生效，不是配置失效后静默通过。
+- 结论：不需要配合改动，可以直接合并 #135，没有开配合 PR。和 #136 改的是 `package.json`、`pnpm-lock.yaml` 的不同位置，先合哪个都行，后合的那个由 Renovate 重建（#135）或手动 rebase（#136）解决 lockfile 冲突。
