@@ -4,7 +4,7 @@
 
 ## 2026-11-09 调查和加固
 
-起因：依赖审计（`node-mpv-2` 一节）读源码发现两个隐患，当时没有复现。`node-mpv-2` 2.0.0-beta.3 是 2023-04-23 发布的，上游 husudosu/Node-MPV 之后没有发版，项目里只有 `src/modules/players/impl/mpv.ts` 用它。维护者当天同意先加固、不重写。修复提交 `6923dde`（分支 `fix/mpv-ipc-hardening`）。
+起因：依赖审计（`node-mpv-2` 一节）读源码发现两个隐患，当时没有复现。`node-mpv-2` 2.0.0-beta.3 是 2023-04-23 发布的，上游 husudosu/Node-MPV 之后没有发版，项目里只有 `src/modules/players/impl/mpv.ts` 用它。维护者当天同意先加固、不重写。修复提交 `6923dde`（PR #151）。
 
 ### 隐患 (a)：固定的 IPC 地址
 
