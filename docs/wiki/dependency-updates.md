@@ -65,7 +65,7 @@
 
 ## 2026-11-09 #138、#140 合并
 
-- 2026-11-09 维护者合并 #138（`ffd2e7b`，js-yaml 5）和 #140（`7557fb3`，`@types/node` 上限 `<23`）。#140 的 CI 第 1 次尝试 Windows、macOS 因 Electron 下载 504 失败，重跑后通过；原因和改法见 [构建依赖与 MPV 插件同步](build-dependencies.md) 的“2026-11-09 CI Test job 的 Electron 下载改为单独步骤，带缓存和重试”。
+- 2026-11-09 维护者合并 #138（`ffd2e7b`，js-yaml 5）和 #140（`7557fb3`，`@types/node` 上限 `<23`）。#140 的 CI 第 1 次尝试 Windows、macOS 因 Electron 下载 504 失败，重跑后通过；原因和改法见 [CI 下载与缓存](ci-download-cache.md)（2026-11-09 从构建依赖与 MPV 插件同步拆出）的“2026-11-09 CI Test job 的 Electron 下载改为单独步骤，带缓存和重试”。
 
 ## 2026-11-09 评估 #141（rimraf 6）和 #142（TypeScript 7），维护者选择先停在 TS 6
 
@@ -83,3 +83,11 @@
   - `tsconfig.json`：删掉 `baseUrl`、`paths`（`src` 里没有 `@/` 导入，是死配置），加 `rootDir: "./src"`，`typeRoots` 改成 `types: ["node"]`。TS 5.9.3 下 `dest/` 与改前逐字节相同（`.tsbuildinfo` 除外）；`tsc --noEmit`、`pnpm run lint`、`pnpm test`（355 通过，1 跳过）通过，`pnpm run watch` 正常启动。
   - `renovate.json`：`typescript` 的 `allowedVersions` 设为 `<6.1.0`。取 typescript-eslint 8.72.1 的 peer 上限，不用笼统的 `<7`，否则 Renovate 还会开出 lint 不支持的 6.1。typescript-eslint 支持 TS 7 后放开；它的 peer 上限提高但仍不含 7 时，跟着改。
   - 合并后 #142 由维护者关闭，或等 Renovate 按新规则处理。
+
+## 2026-11-09 #144、#147、#141、#139 合并，剩 #134 和 #132
+
+- 上一节的配合改动是 #145（`7a538c4`）。#145 合并后 Renovate 关闭了 #142，按 `<6.1.0` 的限制换开 #147（TypeScript 6）。
+- 维护者依次合并 #144（`2c8f04b`，`@types/node` 22）、#147（`a23cbb4`，TypeScript 6）、#141（`4fe1c1f`，rimraf 6）、#139（`d5091bc`，CI 的 Node 26）。这几个 PR 重建后的 CI 和冒烟测试都复用了 main 上预热的下载缓存，见 [CI 下载与缓存](ci-download-cache.md) 的“2026-11-09 #146 合并后验证”。
+- 截至 `d5091bc` 还开着：
+  - #134（Electron 45）：CI 全绿，等维护者手测（清单见 [Electron 45 升级评估](electron-45-upgrade.md)）。合并时把 `renovate.json` 里 `@types/node` 的 `allowedVersions` 改成 `<25`。
+  - #132（release 2.8.1）：维护者决定这批更新之后再发。
