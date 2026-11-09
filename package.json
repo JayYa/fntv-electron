@@ -43,7 +43,7 @@
         "url": "https://github.com/JayYa/fntv-electron/issues"
     },
     "devDependencies": {
-        "@types/node": "20.19.43",
+        "@types/node": "22.20.5",
         "copyfiles": "2.4.1",
         "cross-env": "10.1.0",
         "electron": "38.8.6",
