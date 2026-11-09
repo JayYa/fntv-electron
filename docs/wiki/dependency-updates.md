@@ -52,3 +52,13 @@
   - `tests/eslintPlatformRules.test.cjs` 用的 `new ESLint({ cwd })` 和 `lintText` 在 10 里不变。
 - 本地验证（`gh pr checkout 135`，Node 26.13.0）：`pnpm install`、`pnpm run lint` 通过；`--format json` 显示检查了 133 个文件，和 `git ls-files` 列出的 `src/**/*.ts`、`resource/login/*.js`、`tests/**/*.cjs` 数目一致。临时在三个目录各放一个违规文件，`no-var`、`eqeqeq`、`no-empty`、`no-alert`、`prefer-const`、`@typescript-eslint/no-unused-vars`、`no-restricted-properties`、两条 `no-restricted-syntax` 和 `reportUnusedDisableDirectives` 都报错，删掉后恢复干净；`node --test tests/eslintPlatformRules.test.cjs` 12 个全过。规则确实在生效，不是配置失效后静默通过。
 - 结论：不需要配合改动，可以直接合并 #135，没有开配合 PR。和 #136 改的是 `package.json`、`pnpm-lock.yaml` 的不同位置，先合哪个都行，后合的那个由 Renovate 重建（#135）或手动 rebase（#136）解决 lockfile 冲突。
+
+## 2026-11-09 #136、#135、#137 合并，评估 #138（js-yaml 5）和 #139（Node 26）
+
+- 2026-11-09 维护者合并 #136（`775ce3e`）、#135（`924fd54`，ESLint 10）、#137（`0277532`，冒烟测试认 Electron 45 反引号写法）。
+- #134（Electron 45）：第一次重建后的运行 [`42558369750`](https://github.com/JayYa/fntv-electron/actions/runs/42558369750) 冒烟测试仍失败，因为合并基点是 `924fd54`，不含 #137。Renovate 默认只在冲突时 rebase，维护者勾 PR 正文的 rebase 复选框后重建为 `f408318`，运行 [`42562840180`](https://github.com/JayYa/fntv-electron/actions/runs/42562840180) 16 项检查全过。维护者当天没有机器手测，#134 暂不合并，手测清单见 [Electron 45 升级评估](electron-45-upgrade.md)。
+- #138（js-yaml 4.3.2 → 5.5.0，head `9a8de18`）：只读评估结论是可以直接合并。js-yaml 只在 `tests/releaseGate.test.cjs`、`tests/standards.test.cjs` 里用 `load()` 读 workflow；5.x 仍支持 `require`，删掉的 `safeLoad` 等没用到，workflow 没有锚点和 `<<`。4.3.2 和 5.5.0 读 6 个 workflow 和 `pnpm-workspace.yaml` 结果一致。electron-builder 子包仍各自用 4.3.2。
+- #139（Node 22 → 26，含 `@types/node` 20 → 26，head `e00bfd3`）：CI 全红，三平台 Test 和 build 都失败在 `tsc`：`src/public/platform.ts(73,51): Namespace 'path' has no exported member 'PlatformPath'`。`@types/node` 25 起删掉了 `PlatformPath`（22.20.5、24.19.2 有，25.9.9、26.6.6 没有），和 Node 26 运行时无关。
+  - CI 用的 Node：26 自 2026-10-28 起是 Active LTS。在 PR head 上用 Node 26.13.0 本地跑 install（yauzl override 仍有效）、tsc、lint、test 和 Windows 打包都通过，冒烟测试没跑。
+  - `@types/node`：运行时是 Electron 内置的 Node（Electron 38 是 22.22.0，45 是 24.22.2），用 26 的类型会让 tsc 放过运行时没有的 API。
+  - 配合改动（本节所在 PR）：`renovate.json` 加规则，`@types/node` 的 `allowedVersions` 为 `<23`，跟随 Electron 38；`platform.ts` 的 `path.PlatformPath` 改成 `typeof path.posix`，以后升 `@types/node` 25+ 不再卡在这里。合并后等 Renovate 重建 #139，预计只剩 workflow 的 Node 26，三平台构建和冒烟测试都绿后再合并。#134 合并时把上限改成 `<25`。
