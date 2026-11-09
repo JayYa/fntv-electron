@@ -1,0 +1,11 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "group:allNonMajor"
+  ],
+  "rangeStrategy": "pin",
+  "minimumReleaseAge": "3 days",
+  "dependencyDashboardAutoclose": true,
+  "lockFileMaintenance": { "enabled": false }
+}
