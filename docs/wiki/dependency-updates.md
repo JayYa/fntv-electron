@@ -1,6 +1,6 @@
 # 依赖更新（Renovate）
 
-相关：[构建依赖与 MPV 插件同步](build-dependencies.md)、[多平台测试策略](multi-platform-testing.md)。
+相关：[构建依赖与 MPV 插件同步](build-dependencies.md)、[多平台测试策略](multi-platform-testing.md)、[依赖更新（TypeScript 6 之后）](dependency-updates-ts6.md)。
 
 ## 2026-11-09 Renovate pin PR #126 的 macOS、Windows 构建失败
 
@@ -67,27 +67,4 @@
 
 - 2026-11-09 维护者合并 #138（`ffd2e7b`，js-yaml 5）和 #140（`7557fb3`，`@types/node` 上限 `<23`）。#140 的 CI 第 1 次尝试 Windows、macOS 因 Electron 下载 504 失败，重跑后通过；原因和改法见 [CI 下载与缓存](ci-download-cache.md)（2026-11-09 从构建依赖与 MPV 插件同步拆出）的“2026-11-09 CI Test job 的 Electron 下载改为单独步骤，带缓存和重试”。
 
-## 2026-11-09 评估 #141（rimraf 6）和 #142（TypeScript 7），维护者选择先停在 TS 6
-
-- #141（rimraf 5.0.10 → 6.1.4，评估时 head `0d155b7`，基于 `0277532`）：只读评估结论是可以直接合并，不需要配合改动。
-  - CI 失败都在 `pnpm install --frozen-lockfile` 的 Electron 下载 504，和 rimraf 无关。
-  - 6.x 要求 Node `20 || >=22`，三个 workflow 用 `22.23.4`；rimraf 只在构建时作 CLI 用，不进应用包。CLI 没删选项，本项目也不用 `--glob`。
-  - 只有 `package.json` 的 `clean`（`rimraf dest`）和 `clean:proxy:mac` 两处用到。在 PR head 上本地验证了这两个脚本（目录或文件存在时删除，不存在时退出码 0），`tsc --noEmit`、`pnpm run lint`、`pnpm test` 也都通过。
-  - 评估之后 Renovate 把 #141 重建为 `ef2b9bc`。
-- #142（typescript 5.9.3 → 7.0.2，head `1e825b4`，基于 `0277532`）：不能合并，重跑解决不了。
-  - lint：`typescript-eslint` 8.72.1 及 `@typescript-eslint/*` 的 peer 是 `typescript >=4.8.4 <6.1.0`。TS 7.0 不提供 JS API（`require('typescript')` 只导出 `version`、`versionMajorMinor`），parser 启动就报 `typescript-eslint does not support TS 7.0.`，`tests/eslintPlatformRules.test.cjs` 也跟着失败。上游支持状态见 typescript-eslint#10940（open，WIP 针对 7.1 的新 API）。
-  - `tsc`：7.0 把 6.0 弃用的选项改成错误。`tsconfig.json` 的 `baseUrl` 报 TS5102，`paths` 的非相对路径报 TS5090，没写 `rootDir` 时 emit 报 TS5011。另外 `types` 默认改为 `[]`：不报错，但不再自动加载 `node_modules/@types` 下的包。
-  - `pnpm run watch`：TS 7 的 `exports` 不导出 `./bin/tsc`，`scripts/build-preload.cjs` 的 `require.resolve('typescript/bin/tsc')` 报 `ERR_PACKAGE_PATH_NOT_EXPORTED`。CI 不跑 watch，所以 CI 里看不到。
-  - 两个方案：A. 先停在 TS 6，等 typescript-eslint 支持 TS 7 再升；B. 按官方并存方案用 TS 7 编译，再把 `typescript` 别名到 `@typescript/typescript6` 给 typescript-eslint 用。B 在本地验证通过，代价是同时维护两套 TypeScript。
-- 2026-11-09 维护者选了方案 A。配合改动（本节所在 PR）：
-  - `tsconfig.json`：删掉 `baseUrl`、`paths`（`src` 里没有 `@/` 导入，是死配置），加 `rootDir: "./src"`，`typeRoots` 改成 `types: ["node"]`。TS 5.9.3 下 `dest/` 与改前逐字节相同（`.tsbuildinfo` 除外）；`tsc --noEmit`、`pnpm run lint`、`pnpm test`（355 通过，1 跳过）通过，`pnpm run watch` 正常启动。
-  - `renovate.json`：`typescript` 的 `allowedVersions` 设为 `<6.1.0`。取 typescript-eslint 8.72.1 的 peer 上限，不用笼统的 `<7`，否则 Renovate 还会开出 lint 不支持的 6.1。typescript-eslint 支持 TS 7 后放开；它的 peer 上限提高但仍不含 7 时，跟着改。
-  - 合并后 #142 由维护者关闭，或等 Renovate 按新规则处理。
-
-## 2026-11-09 #144、#147、#141、#139 合并，剩 #134 和 #132
-
-- 上一节的配合改动是 #145（`7a538c4`）。#145 合并后 Renovate 关闭了 #142，按 `<6.1.0` 的限制换开 #147（TypeScript 6）。
-- 维护者依次合并 #144（`2c8f04b`，`@types/node` 22）、#147（`a23cbb4`，TypeScript 6）、#141（`4fe1c1f`，rimraf 6）、#139（`d5091bc`，CI 的 Node 26）。这几个 PR 重建后的 CI 和冒烟测试都复用了 main 上预热的下载缓存，见 [CI 下载与缓存](ci-download-cache.md) 的“2026-11-09 #146 合并后验证”。
-- 截至 `d5091bc` 还开着：
-  - #134（Electron 45）：CI 全绿，等维护者手测（清单见 [Electron 45 升级评估](electron-45-upgrade.md)）。合并时把 `renovate.json` 里 `@types/node` 的 `allowedVersions` 改成 `<25`。
-  - #132（release 2.8.1）：维护者决定这批更新之后再发。
+之后各节（评估 #141 和 #142、#144 等合并、#149 合并后的依赖清理）见 [依赖更新（TypeScript 6 之后）](dependency-updates-ts6.md)。
