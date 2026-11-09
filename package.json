@@ -49,7 +49,7 @@
         "electron": "38.8.6",
         "electron-builder": "26.18.0",
         "esbuild": "0.28.2",
-        "eslint": "9.39.4",
+        "eslint": "10.14.0",
         "js-yaml": "4.3.2",
         "playwright-core": "1.65.0",
         "rimraf": "5.0.10",
