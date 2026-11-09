@@ -8,7 +8,7 @@
 
 ### 结论
 
-- 需要配合改动，不能直接合并：五个冒烟测试目标都失败，原因是冒烟测试自己认不出 Electron 45 自带的监听，不是客户端的回归（见“CI 结果”）。改一行测试正则后，Renovate 重建 #134，冒烟测试通过、维护者手测通过后可以合并。
+- 已被取代（2026-11-09，见末尾“#149 替代 #134”）：~~需要配合改动，不能直接合并：五个冒烟测试目标都失败，原因是冒烟测试自己认不出 Electron 45 自带的监听，不是客户端的回归（见“CI 结果”）。改一行测试正则后，Renovate 重建 #134，冒烟测试通过、维护者手测通过后可以合并。~~
 - 不影响合并、但要排期的：`safeStorage` 同步方法在 45 弃用、46 删除（见“逐版本对照”第 45 条），升级 46 前要改成异步方法。
 - 面向用户的变化：macOS 最低版本从 12（Monterey）升到 13（Ventura），发版说明里要写。
 
@@ -95,4 +95,12 @@
 
 ## 2026-11-09 补充：合并 #134 时要同步改的 Renovate 规则
 
-- `renovate.json` 里 `@types/node` 的 `allowedVersions` 当天设为 `<23`（跟随 Electron 38 内置的 Node 22，见 [依赖更新](dependency-updates.md) 的“2026-11-09 #136、#135、#137 合并，评估 #138（js-yaml 5）和 #139（Node 26）”一节）。合并 #134 后要改成 `<25`，跟随 Electron 45 内置的 Node 24。
+- 已被取代（2026-11-09，见末尾“#149 替代 #134”）：~~`renovate.json` 里 `@types/node` 的 `allowedVersions` 当天设为 `<23`（跟随 Electron 38 内置的 Node 22，见 [依赖更新](dependency-updates.md) 的“2026-11-09 #136、#135、#137 合并，评估 #138（js-yaml 5）和 #139（Node 26）”一节）。合并 #134 后要改成 `<25`，跟随 Electron 45 内置的 Node 24。~~
+
+## 2026-11-09 #149 替代 #134：升级和配合改动放在一个 PR
+
+- 决定（维护者，当天）：开一个 PR 放 Electron 45 升级和配合改动，替代 #134；维护者手测这个 PR 的安装包后合并，再关 #134。冒烟测试正则（反引号）已在 `main` 上改好。
+- #149（`feat(deps)!: 升级 Electron 到 45`，分支 `chore/electron-45`，基于 `f9e2ba5`）：`electron` 45.2.3，与 #134 相同；CI 下载步骤按 45 的机制调整（见 [CI 下载与缓存](ci-download-cache.md) 末节）；删 `extract-zip>yauzl` override、`allowBuilds` 的 `electron`、`build-and-smoke.yml` 的 `ELECTRON_SKIP_BINARY_DOWNLOAD`；`@types/node` 22.20.5 → 24.19.2，`renovate.json` 上限改为 `<25`；托盘“设置MPV播放器路径”对话框传 `defaultPath`（当前 MPV 所在目录，43 的变化）；`README.md` 写明 macOS 13 及以上。
+- 标题带 `!`、提交带 `BREAKING CHANGE`：macOS 12 用户装上打不开，按面向用户的破坏性变化处理，release-please 下一版是 3.0.0。
+- 没改、记为后续：`safeStorage` 同步方法（升 46 前改异步）；macOS 未签名通知的 `failed` 事件、Linux 无边框圆角，看手测结果。手测仍按上文清单，安装包取 #149 的 Smoke Test 运行里的 `<平台>-build` artifact。
+- CI（`66bef9d`）：三平台 Test、build 和五个冒烟测试目标全过，见 [CI 下载与缓存](ci-download-cache.md) 末节。

@@ -1,13 +1,8 @@
 nodeLinker: hoisted
 
 # 放行这些包的安装脚本。未列出的包有安装脚本时，pnpm install 直接报错。
+# electron 从 42 起没有安装脚本，二进制在第一次 require('electron') 或运行 install.js 时下载，不用放行。
 allowBuilds:
-  electron: true
   electron-winstaller: true
   esbuild: true
   sharp: true
-
-# electron 的 postinstall 靠 extract-zip 解压。yauzl 2.10 在 Node 26 上读不出数据，
-# 进程以 0 退出，留下空的 dist。yauzl 3 修好了这个问题，extract-zip 还没跟进。
-overrides:
-  extract-zip>yauzl: 3.4.0

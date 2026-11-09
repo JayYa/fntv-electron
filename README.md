@@ -28,6 +28,8 @@
 
 正式版发布在 [Releases](https://github.com/JayYa/fntv-electron/releases)，选对应平台的文件下载。也可以按下文[从源码构建](#从源码构建)，产物在 `release/` 目录。
 
+系统要求：Windows 10 及以上（x64）；macOS 13（Ventura）及以上，macOS 12 只能用 2.8.x 及更早的版本；Linux x64、arm64。
+
 - 文件名：`FNMedia_${version}_${os}_${arch}.${ext}`
 
 1. 字段含义：
