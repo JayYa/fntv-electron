@@ -6,7 +6,9 @@ const path = require('node:path');
 
 const { action, assertRestoreAndSave, posixPath, runStep, workflow } = require('./helpers/workflowSteps.cjs');
 
-// 安装依赖时 postinstall 不下载 Electron，改由单独的步骤带缓存和重试下载（2026-11-09，PR #140、#139 的 504）。
+// Electron 二进制由安装依赖之后的单独步骤带缓存和重试下载（2026-11-09，PR #140、#139 的 504）。
+// electron 42 起没有 postinstall，二进制在第一次 require('electron') 时按需下载，只试一次；
+// 预先下载保证测试和打包不走这条没有重试的路径（Electron 45 升级）。
 // ci.yml 和 build.yml 共用 .github/actions/install-dependencies，这里检查 action 本身和两处调用。
 const INSTALL = './.github/actions/install-dependencies';
 
@@ -22,7 +24,7 @@ function installSteps() {
     };
 }
 
-// 用桩 node 运行下载步骤：前 failures 次失败，之后写出 path.txt。返回进程结果和桩收到的参数。
+// 用桩 node 运行下载步骤：前 failures 次失败，之后写出 path.txt 和 dist/version。返回进程结果和桩收到的参数。
 function runElectronDownload(t, failures) {
     const { install } = installSteps();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-electron-download-'));
@@ -35,7 +37,8 @@ function runElectronDownload(t, failures) {
         '#!/bin/sh',
         `echo "$1" >> "${posixPath(calls)}"`,
         `[ "$(wc -l < "${posixPath(calls)}")" -gt ${failures} ] || exit 1`,
-        'mkdir -p node_modules/electron && printf electron > node_modules/electron/path.txt',
+        'mkdir -p node_modules/electron/dist && printf electron > node_modules/electron/path.txt',
+        'printf v45.0.0 > node_modules/electron/dist/version',
         '',
     ].join('\n'), { mode: 0o755 });
     const result = runStep(t, install, step => step.name === 'Download Electron binary', {
@@ -58,15 +61,42 @@ test('ci.yml and build.yml install dependencies through the shared action', () =
     }
 });
 
-test('the install skips the Electron download in the postinstall and downloads it afterwards', () => {
-    // postinstall 里下载遇到 504 时整个 pnpm install 失败，没有重试。
+test('the electron package downloads its binary on demand, not at install time', () => {
+    // 下载步骤依赖这几点：安装依赖时不下载，install.js 还在。electron 重新加回安装脚本或去掉 install.js 时，
+    // 这里失败，提醒重新核对下载步骤（Electron 45 的机制见 docs/wiki/ci-download-cache.md）。
+    const electronDir = path.join(__dirname, '..', 'node_modules', 'electron');
+    const pkg = JSON.parse(fs.readFileSync(path.join(electronDir, 'package.json'), 'utf8'));
+    for (const script of ['preinstall', 'install', 'postinstall']) {
+        assert.equal(pkg.scripts?.[script], undefined, `electron has a ${script} script again`);
+    }
+    assert.equal(pkg.bin['install-electron'], 'install.js');
+    // index.js 在二进制不在时自己运行 install.js 下载，不重试。
+    assert.match(fs.readFileSync(path.join(electronDir, 'index.js'), 'utf8'), /install\.js/);
+});
+
+test('no workflow sets the ELECTRON_SKIP_BINARY_DOWNLOAD that electron no longer reads', () => {
+    const github = path.join(__dirname, '..', '.github');
+    const files = [
+        ...fs.readdirSync(path.join(github, 'workflows')).map(name => path.join(github, 'workflows', name)),
+        ...fs.readdirSync(path.join(github, 'actions')).map(name => path.join(github, 'actions', name, 'action.yml')),
+    ];
+    for (const file of files) {
+        const code = fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(line => !line.trimStart().startsWith('#'));
+        assert.ok(!code.some(line => line.includes('ELECTRON_SKIP_BINARY_DOWNLOAD')), path.relative(github, file));
+    }
+});
+
+test('the install action downloads Electron after installing dependencies', () => {
     const { install, pnpm, download } = installSteps();
     assert.equal(install.runs.using, 'composite');
     assert.match(pnpm.run, /^pnpm install --frozen-lockfile$/);
-    assert.equal(pnpm.env?.ELECTRON_SKIP_BINARY_DOWNLOAD, '1');
+    // electron 42 起不读 ELECTRON_SKIP_BINARY_DOWNLOAD，写了也不生效。
+    assert.equal(pnpm.env?.ELECTRON_SKIP_BINARY_DOWNLOAD, undefined);
     assert.equal(download.env?.ELECTRON_SKIP_BINARY_DOWNLOAD, undefined);
     assert.ok(install.steps.indexOf(pnpm) < install.steps.indexOf(download), 'Electron must be downloaded after the install');
     assert.match(download.run, /node node_modules\/electron\/install\.js/);
+    // 日志里要能看到 @electron/get 的 Cache hit / Cache miss。
+    assert.equal(download.env?.DEBUG, '@electron/get:*');
     // composite action 的步骤不支持 timeout-minutes，写了也不生效。
     assert.ok(install.steps.every(step => step['timeout-minutes'] === undefined));
 });

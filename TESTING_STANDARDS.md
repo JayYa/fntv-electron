@@ -10,7 +10,7 @@
 
 ### `Electron failed to install correctly`
 
-`tests/accessCodeSession.test.cjs` 在加载时报这个错，说明 `node_modules/electron/dist` 不完整。这是环境问题。先确认 `pnpm-workspace.yaml` 的 `allowBuilds` 有 `electron`、`overrides` 有 `extract-zip>yauzl`，再删掉 `node_modules` 重新 `pnpm install`。`node_modules/electron/path.txt` 存在才算解压完成，`electron postinstall: Done` 证明不了。
+`tests/accessCodeSession.test.cjs` 在加载时报这个错，说明第一次 `require('electron')` 时按需下载或解压 Electron 二进制失败（electron 42 起 `pnpm install` 不下载）。这是环境问题，多半是网络。运行 `node node_modules/electron/install.js` 重新下载，看它的报错；镜像用 `ELECTRON_MIRROR` 环境变量。`node_modules/electron/path.txt` 存在、`dist/version` 和包版本一致才算解压完成。
 
 ## `tests/*.test.cjs` 写法
 

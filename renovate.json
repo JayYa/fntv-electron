@@ -18,10 +18,10 @@
       "enabled": false
     },
     {
-      "description": "运行时是 Electron 内置的 Node，不是 CI 的 Node。@types/node 的主版本跟随 Electron 内置 Node（Electron 38 是 Node 22），否则 tsc 会放过运行时没有的 API。升级 Electron 时同步改这里的上限。",
+      "description": "运行时是 Electron 内置的 Node，不是 CI 的 Node。@types/node 的主版本跟随 Electron 内置 Node（Electron 45 是 Node 24），否则 tsc 会放过运行时没有的 API。升级 Electron 时同步改这里的上限。",
       "matchManagers": ["npm"],
       "matchPackageNames": ["@types/node"],
-      "allowedVersions": "<23"
+      "allowedVersions": "<25"
     },
     {
       "description": "typescript-eslint 8.72.1 的 peer 是 typescript >=4.8.4 <6.1.0，TS 7.0 不提供 JS API，lint 跑不起来（评估见 #142）。上限跟随 typescript-eslint 的 peer 范围。等 typescript-eslint 支持 TS 7（上游 typescript-eslint#10940）后放开；peer 上限提高但仍不含 7 时，同步改这里。",

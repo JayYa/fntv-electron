@@ -70,6 +70,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
                 if (mainWindow) {
                     const result = await dialog.showOpenDialog(mainWindow, {
                         title: '选择MPV播放器',
+                        // Electron 43 起不传 defaultPath 时总是从“下载”目录开始，系统不再记住上次的目录。
+                        defaultPath: currentMpvPath ? path.dirname(currentMpvPath) : undefined,
                         properties: ['openFile'],
                         filters: [
                             { name: '可执行文件', extensions: platformBehavior().mpvExecutableExtensions },

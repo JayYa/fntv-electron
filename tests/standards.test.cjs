@@ -136,7 +136,17 @@ test('pnpm uses the hoisted node linker', () => {
 });
 
 test('electron finished extracting its binary', () => {
-    assert.ok(fs.existsSync(path.join(root, 'node_modules', 'electron', 'path.txt')));
+    // electron 42 起 pnpm install 不下载二进制，第一次 require('electron') 时按需下载并解压，解压完才写 path.txt。
+    // 曾经解压器在 Node 26 上读不出 zip 内容却以 0 退出，dist 里只剩空的 locales，这里核对可执行文件和版本都在。
+    const electronDir = path.join(root, 'node_modules', 'electron');
+    const resolved = spawnSync(process.execPath, ['-p', "require('electron')"], { cwd: root, encoding: 'utf8' });
+    assert.equal(resolved.status, 0, resolved.stderr);
+    // 按需下载时 index.js 先往 stdout 打下载信息，路径在最后一行。
+    const executable = resolved.stdout.trim().split(/\r?\n/).pop();
+    assert.ok(fs.existsSync(path.join(electronDir, 'path.txt')), 'path.txt missing');
+    assert.ok(fs.existsSync(executable), `${executable} missing`);
+    const { version } = JSON.parse(read('node_modules/electron/package.json'));
+    assert.equal(fs.readFileSync(path.join(electronDir, 'dist', 'version'), 'utf8').trim().replace(/^v/, ''), version);
 });
 
 test('a verification command with a broken regex is reported as broken', () => {

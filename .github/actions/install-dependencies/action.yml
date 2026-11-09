@@ -1,6 +1,6 @@
 name: Install dependencies
 description: >-
-  安装依赖时跳过 Electron 下载，再由单独的步骤带缓存和重试下载 Electron 二进制。
+  安装依赖后由单独的步骤带缓存和重试下载 Electron 二进制（electron 42 起安装依赖时不下载）。
   ci.yml 和 build.yml 共用这一份，调用前先 checkout、装好 pnpm 和 Node.js、删掉 .npmrc。
   composite action 的步骤不支持 timeout-minutes，超时写在调用它的步骤上。
 
@@ -21,13 +21,11 @@ outputs:
 runs:
   using: composite
   steps:
-    # 不加 --ignore-scripts：esbuild、sharp 等的安装脚本还要跑。electron 的 postinstall 只跳过下载，
-    # 二进制由下面带缓存和重试的步骤下载：postinstall 里 GitHub 偶发 504 会让整个 install 失败。
+    # 不加 --ignore-scripts：esbuild、sharp 等的安装脚本还要跑。electron 42 起没有 postinstall，
+    # 也不再读 ELECTRON_SKIP_BINARY_DOWNLOAD，安装时不下载二进制。
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash
-      env:
-        ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
 
     # key 只取 package.json 和锁文件里的版本号（scripts/ci-download-cache.cjs），cache-warm.yml 用同一个脚本。
     - name: Resolve download cache keys
@@ -35,9 +33,10 @@ runs:
       run: node scripts/ci-download-cache.cjs keys
       shell: bash
 
-    # tests/accessCodeSession.test.cjs 在 Node 里 require('electron')，没有 path.txt 时 electron/index.js 直接抛错，
-    # 打包也要用 Electron，所以不能整个跳过下载。
-    # Electron zip 由 @electron/get 存到默认目录（不读 ELECTRON_CACHE），三个平台的默认目录都列上，不存在的会被忽略。
+    # electron 45 的 index.js 在二进制不在时，第一次 require('electron') 同步运行 install.js 下载，只试一次、不重试。
+    # tests/accessCodeSession.test.cjs 在 Node 里 require('electron')，所以在测试和打包之前由下面的步骤预先下载。
+    # Electron zip 由 @electron/get 存到默认目录（env-paths('electron').cache，不读 ELECTRON_CACHE），
+    # 三个平台的默认目录都列上，不存在的会被忽略。
     # PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
     - name: Restore Electron download cache
       id: electron-cache
@@ -53,6 +52,8 @@ runs:
     - name: Download Electron binary
       env:
         RETRY_DELAY: '15'
+        # 日志里打出 @electron/get 的 Cache hit / Cache miss 和下载地址，用来核对缓存是否生效。
+        DEBUG: '@electron/get:*'
       run: |
         for attempt in 1 2 3 4 5; do
           if node node_modules/electron/install.js; then break; fi
@@ -60,7 +61,9 @@ runs:
           echo "Electron download failed (attempt $attempt), retrying in $((attempt * RETRY_DELAY))s"
           sleep $((attempt * RETRY_DELAY))
         done
+        # install.js 解压完才写 path.txt；dist/version 和包版本一致时 index.js 才不会再下载。
         test -f node_modules/electron/path.txt
+        test -f node_modules/electron/dist/version
       shell: bash
 
     - name: Save Electron download cache
