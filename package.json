@@ -48,7 +48,7 @@
         "@types/express": "5.0.6",
         "@types/fs-extra": "11.0.4",
         "@types/http-cache-semantics": "4.2.0",
-        "@types/keyv": "3.1.4",
+        "@types/keyv": "4.2.0",
         "@types/ms": "2.1.0",
         "@types/multistream": "4.1.4",
         "@types/node": "20.19.43",
