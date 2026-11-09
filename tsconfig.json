@@ -8,6 +8,8 @@
         ],
         // 输出目录（编译产物）
         "outDir": "dest",
+        // 源码根目录。TS 6 起 rootDir 默认是 tsconfig 所在目录，不再按输入文件推算，不写会输出到 dest/src/
+        "rootDir": "./src",
         // 模块系统：使用ES2022替代CommonJS以支持ESModules
         "module": "Node16",
         // 是否允许编译 .js 文件（此项目使用 TypeScript 源码，设为 false）
@@ -36,16 +38,9 @@
         "skipLibCheck": true,
         // 是否生成声明文件（此项目不是发布 npm 包，默认关闭），如果需要对外类型请设为 true
         "declaration": false,
-        // 保持原有的模块路径别名配置，方便在源码中使用 `@/` 指向 `src/`
-        "baseUrl": ".",
-        "paths": {
-            "@/*": [
-                "src/*"
-            ]
-        },
-        // 指定类型根目录，优先使用本地的 Electron 类型定义
-        "typeRoots": [
-            "./node_modules/@types",
+        // 全局类型只加载 @types/node。TS 6 起 types 默认是 []，不再自动加载 node_modules/@types 下所有包
+        "types": [
+            "node"
         ]
     },
     // 要包含的源码路径
