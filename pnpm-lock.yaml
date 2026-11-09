@@ -198,8 +198,8 @@ importers:
         version: 13.0.2
     devDependencies:
       '@types/cacheable-request':
-        specifier: 6.0.3
-        version: 6.0.3
+        specifier: 8.3.6
+        version: 8.3.6
       '@types/debug':
         specifier: 4.1.13
         version: 4.1.13
@@ -749,6 +749,10 @@ packages:
 
   '@types/cacheable-request@6.0.3':
     resolution: {integrity: sha512-IQ3EbTzGxIigb1I3qPZc1rWJnH0BmSKv5QYTalEwweFvyBDLSAe24zP0le/hyi7ecGfZVlIVAg4BZqb8WBwKqw==}
+
+  '@types/cacheable-request@8.3.6':
+    resolution: {integrity: sha512-490ZO711a+yBqLd7O2PIr4XKdeFftV/eIyragGl7/ki2piOhBt4rmDxTe/yDzxgMcxy+Kis3QtV2w8C9X38ZZg==}
+    deprecated: This is a stub types definition. cacheable-request provides its own type definitions, so you do not need this installed.
 
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
@@ -2832,6 +2836,10 @@ snapshots:
       '@types/keyv': 3.1.4
       '@types/node': 20.19.43
       '@types/responselike': 1.0.3
+
+  '@types/cacheable-request@8.3.6':
+    dependencies:
+      cacheable-request: 7.0.4
 
   '@types/connect@3.4.38':
     dependencies:
