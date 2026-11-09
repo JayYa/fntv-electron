@@ -1,0 +1,250 @@
+diff --git a/lib/ipcInterface/_events.js b/lib/ipcInterface/_events.js
+index 5598464e2da438ea7f9634147b1f293da3788645..8190e49b0d39aaa7ecca27b6eba41008de6467f7 100644
+--- a/lib/ipcInterface/_events.js
++++ b/lib/ipcInterface/_events.js
+@@ -47,7 +47,7 @@ const events = {
+ 	// Event: data
+ 	dataHandler: function(data) {
+ 		// various messages might be fetched at once
+-		let messages = data.toString().split('\n');
++		let messages = this.splitLines(data);
+ 
+ 		// each message is emitted seperately
+ 		messages.forEach((message) => {
+diff --git a/lib/ipcInterface/ipcInterface.js b/lib/ipcInterface/ipcInterface.js
+index a0c5756dc8539e904bfe6d39c575494e7c05b0a4..c51da2eea77c672880723cd3a8f4a48adc1324fd 100644
+--- a/lib/ipcInterface/ipcInterface.js
++++ b/lib/ipcInterface/ipcInterface.js
+@@ -145,6 +145,8 @@ ipcInterface.prototype = Object.assign({
+ 	// @param socket {String}
+ 	// 
+ 	connect: function(socket){
++		// a new connection starts without a partial line from the previous one
++		this.splitLines = util.lineSplitter();
+ 		// Connect to the socket specified in options
+ 		this.socket.connect({path: socket}, () => {
+ 			// Events
+diff --git a/lib/mpv/_controls.js b/lib/mpv/_controls.js
+index b7dedf807e4b59f02b19a560456060a80e41f9ba..dfe0ab0922d350f2dd479e4f419d0a285116f6f7 100644
+--- a/lib/mpv/_controls.js
++++ b/lib/mpv/_controls.js
+@@ -1,6 +1,7 @@
+ 'use strict';
+ 
+ const net = require('net');
++const util = require('../util');
+ 
+ const controls = {
+ 	// toggles pause
+@@ -29,12 +30,13 @@ const controls = {
+ 				let started = false;
+ 				// socket to observe if the file is being played back
+ 				const observeSocket = new net.Socket();
++				const splitLines = util.lineSplitter();
+ 				observeSocket.connect({path: this.options.socket}, async () => {
+ 					// this starts the playback when mpv is idle but songs are queued in the playlist
+ 					await this.setProperty('playlist-pos', 0);
+ 				}).on('data', (data) => {
+ 					// parse the messages from the socket
+-					const messages = data.toString('utf-8').split('\n');
++					const messages = splitLines(data);
+ 					// check every message
+ 					messages.forEach((message) => {
+ 						// ignore empty messages
+@@ -112,6 +114,7 @@ const controls = {
+ 			// tracks if the seek event has been emitted
+ 			let seek_event_started = false;
+ 			const observeSocket = new net.Socket();
++			const splitLines = util.lineSplitter();
+ 			observeSocket.connect({path: this.options.socket}, async () => {
+ 				try {
+ 					await this.command('seek', [seconds, mode, 'exact']);
+@@ -121,7 +124,7 @@ const controls = {
+ 				}
+ 			}).on('data', (data) => {
+ 				// parse the messages from the socket
+-				const messages = data.toString('utf-8').split('\n');
++				const messages = splitLines(data);
+ 				// check every message
+ 				messages.forEach((message) => {
+ 					// ignore empty messages
+diff --git a/lib/mpv/_events.js b/lib/mpv/_events.js
+index 15c34dc8be01f28366ff2b21c5072acdef3f84b5..d58f88dfebc1ce3e4499d9e8c9569ace16a0145d 100644
+--- a/lib/mpv/_events.js
++++ b/lib/mpv/_events.js
+@@ -1,6 +1,7 @@
+ 'use strict';
+ 
+ let net = require('net');
++const util = require('../util');
+ 
+ // This file contains the event handlers for the mpv module
+ // These function should not be called on their own, they are just bound
+@@ -138,6 +139,7 @@ const events = {
+ 					if(this.options.verbose){console.log('Event: seek')};
+ 					// socket to watch for the change after a seek has happened
+ 					const observeSocket = new net.Socket();
++					const splitLines = util.lineSplitter();
+ 					// startseek position
+ 					let seekstarttimepos = this.currentTimePos;
+ 					// timeout tracker
+@@ -151,7 +153,7 @@ const events = {
+ 								// increase timeout
+ 								timeout += 1;
+ 								// console.log(data.toJSON());
+-								let messages = data.toString('utf-8').split('\n');
++								let messages = splitLines(data);
+ 								// check every message
+ 								messages.forEach((message) => {
+ 									// ignore empty messages
+diff --git a/lib/mpv/_playlist.js b/lib/mpv/_playlist.js
+index 0a6247de9149ae0bb563b07b5eb89a6f9a30f66d..9ca21a52b37fb09713a0fc1dc4a277339b1a61b4 100644
+--- a/lib/mpv/_playlist.js
++++ b/lib/mpv/_playlist.js
+@@ -2,6 +2,7 @@
+ 
+ const net = require('net');
+ const stat = require('fs').stat;
++const util = require('../util');
+ 
+ const playlist = {
+ 	// load a playlist file
+@@ -42,6 +43,7 @@ const playlist = {
+ 		.then(() => { return new Promise((resolve, reject) => {
+ 			// socket to observe the command
+ 			let observeSocket = net.Socket();
++			const splitLines = util.lineSplitter();
+ 			observeSocket.connect({path: this.options.socket}, () =>{
+ 				// send the command to mpv
+ 				this.command('loadlist', [playlist, mode]);
+@@ -64,7 +66,7 @@ const playlist = {
+ 					// increase timeout
+ 					timeout += 1;
+ 					// parse the messages from the socket
+-					let messages = data.toString('utf-8').split('\n');
++					let messages = splitLines(data);
+ 					// check every message
+ 					messages.forEach((message) => {
+ 						// ignore empty messages
+@@ -161,6 +163,7 @@ const playlist = {
+ 		return new Promise((resolve, reject) => {
+ 			// socket to observe the command
+ 			const observeSocket = net.Socket();
++			const splitLines = util.lineSplitter();
+ 			observeSocket.connect({path: this.options.socket}, async () =>{
+ 				// send the skip command to mpv
+ 				await this.command('playlist-next', [mode]);
+@@ -174,7 +177,7 @@ const playlist = {
+ 					// increase timeout
+ 					timeout += 1;
+ 					// parse the messages from the socket
+-					const messages = data.toString('utf-8').split('\n');
++					const messages = splitLines(data);
+ 					// check every message
+ 					messages.forEach((message) => {
+ 						// ignore empty messages
+@@ -249,6 +252,7 @@ const playlist = {
+ 		return new Promise((resolve, reject) => {
+ 			// socket to observe the command
+ 			const observeSocket = net.Socket();
++			const splitLines = util.lineSplitter();
+ 			observeSocket.connect({path: this.options.socket}, async () =>{
+ 				// send the prev command to mpv
+ 				await this.command('playlist-prev', [mode]);
+@@ -261,7 +265,7 @@ const playlist = {
+ 					// increase timeout
+ 					timeout += 1;
+ 					// parse the messages from the socket
+-					const messages = data.toString('utf-8').split('\n');
++					const messages = splitLines(data);
+ 					// check every message
+ 					messages.forEach((message) => {
+ 						// ignore empty messages
+@@ -318,6 +322,7 @@ const playlist = {
+ 			return new Promise((resolve, reject) => {
+ 				// socket to observe the command
+ 				const observeSocket = net.Socket();
++				const splitLines = util.lineSplitter();
+ 				observeSocket.connect({path: this.options.socket}, async () =>{
+ 					// send the command to jump in the playlist to mpv
+ 					await this.setProperty('playlist-pos', position);
+@@ -330,7 +335,7 @@ const playlist = {
+ 						// increase timeout
+ 						timeout += 1;
+ 						// parse the messages from the socket
+-						const messages = data.toString('utf-8').split('\n');
++						const messages = splitLines(data);
+ 						// check every message
+ 						messages.forEach((message) => {
+ 							// ignore empty messages
+diff --git a/lib/mpv/_startStop.js b/lib/mpv/_startStop.js
+index f598d06ef88a1e49e1679d641805d2c6cd926103..3fe1326ecb812cde805cd4befcc73fe6d60ce092 100644
+--- a/lib/mpv/_startStop.js
++++ b/lib/mpv/_startStop.js
+@@ -118,6 +118,7 @@ const startStop = {
+ 				// socket to check for the idle event to check if mpv fully loaded and
+ 				// actually running
+ 				const observeSocket = net.Socket();
++				const splitLines = util.lineSplitter();
+ 				observeSocket.connect({path: this.options.socket}, () => {
+ 					// send any message to see if there's a MPV instance responding
+ 					observeSocket.write(JSON.stringify({
+@@ -126,7 +127,7 @@ const startStop = {
+ 					if (this.options.debug || this.options.verbose) console.log('[Node-MPV] sending stimulus');
+ 				}).on('data', (data) => {
+ 					// parse the messages from the socket
+-					const messages = data.toString('utf-8').split('\n');
++					const messages = splitLines(data);
+ 					// check every message
+ 					messages.forEach((message) => { 
+ 						// ignore empty messages
+diff --git a/lib/mpv/mpv.js b/lib/mpv/mpv.js
+index d5a7e9e939d2d900d112e70bd08a9893ceccd35d..111e87dcfd69710ea8f7bfea37fbb9b41dcf1903 100644
+--- a/lib/mpv/mpv.js
++++ b/lib/mpv/mpv.js
+@@ -113,6 +113,7 @@ mpv.prototype = Object.assign({
+ 		await new Promise ((resolve, reject) => {
+ 			// socket to observe the command
+ 			const observeSocket = net.Socket();
++			const splitLines = util.lineSplitter();
+ 			observeSocket.connect({path: this.options.socket}, async () =>{
+ 				// send the command to mpv
+ 				await this.command('loadfile', options ? [source, mode].concat(util.formatOptions(options)) : [source, mode]);
+@@ -143,7 +144,7 @@ mpv.prototype = Object.assign({
+ 					// increase timeout
+ 					timeout += 1;
+ 					// parse the messages from the socket
+-					const messages = data.toString('utf-8').split('\n');
++					const messages = splitLines(data);
+ 					// check every message
+ 					messages.forEach((message) => {
+ 						// ignore empty messages
+diff --git a/lib/util.js b/lib/util.js
+index 41744201eb42c876aff29db99efba2fb03700b1b..89bf3831d99d4cd42ddae92b0db7d78f845db8e6 100644
+--- a/lib/util.js
++++ b/lib/util.js
+@@ -2,10 +2,24 @@
+ 
+ const exec  = require('child_process').exec;
+ const stat = require('fs').stat;
++const StringDecoder = require('string_decoder').StringDecoder;
+ 
+ const ErrorHandler = require('./error');
+ 
+ const util = {
++	// fntv-electron patch: one mpv message may arrive in several socket chunks.
++	// Returns a function that takes a chunk and returns the complete lines received
++	// so far, keeping the trailing partial line (and any split UTF-8 character)
++	// until the rest arrives. Use one splitter per socket connection.
++	lineSplitter: function() {
++		const decoder = new StringDecoder('utf8');
++		let pending = '';
++		return function(data) {
++			const lines = (pending + decoder.write(data)).split('\n');
++			pending = lines.pop();
++			return lines;
++		};
++	},
+ 	// Finds the correct command to start the IPC socket for mpv. It looks at the
+ 	// output of 'mpv --version' and uses Regular Expressions to determine the mpv
+ 	// version.

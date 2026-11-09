@@ -6,3 +6,6 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   sharp: true
+
+patchedDependencies:
+  node-mpv-2@2.0.0-beta.3: patches/node-mpv-2@2.0.0-beta.3.patch

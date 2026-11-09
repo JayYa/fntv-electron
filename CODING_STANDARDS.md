@@ -95,6 +95,7 @@
 - pnpm 配置写在 `pnpm-workspace.yaml`，`.npmrc` 只放 `registry`。pnpm 不读 `.npmrc` 里的 `node-linker`，也不把 `electron_mirror` 传给安装脚本；CI 还会删掉 `.npmrc`（`tests/standards.test.cjs`）。
 - `nodeLinker` 保持 `hoisted`，这个布局打包出的生产依赖和迁移前一致。改依赖布局时解开产物的 `app.asar`，核对 `node_modules` 里生产依赖齐全，构建成功不算验证。
 - 不留没用到的依赖。`ci.yml` 的 `Check unused dependencies` 跑 knip，查 `package.json` 里没用到的包和用到却没写进去的包；`Check Go modules are tidy` 跑 `go mod tidy -diff`。scripts 里新增系统命令（如 `go`、`lipo`）时加进 `knip.jsonc` 的 `ignoreBinaries`（`tests/standards.test.cjs`）。
+- `node-mpv-2` 带一个 `pnpm patch` 补丁（`patches/`，`pnpm-workspace.yaml` 的 `patchedDependencies`），只给 socket 消息加按行缓冲。补丁按版本号绑定，换版本时先确认新版本是否已修，没修就在新版本上重做补丁，否则安装失败；`tests/mpvIpc.test.cjs` 检查拆包的消息（`docs/wiki/mpv-ipc.md`）。
 - 有安装脚本的依赖要在 `allowBuilds` 里写明，否则 `pnpm install` 报 `ERR_PNPM_IGNORED_BUILDS` 并跳过脚本。`electron` 从 42 起没有安装脚本，不用放行：`pnpm install` 不下载二进制，第一次 `require('electron')` 或运行 `electron .` 时按需下载，只试一次。CI 由 `.github/actions/install-dependencies` 预先带缓存和重试下载（`tests/ciElectronDownload.test.cjs`）。
 
 ## GitHub Workflow

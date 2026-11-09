@@ -14,10 +14,14 @@ import {
 import { PlayerFactory } from '../factory';
 import { isNearEnd } from '../../playback/nearEnd';
 import log from '../../logger';
+import { MpvIpcSocket } from '../../../public/platform';
+import { createPlaybackIpcSocket, removePlaybackIpcSocket } from './mpvIpcSocket';
 import NodeMpv, { TimePosition } from 'node-mpv-2';
 
 export class MpvPlayer extends BasePlayer {
     private mpvInstance: NodeMpv | null = null;
+    // 这次播放的 IPC 地址，不用 node-mpv-2 的固定默认值（docs/wiki/mpv-ipc.md）
+    private ipcSocket: MpvIpcSocket | null = null;
     // 节流调用
     private lastProgressTime: number = 0;
     private throttleInterval: number = 15000; // 15秒间隔（毫秒）
@@ -52,9 +56,11 @@ export class MpvPlayer extends BasePlayer {
                 ...args || []
             );
 
+            this.ipcSocket = createPlaybackIpcSocket();
             const mpvOptions = {
                 debug: this.config.debug,
                 binary: this.config.playerPath.length > 0 ? this.config.playerPath : undefined,
+                socket: this.ipcSocket.path,
             };
 
             this.mpvInstance = new NodeMpv(mpvOptions, mpvArgs);
@@ -255,6 +261,8 @@ export class MpvPlayer extends BasePlayer {
 
         // 监听退出事件
         this.mpvInstance.on('quit', () => {
+            // MPV 进程已经退出，socket 文件不会再用
+            this.removeIpcSocket();
             this.handleExit(0);
         });
 
@@ -492,6 +500,12 @@ export class MpvPlayer extends BasePlayer {
         }
     }
 
+    /** 只在 MPV 退出后或 quit() 返回后调用，原因见 removePlaybackIpcSocket。 */
+    private removeIpcSocket(): void {
+        removePlaybackIpcSocket(this.ipcSocket, (error) => log.debug('清理 MPV IPC socket 失败:', error));
+        this.ipcSocket = null;
+    }
+
     /**
      * 停止播放
      */
@@ -503,6 +517,9 @@ export class MpvPlayer extends BasePlayer {
                     if (this.config.debug) {
                         log.debug('停止播放时出错:', error);
                     }
+                }).finally(() => {
+                    // quit() 返回时库已断开连接、不再处理事件，不会再按路径连 socket
+                    this.removeIpcSocket();
                 });
             } catch (error) {
                 if (this.config.debug) {
