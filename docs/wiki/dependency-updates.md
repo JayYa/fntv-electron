@@ -24,4 +24,17 @@
   - `@types/express`（`ae48e75` 加）和 `@types/multistream`（`ce934db` 加）是给原来 TypeScript 写的代理服务用的，代理改用 Go 后 `src` 里已经不导入 `express`、`multistream`。
   - `@types/cacheable-request@6.0.3`、`@types/keyv@3.1.4`、`@types/responselike@1.0.3` 仍经 `got@11.8.6`（`@electron/get` 依赖）间接安装，删掉直接依赖不影响它们被加载，也不会装上 #130、#131 的空壳版本。
 - 结论：这 12 个 `@types` 包从 `devDependencies` 删掉，只留 `@types/node`。本地 `pnpm install`、`tsc --noEmit`、`pnpm run lint`、`pnpm test`（351 通过，1 跳过）都通过。这个 PR 取代 #130、#131，依赖消失后 Renovate 会自动关闭它们。
-- 另外看到：`dependencies` 里的 `express`、`multistream`、`http-proxy-middleware`、`http-range-fetcher`、`uuid` 在 `src` 里也没有导入，可能同样是 TypeScript 代理服务留下的。这次没动。
+- 已被取代（2026-11-09，见下一节：已核实并在 #136 删除）：~~另外看到：`dependencies` 里的 `express`、`multistream`、`http-proxy-middleware`、`http-range-fetcher`、`uuid` 在 `src` 里也没有导入，可能同样是 TypeScript 代理服务留下的。这次没动。~~
+
+## 2026-11-09 #133 合并，major 更新的处理方式，删除旧代理留下的运行时依赖
+
+- 维护者合并了 #133（`b993558`，上一节删 `@types` 包的 PR）。
+- 维护者 2026-11-09 的决定：
+  - major 更新等 Renovate 按速率限制陆续开出，不手动在 Dependency Dashboard（#128）里一次全部创建。
+  - 低风险的 major PR，CI 通过并看过改动后交维护者合并。`electron` 45、TypeScript 7、Node 26 单独评估。
+  - release 2.8.1（#132）推迟到这批更新之后再发。
+- 上一节“另外看到”的 5 个包，PR #136 逐个核实（基于 `b993558`）：
+  - 范围：`git grep` 全仓库（`src`、`tests`、`scripts`、`resource/`、`.github`，含 preload 入口和 `resource/login` 页面），`tsc` 编译产物 `dest/` 里的 `require`，`scripts/build-preload.cjs`（esbuild 只打 preload），`package.json` 的 `build.files` 和 `extraFiles`。唯一的动态 `require` 是 `src/main/handlers/index.ts` 加载 `plugins/*.js`，插件源码在 `src` 里，已覆盖。
+  - 来历（`git log -S`）：`express` 由 `ae48e75`（2025-09-04）加，`http-proxy-middleware` 和 `uuid`（`uuidv5` 生成 ID）由 `54c2452`（2025-09-13）加，`multistream` 和 `http-range-fetcher` 由 `ce934db`（2025-09-14）加，都给 `src/modules/proxy/server.ts`、`utils.ts` 用。`837782f`（`[add] support 302`，2025-09-14）把代理改成 Go 并删掉这些 `.ts`，之后没有代码再导入它们。`http-range-fetcher` 从来没在 `src` 里导入过。
+  - 其它 `dependencies` 都有用：`axios`（`fn_api/request.ts`、`updater/*`）、`node-cache`（`fn_api/api.ts`）、`node-mpv-2`（`players/impl/mpv.ts`）、`semver`（`updater/updateChecker.ts`，`try { require('semver') }`，缺失时退回简单比较）。
+- 结论：5 个包从 `dependencies` 删掉，lockfile 少 119 个包。本地 `tsc --noEmit`、`pnpm run lint`、`pnpm test`（351 通过，1 跳过）都通过。Dashboard 里 `http-proxy-middleware` v4、`uuid` v14 两个 major 更新随之不再需要。

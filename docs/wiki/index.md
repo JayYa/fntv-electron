@@ -16,4 +16,4 @@
 - [更新检查](update-check.md)：2026-11-08 从发布与更新链路拆出，原文未改。更新说明转纯文本和截断上限，检查更新 403 的排查（2026-11-07）。
 - [构建依赖与 MPV 插件同步](build-dependencies.md)：2026-11-08 记录。三个平台为什么都下载 MPV 压缩包，构建下载 504 和 CI 缓存（#101），启动时插件同步到用户配置目录，README 改正（#102），打包时 Electron zip 的下载目录核实和 main 上 Windows 缓存命中验证（#104、#105）。2026-11-09 把 MPV 归档升级到 `fntv-mpv-v20261108_233327`（uosc 5.13.0、新增 thumbfast，弹幕插件不变，无破坏性变化；PR #123）。
 - [多平台测试策略](multi-platform-testing.md)：只有 Windows 电脑时怎样覆盖 macOS 和 Linux。2026-11-08 决定分四层推进，当天完成第 1、2 层（三平台 CI、平台判断集中）和第 3 层（安装包冒烟测试，spec #80），v2.7.2 是第一次过冒烟测试门禁的发版。当天决定删掉 `release.yml` 里的 Release PR 冒烟路径，改由批准后的 `smoke-test.yml` 跑。
-- [依赖更新（Renovate）](dependency-updates.md)：2026-11-09 记录。Renovate pin PR #126 在 macOS、Windows 上因 `python-version` 被 pin 到 `3.11.18` 构建失败，`renovate.json` 修复（#129）并验证；#126、#127 合并；删除 `devDependencies` 里没用到的 12 个 `@types` 包，取代 #130、#131。
+- [依赖更新（Renovate）](dependency-updates.md)：2026-11-09 记录。Renovate pin PR #126 在 macOS、Windows 上因 `python-version` 被 pin 到 `3.11.18` 构建失败，`renovate.json` 修复（#129）并验证；#126、#127 合并；删除 `devDependencies` 里没用到的 12 个 `@types` 包，取代 #130、#131（#133）；维护者对 major 更新和 release 2.8.1 的处理决定；删除旧 TypeScript 代理留下的 5 个运行时依赖（#136）。
