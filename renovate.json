@@ -7,5 +7,15 @@
   "rangeStrategy": "pin",
   "minimumReleaseAge": "3 days",
   "dependencyDashboardAutoclose": true,
-  "lockFileMaintenance": { "enabled": false }
+  "lockFileMaintenance": { "enabled": false },
+  "packageRules": [
+    {
+      "description": "actions/python-versions 只给 3.11.10 及以后的版本发布 Linux 构建，Windows 和 macOS 没有对应补丁版本。python-version 保持 3.11，不 pin 到补丁版本。",
+      "matchManagers": ["github-actions"],
+      "matchDepTypes": ["uses-with"],
+      "matchDepNames": ["python"],
+      "matchUpdateTypes": ["pin"],
+      "enabled": false
+    }
+  ]
 }
