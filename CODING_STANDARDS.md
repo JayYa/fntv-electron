@@ -94,6 +94,7 @@
 - pnpm 版本只写在 `package.json` 的 `packageManager`，`pnpm/action-setup` 读这个字段，工作流不另写一份（`tests/standards.test.cjs`）。
 - pnpm 配置写在 `pnpm-workspace.yaml`，`.npmrc` 只放 `registry`。pnpm 不读 `.npmrc` 里的 `node-linker`，也不把 `electron_mirror` 传给安装脚本；CI 还会删掉 `.npmrc`（`tests/standards.test.cjs`）。
 - `nodeLinker` 保持 `hoisted`，这个布局打包出的生产依赖和迁移前一致。改依赖布局时解开产物的 `app.asar`，核对 `node_modules` 里生产依赖齐全，构建成功不算验证。
+- 不留没用到的依赖。`ci.yml` 的 `Check unused dependencies` 跑 knip，查 `package.json` 里没用到的包和用到却没写进去的包；`Check Go modules are tidy` 跑 `go mod tidy -diff`。scripts 里新增系统命令（如 `go`、`lipo`）时加进 `knip.jsonc` 的 `ignoreBinaries`（`tests/standards.test.cjs`）。
 - 有安装脚本的依赖要在 `allowBuilds` 里写明，否则 `pnpm install` 报 `ERR_PNPM_IGNORED_BUILDS` 并跳过脚本。`electron` 从 42 起没有安装脚本，不用放行：`pnpm install` 不下载二进制，第一次 `require('electron')` 或运行 `electron .` 时按需下载，只试一次。CI 由 `.github/actions/install-dependencies` 预先带缓存和重试下载（`tests/ciElectronDownload.test.cjs`）。
 
 ## GitHub Workflow

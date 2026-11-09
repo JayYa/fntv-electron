@@ -1,0 +1,20 @@
+// knip 只查依赖：package.json 里没用到的依赖、用到但没写进 package.json 的包和命令、解析不了的导入。
+// 不查未使用的文件和导出。插件按目录动态加载，preload 由 esbuild 打包，knip 跟踪不到，所以这些目录的文件都当入口。
+{
+    "$schema": "https://unpkg.com/knip@6/schema.json",
+    "include": ["dependencies", "devDependencies", "unlisted", "binaries", "unresolved"],
+    "entry": [
+        "src/**/*.ts",
+        "resource/login/*.js",
+        "scripts/*.{js,cjs}",
+        "tests/**/*.cjs"
+    ],
+    "project": [
+        "src/**/*.ts",
+        "resource/login/*.js",
+        "scripts/*.{js,cjs}",
+        "tests/**/*.cjs"
+    ],
+    // package.json scripts 里调用的系统命令，不是 npm 包：go 是 Go 工具链，lipo 是 macOS Xcode 自带的。
+    "ignoreBinaries": ["go", "lipo"]
+}

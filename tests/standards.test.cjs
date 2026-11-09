@@ -196,3 +196,20 @@ test('workflow steps and jobs named in the standards documents exist', () => {
         assert.ok(names.has(name), `${doc} refers to ${file} ${name}, which does not exist`);
     }
 });
+
+test('CI checks for unused dependencies and untidy Go modules', () => {
+    const yaml = require('js-yaml');
+    const steps = yaml.load(read('.github/workflows/ci.yml')).jobs.test.steps;
+    const { scripts, devDependencies } = JSON.parse(read('package.json'));
+
+    assert.equal(scripts.knip, 'knip');
+    assert.match(devDependencies.knip, /^\d+\.\d+\.\d+$/, 'knip is pinned to an exact version');
+    assert.ok(steps.some(step => step.run === 'pnpm run knip'), 'ci.yml does not run knip');
+
+    const tidy = steps.find(step => step.run === 'go mod tidy -diff');
+    assert.ok(tidy, 'ci.yml does not run go mod tidy -diff');
+    assert.equal(tidy['working-directory'], 'src/modules/proxy');
+    // CI 的 Go 版本来自 go.mod 的 go 指令，-diff 从 Go 1.23 起才有。
+    const [major, minor] = read('src/modules/proxy/go.mod').match(/^go (\d+)\.(\d+)/m).slice(1).map(Number);
+    assert.ok(major > 1 || minor >= 23, `go ${major}.${minor} does not support go mod tidy -diff`);
+});

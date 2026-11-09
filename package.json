@@ -7,8 +7,8 @@
     "scripts": {
         "build:proxy:win": "cd src/modules/proxy && go build -o ../../../third_party/proxy/proxy.exe",
         "build:proxy:linux": "pnpm run build:proxy:linux:x64",
-        "build:proxy:linux:x64": "cd src/modules/proxy && cross-env GOOS=linux GOARCH=amd64 go build -o ../../../third_party/proxy/proxy",
-        "build:proxy:linux:arm64": "cd src/modules/proxy && cross-env GOOS=linux GOARCH=arm64 go build -o ../../../third_party/proxy/proxy",
+        "build:proxy:linux:x64": "cd src/modules/proxy && GOOS=linux GOARCH=amd64 go build -o ../../../third_party/proxy/proxy",
+        "build:proxy:linux:arm64": "cd src/modules/proxy && GOOS=linux GOARCH=arm64 go build -o ../../../third_party/proxy/proxy",
         "build:proxy:mac:x64": "cd src/modules/proxy && GOOS=darwin GOARCH=amd64 go build -o ../../../third_party/proxy/proxy_x64",
         "build:proxy:mac:arm64": "cd src/modules/proxy && GOOS=darwin GOARCH=arm64 go build -o ../../../third_party/proxy/proxy_arm64",
         "build:proxy:mac": "cd src/modules/proxy && go build -o ../../../third_party/proxy/proxy",
@@ -19,6 +19,7 @@
         "compile": "pnpm run clean && tsc && pnpm run build:preload",
         "build:preload": "node scripts/build-preload.cjs",
         "lint": "eslint src resource/login tests",
+        "knip": "knip",
         "prepare": "git config core.hooksPath .githooks",
         "test": "pnpm run compile && node --test tests/*.test.cjs",
         "test:smoke": "node --test --test-reporter=spec --test-timeout=300000 tests/smoke/installer.smoke.cjs",
@@ -44,13 +45,12 @@
     },
     "devDependencies": {
         "@types/node": "24.19.2",
-        "copyfiles": "2.4.1",
-        "cross-env": "10.1.0",
         "electron": "45.2.3",
         "electron-builder": "26.18.0",
         "esbuild": "0.28.2",
         "eslint": "10.14.0",
         "js-yaml": "5.5.0",
+        "knip": "6.44.1",
         "playwright-core": "1.65.0",
         "rimraf": "6.1.4",
         "sharp": "0.35.5",
@@ -59,7 +59,6 @@
     },
     "dependencies": {
         "axios": "1.21.0",
-        "node-cache": "5.1.2",
         "node-mpv-2": "2.0.0-beta.3",
         "semver": "7.8.6"
     },
