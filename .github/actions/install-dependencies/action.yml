@@ -1,0 +1,75 @@
+name: Install dependencies
+description: >-
+  安装依赖时跳过 Electron 下载，再由单独的步骤带缓存和重试下载 Electron 二进制。
+  ci.yml 和 build.yml 共用这一份，调用前先 checkout、装好 pnpm 和 Node.js、删掉 .npmrc。
+  composite action 的步骤不支持 timeout-minutes，超时写在调用它的步骤上。
+
+outputs:
+  electron-version:
+    description: Electron version from package.json
+    value: ${{ steps.keys.outputs.electron-version }}
+  packaging-key:
+    description: build.yml 打包下载缓存的 key
+    value: ${{ steps.keys.outputs.packaging-key }}
+  packaging-electron-prefix:
+    description: 打包缓存 restore-keys 的第一级前缀，同一 Electron 版本
+    value: ${{ steps.keys.outputs.packaging-electron-prefix }}
+  packaging-prefix:
+    description: 打包缓存 restore-keys 的第二级前缀，同一平台
+    value: ${{ steps.keys.outputs.packaging-prefix }}
+
+runs:
+  using: composite
+  steps:
+    # 不加 --ignore-scripts：esbuild、sharp 等的安装脚本还要跑。electron 的 postinstall 只跳过下载，
+    # 二进制由下面带缓存和重试的步骤下载：postinstall 里 GitHub 偶发 504 会让整个 install 失败。
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      shell: bash
+      env:
+        ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+    # key 只取 package.json 和锁文件里的版本号（scripts/ci-download-cache.cjs），cache-warm.yml 用同一个脚本。
+    - name: Resolve download cache keys
+      id: keys
+      run: node scripts/ci-download-cache.cjs keys
+      shell: bash
+
+    # tests/accessCodeSession.test.cjs 在 Node 里 require('electron')，没有 path.txt 时 electron/index.js 直接抛错，
+    # 打包也要用 Electron，所以不能整个跳过下载。
+    # Electron zip 由 @electron/get 存到默认目录（不读 ELECTRON_CACHE），三个平台的默认目录都列上，不存在的会被忽略。
+    # PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
+    - name: Restore Electron download cache
+      id: electron-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      continue-on-error: true
+      with:
+        path: |
+          ~/.cache/electron
+          ~/Library/Caches/electron
+          ~/AppData/Local/electron/Cache
+        key: ${{ steps.keys.outputs.electron-key }}
+
+    - name: Download Electron binary
+      env:
+        RETRY_DELAY: '15'
+      run: |
+        for attempt in 1 2 3 4 5; do
+          if node node_modules/electron/install.js; then break; fi
+          if [ "$attempt" = 5 ]; then echo "Electron download failed after $attempt attempts"; exit 1; fi
+          echo "Electron download failed (attempt $attempt), retrying in $((attempt * RETRY_DELAY))s"
+          sleep $((attempt * RETRY_DELAY))
+        done
+        test -f node_modules/electron/path.txt
+      shell: bash
+
+    - name: Save Electron download cache
+      if: steps.electron-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      continue-on-error: true
+      with:
+        path: |
+          ~/.cache/electron
+          ~/Library/Caches/electron
+          ~/AppData/Local/electron/Cache
+        key: ${{ steps.electron-cache.outputs.cache-primary-key }}

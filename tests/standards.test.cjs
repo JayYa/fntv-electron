@@ -11,13 +11,18 @@ function read(relativePath) {
     return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
+const actionDir = path.join(root, '.github', 'actions');
+
+// workflow 和本仓库的 composite action（.github/actions/<名字>/action.yml）按同样的规则检查。
 function workflows() {
-    return fs.readdirSync(workflowDir)
-        .filter(name => /\.ya?ml$/.test(name))
-        .map(name => ({
-            name,
-            lines: fs.readFileSync(path.join(workflowDir, name), 'utf8').split(/\r?\n/)
-        }));
+    const files = [
+        ...fs.readdirSync(workflowDir).filter(name => /\.ya?ml$/.test(name)).map(name => path.join(workflowDir, name)),
+        ...fs.readdirSync(actionDir).map(name => path.join(actionDir, name, 'action.yml')).filter(file => fs.existsSync(file)),
+    ];
+    return files.map(file => ({
+        name: path.relative(root, file),
+        lines: fs.readFileSync(file, 'utf8').split(/\r?\n/)
+    }));
 }
 
 function isComment(line) {

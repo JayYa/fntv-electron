@@ -107,7 +107,7 @@
 - 版本号和 `CHANGELOG.md` 由 Release PR 改，不手动改 `package.json` 的 `version` 和 `.release-please-manifest.json`。release-please 的配置在 `release-please-config.json`。
 - `package.json` 里每条 `electron-builder` 打包命令都带 `--publish never`。不写时它在 CI 上按 `repository` 隐式发布到 GitHub（`tests/standards.test.cjs`）。
 - 构建依赖的外部资产固定 tag 和 sha256，按 sha256 缓存，命中缓存也校验（`build.yml` 的 `Download third-party dependencies`，`tests/releaseGate.test.cjs`）。
-- `ci.yml` 的 `Install dependencies` 设 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`，Electron 二进制由后面的 `Download Electron binary` 下载：按 Electron 版本缓存，失败重试 5 次。测试需要二进制（`require('electron')` 没有 `path.txt` 时抛错），不能整个跳过（`tests/ciElectronDownload.test.cjs`）。
+- 需要 Electron 二进制的 job 用 `.github/actions/install-dependencies` 安装依赖（`ci.yml`、`build.yml`），不自己写 `pnpm install`：安装时跳过 Electron 下载，再按 Electron 版本缓存、失败重试 5 次单独下载（`tests/ciElectronDownload.test.cjs`）。下载缓存的 key 只用版本号，不用锁文件 hash，由 `scripts/ci-download-cache.cjs` 算；main 上的缓存由 `cache-warm.yml` 填充（`tests/buildDownloads.test.cjs`）。
 - `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
 - 工作流不出现 `head_commit`、`releases/latest` 和 `secrets.`（`tests/standards.test.cjs`）。
 - 判断某个 PR 上的 workflow 是没触发还是在等批准，用 `gh run list --branch <head 分支> --json workflowName,event,conclusion`，等批准的运行结论是 `action_required`。`gh pr checks` 区分不了：等批准的运行不生成 check run，它显示 `no checks reported`，和没触发一样。GitHub Actions 行为的已知事实记在 `docs/wiki/release-and-update.md`，下结论前先查它。

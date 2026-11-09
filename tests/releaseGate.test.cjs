@@ -229,23 +229,6 @@ test('the MPV archive is cached as soon as it is downloaded and verified', () =>
     assertRestoreAndSave(job, cache, save, download);
 });
 
-test('electron-builder and Electron downloads are cached per lockfile', () => {
-    const job = workflow('build.yml').jobs.build;
-    const restore = job.steps.find(step => step.id === 'packaging-cache');
-    const save = job.steps.find(step => step.name === 'Save packaging download cache');
-    const build = job.steps.find(step => step.name === 'Build application');
-    assertRestoreAndSave(job, restore, save, build);
-    assert.ok(job.steps.indexOf(restore) < job.steps.indexOf(build), 'packaging cache must be restored before the build');
-    assert.match(restore.with.key, /\$\{\{\s*runner\.os\s*\}\}/);
-    assert.match(restore.with.key, /hashFiles\('pnpm-lock\.yaml'\)/);
-    // 打包工具存到 ELECTRON_BUILDER_CACHE；Electron zip 存到 @electron/get 的默认目录，它不读 ELECTRON_CACHE。
-    const paths = restore.with.path.trim().split('\n');
-    assert.ok(paths.includes(build.env.ELECTRON_BUILDER_CACHE), 'ELECTRON_BUILDER_CACHE is not cached');
-    for (const dir of ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache']) {
-        assert.ok(paths.includes(dir), `${dir} is not cached`);
-    }
-});
-
 test('a cached MPV archive is verified and used without downloading', t => {
     const archive = Buffer.from('cached archive');
     const sha256 = require('node:crypto').createHash('sha256').update(archive).digest('hex');

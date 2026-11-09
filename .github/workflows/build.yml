@@ -18,6 +18,11 @@ on:
         required: false
         default: ''
         type: string
+      upload:
+        description: Upload the installers as <platform>-build; cache-warm.yml only fills caches and passes false
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -26,7 +31,7 @@ jobs:
   build:
     name: Build on ${{ inputs.os }}
     runs-on: ${{ inputs.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # 构建依赖的 MPV 归档，固定 tag 和 sha256。缓存 key 也用这里的 sha256。
       MPV_CONFIG_REPO: JayYa/fntv-mpv-config
@@ -57,9 +62,11 @@ jobs:
         shell: bash
         continue-on-error: true
 
+      # 和 ci.yml 共用：安装时跳过 Electron 下载，再带缓存和重试单独下载。
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        timeout-minutes: 10
+        id: install
+        uses: ./.github/actions/install-dependencies
+        timeout-minutes: 15
 
       - name: Setup Python (for native modules)
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -129,7 +136,9 @@ jobs:
           key: ${{ steps.mpv-archive-cache.outputs.cache-primary-key }}
 
       # electron-builder 打包时下载 Electron zip 和打包工具（AppImage、NSIS 等），GitHub 偶尔返回 504。
-      # electron 和 electron-builder 的版本都在锁文件里，key 用锁文件 hash。
+      # key 只含 electron、electron-builder 和 app-builder-lib 的版本（scripts/ci-download-cache.cjs）：用锁文件 hash 时
+      # 每个依赖 PR 都改锁文件，几乎从不命中。版本变了时按 restore-keys 先找同一 Electron 版本、再找同一平台的旧缓存，
+      # 打包工具大多还能用，缺的再下载。PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
       # Electron zip 由 @electron/get 存到它的默认目录（不读 ELECTRON_CACHE），三个平台的默认目录都列上，
       # 不存在的会被忽略；打包工具存到 ELECTRON_BUILDER_CACHE，由 Build application 显式指定。
       - name: Restore packaging download cache
@@ -142,27 +151,46 @@ jobs:
             ~/.cache/electron
             ~/Library/Caches/electron
             ~/AppData/Local/electron/Cache
-          key: packaging-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ steps.install.outputs.packaging-key }}
+          restore-keys: |
+            ${{ steps.install.outputs.packaging-electron-prefix }}
+            ${{ steps.install.outputs.packaging-prefix }}
+
+      # 删掉从旧版本缓存恢复的 Electron zip；写入 SHASUMS256.txt-<版本>，命中缓存的 zip 校验时不再联网下载 SHASUMS256.txt。
+      - name: Prepare packaging download cache
+        run: node scripts/ci-download-cache.cjs prepare-packaging
 
       - name: Compile TypeScript
         run: pnpm run compile
         timeout-minutes: 5
 
+      # electron-builder 自己对每个下载只重试 3 次，间隔 2 到 6 秒，次数和间隔都不能配置。
+      # 日志里有 5xx 或网络错误时整个打包命令再跑，共 3 次，间隔 30、60 秒；其它错误直接失败。
+      # 前一次已下载的文件留在缓存目录里，重跑时不再下载。
       - name: Build application
         env:
           PLATFORM: ${{ inputs.platform }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder-cache
+          RETRY_DELAY: '30'
         run: |
-          if [ "$PLATFORM" = "windows" ]; then
-            pnpm run build:win
-          elif [ "$PLATFORM" = "macos" ]; then
-            pnpm run build:mac
-          else
-            pnpm run build:linux
-          fi
+          case "$PLATFORM" in
+            windows) script=build:win ;;
+            macos) script=build:mac ;;
+            *) script=build:linux ;;
+          esac
+          log="$RUNNER_TEMP/build-application.log"
+          for attempt in 1 2 3; do
+            if pnpm run "$script" 2>&1 | tee "$log"; then exit 0; fi
+            if ! grep -Eq 'Response code 5[0-9]{2}|HttpError: 5[0-9]{2}|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up' "$log"; then
+              exit 1
+            fi
+            if [ "$attempt" = 3 ]; then echo "Build failed with a download error after $attempt attempts"; exit 1; fi
+            echo "Build failed with a download error (attempt $attempt), retrying in $((attempt * RETRY_DELAY))s"
+            sleep $((attempt * RETRY_DELAY))
+          done
         shell: bash
-        timeout-minutes: 15
+        timeout-minutes: 30
 
       - name: Save packaging download cache
         if: steps.packaging-cache.outputs.cache-hit != 'true'
@@ -177,6 +205,7 @@ jobs:
           key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
       - name: Upload build artifacts
+        if: inputs.upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.platform }}-build
