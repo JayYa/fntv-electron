@@ -70,7 +70,7 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
 }
 
 /** 目标平台的路径写法：结果和在该平台上运行时一致，与测试所在主机无关。 */
-function pathFor(platform: NodeJS.Platform): path.PlatformPath {
+function pathFor(platform: NodeJS.Platform): typeof path.posix {
     return platform === 'win32' ? path.win32 : path.posix;
 }
 

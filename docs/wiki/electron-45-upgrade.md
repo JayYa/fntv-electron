@@ -92,3 +92,7 @@
 9. 外部链接和更新检查：页面里的外部链接用系统浏览器打开（`externalLink.ts`）；“检查更新”能取到版本信息、点下载打开浏览器（`updateChecker.ts`）。
 10. 网页端自带播放器（关掉 MPV 接管时）：视频能播放、全屏正常（Chromium 版本跨度 140 → 156，WebGL 和硬件解码路径有变化）。
 11. macOS 12 机器（如果有）：确认 45 构建打不开，作为发版说明的依据。
+
+## 2026-11-09 补充：合并 #134 时要同步改的 Renovate 规则
+
+- `renovate.json` 里 `@types/node` 的 `allowedVersions` 当天设为 `<23`（跟随 Electron 38 内置的 Node 22，见 [依赖更新](dependency-updates.md) 最后一节）。合并 #134 后要改成 `<25`，跟随 Electron 45 内置的 Node 24。
