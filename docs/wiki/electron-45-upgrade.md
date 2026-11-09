@@ -95,4 +95,4 @@
 
 ## 2026-11-09 补充：合并 #134 时要同步改的 Renovate 规则
 
-- `renovate.json` 里 `@types/node` 的 `allowedVersions` 当天设为 `<23`（跟随 Electron 38 内置的 Node 22，见 [依赖更新](dependency-updates.md) 最后一节）。合并 #134 后要改成 `<25`，跟随 Electron 45 内置的 Node 24。
+- `renovate.json` 里 `@types/node` 的 `allowedVersions` 当天设为 `<23`（跟随 Electron 38 内置的 Node 22，见 [依赖更新](dependency-updates.md) 的“2026-11-09 #136、#135、#137 合并，评估 #138（js-yaml 5）和 #139（Node 26）”一节）。合并 #134 后要改成 `<25`，跟随 Electron 45 内置的 Node 24。

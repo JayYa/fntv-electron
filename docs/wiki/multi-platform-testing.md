@@ -1,6 +1,6 @@
 # 多平台测试策略
 
-相关：[发布与更新链路](release-and-update.md)、[构建依赖与 MPV 插件同步](build-dependencies.md)（2026-11-08 构建下载 504 和 CI 缓存）
+相关：[发布与更新链路](release-and-update.md)、[CI 下载与缓存](ci-download-cache.md)（2026-11-08 构建下载 504 和 CI 缓存，2026-11-09 从构建依赖与 MPV 插件同步拆出）
 
 ## 背景
 
@@ -119,4 +119,4 @@
 
 - `gh issue list --state open`：#74、#75、#76、#77、#78、#87、#94 仍为 OPEN，标签都只有 `needs-triage`，和上一次核对相同，没有分诊。
 - Release PR 经 `smoke-test.yml` 跑冒烟测试（上方“待验证（2026-11-08 追加）”）仍没有发生：截至 `dff30b2` 没有新的 Release PR。
-- 打包缓存在 main 上的命中只验证了 Windows（见[构建依赖与 MPV 插件同步](build-dependencies.md)），macOS、Linux 要等下次发版看 `Build on macos-latest`、`Build on ubuntu-latest` 的日志。
+- 打包缓存在 main 上的命中只验证了 Windows（见[CI 下载与缓存](ci-download-cache.md)，2026-11-09 从构建依赖与 MPV 插件同步拆出），macOS、Linux 要等下次发版看 `Build on macos-latest`、`Build on ubuntu-latest` 的日志。

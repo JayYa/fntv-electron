@@ -1,6 +1,6 @@
 # 发布与更新链路
 
-相关：[独立维护](independent-maintenance.md)、[多平台测试策略](multi-platform-testing.md)（2026-11-08 起的发版门禁和冒烟测试）、[更新检查](update-check.md)（2026-11-08 从本页拆出：更新说明转纯文本、截断上限、检查更新 403）、[构建依赖与 MPV 插件同步](build-dependencies.md)（MPV 压缩包、2026-11-08 起的 CI 下载缓存）、[历史遗留 issue 分诊](legacy-issues-triage.md)（#32 发版准备）。
+相关：[独立维护](independent-maintenance.md)、[多平台测试策略](multi-platform-testing.md)（2026-11-08 起的发版门禁和冒烟测试）、[更新检查](update-check.md)（2026-11-08 从本页拆出：更新说明转纯文本、截断上限、检查更新 403）、[构建依赖与 MPV 插件同步](build-dependencies.md)（MPV 压缩包）、[CI 下载与缓存](ci-download-cache.md)（2026-11-08 起的 CI 下载缓存，2026-11-09 从前者拆出）、[历史遗留 issue 分诊](legacy-issues-triage.md)（#32 发版准备）。
 
 ## 2026-11-05 事实（`JayYa/fntv-electron@af416c0`）
 
