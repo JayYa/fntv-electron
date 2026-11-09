@@ -5,12 +5,18 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const yaml = require('js-yaml');
 
-// 读 .github/workflows 下的 workflow，在临时目录里实际运行某个 step，检查缓存步骤的约定。
+// 读 .github/workflows 下的 workflow 和 .github/actions 下的 composite action，在临时目录里实际运行某个 step，检查缓存步骤的约定。
 
 const root = path.resolve(__dirname, '..', '..');
 
 function workflow(name) {
     return yaml.load(fs.readFileSync(path.join(root, '.github', 'workflows', name), 'utf8'));
+}
+
+// 本仓库的 composite action。返回值带 steps，可以和 job 一样交给 runStep。
+function action(name) {
+    const metadata = yaml.load(fs.readFileSync(path.join(root, '.github', 'actions', name, 'action.yml'), 'utf8'));
+    return { ...metadata, steps: metadata.runs.steps };
 }
 
 function asList(value) {
@@ -69,4 +75,4 @@ function posixPath(file) {
         : file;
 }
 
-module.exports = { asList, assertRestoreAndSave, posixPath, runStep, workflow };
+module.exports = { action, asList, assertRestoreAndSave, posixPath, runStep, workflow };

@@ -1,0 +1,86 @@
+name: Warm download caches
+
+# Actions 缓存按 ref 隔离：PR 只能读自己的和 base 分支（main）的缓存。ci.yml 只在 pull_request 上跑，
+# main 上只有发版时才构建，main 上几乎没有 Electron 和打包下载缓存，每个新 PR 第一次运行都要下载。
+# 这里在 main 上调用 build.yml 打包一次（不上传安装包），把 install-dependencies 的 electron-* 和
+# build.yml 的 packaging-* 缓存存到 main。先用 Actions API 查 main 上每个平台的两个 key，
+# 都在的平台不构建；key 只随 electron、electron-builder、app-builder-lib 的版本变（scripts/ci-download-cache.cjs），
+# 平时合并依赖 PR 只跑一次几秒的查询。
+# 每周一次的定时运行补上 7 天没被读过、被 GitHub 清掉的缓存。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - package.json
+      - pnpm-lock.yaml
+      - scripts/ci-download-cache.cjs
+      - .github/actions/install-dependencies/**
+      - .github/workflows/build.yml
+      - .github/workflows/cache-warm.yml
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cache-warm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  missing:
+    name: Find missing caches
+    # 缓存存在 github.ref 下，只有 main 上的缓存能被 PR 读到。手动触发时也只认 main。
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      matrix: ${{ steps.missing.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Find platforms without caches on main
+        id: missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          include=''
+          for entry in Linux:linux:ubuntu-latest Windows:windows:windows-latest macOS:macos:macos-latest; do
+            IFS=: read -r runner_os platform os <<< "$entry"
+            keys="$(GITHUB_OUTPUT= RUNNER_OS="$runner_os" node scripts/ci-download-cache.cjs keys | grep -E '^(electron|packaging)-key=' | cut -d= -f2-)"
+            # 没取到 key 时不能当成缓存都在。
+            if [ "$(echo "$keys" | grep -c .)" -ne 2 ]; then echo "Expected 2 cache keys for $runner_os, got: $keys"; exit 1; fi
+            missing=0
+            for key in $keys; do
+              # key 参数按前缀匹配，再按完整 key 过滤。
+              count="$(gh api -X GET "repos/$REPO/actions/caches" -f key="$key" -f ref="$REF" \
+                --jq "[.actions_caches[] | select(.key == \"$key\")] | length")"
+              echo "$key: $count"
+              [ "$count" -gt 0 ] || missing=1
+            done
+            if [ "$missing" = 1 ]; then
+              include="$include${include:+,}{\"platform\":\"$platform\",\"os\":\"$os\"}"
+            fi
+          done
+          echo "matrix={\"include\":[$include]}" >> "$GITHUB_OUTPUT"
+
+  warm:
+    name: ${{ matrix.platform }}
+    needs: missing
+    if: needs.missing.outputs.matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.missing.outputs.matrix) }}
+    uses: ./.github/workflows/build.yml
+    with:
+      os: ${{ matrix.os }}
+      platform: ${{ matrix.platform }}
+      upload: false
