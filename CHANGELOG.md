@@ -1,5 +1,24 @@
 # 更新日志
 
+## [3.0.0](https://github.com/JayYa/fntv-electron/compare/v2.8.0...v3.0.0) (2026-11-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** 升级 Electron 到 45，macOS 最低版本改为 13（Ventura） ([#149](https://github.com/JayYa/fntv-electron/issues/149))
+
+### 新功能
+
+* **deps:** 升级 Electron 到 45，macOS 最低版本改为 13（Ventura） ([#149](https://github.com/JayYa/fntv-electron/issues/149)) ([efa66c2](https://github.com/JayYa/fntv-electron/commit/efa66c2a5d4cb01e8bb3678f556c2efb5c3d2451))
+
+
+### 问题修复
+
+* **deps:** pin dependencies ([#126](https://github.com/JayYa/fntv-electron/issues/126)) ([f139460](https://github.com/JayYa/fntv-electron/commit/f1394608fb7f7330d499278ad5b3d746cf769a0c))
+* **deps:** update all non-major dependencies ([#127](https://github.com/JayYa/fntv-electron/issues/127)) ([def16be](https://github.com/JayYa/fntv-electron/commit/def16bedb945ac3260235944162562474a961bf6))
+* **mpv:** 播放时不再连上自己开着的 MPV，MPV 消息分段到达时不再报错 ([#151](https://github.com/JayYa/fntv-electron/issues/151)) ([2d0bdaa](https://github.com/JayYa/fntv-electron/commit/2d0bdaaafc353c62a59da8f4042cca81c7b87742))
+* **renovate:** 不把 setup-python 的 python-version pin 到补丁版本 ([#129](https://github.com/JayYa/fntv-electron/issues/129)) ([e74c6aa](https://github.com/JayYa/fntv-electron/commit/e74c6aa54df8d2b0c5194f1a75ddd0a40142d331))
+
 ## [2.8.0](https://github.com/JayYa/fntv-electron/compare/v2.7.2...v2.8.0) (2026-11-08)
 
 
