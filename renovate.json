@@ -22,6 +22,12 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["@types/node"],
       "allowedVersions": "<23"
+    },
+    {
+      "description": "typescript-eslint 8.72.1 的 peer 是 typescript >=4.8.4 <6.1.0，TS 7.0 不提供 JS API，lint 跑不起来（评估见 #142）。上限跟随 typescript-eslint 的 peer 范围。等 typescript-eslint 支持 TS 7（上游 typescript-eslint#10940）后放开；peer 上限提高但仍不含 7 时，同步改这里。",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1.0"
     }
   ]
 }
