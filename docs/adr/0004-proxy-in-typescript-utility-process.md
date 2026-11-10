@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Proxy 改用 TypeScript，运行在 utilityProcess

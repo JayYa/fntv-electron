@@ -9,7 +9,7 @@
 3. 验证后记下最终 origin，把该会话的 Cookie 存成按 origin 区分的内存授权（`src/modules/fn_api/accessGrant.ts`）。`mode` 和 `trim-mc-token` 不进授权。
 4. `ApiService` 在签名的 FNMedia 请求上附加授权 Cookie，从不附加明文访问码。
 5. 登录成功后，访问码经 `safeStorage` 写入当前配置和历史。启动时先重新验证，再恢复 token；验证失败回到登录页。
-6. 创建播放会话时，授权 Cookie 随 `POST /api/v1/session` 进入 Proxy，这个请求受 `X-FNTV-Proxy-Secret` 保护。
+6. 创建播放会话时，授权 Cookie 经 IPC 进入 Proxy 子进程（ADR-0004）。
 7. Proxy 把 Cookie 加到 FNMedia API 和本地 NAS 范围请求上。云盘直连只用云盘自己的 Cookie。
 
 ## 契约
@@ -18,7 +18,7 @@
 - 每次验证都先清空已有授权，因为应用同时只有一个登录。
 - 重定向只允许同主机，不允许 HTTPS 降级到 HTTP，最多 5 次，整个请求 10 秒超时。这防止访问码被发到其它主机，同时支持常见的 80 到 5666 端口跳转。
 - `401`、`403`、`429` 视为访问码被拒绝，用户看到“访问码错误”。其它非 2xx、网络错误，以及 2xx 但没有拿到 Cookie，都按网络失败处理，和账号密码错误区分开。
-- Cookie 由 `composeCookieHeader` 结构化组合，`mode=relay` 只出现一次。Go 侧的 `ComposeCookieHeader` 要保持一致。
+- Cookie 由 `composeCookieHeader` 结构化组合，`mode=relay` 只出现一次。主进程和 Proxy 共用这一个实现（`src/modules/fn_api/core/cookie.ts`）。
 
 ## FN ID 登录
 

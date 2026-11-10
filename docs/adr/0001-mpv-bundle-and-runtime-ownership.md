@@ -14,6 +14,8 @@
 
 ## Proxy 密钥持久化
 
+> 已被 [ADR-0004](0004-proxy-in-typescript-utility-process.md) 取代：Proxy 改为 `utilityProcess` 子进程，随客户端退出，密钥、`proxy-secret` 文件、`/health` 和孤儿复用都已删除。下面是原来的决定。
+
 Electron 把 Proxy 密钥存在 `userData` 下，并跨重启复用。Electron 异常退出后，Proxy 可能继续运行并占着固定端口。如果每次启动都换密钥，下一个 Electron 进程既无法认证这个 Proxy，也绑不了端口。端口、认证后的健康检查、守护逻辑和短期播放会话都保持原样。
 
 ## Considered Options
