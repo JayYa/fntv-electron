@@ -27,6 +27,7 @@ on:
       - .github/workflows/build-and-smoke.yml
       - .github/workflows/smoke-test.yml
       - package.json
+      - scripts/install-smoke-deps.cjs
 
 permissions:
   contents: read
