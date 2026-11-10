@@ -76,6 +76,18 @@ test('a release is smoke tested on all five targets', t => {
     assert.equal(Object.keys(TARGETS).length, 5);
 });
 
+// macOS 的两个 dmg 都在 Apple Silicon 上构建，各在同架构的机器上原生测试。darwin-x64 经 Rosetta 运行时
+// 首次转译耗时不定，预热也会超时，2026-11-10 改到 Intel 镜像（tests/smoke/targets.cjs 的 darwin-x64）。
+test('macOS installers are smoke tested natively: darwin-x64 on an Intel runner, without Rosetta', t => {
+    const job = workflow('build-and-smoke.yml').jobs['select-targets'];
+    const outputs = runStepOutputs(t, job, 'targets', { PLATFORM: 'macos' });
+    assert.equal(outputs['build-os'], 'macos-latest');
+    const runners = Object.fromEntries(JSON.parse(outputs['smoke-matrix']).include.map(entry => [entry.target, entry.runner]));
+    assert.deepEqual(runners, { 'darwin-arm64': 'macos-latest', 'darwin-x64': 'macos-26-intel' });
+    const steps = workflow('build-and-smoke.yml').jobs.smoke.steps;
+    assert.ok(!steps.some(step => /rosetta/i.test(`${step.name} ${step.run ?? ''}`)), 'the smoke job still installs Rosetta');
+});
+
 // Release PR 会触发 pull_request workflow（要维护者批准后才运行），它的冒烟测试由 smoke-test.yml 跑，
 // release.yml 不对 Release PR 构建（2026-11-08 维护者决定）。release.yml 只在发版和手动触发时构建，
 // 构建的是 release-please 打 tag 的提交或当前提交。

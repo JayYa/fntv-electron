@@ -42,8 +42,8 @@
 - 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
 - 在主进程里执行代码（`app.evaluate`）前先等 `app.firstWindow()`。客户端启动时创建主窗口期间收到的 `app.evaluate` 会以 `Resulting promise was garbage collected` 失败，主窗口页面出现后就不会了。
 - 主进程异常监听在主窗口出现后才装上。更早的异常只能靠 stderr 里的文字发现，而 Electron 默认弹错误框，不一定打印出来，这是已知盲区：表现为主窗口 30 秒内没出现，报错附有主进程输出的末尾，再看 `logs/app.log`。
-- macOS：`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。两个都在 Apple Silicon 的 `macos-latest` 上跑，x64 包经 Rosetta 运行，`process.arch` 断言证明客户端是 x64 进程。用户数据隔离另加 `CFFIXED_USER_HOME`，Electron 默认 userData 也随之落在临时目录。
-- `darwin-x64` 在正式测试前先预热启动一次（`targets.cjs` 的 `warmup`）：不经 Playwright 直接启动客户端，用单独的临时用户数据目录，等 stderr 出现 `DevTools listening` 后杀掉进程组，确认客户端退出、端口 22345 不再响应，耗时打成 `::notice::`，预热超时或失败时测试直接失败。原因是 Rosetta 第一次运行 x64 Electron 要先转译：#92 在同一台 `macos-latest` 上连续直接启动 3 次，`darwin-x64` 到 `DevTools listening` 分别是 51952ms、5552ms、6733ms，转译缓存 `/var/db/oah` 从 2.7M 涨到 255M；`darwin-arm64` 是 2304ms、192ms、216ms，缓存不变。约 50 秒的一次性转译加上 Playwright 的开销会贴着或超过 `electron.launch` 的 60 秒超时。预热上限 120 秒，正式测试的超时和断言不变。
+- macOS：`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。`darwin-arm64` 在 Apple Silicon 的 `macos-latest` 上跑，`darwin-x64` 在 Intel 的 `macos-26-intel` 上原生运行，不经 Rosetta；`process.arch` 断言证明客户端是目标架构的进程，`sysctl hw.optional.arm64` 证明机器也是这个架构。用户数据隔离另加 `CFFIXED_USER_HOME`，Electron 默认 userData 也随之落在临时目录。
+- `darwin-x64` 以前在 Apple Silicon 上经 Rosetta 运行，首次转译耗时不定（28 到 116 秒），正式测试前要预热，预热仍偶尔超时，2026-11-10 改到 Intel 镜像。GitHub 不再提供 Intel macOS 镜像时的退路见 `tests/smoke/targets.cjs` 的 `darwin-x64`。
 
 ### 在 CI 上跑
 
