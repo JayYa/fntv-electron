@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 
 /**
- * 平台差异集中在这里：维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。读取 process.platform 和 process.arch 只在本文件发生（eslint.config.mjs 的
- * no-restricted-properties），其它模块用 currentPlatform() 取得当前平台，再把它传给下面的纯函数。
+ * 平台差异集中在这里：维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。
+ * 读取 process.platform 和 process.arch 只在本文件发生（eslint.config.mjs 的 no-restricted-properties），其它模块用 currentPlatform() 取得当前平台，再把它传给下面的纯函数。
  * 纯函数接收平台参数，测试可以在任意主机上覆盖 Windows、macOS 和 Linux 三条分支（tests/platform.test.cjs）。
  *
  * currentPlatform() 每次调用时读取，不缓存：已有测试通过改写 process.platform 模拟其它平台。
@@ -67,22 +67,6 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
         mpvExecutableExtensions: isWindows ? ['exe'] : [],
         rejectsBasicTextStorage: platform === 'linux',
     };
-}
-
-/** 目标平台的路径写法：结果和在该平台上运行时一致，与测试所在主机无关。 */
-function pathFor(platform: NodeJS.Platform): typeof path.posix {
-    return platform === 'win32' ? path.win32 : path.posix;
-}
-
-/**
- * Proxy 可执行文件的绝对路径，不依赖当前工作目录（从快捷方式、开机自启或命令行启动时工作目录不一定是安装目录）。
- * 打包后 package.json 的 extraFiles 把 third_party/proxy 放在 app.asar 上两级目录：
- * Windows 和 Linux 是安装目录，macOS 是 .app/Contents。未打包时 appPath 是项目根目录。
- */
-export function proxyExecutablePath(platform: NodeJS.Platform, app: { isPackaged: boolean; appPath: string }): string {
-    const p = pathFor(platform);
-    const baseDir = app.isPackaged ? p.dirname(p.dirname(app.appPath)) : app.appPath;
-    return p.join(baseDir, 'third_party', 'proxy', platform === 'win32' ? 'proxy.exe' : 'proxy');
 }
 
 export interface UserDirs {

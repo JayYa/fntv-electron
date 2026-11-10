@@ -11,7 +11,7 @@
 | `name`（`fntv`） | `package.json` | 决定应用名。Electron `safeStorage` 在 macOS 和 Linux 上按应用名找密钥，改名后可能解不开已保存的凭据，用户只能重新登录（`src/modules/fn_config/config.ts`）。 |
 | `productName`（`飞牛影视`） | `package.json` 的 `build` | 打包后它决定应用名，风险同 `name`；安装目录和快捷方式名也随之改变。 |
 | `appId`（`com.qiaokes.fntv`） | `package.json` 的 `build` | 打包工具用它生成 macOS bundle id 和 Windows 安装标识。改了会变成另一个应用，而不是升级。 |
-| `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、`proxy-secret`、Chromium 会话和 `logs/`。改了等于丢配置，已运行的 Proxy 也认证不了。在 `app.setPath` 之前加载的模块用 `USER_DATA_PATH`，那时 `app.getPath('userData')` 还是 Electron 默认目录（`src/modules/logger/logger.ts`）。 |
+| `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、Chromium 会话和 `logs/`。改了等于丢配置。在 `app.setPath` 之前加载的模块用 `USER_DATA_PATH`，那时 `app.getPath('userData')` 还是 Electron 默认目录（`src/modules/logger/logger.ts`）。 |
 | `persist:fntv` | `src/main/common/mainwin.ts` 等，用 `git grep` 找全 | 登录 Cookie 和访问码网关 Cookie 存在这个分区。改了用户要重新登录；只改一处则读写的不是同一个会话。 |
 | `third_party/fntv-mpv` | `package.json` 的 `extraFiles`、`mpvConfigHelpers.ts`、`build.yml` | 构建、打包和运行时都按这个路径找 MPV。 |
 | `FNMedia_*` 产物名 | `package.json` 的 `artifactName` | `src/modules/updater/updateChecker.ts` 按这个前缀和 `_win_x64` 这类后缀匹配下载链接。 |
@@ -31,20 +31,17 @@
 
 - `config.json` 只由 `config.ts` 的 `writeConfig` 写。新增凭据字段时读写两边用 `readCredential` 和 `storeCredential`，解不开的原值才会原样写回。
 - FN ID、用户名和完整 NAS 地址不进日志。`log.noformat` 也会脱敏，但那只是兜底。
-- Proxy 密钥、访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时脱敏（`src/modules/logger/masking.ts`）。
+- 访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时脱敏（`src/modules/logger/masking.ts`）。
 
 ## 模块
 
+- `src/modules/fn_api/core/` 由主进程和 Proxy 共用，`src/modules/proxy_service/` 运行在 Proxy 子进程里，两者不能加载 `electron`，由 ESLint 的 `no-restricted-imports` 检查（`eslint.config.mjs`）。访问授权 Cookie、证书信任和日志由调用方通过 `RequestContext` 或参数传入。
 - 登录页脚本是按顺序加载的经典脚本，不用 `type="module"`，`file:` 下会被拦。顶层 `const`、`let` 和函数跨文件共享，给其它脚本用的名字写进文件头的 `/* exported */`；顶层语句只能用已加载脚本里的名字。会重新赋值的状态放在唯一写它的脚本里（`resource/login/index.html`）。
-- 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`proxyExecutablePath`、`mpvUserConfigDir`、`expectedAssetName`），调用处只读结果。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`src/public/platform.ts`）。
+- 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`mpvUserConfigDir`、`mpvIpcSocket`、`expectedAssetName`），调用处只读结果。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`src/public/platform.ts`）。
 
 ## 跨层改动
 
 - 改字段含义前，用 `git grep` 找全读写处，改完再搜一遍。`hideOriginalPlayButton` 同时被主进程、preload 和登录页读取，默认值必须一致（`docs/external-runtime.md`）。
-- TS 和 Go 之间的契约两端一起改：
-  - `PlaybackSessionInput`（`proxySession.ts`）和 `PlaybackSessionRequest`（`session.go`）的 JSON 字段。
-  - `composeCookieHeader`（`accessGrant.ts`）和 `ComposeCookieHeader`（`request.go`）。
-  - `/health` 的 `service`、`protocol`（`proxyHealth.ts`、`register.go`）。
 
 ## 依赖
 

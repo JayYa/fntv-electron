@@ -6,15 +6,15 @@ import { registerHandler } from '../core/ipcHandler';
 import { registerAppHook } from '../core/appHook';
 import * as log from '../../../modules/logger';
 import * as fs from 'fs';
-import { ItemListRequest } from '../../../modules/fn_api/types';
+import { ItemListRequest } from '../../../modules/fn_api/core/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
 import { getMpvConfigDir } from './mpvConfig';
 import { currentPlatform } from '../../../public/platform';
 import { resolveBundledMpvPath } from '../../common/mpvConfigHelpers';
-import { getProxySecret } from '../../common/proxy';
-import { createProxyPlaybackUrl, registerPlaybackSession } from '../../common/proxySession';
+import { createPlaybackSession } from '../../common/proxy';
+import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
 import { isNearEnd } from '../../../modules/playback/nearEnd';
 import { applyRestart } from '../../../modules/playback/restart';
@@ -410,7 +410,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         playList[currentIndex] = applyRestart(playList[currentIndex], true);
     }
 
-    const session = await registerPlaybackSession(getProxySecret(), {
+    const session = await createPlaybackSession({
         token: config.token,
         account: config.account,
         domain: config.domain,

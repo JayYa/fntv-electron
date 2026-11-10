@@ -5,30 +5,20 @@
     "main": "dest/main/main.js",
     "packageManager": "pnpm@12.18.0",
     "scripts": {
-        "build:proxy:win": "cd src/modules/proxy && go build -o ../../../third_party/proxy/proxy.exe",
-        "build:proxy:linux": "pnpm run build:proxy:linux:x64",
-        "build:proxy:linux:x64": "cd src/modules/proxy && GOOS=linux GOARCH=amd64 go build -o ../../../third_party/proxy/proxy",
-        "build:proxy:linux:arm64": "cd src/modules/proxy && GOOS=linux GOARCH=arm64 go build -o ../../../third_party/proxy/proxy",
-        "build:proxy:mac:x64": "cd src/modules/proxy && GOOS=darwin GOARCH=amd64 go build -o ../../../third_party/proxy/proxy_x64",
-        "build:proxy:mac:arm64": "cd src/modules/proxy && GOOS=darwin GOARCH=arm64 go build -o ../../../third_party/proxy/proxy_arm64",
-        "build:proxy:mac": "cd src/modules/proxy && go build -o ../../../third_party/proxy/proxy",
-        "build:proxy:mac:universal": "lipo -create -output third_party/proxy/proxy third_party/proxy/proxy_x64 third_party/proxy/proxy_arm64",
-        "clean:proxy:mac": "rimraf third_party/proxy/proxy_x64 third_party/proxy/proxy_arm64",
-        "start": "pnpm run clean && pnpm run build:proxy:win && tsc && pnpm run build:preload && electron .",
-        "start:mac": "pnpm run clean && pnpm run build:proxy:mac && pnpm run compile && electron .",
+        "start": "pnpm run clean && tsc && pnpm run build:preload && electron .",
         "compile": "pnpm run clean && tsc && pnpm run build:preload",
         "build:preload": "node scripts/build-preload.cjs",
         "lint": "eslint src resource/login tests",
         "knip": "knip",
         "prepare": "git config core.hooksPath .githooks",
-        "test": "pnpm run compile && node --test tests/*.test.cjs",
+        "test": "pnpm run compile && node --test --test-timeout=30000 tests/*.test.cjs",
         "test:smoke": "node --test --test-reporter=spec --test-timeout=300000 tests/smoke/installer.smoke.cjs",
         "watch": "node scripts/build-preload.cjs --watch",
         "clean": "rimraf dest",
-        "build:win": "pnpm run build:proxy:win && pnpm run compile && electron-builder --win --publish never",
-        "build:mac": "pnpm run build:proxy:mac:x64 && pnpm run build:proxy:mac:arm64 && pnpm run build:proxy:mac:universal && pnpm run compile && pnpm run clean:proxy:mac && electron-builder --mac --publish never",
-        "build:linux:x64": "pnpm run build:proxy:linux:x64 && pnpm run compile && electron-builder --linux AppImage --x64 --publish never",
-        "build:linux:arm64": "pnpm run build:proxy:linux:arm64 && pnpm run compile && electron-builder --linux AppImage --arm64 --publish never",
+        "build:win": "pnpm run compile && electron-builder --win --publish never",
+        "build:mac": "pnpm run compile && electron-builder --mac --publish never",
+        "build:linux:x64": "pnpm run compile && electron-builder --linux AppImage --x64 --publish never",
+        "build:linux:arm64": "pnpm run compile && electron-builder --linux AppImage --arm64 --publish never",
         "build:linux": "pnpm run build:linux:x64 && pnpm run build:linux:arm64",
         "generate-iconset": "node scripts/generate-iconset.js",
         "generate-icns": "bash scripts/generate-icns.sh"
@@ -89,13 +79,6 @@
                     "filter": [
                         "**/*"
                     ]
-                },
-                {
-                    "from": "third_party/proxy",
-                    "to": "third_party/proxy",
-                    "filter": [
-                        "**/*"
-                    ]
                 }
             ]
         },
@@ -120,13 +103,6 @@
                 {
                     "from": "third_party/fntv-mpv/portable_config",
                     "to": "third_party/fntv-mpv/portable_config",
-                    "filter": [
-                        "**/*"
-                    ]
-                },
-                {
-                    "from": "third_party/proxy",
-                    "to": "third_party/proxy",
                     "filter": [
                         "**/*"
                     ]
@@ -176,13 +152,6 @@
                 {
                     "from": "third_party/fntv-mpv/portable_config",
                     "to": "third_party/fntv-mpv/portable_config",
-                    "filter": [
-                        "**/*"
-                    ]
-                },
-                {
-                    "from": "third_party/proxy",
-                    "to": "third_party/proxy",
                     "filter": [
                         "**/*"
                     ]

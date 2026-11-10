@@ -1,6 +1,6 @@
 # 外部运行时归属
 
-改打包的 MPV、MPV 插件、用户 MPV 配置同步、默认播放方式或本地 Go Proxy 生命周期时读这份文档。决策原因见 [ADR-0001](adr/0001-mpv-bundle-and-runtime-ownership.md)。
+改打包的 MPV、MPV 插件、用户 MPV 配置同步、默认播放方式或 Proxy 生命周期时读这份文档。决策原因见 [ADR-0001](adr/0001-mpv-bundle-and-runtime-ownership.md) 和 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
 
 ## 术语
 
@@ -64,49 +64,42 @@ const enabled = value !== false
 const enabled = isMpvPlaybackEnabled(value)
 ```
 
-## Proxy 密钥
+## Proxy
 
-Proxy 监听 `127.0.0.1:22345`。密钥保护本机控制接口，防的是 Electron 渲染的远程网页。它不是登录凭据，也防不住同一系统用户下的其它进程。
+Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动时用 Electron `utilityProcess.fork()` 在子进程里运行，入口是 `src/modules/proxy_service/child.ts`，主进程这一侧在 `src/main/common/proxy.ts`。决策原因见 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
 
-- `userData/proxy-secret`（即 `~/.fntv/proxy-secret`）保存 32 字节随机值，格式是 64 位小写十六进制，不带换行。
-- 重启 Proxy 或 Electron 都复用这份密钥。入口是 `loadOrCreateProxySecret`（`src/main/common/proxySecret.ts`）。
-- 写入时先写临时文件再改名，权限 `0600`，读取已有文件时也重设权限。Windows 上 `0600` 没有实际效果。
-- 只通过 stdin（启动 Proxy）和 `X-FNTV-Proxy-Secret` 请求头（`/health`、`/api/v1/session`）传递。
-- 密钥不进命令行参数、环境变量、URL 和日志。
+- 只监听 `127.0.0.1:22345`。端口固定，因为 MPV 归档里 `smart_skip` 插件的 `api.lua` 写死了 `http://127.0.0.1:22345/api/v1/skipinfo`。改端口要先改 `fntv-mpv-config`，让 `smart_skip` 从播放地址解析主机和端口。
+- HTTP 只给 MPV 用：`GET /api/v1/playvideo/:itemGuid`、`GET /api/v1/skipinfo/:itemGuid`、`POST /api/v1/skipinfo`。视频流量只在 Proxy 子进程和 MPV 之间，不经过主进程。
+- 主进程和 Proxy 之间的控制走 `parentPort` IPC（消息定义在 `src/modules/proxy_service/control.ts`）：Proxy 监听成功后回报就绪，监听失败时回报错误码；主进程经 IPC 创建播放会话。没有 HTTP 控制接口，也没有密钥。
+- Proxy 的日志经 IPC 交给主进程，写进 `app.log`，每行带 `[Proxy]`。
 
-```ts
-// 错：每次启动换密钥，异常退出后留下的 Proxy 无法认证，还占着固定端口。
-const secret = randomBytes(32).toString('hex')
-
-// 对：一份持久化的密钥跨重启识别本地 Proxy。
-const secret = loadOrCreateProxySecret(app.getPath('userData'))
-```
-
-| 状态 | 行为 |
+| 情况 | 行为 |
 | --- | --- |
-| 密钥文件不存在 | 生成并原子写入 |
-| 密钥文件合法 | 原样复用 |
-| 密钥文件格式不对（含末尾换行） | 原子替换为新密钥 |
-| 读取失败（`ENOENT` 以外） | 抛出原始错误，启动失败，不重建 |
-| `/health` 返回 200 且 `service` 是 `fntv-proxy`、`protocol` 是 `2` | 复用这个 Proxy |
-| `/health` 返回其它结果 | 不复用，启动新进程；端口仍被占用时启动失败 |
+| 启动后 10 秒内没有回报就绪，或就绪前退出 | 弹窗说明，退出应用 |
+| 端口 22345 被占用 | 弹窗说明，提示结束残留的 `proxy`/`proxy.exe` 进程（旧版 Go Proxy）或重启电脑，退出应用，不自动重试 |
+| 运行中意外退出 | 隔 3 秒重启，最多 5 次，仍然失败就弹窗并退出应用；重启后连续运行 60 秒，次数清零 |
+| 客户端退出 | 结束 Proxy 子进程；客户端崩溃时 Electron 也会结束它，不留下占端口的进程 |
+| `userData` 下有旧版留下的 `proxy-secret` | 启动时删除（`src/main/common/legacyProxySecret.ts`） |
 
 ## 播放会话
 
-- 播放地址只带 `session`，不带 Proxy 密钥和登录 token（`src/main/common/proxySession.ts`）。
-- `session` 是 64 位十六进制，有效期 24 小时，每次访问顺延（`src/modules/proxy/internal/logic/api/session.go`）。
+- 播放地址只带 `session`，不带登录 token（`createProxyPlaybackUrl`，`src/main/common/proxySession.ts`）。格式是 `http://127.0.0.1:22345/api/v1/playvideo/<itemGuid>?session=<session>[&sourceIndex=<n>]`。
+- 入参 `PlaybackSessionInput` 只定义一次（`src/modules/proxy_service/playbackSessions.ts`），主进程经 IPC 原样传入。
+- `session` 是 64 位十六进制，有效期 24 小时，每次访问顺延。
 - 每个会话只允许访问创建时列出的 `itemGuids`。
-- `session` 等同于访问能力，所以 Proxy 用 `gin.New()` 关掉了访问日志，Electron 日志会脱敏（`tests/sessionMasking.test.cjs`）。
+- `session` 等同于访问能力，所以 Proxy 不输出访问日志，Electron 日志会脱敏（`tests/sessionMasking.test.cjs`）。
 
 ## 测试覆盖
 
 | 行为 | 测试 |
 | --- | --- |
 | 用户配置同步 | `tests/mpvConfigMigration.test.cjs` |
-| 用户配置目录、Proxy 可执行文件路径 | `tests/platform.test.cjs` |
+| 用户配置目录 | `tests/platform.test.cjs` |
 | 默认播放方式 | `tests/playbackPreference.test.cjs` |
-| 密钥持久化、权限、孤儿 Proxy 认证 | `tests/proxySecret.test.cjs` |
-| 健康检查响应 | `tests/proxyHealth.test.cjs`、`src/modules/proxy/internal/logic/register_test.go` |
-| 播放地址不暴露密钥 | `tests/proxySession.test.cjs` |
+| 经 IPC 创建播放会话，入参不变 | `tests/proxyControl.test.cjs` |
+| 删除旧版 Proxy 密钥文件 | `tests/legacyProxySecret.test.cjs` |
+| 播放地址不暴露登录凭据 | `tests/proxySession.test.cjs` |
+| Proxy 取流和片头片尾接口 | `tests/proxyService*.test.cjs` |
+| Proxy 在打包产物里启动、端口被占用时报错、客户端退出后端口关闭 | `tests/smoke/installer.smoke.cjs` |
 
 构建（`build.yml`）不覆盖上游插件这一条没有自动化测试，改工作流时用 `grep -n -i danmaku .github/workflows/build.yml .github/workflows/release.yml` 确认没有结果。

@@ -11,14 +11,14 @@ const ELECTRON_ERROR = 'write EPROTO 115584:error:100000f7:SSL routines:OPENSSL_
 const NODE_ERROR = 'write EPROTO E84B0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:openssl\ssl\record\methods\tlsany_meth.c:78:\n';
 
 test('recognizes HTTPS reaching an HTTP port from the raw TLS error', () => {
-    const { isHttpsPortMismatch } = require('../dest/modules/fn_api/httpsPortMismatch.js');
+    const { isHttpsPortMismatch } = require('../dest/modules/fn_api/core/httpsPortMismatch.js');
 
     assert.equal(isHttpsPortMismatch(ELECTRON_ERROR), true);
     assert.equal(isHttpsPortMismatch(NODE_ERROR), true);
 });
 
 test('does not treat other failures as HTTPS reaching an HTTP port', () => {
-    const { isHttpsPortMismatch } = require('../dest/modules/fn_api/httpsPortMismatch.js');
+    const { isHttpsPortMismatch } = require('../dest/modules/fn_api/core/httpsPortMismatch.js');
 
     assert.equal(isHttpsPortMismatch('connect ECONNREFUSED 192.0.2.10:5666'), false);
     assert.equal(isHttpsPortMismatch('write EPROTO 115584:error:10000410:SSL routines:OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE'), false);

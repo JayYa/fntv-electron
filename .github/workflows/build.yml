@@ -73,12 +73,6 @@ jobs:
       # 用不到 node-gyp；打 dmg 用的 dmgbuild 是 electron-builder 下载的独立可执行文件，自带 Python。
       # ci.yml 三个平台也不装 Python，pnpm install 照常通过。
 
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: src/modules/proxy/go.mod
-          cache-dependency-path: src/modules/proxy/go.sum
-
       - name: Setup build environment (Windows)
         if: runner.os == 'Windows'
         shell: cmd

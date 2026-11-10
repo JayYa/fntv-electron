@@ -1,61 +1,69 @@
-import * as http from 'node:http';
-import { PROXY_HOST, PROXY_PORT } from './proxyHealth';
+// 主进程这一侧的播放会话：经 IPC 让 Proxy 创建，再拼出交给 MPV 的播放地址。
+import { CreatePlaybackSessionRequest, PROXY_HOST, PROXY_PORT, ProxyMessage } from '../../modules/proxy_service/control';
+import type { PlaybackSessionInput } from '../../modules/proxy_service/playbackSessions';
 
-interface PlaybackSessionInput {
-    token: string;
-    account: string;
-    domain: string;
-    accessCookie?: string;
-    skipVerify: boolean;
-    useNasLocal: boolean;
-    itemGuids: string[];
+export type { PlaybackSessionInput } from '../../modules/proxy_service/playbackSessions';
+
+const SESSION_PATTERN = /^[a-f0-9]{64}$/;
+
+interface Pending {
+    resolve(session: string): void;
+    reject(error: Error): void;
+    timer: NodeJS.Timeout;
 }
 
-interface PlaybackSessionResponse {
-    session?: string;
-}
+// 一个 Proxy 子进程对应一个客户端。send 把消息发给子进程，子进程的回复交给 receive。
+export class ProxyControlClient {
+    private nextId = 1;
+    private readonly pending = new Map<number, Pending>();
+    private closedWith: Error | null = null;
 
-export function registerPlaybackSession(
-    secret: string,
-    input: PlaybackSessionInput,
-    timeoutMs: number = 5000,
-): Promise<string> {
-    const body = Buffer.from(JSON.stringify(input), 'utf8');
-    return new Promise((resolve, reject) => {
-        const request = http.request({
-            host: PROXY_HOST,
-            port: PROXY_PORT,
-            path: '/api/v1/session',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': body.length,
-                'X-FNTV-Proxy-Secret': secret,
-            },
-        }, response => {
-            const chunks: Buffer[] = [];
-            response.on('data', chunk => chunks.push(Buffer.from(chunk)));
-            response.on('end', () => {
-                if (response.statusCode !== 201) {
-                    reject(new Error(`Proxy 创建播放会话失败 (HTTP ${response.statusCode})`));
-                    return;
-                }
-                try {
-                    const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as PlaybackSessionResponse;
-                    if (!payload.session || !/^[a-f0-9]{64}$/.test(payload.session)) {
-                        reject(new Error('Proxy 返回了无效的播放会话'));
-                        return;
-                    }
-                    resolve(payload.session);
-                } catch (error) {
-                    reject(new Error('Proxy 播放会话响应解析失败', { cause: error }));
-                }
-            });
+    constructor(private readonly send: (message: CreatePlaybackSessionRequest) => void) {}
+
+    createPlaybackSession(input: PlaybackSessionInput, timeoutMs: number = 5000): Promise<string> {
+        if (this.closedWith) return Promise.reject(this.closedWith);
+        const id = this.nextId++;
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.pending.delete(id);
+                reject(new Error('Proxy 创建播放会话超时'));
+            }, timeoutMs);
+            this.pending.set(id, { resolve, reject, timer });
+            try {
+                this.send({ type: 'createPlaybackSession', id, input });
+            } catch (error) {
+                this.settle(id, (entry) => entry.reject(new Error('Proxy 创建播放会话失败', { cause: error })));
+            }
         });
-        request.setTimeout(timeoutMs, () => request.destroy(new Error('Proxy 创建播放会话超时')));
-        request.on('error', reject);
-        request.end(body);
-    });
+    }
+
+    // 处理子进程的回复，不是播放会话回复的消息不处理。
+    receive(message: ProxyMessage): void {
+        if (message.type === 'playbackSession') {
+            this.settle(message.id, (entry) => {
+                if (SESSION_PATTERN.test(message.session)) entry.resolve(message.session);
+                else entry.reject(new Error('Proxy 返回了无效的播放会话'));
+            });
+        } else if (message.type === 'playbackSessionFailed') {
+            this.settle(message.id, (entry) => entry.reject(new Error(`Proxy 创建播放会话失败: ${message.message}`)));
+        }
+    }
+
+    // 子进程退出时调用：还在等的请求和之后的请求都以 error 失败。
+    close(error: Error): void {
+        this.closedWith = error;
+        for (const id of [...this.pending.keys()]) {
+            this.settle(id, (entry) => entry.reject(error));
+        }
+    }
+
+    private settle(id: number, action: (entry: Pending) => void): void {
+        const entry = this.pending.get(id);
+        if (!entry) return;
+        this.pending.delete(id);
+        clearTimeout(entry.timer);
+        action(entry);
+    }
 }
 
 export function createProxyPlaybackUrl(session: string, itemGuid: string, sourceIndex: number = 0): string {

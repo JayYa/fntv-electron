@@ -8,10 +8,10 @@ const {
     resolveAccessCodeRedirect,
 } = require('../dest/main/common/accessCodeSession.js');
 const {
-    composeCookieHeader,
     getAccessCookieHeader,
     setAccessGrant,
 } = require('../dest/modules/fn_api/accessGrant.js');
+const { composeCookieHeader } = require('../dest/modules/fn_api/core/cookie.js');
 
 test('encodes Unicode access codes as UTF-8 Base64', () => {
     assert.equal(encodeAccessCode('访问-123'), Buffer.from('访问-123', 'utf8').toString('base64'));
