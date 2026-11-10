@@ -75,14 +75,14 @@ test('a local Windows smoke test refuses to install over a client already instal
 
     assert.throws(
         () => checkWindowsInstallAllowed({ env: {}, appId: 'com.qiaokes.fntv', isInstalled }),
-        error => /com.qiaokes.fntv/.test(error.message) && /FNTV_SMOKE_ALLOW_INSTALL=1/.test(error.message) && /TESTING_STANDARDS.md/.test(error.message)
+        error => /com.qiaokes.fntv/.test(error.message) && /FNTV_SMOKE_ALLOW_INSTALL=1/.test(error.message) && /tests\/smoke\/README\.md/.test(error.message)
     );
     assert.deepEqual(queried, [INSTALLED_CLIENT_KEY]);
 });
 
 test('a Windows smoke test installs when no client with the same appId is installed, on CI, or when explicitly allowed', () => {
     const installed = key => key === INSTALLED_CLIENT_KEY;
-    // 本地构建改了 appId（TESTING_STANDARDS.md 的“在本地跑”），GUID 不同，不会碰到已装的客户端。
+    // 本地构建改了 appId（tests/smoke/README.md 的“在本地跑”），GUID 不同，不会碰到已装的客户端。
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: {}, appId: 'com.qiaokes.fntv.smoketest', isInstalled: installed }));
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: { CI: 'true' }, appId: 'com.qiaokes.fntv', isInstalled: installed }));
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: { FNTV_SMOKE_ALLOW_INSTALL: '1' }, appId: 'com.qiaokes.fntv', isInstalled: installed }));

@@ -5,7 +5,7 @@ const sharedRules = {
     'prefer-const': 'error',
     'no-var': 'error',
     'no-empty': 'error',
-    // 浏览器原生弹窗在 Electron 里不可靠，见 CODING_STANDARDS.md 的“进程边界”。
+    // 浏览器原生弹窗在 Electron 里不可靠，确认和输入走主进程的 dialog 或页面内组件。
     'no-alert': 'error',
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-unused-vars': ['error', {

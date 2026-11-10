@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-// 平台判断只在 src/public/platform.ts 发生（eslint.config.mjs，CODING_STANDARDS.md）。
+// 平台判断只在 src/public/platform.ts 发生（eslint.config.mjs）。
 const eslint = new ESLint({ cwd: path.join(__dirname, '..') });
 
 async function messagesFor(code, file = 'src/main/example.ts') {

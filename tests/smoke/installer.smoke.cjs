@@ -1,7 +1,7 @@
 'use strict';
 
 // 安装包冒烟测试：按用户的方式装好或打开安装包，用 Playwright 启动客户端，只观察窗口、
-// 页面、进程和日志，不引入任何源码。运行方式见 TESTING_STANDARDS.md 的“冒烟测试”。
+// 页面、进程和日志，不引入任何源码。运行方式见同目录的 README.md。
 //
 // 环境变量：
 //   FNTV_SMOKE_TARGET        目标平台，如 linux-x64，默认取当前机器（targets.cjs）

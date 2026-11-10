@@ -117,7 +117,7 @@ export class UpdateChecker {
     }
 
     /**
-     * 带梯度重试机制的 API 检查。只重试网络错误和 5xx，4xx 原样抛出。
+     * 带梯度重试机制的 API 检查。只重试网络错误和 5xx，4xx 原样抛出：4xx 几秒内不会变，重试只会多耗额度。
      * @param retryCount - 当前重试次数
      * @returns 更新信息
      */
