@@ -130,7 +130,7 @@ async function restartAfterCrash(): Promise<void> {
 
 // 启动时调用一次。失败时已经弹窗说明，调用方退出应用。
 export async function startProxyProcess(): Promise<void> {
-    removeLegacyProxySecret(app.getPath('userData'));
+    removeLegacyProxySecret(app.getPath('userData'), log);
     try {
         await startOnce();
     } catch (error) {
