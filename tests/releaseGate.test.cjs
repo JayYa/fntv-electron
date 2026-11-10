@@ -255,3 +255,18 @@ test('a cached MPV archive that fails verification is downloaded again', t => {
     assert.notEqual(result.status, 0);
     assert.deepEqual(calls, ['curl']);
 });
+
+// 升级归档时 build.yml 的 env 是唯一来源，README 的准备步骤和 docs/external-runtime.md 都要跟着改。
+test('README and docs/external-runtime.md pin the same MPV archive as build.yml', () => {
+    const { MPV_CONFIG_REPO, MPV_CONFIG_TAG, MPV_CONFIG_ASSET } = mpvArchiveSteps().job.env;
+    const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+    const runtimeDoc = fs.readFileSync(path.join(root, 'docs', 'external-runtime.md'), 'utf8');
+    const tagsIn = text => [...new Set(text.match(/fntv-mpv-v\d{8}_\d{6}/g) ?? [])];
+    const assetsIn = text => [...new Set(text.match(/mpv-package-\d{8}_\d{6}\.zip/g) ?? [])];
+
+    assert.ok(readme.includes(`https://github.com/${MPV_CONFIG_REPO}/releases/download/${MPV_CONFIG_TAG}/${MPV_CONFIG_ASSET}`),
+        'README 的下载命令要用 build.yml 固定的 tag 和资产名');
+    assert.deepEqual(tagsIn(readme), [MPV_CONFIG_TAG], 'README 只应出现 build.yml 固定的 tag');
+    assert.deepEqual(assetsIn(readme), [MPV_CONFIG_ASSET], 'README 只应出现 build.yml 固定的资产名');
+    assert.deepEqual(tagsIn(runtimeDoc), [MPV_CONFIG_TAG], 'docs/external-runtime.md 只应出现 build.yml 固定的 tag');
+});

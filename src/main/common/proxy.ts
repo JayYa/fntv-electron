@@ -79,6 +79,7 @@ function launch(): Promise<RunningProxy> {
 
 async function startOnce(): Promise<void> {
     running = await launch();
+    // 冒烟测试按原文解析这一行拿实际端口（tests/smoke/installer.smoke.cjs 的 PROXY_READY_PATTERN），改措辞要同步改那边。
     log.info(`Proxy 已就绪，端口 ${running.port}`);
     if (restartCountResetTimer) clearTimeout(restartCountResetTimer);
     restartCountResetTimer = setTimeout(() => { restartAttempts = 0; }, RESTART_COUNT_RESET_MS);

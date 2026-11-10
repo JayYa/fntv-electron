@@ -98,6 +98,12 @@ unzip -q mpv-config.zip -d third_party/fntv-mpv
 rm mpv-config.zip
 ```
 
+Windows 上用 PowerShell 的 `Expand-Archive` 解压，和 CI 一样。Git Bash 的 `unzip` 会把归档里的 `mpv/` 目录和 `mpv.exe` 当成同一个名字，`mpv/fonts.conf` 解压不出来：
+
+```powershell
+Expand-Archive -Path mpv-config.zip -DestinationPath third_party/fntv-mpv -Force
+```
+
 4. 运行开发模式：
 
 ```bash
