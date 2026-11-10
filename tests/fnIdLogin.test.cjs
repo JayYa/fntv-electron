@@ -84,10 +84,10 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
             },
         },
         safeStorage: {
-            isEncryptionAvailable() { return true; },
+            async isAsyncEncryptionAvailable() { return true; },
             getSelectedStorageBackend() { return 'gnome_libsecret'; },
-            encryptString(value) { return Buffer.from(value, 'utf8'); },
-            decryptString(value) { return value.toString('utf8'); },
+            async encryptStringAsync(value) { return Buffer.from(value, 'utf8'); },
+            async decryptStringAsync(value) { return { result: value.toString('utf8'), shouldReEncrypt: false }; },
         },
     };
 
@@ -368,8 +368,8 @@ for (const { name, page, confirmed, domain, baseUrl } of [
         await login.finished;
 
         assert.deepEqual(login.nasRequests, [{ url: `${baseUrl}/v/api/v1/user/info`, token: 'nas-token' }]);
-        assert.equal(login.readConfig().token, 'nas-token');
-        assert.equal(login.readConfig().domain, baseUrl);
+        assert.equal((await login.readConfig()).token, 'nas-token');
+        assert.equal((await login.readConfig()).domain, baseUrl);
         assert.deepEqual(login.mainWindowLoaded(), [`${baseUrl}/v`]);
     });
 }
@@ -389,7 +389,7 @@ test('skips a token cookie of another site and uses the one of the confirmed NAS
     await login.finished;
 
     assert.deepEqual(login.nasRequests, [{ url: `${NAS}/v/api/v1/user/info`, token: 'nas-token' }]);
-    assert.equal(login.readConfig().token, 'nas-token');
+    assert.equal((await login.readConfig()).token, 'nas-token');
 });
 
 test('never sends a token cookie of another site to the NAS', async (t) => {

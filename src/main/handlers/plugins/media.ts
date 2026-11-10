@@ -325,7 +325,7 @@ async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<
 async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise<void> {
     log.info('Play movie event received id:', id, ' index:', sourceIndex, ' restart:', restart === true);
 
-    const config = fnConfig.readConfig();
+    const config = await fnConfig.readConfig();
     if (!config?.domain || !config.token || !config.account) {
         throw new Error('无法找到有效的服务器登录配置');
     }

@@ -9,10 +9,10 @@ const {
     setupConfig,
 } = require('./helpers/credentialConfig.cjs');
 
-test('startup getters keep working when every credential is undecryptable', (t) => {
+test('startup getters keep working when every credential is undecryptable', async (t) => {
     const { loadConfig, undecryptable } = setupConfig(t);
     const config = loadConfig();
-    seedLoggedInConfig(config);
+    await seedLoggedInConfig(config);
     config.setMpvPlayerPath('/usr/bin/mpv');
 
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
@@ -26,7 +26,7 @@ test('startup getters keep working when every credential is undecryptable', (t) 
 for (const failing of ['saved-token', 'saved-access-code']) {
     test(`startup goes to the login page without a dialog when ${failing} is undecryptable`, async (t) => {
         const { loadConfig, loadWinctrl, dialogs, undecryptable } = setupConfig(t);
-        seedLoggedInConfig(loadConfig());
+        await seedLoggedInConfig(loadConfig());
         undecryptable.add(failing);
 
         const window = fakeMainWindow();

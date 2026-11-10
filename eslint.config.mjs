@@ -26,6 +26,17 @@ const PLATFORM_PROPERTIES = ['process', 'os'].flatMap((object) => ['platform', '
     message: `${PLATFORM_HINT}，不要直接读 ${object}.${property}。`
 })));
 
+// Electron 45 弃用、46 删除的 safeStorage 同步方法。
+const SAFE_STORAGE_SYNC_PROPERTIES = [
+    ['isEncryptionAvailable', 'isAsyncEncryptionAvailable'],
+    ['encryptString', 'encryptStringAsync'],
+    ['decryptString', 'decryptStringAsync'],
+].map(([property, replacement]) => ({
+    object: 'safeStorage',
+    property,
+    message: `safeStorage.${property} 在 Electron 46 删除，用 ${replacement}。`
+}));
+
 // no-restricted-properties 只认对象名，os 模块换个写法导入就拦不住，这里把其它写法也禁掉。
 const OS_MODULE = '/^(node:)?os$/';
 const OS_PLATFORM_MEMBER = '/^(platform|arch)$/';
@@ -88,7 +99,8 @@ export default [
             // 由接收平台参数的纯函数决定，在 Windows 上也能测三条分支（tests/platform.test.cjs）。
             // 各种写法的拦截见 tests/eslintPlatformRules.test.cjs。
             'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX],
-            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES]
+            // safeStorage 同步方法的拦截见 tests/eslintSafeStorageRules.test.cjs。
+            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES]
         }
     },
     {
@@ -114,7 +126,7 @@ export default [
         files: ['src/public/platform.ts'],
         rules: {
             'no-restricted-syntax': ['error', NO_MODULE_EXPORTS],
-            'no-restricted-properties': 'off'
+            'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES]
         }
     },
     {

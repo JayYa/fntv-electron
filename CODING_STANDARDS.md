@@ -29,7 +29,8 @@
 
 ## 凭据和配置
 
-- `config.json` 只由 `config.ts` 的 `writeConfig` 写。新增凭据字段时读写两边用 `readCredential` 和 `storeCredential`，解不开的原值才会原样写回。
+- `config.json` 只由 `src/modules/fn_config/config.ts` 写（落盘和损坏备份在 `configFile.ts`）：凭据操作走 `writeConfig`，设置项走 `writeStoredConfig`（不解密，凭据密文原样写回）。新增凭据字段时在 `credentialFields` 登记，读写两边用 `readCredential` 和 `storeCredential`，解不开的原值才会原样写回。
+- `safeStorage` 只用异步接口，同步方法由 ESLint 拦截。要明文凭据的导出函数是异步的，按调用顺序排队执行；加解密都在读改写之前做完，读改写本身同步完成。
 - FN ID、用户名和完整 NAS 地址不进日志。`log.noformat` 也会脱敏，但那只是兜底。
 - 访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时脱敏（`src/modules/logger/masking.ts`）。
 

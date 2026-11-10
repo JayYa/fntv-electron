@@ -17,10 +17,12 @@ function setupConfig(t) {
             setPath(name, value) { paths[name] = value; },
         },
         safeStorage: {
-            isEncryptionAvailable() { return true; },
+            async isAsyncEncryptionAvailable() { return true; },
             getSelectedStorageBackend() { return 'gnome_libsecret'; },
-            encryptString(value) { return Buffer.from(`protected:${value}`, 'utf8'); },
-            decryptString(value) { return value.toString('utf8').slice('protected:'.length); },
+            async encryptStringAsync(value) { return Buffer.from(`protected:${value}`, 'utf8'); },
+            async decryptStringAsync(value) {
+                return { result: value.toString('utf8').slice('protected:'.length), shouldReEncrypt: false };
+            },
         },
     };
 
@@ -58,11 +60,11 @@ function setupConfig(t) {
 
 const CORRUPT = '{"account":"user","token":"safe-storage:v1:c2VjcmV0","mpvVolume":33,';
 
-test('a setter after a corrupt config keeps the damaged content in a backup', (t) => {
+test('a setter after a corrupt config keeps the damaged content in a backup', async (t) => {
     const { config, configPath, backups, readBackup } = setupConfig(t);
     fs.writeFileSync(configPath, CORRUPT);
 
-    assert.equal(config.readConfig(), null);
+    assert.equal((await config.readConfig()), null);
     config.setNasProxyEnabled(true);
 
     assert.equal(backups().length, 1);
@@ -70,7 +72,7 @@ test('a setter after a corrupt config keeps the damaged content in a backup', (t
     assert.equal(config.getNasProxyEnabled(), true);
 });
 
-test('the backup limit drops the oldest damaged copies', (t) => {
+test('the backup limit drops the oldest damaged copies', async (t) => {
     const { config, configPath, backups, readBackup } = setupConfig(t);
 
     for (const round of [1, 2, 3, 4, 5]) {
@@ -81,7 +83,7 @@ test('the backup limit drops the oldest damaged copies', (t) => {
     assert.deepEqual(backups().map(readBackup), ['{"round":3,', '{"round":4,', '{"round":5,']);
 });
 
-test('a failed backup leaves the damaged config untouched', (t) => {
+test('a failed backup leaves the damaged config untouched', async (t) => {
     const { config, configPath, backups } = setupConfig(t);
     fs.writeFileSync(configPath, CORRUPT);
     t.mock.method(fs, 'copyFileSync', () => { throw new Error('disk full'); });
@@ -92,7 +94,7 @@ test('a failed backup leaves the damaged config untouched', (t) => {
     assert.deepEqual(backups(), []);
 });
 
-test('a write interrupted before the swap keeps the previous config', (t) => {
+test('a write interrupted before the swap keeps the previous config', async (t) => {
     const { config, configPath, userData } = setupConfig(t);
     config.setMpvVolume(33);
     const before = fs.readFileSync(configPath, 'utf8');
@@ -104,7 +106,7 @@ test('a write interrupted before the swap keeps the previous config', (t) => {
     assert.deepEqual(fs.readdirSync(userData), ['config.json']);
 });
 
-test('a failed write does not spend a backup slot on the same damaged file', (t) => {
+test('a failed write does not spend a backup slot on the same damaged file', async (t) => {
     const { config, configPath, backups } = setupConfig(t);
     fs.writeFileSync(configPath, CORRUPT);
     t.mock.method(fs, 'fsyncSync', () => { throw new Error('disk full'); });
@@ -115,18 +117,18 @@ test('a failed write does not spend a backup slot on the same damaged file', (t)
     assert.equal(fs.readFileSync(configPath, 'utf8'), CORRUPT);
 });
 
-test('healthy writes keep the file format and leave no extra files', (t) => {
+test('healthy writes keep the file format and leave no extra files', async (t) => {
     const { config, configPath, userData } = setupConfig(t);
 
     config.setMpvVolume(33);
     config.setMpvVolume(44);
 
-    assert.equal(fs.readFileSync(configPath, 'utf8'), JSON.stringify({ mpvVolume: 44, token: '', accessCode: '' }, null, 2));
+    assert.equal(fs.readFileSync(configPath, 'utf8'), JSON.stringify({ mpvVolume: 44 }, null, 2));
     assert.deepEqual(fs.readdirSync(userData), ['config.json']);
 });
 
 // Windows 没有 POSIX 权限位，chmod 只能切换只读，statSync 的 mode 不反映 0o600。
-test('rewriting the config keeps its file permissions', { skip: process.platform === 'win32' }, (t) => {
+test('rewriting the config keeps its file permissions', { skip: process.platform === 'win32' }, async (t) => {
     const { config, configPath } = setupConfig(t);
     config.setMpvVolume(33);
     fs.chmodSync(configPath, 0o600);
@@ -136,7 +138,7 @@ test('rewriting the config keeps its file permissions', { skip: process.platform
     assert.equal(fs.statSync(configPath).mode & 0o777, 0o600);
 });
 
-test('the backup is logged by file name without its content', (t) => {
+test('the backup is logged by file name without its content', async (t) => {
     const { config, configPath, backups, logText } = setupConfig(t);
     fs.writeFileSync(configPath, CORRUPT);
 
@@ -151,28 +153,28 @@ for (const [label, history] of [
     ['a string', 'safe-storage:v1:c2VjcmV0'],
     ['a number', 5],
 ]) {
-    test(`a history that is ${label} reads as an empty list`, (t) => {
+    test(`a history that is ${label} reads as an empty list`, async (t) => {
         const { config, configPath } = setupConfig(t);
         const original = JSON.stringify({ domain: 'https://nas.example', history });
         fs.writeFileSync(configPath, original);
 
-        assert.deepEqual(config.readConfig().history, []);
-        assert.deepEqual(config.getHistory(), []);
-        assert.equal(config.readConfig().domain, 'https://nas.example');
+        assert.deepEqual((await config.readConfig()).history, []);
+        assert.deepEqual((await config.getHistory()), []);
+        assert.equal((await config.readConfig()).domain, 'https://nas.example');
         assert.equal(fs.readFileSync(configPath, 'utf8'), original);
     });
 }
 
-test('writing over a non-array history keeps the original file in a backup', (t) => {
+test('writing over a non-array history keeps the original file in a backup', async (t) => {
     const { config, configPath, backups, readBackup, logText } = setupConfig(t);
     const original = JSON.stringify({ mpvVolume: 33, history: { password: 'c2VjcmV0' } });
     fs.writeFileSync(configPath, original);
 
-    config.addHistory({ domain: 'nas.example', account: 'user', password: 'new-password' });
+    await config.addHistory({ domain: 'nas.example', account: 'user', password: 'new-password' });
 
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), original);
-    assert.equal(config.getHistory()[0].account, 'user');
+    assert.equal((await config.getHistory())[0].account, 'user');
     assert.equal(config.getMpvVolume(), 33);
     assert.doesNotMatch(logText(), /c2VjcmV0/);
 
@@ -186,17 +188,17 @@ for (const [label, content] of [
     ['a number', '5'],
     ['a string', '"safe-storage:v1:c2VjcmV0"'],
 ]) {
-    test(`a config that is ${label} reads as missing and stays on disk`, (t) => {
+    test(`a config that is ${label} reads as missing and stays on disk`, async (t) => {
         const { config, configPath, backups } = setupConfig(t);
         fs.writeFileSync(configPath, content);
 
-        assert.equal(config.readConfig(), null);
-        assert.deepEqual(config.getHistory(), []);
+        assert.equal((await config.readConfig()), null);
+        assert.deepEqual((await config.getHistory()), []);
         assert.equal(fs.readFileSync(configPath, 'utf8'), content);
         assert.deepEqual(backups(), []);
     });
 
-    test(`a setter after a config that is ${label} keeps it in a backup`, (t) => {
+    test(`a setter after a config that is ${label} keeps it in a backup`, async (t) => {
         const { config, configPath, backups, readBackup } = setupConfig(t);
         fs.writeFileSync(configPath, content);
 
@@ -224,13 +226,13 @@ for (const [label, entry] of [
     ['an object with a non-string domain', { domain: 5, account: 'user' }],
     ['an object with a non-string account', { domain: 'nas.example', account: null }],
 ]) {
-    test(`a history entry that is ${label} is left out on read and stays on disk`, (t) => {
+    test(`a history entry that is ${label} is left out on read and stays on disk`, async (t) => {
         const { config, configPath, backups } = setupConfig(t);
         const original = JSON.stringify({ mpvVolume: 33, history: [entry, SAVED_ENTRY] });
         fs.writeFileSync(configPath, original);
 
-        assert.equal(config.readConfig().history.length, 1);
-        assert.deepEqual(config.getHistory(), [{
+        assert.equal((await config.readConfig()).history.length, 1);
+        assert.deepEqual((await config.getHistory()), [{
             domain: 'nas.example',
             account: 'user',
             password: 'saved-password',
@@ -242,7 +244,7 @@ for (const [label, entry] of [
     });
 }
 
-test('writing over a history with unusable entries keeps the original file in a backup', (t) => {
+test('writing over a history with unusable entries keeps the original file in a backup', async (t) => {
     const { config, configPath, backups, readBackup, logText } = setupConfig(t);
     const original = JSON.stringify({ mpvVolume: 33, history: [null, 'c2VjcmV0', SAVED_ENTRY] });
     fs.writeFileSync(configPath, original);
@@ -258,18 +260,18 @@ test('writing over a history with unusable entries keeps the original file in a 
     assert.equal(backups().length, 1);
 });
 
-test('migrating legacy credentials on read keeps the unusable history entries in a backup', (t) => {
+test('migrating legacy credentials on read keeps the unusable history entries in a backup', async (t) => {
     const { config, configPath, backups, readBackup } = setupConfig(t);
     const original = JSON.stringify({ token: 'legacy-token', history: [null, SAVED_ENTRY] });
     fs.writeFileSync(configPath, original);
 
-    assert.equal(config.readConfig().token, 'legacy-token');
+    assert.equal((await config.readConfig()).token, 'legacy-token');
 
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), original);
 });
 
-test('a retained credential survives the rewrite that drops an unusable entry', (t) => {
+test('a retained credential survives the rewrite that drops an unusable entry', async (t) => {
     const { config, configPath } = setupConfig(t);
     const undecryptable = { domain: 'nas.example', account: 'user', password: 'not-legacy-ciphertext' };
     fs.writeFileSync(configPath, JSON.stringify({ history: [null, undecryptable] }));
@@ -281,7 +283,7 @@ test('a retained credential survives the rewrite that drops an unusable entry', 
     assert.equal(history[0].password, 'not-legacy-ciphertext');
 });
 
-test('a config without history still has no history after a write', (t) => {
+test('a config without history still has no history after a write', async (t) => {
     const { config, configPath } = setupConfig(t);
     fs.writeFileSync(configPath, JSON.stringify({ history: null, mpvVolume: 33 }));
 

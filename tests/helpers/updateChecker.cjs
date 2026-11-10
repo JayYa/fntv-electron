@@ -34,9 +34,7 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         shell: {
             openExternal(url) { opened.push(url); },
         },
-        safeStorage: {
-            isEncryptionAvailable() { return false; },
-        },
+        safeStorage: {},
     };
 
     const originalLoad = Module._load;

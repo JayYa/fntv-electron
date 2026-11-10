@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { OnBeforeRequestListenerDetails } from 'electron';
 import { getInstance as getInterceptor } from '../core/interceptor';
-import { readConfig, saveConfig } from '../../../modules/fn_config/config';
+import { clearSavedToken } from '../../../modules/fn_config/config';
 import { getMainWindow } from '../../common/mainwin';
 import { session } from 'electron';
 import * as log from '../../../modules/logger';
@@ -18,19 +18,13 @@ import { clearAccessGrants } from '../../../modules/fn_api/accessGrant';
 function clearLoginCookies(): void {
     log.info('清空登录信息和Cookie');
 
-    // 清空配置中保存的token
-    const config = readConfig() || {};
+    // 清空配置中保存的token。凭据操作按调用顺序执行，之后的登录保存不会被这里覆盖。
+    clearSavedToken().then((cleared) => {
+        if (cleared) log.info('已清空配置中的登录token');
+    }).catch(err => {
+        log.error('清空配置中的登录token失败:', err);
+    });
     clearAccessGrants();
-    if (config.token || config.domain) {
-        // 保留domain和useHttps但清空token
-        saveConfig({
-            account: config.account || '',
-            domain: config.domain || '',
-            token: '',
-            useHttps: config.useHttps
-        });
-        log.info('已清空配置中的登录token');
-    }
 
     // 清除会话中的cookie
     const ses = session.fromPartition('persist:fntv');

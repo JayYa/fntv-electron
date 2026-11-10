@@ -177,14 +177,14 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                     const restored = await restoreCookies(resolvedTargetBaseUrl, token, true);
                     if (!restored) throw new Error('无法恢复 FN Connect 登录状态');
 
-                    fnConfig.saveConfig({
+                    await fnConfig.saveConfig({
                         account: loginData.username,
                         domain: resolvedTargetBaseUrl,
                         token,
                         accessCode,
                         useHttps: resolvedTargetBaseUrl.startsWith('https://'),
                     });
-                    fnConfig.addHistory({
+                    await fnConfig.addHistory({
                         domain: fnId,
                         account: loginData.username,
                         password: loginData.password,

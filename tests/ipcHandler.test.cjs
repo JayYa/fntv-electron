@@ -19,7 +19,7 @@ function setupIpc(t) {
             commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
-        safeStorage: { isEncryptionAvailable() { return true; } },
+        safeStorage: {},
     };
 
     const originalLoad = Module._load;
