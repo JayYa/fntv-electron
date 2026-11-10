@@ -1,4 +1,5 @@
 // 主进程和 Proxy 子进程之间的 IPC 消息（ADR-0004）。HTTP 只给 MPV 取流，控制都走这里。
+import type { ProxyLogMessage } from './log';
 import type { PlaybackSessionInput } from './playbackSessions';
 
 export const PROXY_HOST = '127.0.0.1';
@@ -20,7 +21,7 @@ export type CreatePlaybackSessionReply =
 export type ProxyStatusMessage =
     | { type: 'ready'; port: number }
     | { type: 'startFailed'; code: string; message: string }
-    | { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string };
+    | ProxyLogMessage;
 
 export type ProxyMessage = CreatePlaybackSessionReply | ProxyStatusMessage;
 

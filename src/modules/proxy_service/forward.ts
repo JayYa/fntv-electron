@@ -1,9 +1,9 @@
 // 透明转发：把 MPV 的请求转给上游，流式返回响应。
-import * as http from 'node:http';
-import * as https from 'node:https';
+import type * as http from 'node:http';
 import { pipeline } from 'node:stream';
 import type { ProxyLog } from './log';
-import { sendJson } from './respond';
+import { abortWhenMpvLeaves, sendJson } from './respond';
+import { openUpstream } from './upstream';
 
 // 从 MPV 请求转给上游的头。不在这里的头（Cookie、Authorization 等）不转发（U-05，不照搬 Go）。
 const PASSTHROUGH_HEADERS = [
@@ -70,26 +70,8 @@ function sendUpstream(
     method: string,
     signal: AbortSignal,
 ): Promise<http.IncomingMessage> {
-    const url = new URL(target.url);
-    const isHttps = url.protocol === 'https:';
-    const options: https.RequestOptions = {
-        protocol: url.protocol,
-        hostname: url.hostname.replace(/^\[|\]$/g, ''),
-        port: url.port || undefined,
-        path: `${url.pathname}${url.search}`,
-        method,
-        headers,
-        // 每个请求单独建连接，与 Go 版一致。
-        agent: false,
-        signal,
-    };
-    if (isHttps) {
-        options.rejectUnauthorized = !target.skipVerify;
-        options.ca = target.ca;
-    }
-
     return new Promise((resolve, reject) => {
-        const request = (isHttps ? https : http).request(options);
+        const request = openUpstream(target, headers, method, signal);
         const timer = setTimeout(() => request.destroy(new Error('等待上游响应头超时')), RESPONSE_HEADER_TIMEOUT_MS);
         request.on('response', (response) => {
             clearTimeout(timer);
@@ -116,16 +98,12 @@ export async function forward(
         sendJson(res, 500, { error: 'Invalid target URL' });
         return;
     }
-    const controller = new AbortController();
-    // MPV 断开时取消上游请求。
-    res.on('close', () => {
-        if (!res.writableFinished) controller.abort();
-    });
-
+    const controller = abortWhenMpvLeaves(res);
     const headers: Record<string, string> = { ...passthroughHeaders(req), ...target.headers, 'x-forwarded-for': '127.0.0.1' };
     const method = req.method || 'GET';
-    const { host, pathname } = targetUrl;
-    log.info(`代理请求 method=${method} host=${host} path=${pathname} range=${headers.range ?? ''}`);
+    const { pathname } = targetUrl;
+    // 不记主机：NAS 路径下就是完整 NAS 地址（CODING_STANDARDS）。
+    log.info(`转发请求 method=${method} path=${pathname} range=${headers.range ?? ''}`);
 
     let upstream: http.IncomingMessage;
     try {
@@ -141,7 +119,7 @@ export async function forward(
         }
     } catch (error: any) {
         if (controller.signal.aborted) return;
-        log.debug(`代理错误: ${error?.code ?? ''}`);
+        log.debug(`转发错误: ${error?.code ?? ''}`);
         if (!res.headersSent) {
             // 错误详情只给错误码，不含上游 URL（U-10，不照搬 Go）。
             sendJson(res, 500, { error: 'Proxy error', details: error?.code || 'upstream request failed' });
@@ -149,7 +127,7 @@ export async function forward(
         return;
     }
 
-    log.info(`代理响应 status=${upstream.statusCode} contentLength=${upstream.headers['content-length'] ?? -1}`);
+    log.info(`转发响应 status=${upstream.statusCode} contentLength=${upstream.headers['content-length'] ?? -1}`);
     res.writeHead(upstream.statusCode || 502, responseHeaders(upstream));
     res.flushHeaders();
     pipeline(upstream, res, (error) => {

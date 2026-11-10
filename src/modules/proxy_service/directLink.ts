@@ -8,7 +8,7 @@ export interface DirectLink {
     cookie: string;
     // 流信息里第一个 trim 后非空的 UA，没有时为空串。
     userAgent: string;
-    // 飞牛影视服务的云盘类型：3 是 115，4 是夸克，其余网盘透明转发。
+    // 飞牛影视服务的云盘类型：CLOUD_TYPE_115、CLOUD_TYPE_QUARK 特殊处理，其余网盘透明转发。
     cloudType: number;
 }
 
