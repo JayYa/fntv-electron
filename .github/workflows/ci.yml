@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# 同一 PR 有新推送时取消还在跑的旧运行，以最后一次推送的结果为准。github.ref 在 pull_request 上是
+# refs/pull/<编号>/merge，每个 PR 一组；组名带 ci- 前缀，不和其它 workflow 的组（smoke-test-、cache-warm-）相撞。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     # 维护者只有 Windows 电脑，macOS 和 Linux 的问题靠 CI 暴露。fail-fast 关掉，一个平台失败时其它平台照样跑完。

@@ -1,0 +1,36 @@
+name: Clean up PR caches
+
+# PR 上运行存的缓存在 refs/pull/<编号>/merge 下，只有这个 PR 自己的运行读得到。PR 关闭（含合并）后
+# 再也不会被读到，但要等 7 天没被读过才被 GitHub 清掉，期间占着仓库 10 GiB 的缓存额度，
+# 超出时 GitHub 按最近访问时间淘汰，可能挤掉 main 上的缓存（docs/wiki/ci-download-cache.md）。
+# 这里在 PR 关闭时删掉它的缓存。删除要 actions: write；fork 来的 PR 拿到的 token 只读，删不了，跳过。
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Delete caches of the closed PR
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete caches on the PR merge ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          caches="$(gh api --paginate -X GET "repos/$REPO/actions/caches" -f ref="$REF" -f per_page=100 \
+            --jq '.actions_caches[] | "\(.id)\t\(.key)"')"
+          if [ -z "$caches" ]; then echo "No caches on $REF"; exit 0; fi
+          while IFS="$(printf '\t')" read -r id key; do
+            echo "Deleting $key ($id)"
+            gh api -X DELETE "repos/$REPO/actions/caches/$id"
+          done <<< "$caches"

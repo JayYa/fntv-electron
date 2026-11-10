@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// CI 的 Electron 和打包下载缓存：算缓存 key，打包前整理 @electron/get 的缓存目录。
+// CI 的 Electron 和打包下载缓存：算缓存 key，打包前整理 @electron/get 的缓存目录，找出被新 key 取代的旧缓存。
 // 由 .github/actions/install-dependencies（keys）和 build.yml（prepare-packaging）调用，
-// cache-warm.yml 也用 keys 查 main 上的缓存是否存在。
+// cache-warm.yml 用 keys 查 main 上的缓存是否存在，用 stale 找出 main 上该删的旧缓存。
 // key 只取 package.json 和锁文件里的版本号，安装依赖之前也能算出来。
 const fs = require('node:fs');
 const os = require('node:os');
@@ -34,7 +34,8 @@ function cacheKeys(runnerOs, dir = root) {
     const electron = exactVersion(packageJson, 'electron');
     const builder = exactVersion(packageJson, 'electron-builder');
     const appBuilderLib = appBuilderLibVersion(fs.readFileSync(path.join(dir, 'pnpm-lock.yaml'), 'utf8'));
-    const packagingPrefix = `packaging-${runnerOs}-`;
+    // v2：打包缓存不再含宿主架构的 Electron zip（build.yml）。路径变了，actions/cache 读不到旧条目，换前缀以示区分。
+    const packagingPrefix = `packaging-v2-${runnerOs}-`;
     const packagingElectronPrefix = `${packagingPrefix}electron-${electron}-`;
     return {
         'electron-version': electron,
@@ -43,6 +44,20 @@ function cacheKeys(runnerOs, dir = root) {
         'packaging-electron-prefix': packagingElectronPrefix,
         'packaging-prefix': packagingPrefix,
     };
+}
+
+// main 上被当前 key 取代的旧 Electron 下载缓存和打包缓存。caches 是 Actions API 返回的 { id, key }。
+// 当前 key 已在 caches 里时，同一平台、同一类的其它 key 才算旧的：先存新的再删旧的，
+// 新 key 没存成时旧缓存还能经 restore-keys 用上。打包缓存也认换前缀之前的 packaging-<os>-。
+function staleCaches(runnerOs, caches, dir = root) {
+    const keys = cacheKeys(runnerOs, dir);
+    const present = new Set(caches.map(cache => cache.key));
+    const kinds = [
+        { current: keys['electron-key'], prefixes: [`electron-${runnerOs}-`] },
+        { current: keys['packaging-key'], prefixes: [keys['packaging-prefix'], `packaging-${runnerOs}-`] },
+    ].filter(kind => present.has(kind.current));
+    return caches.filter(cache => kinds.some(kind =>
+        cache.key !== kind.current && kind.prefixes.some(prefix => cache.key.startsWith(prefix))));
 }
 
 // @electron/get 不传 cacheRoot 时的默认目录（env-paths('electron').cache），和 app-builder-lib 的
@@ -103,11 +118,18 @@ function main(command) {
         const { file, version } = seedChecksums(cacheRoot, checksumsFile);
         for (const stale of pruneStaleElectron(cacheRoot, version)) console.log(`Removed stale ${stale}`);
         console.log(`Seeded ${file}`);
+    } else if (command === 'stale') {
+        // stdin 每行 "<id>\t<key>"，输出同样格式的旧缓存。
+        const caches = fs.readFileSync(0, 'utf8').split(/\r?\n/).filter(Boolean).map(line => {
+            const [id, key] = line.split('\t');
+            return { id, key };
+        });
+        for (const { id, key } of staleCaches(process.env.RUNNER_OS, caches)) process.stdout.write(`${id}\t${key}\n`);
     } else {
-        throw new Error(`usage: ci-download-cache.cjs keys|prepare-packaging, got ${command}`);
+        throw new Error(`usage: ci-download-cache.cjs keys|prepare-packaging|stale, got ${command}`);
     }
 }
 
 if (require.main === module) main(process.argv[2]);
 
-module.exports = { appBuilderLibVersion, cacheKeys, electronCacheRoot, pruneStaleElectron, seedChecksums };
+module.exports = { appBuilderLibVersion, cacheKeys, electronCacheRoot, pruneStaleElectron, seedChecksums, staleCaches };
