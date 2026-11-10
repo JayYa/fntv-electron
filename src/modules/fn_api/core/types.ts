@@ -693,7 +693,9 @@ export interface StreamResponse {
     /** 请求头部信息 */
     header: {
         /** Cookie列表 */
-        Cookie: string[];
+        Cookie: string[] | null;
+        /** 直链直连时要用的 UA 列表 */
+        'User-Agent'?: string[] | null;
     };
     /** 直接链接质量列表 */
     direct_link_qualities: DirectLinkQuality[];
