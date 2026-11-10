@@ -113,7 +113,7 @@ function checkWindowsInstallAllowed({ env, appId, isInstalled }) {
     if (!isInstalled(nsisUninstallKeyName(appId))) return;
     throw new Error(
         `本机已经装了 appId 为 ${appId} 的客户端，测试用的安装包会先卸载它并删掉同名快捷方式。` +
-        '按 TESTING_STANDARDS.md 的“在本地跑”改 appId 和 productName 重新构建后，' +
+        '按 tests/smoke/README.md 的“在本地跑”改 appId 和 productName 重新构建后，' +
         '设 FNTV_SMOKE_ALLOW_INSTALL=1 再运行；或者先卸载本机的客户端。'
     );
 }
@@ -142,7 +142,7 @@ const TARGETS = {
     'darwin-x64': macDmgTarget('x64'),
     'linux-x64': {
         platform: 'linux',
-        // 打包工具给 Linux x64 的架构名是 x86_64（CODING_STANDARDS.md 的更新检查一节）。
+        // 打包工具给 Linux x64 的架构名是 x86_64（githubRelease.ts 的 expectedAssetName）。
         installerPattern: /^FNMedia_.+_linux_x86_64\.AppImage$/,
         // 直接运行用户下载的那个 AppImage。artifact 下载后丢失可执行位，这里补上。
         install(installerPath) {

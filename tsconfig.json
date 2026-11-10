@@ -33,6 +33,7 @@
         "sourceMap": false,
         // 打开增量构建，加快后续编译速度
         "incremental": true,
+        // 要留在 dest/ 里：compile 会清空 dest/，放到外面时 tsc 认为无需输出，留下空目录
         "tsBuildInfoFile": "dest/.tsbuildinfo",
         // 跳过库文件类型检查以加快编译并避免第三方声明库引起的问题
         "skipLibCheck": true,

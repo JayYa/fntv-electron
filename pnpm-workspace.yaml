@@ -1,3 +1,4 @@
+# pnpm 配置写在这里，.npmrc 只放 registry：pnpm 不读 .npmrc 里的 node-linker，也不把 electron_mirror 传给安装脚本。
 nodeLinker: hoisted
 
 # 放行这些包的安装脚本。未列出的包有安装脚本时，pnpm install 直接报错。

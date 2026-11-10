@@ -31,7 +31,7 @@ function hint() {
     console.error([
         '格式：type(scope): 描述，scope 可省略。',
         `type：${TYPES.join('、')}。`,
-        'feat、fix、perf 的描述会进入用户可见的更新日志，写成用户能看懂的话（CODING_STANDARDS.md 的“提交”）。',
+        'feat、fix、perf 的描述会进入用户可见的更新日志，写成用户能看懂的话（docs/adr/0003-release-gate.md）。',
     ].join('\n'));
 }
 

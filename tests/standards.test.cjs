@@ -6,6 +6,13 @@ const { execFileSync, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const workflowDir = path.join(root, '.github', 'workflows');
+// 写着规则、“验证：”命令或 workflow 名的文档。
+const standardsDocs = [
+    'CODING_STANDARDS.md',
+    'TESTING_STANDARDS.md',
+    'tests/smoke/README.md',
+    ...fs.readdirSync(path.join(root, 'docs', 'adr')).filter(name => name.endsWith('.md')).map(name => `docs/adr/${name}`),
+];
 
 function read(relativePath) {
     return fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -156,8 +163,15 @@ test('a verification command with a broken regex is reported as broken', () => {
     assert.equal(commandWorks(result), false);
 });
 
+test('standards documents contain no control characters', () => {
+    // 反斜杠转义被写成过控制字符，肉眼看不出（CODING_STANDARDS.md 里的 \b，冒烟测试说明里的 %APPDATA%\fntv）。
+    for (const doc of standardsDocs) {
+        assert.doesNotMatch(read(doc), /[\u0000-\u0008\u000B-\u001F]/, doc);
+    }
+});
+
 test('verification commands in the standards documents still run', () => {
-    const commands = ['CODING_STANDARDS.md', 'TESTING_STANDARDS.md']
+    const commands = standardsDocs
         .flatMap(file => [...read(file).matchAll(/验证：`([^`]+)`/g)].map(match => match[1]));
 
     assert.ok(commands.length > 0, 'no verification command found');
@@ -179,7 +193,7 @@ test('workflow steps and jobs named in the standards documents exist', () => {
     // 文档写“`<文件>.yml` 的 `<名字>`”时，名字是那个 workflow 的触发事件、job id 或 step 的 name。
     const yaml = require('js-yaml');
     const references = [];
-    for (const doc of ['CODING_STANDARDS.md', 'TESTING_STANDARDS.md']) {
+    for (const doc of standardsDocs) {
         for (const match of read(doc).matchAll(/`([\w-]+\.yml)` 的 `([^`]+)`/g)) {
             references.push({ doc, file: match[1], name: match[2] });
         }
