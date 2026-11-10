@@ -19,7 +19,7 @@ async function startProxy(t) {
     return { service, logs };
 }
 
-function get(service, requestPath, headers = {}, method = 'GET') {
+function get(service, requestPath, headers = {}, method = 'GET', body = undefined) {
     return new Promise((resolve, reject) => {
         const request = http.request({ host: '127.0.0.1', port: service.port, path: requestPath, method, headers }, (response) => {
             const chunks = [];
@@ -28,8 +28,14 @@ function get(service, requestPath, headers = {}, method = 'GET') {
             response.on('error', reject);
         });
         request.on('error', reject);
-        request.end();
+        request.end(body);
     });
+}
+
+// 像 smart_skip 那样 POST，body 是字符串时原样发送。
+function post(service, requestPath, body) {
+    const payload = typeof body === 'string' ? body : JSON.stringify(body);
+    return get(service, requestPath, { 'Content-Type': 'application/json' }, 'POST', payload);
 }
 
 function sessionInput(nas, overrides = {}) {
@@ -45,4 +51,4 @@ function sessionInput(nas, overrides = {}) {
     };
 }
 
-module.exports = { SERVICE_DIR, MEDIA, startProxy, get, sessionInput };
+module.exports = { SERVICE_DIR, MEDIA, startProxy, get, post, sessionInput };

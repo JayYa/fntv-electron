@@ -44,9 +44,9 @@ function serveBytes(req, res, bytes, extraHeaders = {}) {
     res.end(bytes.subarray(start, end + 1));
 }
 
-// media: { [mediaGuid]: Buffer }；streams: { [itemGuid]: mediaGuid[] }。
+// media: { [mediaGuid]: Buffer }；streams: { [itemGuid]: mediaGuid[] }；playInfo: { [itemGuid]: 播放信息 }。
 // handlers 里的同名处理器优先，用来模拟失败或特殊响应。
-async function startFakeFnMedia(t, { media = {}, streams = {}, handlers = {}, tls } = {}) {
+async function startFakeFnMedia(t, { media = {}, streams = {}, playInfo = {}, handlers = {}, tls } = {}) {
     const requests = [];
     const listener = async (req, res) => {
         const url = new URL(req.url, 'http://fake');
@@ -64,6 +64,15 @@ async function startFakeFnMedia(t, { media = {}, streams = {}, handlers = {}, tl
         if (url.pathname === '/v/api/v1/stream' && req.method === 'POST') {
             if (handlers.stream) return handlers.stream(req, res, record);
             return json(res, ok({ header: { 'User-Agent': [], Cookie: [] }, cloud_storage_info: null, direct_link_qualities: [] }));
+        }
+        if (url.pathname === '/v/api/v1/play/info' && req.method === 'POST') {
+            if (handlers.playInfo) return handlers.playInfo(req, res, record);
+            const info = playInfo[JSON.parse(body).item_guid];
+            return json(res, info ? ok(info) : { code: 1, msg: 'not found', data: null });
+        }
+        if (url.pathname === '/v/api/v1/play/setConfigByItem' && req.method === 'POST') {
+            if (handlers.setConfig) return handlers.setConfig(req, res, record);
+            return json(res, ok(null));
         }
         if (rangeMatch) {
             if (handlers.media) return handlers.media(req, res, record);

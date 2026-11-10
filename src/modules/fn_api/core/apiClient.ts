@@ -98,6 +98,21 @@ export class FnApiClient {
     }
 
     /**
+     * 写入片头片尾信息。飞牛影视服务按播放项的父级记录，不按播放项本身。
+     * @param parentGuid - 播放项的 parent_guid
+     * @param skipStart - 片头结束的时间点（秒）
+     * @param skipEnd - 片尾开始的时间点（秒）
+     */
+    setSkipInfo(parentGuid: string, skipStart: number, skipEnd: number): Promise<ApiResponse<unknown>> {
+        const data: types.SetSkipInfoData = {
+            guid: parentGuid,
+            skip_opening: skipStart,
+            skip_ending: skipEnd,
+        };
+        return request(this.context, this.baseURL, '/v/api/v1/play/setConfigByItem', HttpMethod.POST, this.token, data);
+    }
+
+    /**
      * 获取播放质量列表
      * @param mediaGuid - 媒体文件的唯一标识符
      */
