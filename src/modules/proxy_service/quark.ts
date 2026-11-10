@@ -18,7 +18,7 @@ export interface FileMeta {
 }
 
 export interface QuarkDeps {
-    // 键是直链 URL（整串，含 query），只缓存成功结果。
+    // 键是流信息给的原始直链 URL（整串，含 userinfo 和 query），与 Go 一致；只缓存成功结果。
     metaCache: TtlCache<FileMeta>;
     // 上游连接多久没有收发数据就断开（毫秒）。
     idleTimeoutMs: number;
@@ -81,6 +81,8 @@ export async function forwardQuark(
     req: http.IncomingMessage,
     res: http.ServerResponse,
     target: ForwardTarget,
+    // 元信息的缓存键：流信息里的原始直链。target.url 已去掉 userinfo，不能当键。
+    metaKey: string,
     deps: QuarkDeps,
 ): Promise<void> {
     const controller = new AbortController();
@@ -90,7 +92,7 @@ export async function forwardQuark(
     // 只发白名单头加直链的 UA、Cookie 和认证，没有 X-Forwarded-For，与 Go 版一致。
     const headers: Record<string, string> = { ...passthroughHeaders(req), ...target.headers };
 
-    let meta = deps.metaCache.get(target.url);
+    let meta = deps.metaCache.get(metaKey);
     if (!meta) {
         try {
             meta = await fileMeta(target, headers, deps.idleTimeoutMs, controller.signal);
@@ -100,7 +102,7 @@ export async function forwardQuark(
             sendJson(res, 500, { error: 'failed to get meta' });
             return;
         }
-        deps.metaCache.set(target.url, meta);
+        deps.metaCache.set(metaKey, meta);
     }
 
     // Range 不合法或起点超出文件时，与 Go 版的 416 一致（先取了元信息才知道总大小）。

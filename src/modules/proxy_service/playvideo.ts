@@ -92,7 +92,7 @@ export async function handlePlayVideo(
         // 115 和夸克的特殊处理按 directLink.cloudType 在这里分支，其余网盘透明转发。
         if (directLink.cloudType === 4) {
             deps.log.info(`开始代理 | 模式: 夸克分片 | itemGuid: ${itemGuid}`);
-            await forwardQuark(req, res, cloudDirectTarget(directLink, deps.ca), {
+            await forwardQuark(req, res, cloudDirectTarget(directLink, deps.ca), directLink.url, {
                 metaCache: deps.quarkMetaCache,
                 idleTimeoutMs: deps.quarkIdleTimeoutMs,
                 log: deps.log,

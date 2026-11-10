@@ -149,6 +149,27 @@ test('quark turns userinfo in the direct link into Basic authorization', async (
     }
 });
 
+// Go 的缓存键是原始直链 URL：同一路径、账号不同的两个直链各取一次元信息。
+test('quark asks again for the file size when only the account in the direct link differs', async (t) => {
+    const drive = await startFakeDirectLink(t, { media: FILE });
+    const { host } = new URL(drive.origin);
+    const urls = { 'media-1': `http://alice:one@${host}/quark.mkv`, 'media-2': `http://bob:two@${host}/quark.mkv` };
+    const nas = await startFakeFnMedia(t, {
+        streams: { 'item-1': ['media-1'], 'item-2': ['media-2'] },
+        handlers: {
+            stream: (req, res, record) => directLinkStream({ urls: [urls[JSON.parse(record.body).media_guid]], cloudType: 4 })(req, res),
+        },
+    });
+    const { service } = await startProxy(t);
+    const session = service.createPlaybackSession(sessionInput(nas, { itemGuids: ['item-1', 'item-2'] }));
+
+    await get(service, `/api/v1/playvideo/item-1?session=${session}`, { Range: 'bytes=0-9' });
+    await get(service, `/api/v1/playvideo/item-2?session=${session}`, { Range: 'bytes=0-9' });
+
+    const metaRequests = drive.requests.filter((r) => r.headers.range === 'bytes=0-0');
+    assert.deepEqual(metaRequests.map((r) => Buffer.from(r.headers.authorization.slice(6), 'base64').toString()), ['alice:one', 'bob:two']);
+});
+
 test('quark answers an unsupported range or a start past the end with the Go 416', async (t) => {
     const { drive, play } = await quarkSetup(t);
     const total = FILE.length;
