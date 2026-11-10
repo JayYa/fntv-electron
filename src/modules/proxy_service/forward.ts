@@ -109,6 +109,13 @@ export async function forward(
     target: ForwardTarget,
     log: ProxyLog,
 ): Promise<void> {
+    let targetUrl: URL;
+    try {
+        targetUrl = new URL(target.url);
+    } catch {
+        sendJson(res, 500, { error: 'Invalid target URL' });
+        return;
+    }
     const controller = new AbortController();
     // MPV 断开时取消上游请求。
     res.on('close', () => {
@@ -117,7 +124,7 @@ export async function forward(
 
     const headers: Record<string, string> = { ...passthroughHeaders(req), ...target.headers, 'x-forwarded-for': '127.0.0.1' };
     const method = req.method || 'GET';
-    const { host, pathname } = new URL(target.url);
+    const { host, pathname } = targetUrl;
     log.info(`代理请求 method=${method} host=${host} path=${pathname} range=${headers.range ?? ''}`);
 
     let upstream: http.IncomingMessage;
