@@ -47,7 +47,9 @@
 
 ### 在 CI 上跑
 
-`smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建（发版也用这一份），再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、改了 `tests/smoke/`、这三个 workflow 或 `package.json` 的 PR。
+`smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建（发版也用这一份），再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、改了 `tests/smoke/`、这三个 workflow、`package.json` 或 `scripts/install-smoke-deps.cjs` 的 PR。
+
+冒烟测试 job 不跑 `pnpm install`，也不用 setup-node 的依赖缓存：`scripts/install-smoke-deps.cjs` 按 `pnpm-lock.yaml` 的版本和 integrity 只装 `playwright-core`（它没有依赖），测试用 `npm run test:smoke` 运行。`tests/smoke/` 新 require 一个 npm 包时，要加进脚本的 `SMOKE_PACKAGES`，否则 `tests/smokeDeps.test.cjs` 失败；新包在锁文件里有依赖时脚本报错，要改装法。本地跑时用的是 `pnpm install` 装好的 `node_modules`，不需要这个脚本。
 
 Release PR 也走 `smoke-test.yml`：release-please 用 GITHUB_TOKEN 开的 PR 会触发 `pull_request` workflow，但结论是 `action_required`，维护者在 PR 上点 “Approve workflows to run” 后才跑（`docs/wiki/release-and-update.md` 2026-11-07 v2.7.0 验收；#70 批准后 `actions/runs/42455333345` 通过）。Release PR 总会改 `package.json`，批准后 `smoke-test.yml` 测 5 个目标，结果直接显示在 PR 上。`release.yml` 不对 Release PR 构建（2026-11-08 维护者决定，见 `docs/wiki/multi-platform-testing.md`）。合并 Release PR 前先批准并等这些检查通过。
 
