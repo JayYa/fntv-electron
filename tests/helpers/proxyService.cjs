@@ -6,13 +6,13 @@ const SERVICE_DIR = path.join(__dirname, '..', '..', 'dest', 'modules', 'proxy_s
 
 const MEDIA = Buffer.from(Array.from({ length: 4096 }, (_, index) => index % 251));
 
-async function startProxy(t) {
+async function startProxy(t, { rateLimitIntervalMs = 5 } = {}) {
     const { startProxyService } = require(SERVICE_DIR);
     const logs = [];
     const record = (level) => (...args) => logs.push(`${level} ${args.map(String).join(' ')}`);
     const service = await startProxyService({
         port: 0,
-        rateLimitIntervalMs: 5,
+        rateLimitIntervalMs,
         log: { debug: record('debug'), info: record('info'), warn: record('warn'), error: record('error') },
     });
     t.after(() => service.close());

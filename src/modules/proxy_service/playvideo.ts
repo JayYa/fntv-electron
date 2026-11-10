@@ -5,6 +5,7 @@ import { FnApiClient } from '../fn_api/core/apiClient';
 import { composeCookieHeader } from '../fn_api/core/cookie';
 import type { RequestContext } from '../fn_api/core/request';
 import type { TtlCache } from '../fn_api/core/ttlCache';
+import { CLOUD_TYPE_115, forward115, RateLimiter } from './cloud115';
 import { cloudDirectTarget, directLinkOf } from './directLink';
 import { forward } from './forward';
 import type { ProxyLog } from './log';
@@ -16,6 +17,8 @@ export interface PlayVideoDeps {
     cache: TtlCache;
     ca: string[];
     log: ProxyLog;
+    // 115 直连的限流，所有会话共用。
+    limiter115: RateLimiter;
 }
 
 const INT32_MIN = -(2 ** 31);
@@ -95,7 +98,8 @@ export async function handlePlayVideo(
         deps.log.info(`启用云存储直连: type=${directLink.cloudType}`);
         // 115 和夸克的特殊处理按 directLink.cloudType 在这里分支，其余网盘透明转发。
         deps.log.info(`开始代理 | 模式: 透明转发 | itemGuid: ${itemGuid}`);
-        await forward(req, res, cloudDirectTarget(directLink, deps.ca), deps.log);
+        if (directLink.cloudType === CLOUD_TYPE_115) await forward115(req, res, cloudDirectTarget(directLink, deps.ca), deps.limiter115, deps.log);
+        else await forward(req, res, cloudDirectTarget(directLink, deps.ca), deps.log);
         return;
     }
 

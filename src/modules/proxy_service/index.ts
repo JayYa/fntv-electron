@@ -4,6 +4,7 @@ import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { TtlCache } from '../fn_api/core/ttlCache';
 import { trustedCaCertificates } from './caCertificates';
+import { RateLimiter } from './cloud115';
 import { ProxyLog, silentLog } from './log';
 import { PlaybackSessionInput, PlaybackSessionStore } from './playbackSessions';
 import { handlePlayVideo, PlayVideoDeps } from './playvideo';
@@ -75,6 +76,7 @@ export function startProxyService(options: ProxyServiceOptions): Promise<ProxySe
         cache: new TtlCache({ defaultTtl: 300 }),
         ca: trustedCaCertificates(),
         log,
+        limiter115: new RateLimiter(options.rateLimitIntervalMs),
     };
     const routes: Route[] = [
         {
