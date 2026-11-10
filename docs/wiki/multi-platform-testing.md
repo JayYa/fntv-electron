@@ -133,3 +133,5 @@
 - 实现：`build-and-smoke.yml` 的 `select-targets` 把 darwin-x64 的 runner 改为 `macos-26-intel`；删掉 `targets.cjs` 的 `warmup`、`installer.smoke.cjs` 的 `warmUp()` 和调用、`Install Rosetta` 步骤和 `tests/smokeTargets.test.cjs` 的预热测试。架构断言除了客户端的 `process.arch`，macOS 上还读 `sysctl -in hw.optional.arm64`，确认机器就是目标架构（Rosetta 转译的进程读到的也是 1）。`tests/releaseGate.test.cjs` 锁住两个 macOS 目标的 runner，并检查 smoke job 里没有 Rosetta 步骤。代码改动在 `1de0b15`。
 - 退路：GitHub 不再提供 Intel macOS 镜像时，darwin-x64 回到 `macos-latest`，从 `33cf286`（本次改动前的 main）恢复预热方案，要恢复的几处写在 `tests/smoke/targets.cjs` 的 darwin-x64 注释里。预热最早由 #96 合入（`58e82f1`）。
 - 本地 `pnpm run lint` 通过，`pnpm test` 393 个：392 通过、1 个跳过、0 失败。
+- 2026-11-10，PR #155 在 `7bb75ec` 上的 smoke-test.yml（`actions/runs/42739490203`）5 个目标全部通过。`macos / Smoke test darwin-x64` 跑在 `macos-26-intel`（镜像 `macos-26` 版本 20260819.586）：02:01:46Z 创建，02:01:50Z 开始，排队 4 秒；02:04:12Z 结束，job 共 2 分 22 秒，其中 `Run smoke test` 38 秒（测试 10 个全部通过，`duration_ms` 约 37494），日志里 `client process.arch=x64`、`hardware=x64`。同一次运行里 darwin-arm64 在 `macos-latest` 上排队 2 秒、job 1 分 21 秒。
+- 同一次运行里 linux-x64 用了 11 分 44 秒，其中 `Install Linux runtime dependencies`（`apt-get`）占 10 分 36 秒，和本次改动无关，没有处理。
