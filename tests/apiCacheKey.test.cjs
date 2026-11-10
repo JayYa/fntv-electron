@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApiCacheKey } = require('../dest/modules/fn_api/cacheKey.js');
+const { createApiCacheKey } = require('../dest/modules/fn_api/core/cacheKey.js');
 
 test('isolates API cache keys by server and token without exposing the token', () => {
     const token = 'sensitive-token-value';

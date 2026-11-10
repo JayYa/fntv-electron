@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { TtlCache } = require('../dest/modules/fn_api/ttlCache.js');
+const { TtlCache } = require('../dest/modules/fn_api/core/ttlCache.js');
 
 function fakeClock(start = 1_000_000) {
     const clock = { time: start, now: () => clock.time };

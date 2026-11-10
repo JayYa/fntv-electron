@@ -4,9 +4,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import log from '../logger';
-import * as types from './types';
-import { TtlCache } from './ttlCache';
-import { createApiCacheKey } from './cacheKey';
+import * as types from './core/types';
+import { TtlCache } from './core/ttlCache';
+import { createApiCacheKey } from './core/cacheKey';
 
 export class ApiService {
     private baseURL: string;
@@ -450,4 +450,4 @@ export class ApiService {
 }
 
 // 重新导出类型定义，保持向后兼容
-export * from './types';
+export * from './core/types';
