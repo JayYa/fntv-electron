@@ -6,7 +6,8 @@ const SERVICE_DIR = path.join(__dirname, '..', '..', 'dest', 'modules', 'proxy_s
 
 const MEDIA = Buffer.from(Array.from({ length: 4096 }, (_, index) => index % 251));
 
-async function startProxy(t) {
+// options 覆盖服务的默认选项，例如夸克的空闲超时。
+async function startProxy(t, options = {}) {
     const { startProxyService } = require(SERVICE_DIR);
     const logs = [];
     const record = (level) => (...args) => logs.push(`${level} ${args.map(String).join(' ')}`);
@@ -14,6 +15,7 @@ async function startProxy(t) {
         port: 0,
         rateLimitIntervalMs: 5,
         log: { debug: record('debug'), info: record('info'), warn: record('warn'), error: record('error') },
+        ...options,
     });
     t.after(() => service.close());
     return { service, logs };

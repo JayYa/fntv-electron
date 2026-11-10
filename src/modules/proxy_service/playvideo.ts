@@ -9,6 +9,7 @@ import { cloudDirectTarget, directLinkOf } from './directLink';
 import { forward } from './forward';
 import type { ProxyLog } from './log';
 import type { PlaybackSession, PlaybackSessionStore } from './playbackSessions';
+import { FileMeta, forwardQuark } from './quark';
 import { sendJson } from './respond';
 
 export interface PlayVideoDeps {
@@ -16,6 +17,9 @@ export interface PlayVideoDeps {
     cache: TtlCache;
     ca: string[];
     log: ProxyLog;
+    // 夸克的文件元信息，按直链 URL 缓存，所有会话共用。
+    quarkMetaCache: TtlCache<FileMeta>;
+    quarkIdleTimeoutMs: number;
 }
 
 const INT32_MIN = -(2 ** 31);
@@ -94,6 +98,15 @@ export async function handlePlayVideo(
     if (directLink && !session.useNasLocal) {
         deps.log.info(`启用云存储直连: type=${directLink.cloudType}`);
         // 115 和夸克的特殊处理按 directLink.cloudType 在这里分支，其余网盘透明转发。
+        if (directLink.cloudType === 4) {
+            deps.log.info(`开始代理 | 模式: 夸克分片 | itemGuid: ${itemGuid}`);
+            await forwardQuark(req, res, cloudDirectTarget(directLink, deps.ca), {
+                metaCache: deps.quarkMetaCache,
+                idleTimeoutMs: deps.quarkIdleTimeoutMs,
+                log: deps.log,
+            });
+            return;
+        }
         deps.log.info(`开始代理 | 模式: 透明转发 | itemGuid: ${itemGuid}`);
         await forward(req, res, cloudDirectTarget(directLink, deps.ca), deps.log);
         return;

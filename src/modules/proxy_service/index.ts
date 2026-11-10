@@ -21,6 +21,8 @@ export interface ProxyServiceOptions {
     port: number;
     // 115 两次请求之间的最小间隔（毫秒）。
     rateLimitIntervalMs: number;
+    // 夸克上游连接的空闲超时（毫秒），默认 60 秒。
+    quarkIdleTimeoutMs?: number;
     log?: ProxyLog;
 }
 
@@ -75,6 +77,9 @@ export function startProxyService(options: ProxyServiceOptions): Promise<ProxySe
         cache: new TtlCache({ defaultTtl: 300 }),
         ca: trustedCaCertificates(),
         log,
+        // 与 Go 版一致：TTL 200 分钟。
+        quarkMetaCache: new TtlCache({ defaultTtl: 200 * 60 }),
+        quarkIdleTimeoutMs: options.quarkIdleTimeoutMs ?? 60 * 1000,
     };
     const routes: Route[] = [
         {

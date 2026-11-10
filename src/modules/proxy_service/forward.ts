@@ -52,7 +52,7 @@ export function passthroughHeaders(req: http.IncomingMessage): Record<string, st
     return headers;
 }
 
-function responseHeaders(upstream: http.IncomingMessage): http.OutgoingHttpHeaders {
+export function responseHeaders(upstream: http.IncomingMessage): http.OutgoingHttpHeaders {
     const connectionTokens = new Set(
         String(upstream.headers.connection || '').split(',').map((token) => token.trim().toLowerCase()).filter(Boolean),
     );

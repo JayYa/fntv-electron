@@ -32,4 +32,42 @@ function directLinkStream({ urls, cloudType = 1, cookies = [], userAgents = [] }
     }));
 }
 
-module.exports = { startFakeDirectLink, directLinkStream };
+// 忽略 Range 的网盘：总是 200 返回整个文件。
+function ignoringRange(media) {
+    return (req, res) => {
+        res.setHeader('Content-Type', 'video/x-matroska');
+        res.setHeader('Content-Length', media.length);
+        res.end(media);
+    };
+}
+
+// 低速网盘：先发响应头，再每隔 intervalMs 发 chunkSize 字节；stallAfter 字节后不再发送也不结束。
+function slowly(media, { chunkSize, intervalMs, stallAfter = Infinity, headerDelayMs = 0 }) {
+    return (req, res) => {
+        const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
+        const start = match ? Number(match[1]) : 0;
+        const end = match && match[2] !== '' ? Math.min(Number(match[2]), media.length - 1) : media.length - 1;
+        const body = media.subarray(start, end + 1);
+        const timers = [];
+        res.on('close', () => timers.forEach(clearTimeout));
+        timers.push(setTimeout(() => {
+            res.writeHead(match ? 206 : 200, {
+                'Content-Type': 'video/mp4',
+                'Content-Length': body.length,
+                ...(match ? { 'Content-Range': `bytes ${start}-${end}/${media.length}` } : {}),
+            });
+            let sent = 0;
+            const tick = () => {
+                if (sent >= stallAfter) return;
+                const piece = body.subarray(sent, Math.min(sent + chunkSize, body.length, stallAfter));
+                sent += piece.length;
+                if (sent >= body.length) return res.end(piece);
+                res.write(piece);
+                timers.push(setTimeout(tick, intervalMs));
+            };
+            tick();
+        }, headerDelayMs));
+    };
+}
+
+module.exports = { startFakeDirectLink, directLinkStream, ignoringRange, slowly };
