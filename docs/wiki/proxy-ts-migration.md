@@ -91,3 +91,14 @@ chief of staff 当天的计划（维护者待确认）：
 - 遗留问题：
   - `skipinfo.ts` 复制了一份 `playvideo.ts` 里的 `apiClient(session, deps)`，为的是不碰 #162 要改的文件。chief of staff 决定 #162 合并后由一个小任务抽成共用函数。
   - `fn_api/core` 的缓存会把失败结果也存 300 秒，Go 只缓存成功的结果。这样一次 `play/info` 失败，之后 5 分钟内写回和取流都会失败。chief of staff 当天决定在同一个小任务里改成不缓存失败结果；主进程也会跟着变，已告知维护者。
+- 2026-11-10 #161 合并进集成分支（`0345032`），PR #168 上四项 CI 都通过。
+
+## 2026-11-10 #162 完成
+
+- 分支 `feat/proxy-ts-162`（`fe9a95d`）。`pnpm test` 共 452 条，450 通过、2 条按平台跳过。清单 G-162 的 14 条里有 13 条写了 Node 测试，没写的是 120 秒响应头超时（和 #160 共用同一段转发代码）。
+- 和维护者决定不同、待维护者确认：U-15。直链 path 里的编码原样发给网盘，没有照搬 Go 的重新编码，理由是照搬会让带签名的直链失效。chief of staff 建议接受。
+- chief of staff 当天接受的改动：
+  - 直链 URL 里带账号时总是补上 Basic 认证，因为按 U-05，MPV 的 Authorization 不再转发。
+  - `StreamResponse.header` 新增可选的 `User-Agent`，`Cookie` 允许为 null。
+- 留给 #163、#164 的接入位置：`playvideo.ts` 的直连分支按 `directLink.cloudType` 区分，115（3）和夸克（4）暂时仍走透明转发。
+- 没有测试：直连路径使用系统证书库（U-17）。
