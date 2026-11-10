@@ -10,14 +10,6 @@
   "lockFileMaintenance": { "enabled": false },
   "packageRules": [
     {
-      "description": "actions/python-versions 只给 3.11.10 及以后的版本发布 Linux 构建，Windows 和 macOS 没有对应补丁版本。python-version 保持 3.11，不 pin 到补丁版本。",
-      "matchManagers": ["github-actions"],
-      "matchDepTypes": ["uses-with"],
-      "matchDepNames": ["python"],
-      "matchUpdateTypes": ["pin"],
-      "enabled": false
-    },
-    {
       "description": "运行时是 Electron 内置的 Node，不是 CI 的 Node。@types/node 的主版本跟随 Electron 内置 Node（Electron 45 是 Node 24），否则 tsc 会放过运行时没有的 API。升级 Electron 时同步改这里的上限。",
       "matchManagers": ["npm"],
       "matchPackageNames": ["@types/node"],

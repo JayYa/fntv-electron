@@ -68,10 +68,10 @@ jobs:
         uses: ./.github/actions/install-dependencies
         timeout-minutes: 15
 
-      - name: Setup Python (for native modules)
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.15'
+      # 不装 Python：生产依赖（axios、node-mpv-2、semver）没有原生模块，electron-builder 的
+      # @electron/rebuild 在三个平台上都不编译（日志 "installing native dependencies" 不到 1 秒完成），
+      # 用不到 node-gyp；打 dmg 用的 dmgbuild 是 electron-builder 下载的独立可执行文件，自带 Python。
+      # ci.yml 三个平台也不装 Python，pnpm install 照常通过。
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
