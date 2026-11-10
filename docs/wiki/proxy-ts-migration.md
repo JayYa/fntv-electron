@@ -179,3 +179,7 @@ chief of staff 当天的计划（维护者待确认）：
   - 不修：Middle Man 两处、`proxyControl` 测试断言 IPC 消息内容。
   - NAS 调用的缓存 TTL 用 300 秒（Go 是 10 分钟），属于 U-12 以 TS 版为准的结果，不改。
 - 由一个实现 subagent 统一修复，分支 `fix/proxy-ts-review`。
+- 2026-11-10 修复分支 `fix/proxy-ts-review` 合并进集成分支（`a78c2ef`）。`pnpm test` 共 509 条，507 通过。修复先写了测试再改，涉及 5 项：日志里不记 NAS 主机、子进程日志按字段脱敏、旧密钥文件删不掉时只记 warn、夸克缓存键用原始直链、复用 `https.Agent`。
+- 行为变化（chief of staff 接受）：Proxy 启动失败时，先弹窗、调用 `app.quit()`，再抛错。
+- PR #168 的 15 个 job 都通过后转为 ready，正文改成“已完成”的表述，等维护者合并。#166 的手动验收在合并后、发版前进行。
+- 同日清理了这次的 11 个实现、审查 worktree 和对应的本地分支。其中两个 worktree 的目录因为文件被占用没能删掉，只剩空目录。
