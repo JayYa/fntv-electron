@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 
 /**
- * 平台差异集中在这里：维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。读取 process.platform 和 process.arch 只在本文件发生（eslint.config.mjs 的
- * no-restricted-properties），其它模块用 currentPlatform() 取得当前平台，再把它传给下面的纯函数。
+ * 平台差异集中在这里：维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到。
+ * 读取 process.platform 和 process.arch 只在本文件发生（eslint.config.mjs 的 no-restricted-properties），其它模块用 currentPlatform() 取得当前平台，再把它传给下面的纯函数。
  * 纯函数接收平台参数，测试可以在任意主机上覆盖 Windows、macOS 和 Linux 三条分支（tests/platform.test.cjs）。
  *
  * currentPlatform() 每次调用时读取，不缓存：已有测试通过改写 process.platform 模拟其它平台。

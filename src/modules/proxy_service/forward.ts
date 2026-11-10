@@ -119,7 +119,7 @@ export async function forward(
         }
     } catch (error: any) {
         if (controller.signal.aborted) return;
-        log.debug(`代理错误: ${error?.code ?? ''}`);
+        log.debug(`转发错误: ${error?.code ?? ''}`);
         if (!res.headersSent) {
             // 错误详情只给错误码，不含上游 URL（U-10，不照搬 Go）。
             sendJson(res, 500, { error: 'Proxy error', details: error?.code || 'upstream request failed' });
@@ -127,7 +127,7 @@ export async function forward(
         return;
     }
 
-    log.info(`代理响应 status=${upstream.statusCode} contentLength=${upstream.headers['content-length'] ?? -1}`);
+    log.info(`转发响应 status=${upstream.statusCode} contentLength=${upstream.headers['content-length'] ?? -1}`);
     res.writeHead(upstream.statusCode || 502, responseHeaders(upstream));
     res.flushHeaders();
     pipeline(upstream, res, (error) => {

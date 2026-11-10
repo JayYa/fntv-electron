@@ -87,7 +87,7 @@ export async function handlePlayVideo(
         deps.log.info(`启用云存储直连: type=${directLink.cloudType}`);
         // 115 和夸克的特殊处理按 directLink.cloudType 在这里分支，其余网盘透明转发。
         if (directLink.cloudType === CLOUD_TYPE_QUARK) {
-            deps.log.info(`开始代理 | 模式: 夸克分片 | itemGuid: ${itemGuid}`);
+            deps.log.info(`开始转发 | 模式: 夸克分片 | itemGuid: ${itemGuid}`);
             await forwardQuark(req, res, cloudDirectTarget(directLink, deps.ca), directLink.url, {
                 metaCache: deps.quarkMetaCache,
                 idleTimeoutMs: deps.quarkIdleTimeoutMs,
@@ -95,14 +95,14 @@ export async function handlePlayVideo(
             });
             return;
         }
-        deps.log.info(`开始代理 | 模式: 透明转发 | itemGuid: ${itemGuid}`);
+        deps.log.info(`开始转发 | 模式: 透明转发 | itemGuid: ${itemGuid}`);
         if (directLink.cloudType === CLOUD_TYPE_115) await forward115(req, res, cloudDirectTarget(directLink, deps.ca), deps.limiter115, deps.log);
         else await forward(req, res, cloudDirectTarget(directLink, deps.ca), deps.log);
         return;
     }
 
     // NAS 本地播放源，以及 NAS 中转的直链媒体。
-    deps.log.info(`开始代理 | 模式: NAS | itemGuid: ${itemGuid}`);
+    deps.log.info(`开始转发 | 模式: NAS | itemGuid: ${itemGuid}`);
     await forward(req, res, {
         url: api.getVideoUrl(mediaGuid),
         headers: {

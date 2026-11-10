@@ -1,4 +1,4 @@
-// 115 网盘直连：用流信息给的 UA（cloudDirectTarget 的通用规则），转发前按限流间隔排队，避免被 115 拒绝。
+// 115 的直链直连：用流信息给的 UA（cloudDirectTarget 的通用规则），转发前按限流间隔排队，避免被 115 拒绝。
 import type * as http from 'node:http';
 import { forward, ForwardTarget } from './forward';
 import type { ProxyLog } from './log';
