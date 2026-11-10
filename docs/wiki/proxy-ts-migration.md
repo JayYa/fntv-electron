@@ -102,3 +102,4 @@ chief of staff 当天的计划（维护者待确认）：
   - `StreamResponse.header` 新增可选的 `User-Agent`，`Cookie` 允许为 null。
 - 留给 #163、#164 的接入位置：`playvideo.ts` 的直连分支按 `directLink.cloudType` 区分，115（3）和夸克（4）暂时仍走透明转发。
 - 没有测试：直连路径使用系统证书库（U-17）。
+- 2026-11-10 #162 合并进集成分支（`645821d`），没有冲突，PR #168 上四项 CI 都通过。同日维护者确认 U-15 按 chief of staff 的建议处理：直链 path 里的编码原样发给网盘，不照搬 Go 的重新编码。
