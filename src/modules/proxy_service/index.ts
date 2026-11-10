@@ -4,6 +4,7 @@ import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { TtlCache } from '../fn_api/core/ttlCache';
 import { trustedCaCertificates } from './caCertificates';
+import { RateLimiter } from './cloud115';
 import { ProxyLog, silentLog } from './log';
 import { PlaybackSessionInput, PlaybackSessionStore } from './playbackSessions';
 import { handlePlayVideo, PlayVideoDeps } from './playvideo';
@@ -77,6 +78,7 @@ export function startProxyService(options: ProxyServiceOptions): Promise<ProxySe
         cache: new TtlCache({ defaultTtl: 300 }),
         ca: trustedCaCertificates(),
         log,
+        limiter115: new RateLimiter(options.rateLimitIntervalMs),
         // 与 Go 版一致：TTL 200 分钟。
         quarkMetaCache: new TtlCache({ defaultTtl: 200 * 60 }),
         quarkIdleTimeoutMs: options.quarkIdleTimeoutMs ?? 60 * 1000,
