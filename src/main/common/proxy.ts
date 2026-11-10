@@ -3,10 +3,10 @@
 import { app, dialog, utilityProcess, UtilityProcess } from 'electron';
 import * as path from 'node:path';
 import * as log from '../../modules/logger';
-import { PROXY_PORT, ProxyMessage } from '../../modules/proxy_service/control';
+import { ProxyMessage } from '../../modules/proxy_service/control';
 import { writeProxyLog } from '../../modules/proxy_service/log';
 import { removeLegacyProxySecret } from './legacyProxySecret';
-import { PlaybackSessionInput, ProxyControlClient } from './proxySession';
+import { PlaybackSessionInput, ProxyControlClient, ProxyPlaybackSession } from './proxySession';
 
 // 编译后在 dest/modules/proxy_service/child.js，打包后在 app.asar 里的同一位置。
 const CHILD_ENTRY = path.join(__dirname, '..', '..', 'modules', 'proxy_service', 'child.js');
@@ -20,18 +20,14 @@ const SHUTDOWN_TIMEOUT_MS = 5000;
 interface RunningProxy {
     child: UtilityProcess;
     control: ProxyControlClient;
+    // Proxy 就绪时报告的实际端口，每次启动都可能不同。
+    port: number;
 }
-
-class PortInUseError extends Error {}
 
 let running: RunningProxy | null = null;
 let stopping = false;
 let restartAttempts = 0;
 let restartCountResetTimer: NodeJS.Timeout | null = null;
-
-const PORT_IN_USE_MESSAGE = `端口 ${PROXY_PORT} 已被其他程序占用，飞牛影视的播放服务（Proxy）无法启动。
-
-可能是旧版飞牛影视留下的 Proxy 仍在运行。请在任务管理器（macOS 用“活动监视器”）里结束名为 proxy 或 proxy.exe 的进程，或者重启电脑，然后重新打开飞牛影视。`;
 
 function launch(): Promise<RunningProxy> {
     return new Promise((resolve, reject) => {
@@ -54,14 +50,12 @@ function launch(): Promise<RunningProxy> {
                 case 'ready':
                     ready = true;
                     clearTimeout(timer);
-                    resolve({ child, control });
+                    resolve({ child, control, port: message.port });
                     break;
                 case 'startFailed':
                     clearTimeout(timer);
                     child.kill();
-                    reject(message.code === 'EADDRINUSE'
-                        ? new PortInUseError(`端口 ${PROXY_PORT} 已被占用: ${message.message}`)
-                        : new Error(`Proxy 启动失败: ${message.message}`));
+                    reject(new Error(`Proxy 启动失败: ${message.code ? `${message.code} ` : ''}${message.message}`));
                     break;
                 default:
                     control.receive(message);
@@ -85,7 +79,8 @@ function launch(): Promise<RunningProxy> {
 
 async function startOnce(): Promise<void> {
     running = await launch();
-    log.info(`Proxy 已就绪，端口 ${PROXY_PORT}`);
+    // 冒烟测试按原文解析这一行拿实际端口（tests/smoke/installer.smoke.cjs 的 PROXY_READY_PATTERN），改措辞要同步改那边。
+    log.info(`Proxy 已就绪，端口 ${running.port}`);
     if (restartCountResetTimer) clearTimeout(restartCountResetTimer);
     restartCountResetTimer = setTimeout(() => { restartAttempts = 0; }, RESTART_COUNT_RESET_MS);
 }
@@ -99,8 +94,6 @@ async function showErrorAndQuit(title: string, message: string): Promise<void> {
     }
 }
 
-const showPortInUseAndQuit = () => showErrorAndQuit('启动失败 - 端口被占用', PORT_IN_USE_MESSAGE);
-
 async function restartAfterCrash(): Promise<void> {
     if (restartCountResetTimer) clearTimeout(restartCountResetTimer);
     while (restartAttempts < MAX_RESTART_ATTEMPTS) {
@@ -113,10 +106,6 @@ async function restartAfterCrash(): Promise<void> {
             return;
         } catch (error) {
             log.error(`Proxy 重启失败 (第 ${restartAttempts} 次):`, error instanceof Error ? error.message : String(error));
-            if (error instanceof PortInUseError) {
-                await showPortInUseAndQuit();
-                return;
-            }
         }
     }
     log.error(`Proxy 重启 ${MAX_RESTART_ATTEMPTS} 次都失败，应用即将退出`);
@@ -131,18 +120,17 @@ export async function startProxyProcess(): Promise<void> {
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log.error('启动 Proxy 失败:', message);
-        if (error instanceof PortInUseError) {
-            await showPortInUseAndQuit();
-        } else {
-            await showErrorAndQuit('启动失败', `飞牛影视的播放服务（Proxy）无法启动。\n\n错误详情: ${message}\n\n请查看应用日志获取更多信息。`);
-        }
+        await showErrorAndQuit('启动失败', `飞牛影视的播放服务（Proxy）无法启动。\n\n错误详情: ${message}\n\n请查看应用日志获取更多信息。`);
         throw error;
     }
 }
 
-export function createPlaybackSession(input: PlaybackSessionInput): Promise<string> {
-    if (!running) return Promise.reject(new Error('Proxy 未运行'));
-    return running.control.createPlaybackSession(input);
+// Proxy 就绪前（包括崩溃后重启期间）调用会失败，不等待。
+export async function createPlaybackSession(input: PlaybackSessionInput): Promise<ProxyPlaybackSession> {
+    const current = running;
+    if (!current) throw new Error('Proxy 未运行');
+    const session = await current.control.createPlaybackSession(input);
+    return { session, port: current.port };
 }
 
 // 应用退出前调用。

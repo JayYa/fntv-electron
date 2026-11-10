@@ -2,9 +2,8 @@
 import type { ProxyLogMessage } from './log';
 import type { PlaybackSessionInput } from './playbackSessions';
 
+// 端口由系统分配，随 ready 消息报给主进程。MPV 的 smart_skip 从播放地址取主机和端口（docs/external-runtime.md）。
 export const PROXY_HOST = '127.0.0.1';
-// 正式运行时的端口。固定不变：MPV 归档里 smart_skip 的 api.lua 写死了 http://127.0.0.1:22345（docs/external-runtime.md）。
-export const PROXY_PORT = 22345;
 
 // 主进程 → Proxy：创建播放会话。id 由主进程分配，回复原样带回。
 export interface CreatePlaybackSessionRequest {
@@ -17,7 +16,7 @@ export type CreatePlaybackSessionReply =
     | { type: 'playbackSession'; id: number; session: string }
     | { type: 'playbackSessionFailed'; id: number; message: string };
 
-// Proxy → 主进程：启动结果和日志。code 是监听失败时的错误码，端口被占用时为 EADDRINUSE。
+// Proxy → 主进程：启动结果和日志。ready 带实际监听的端口，code 是监听失败时的错误码。
 export type ProxyStatusMessage =
     | { type: 'ready'; port: number }
     | { type: 'startFailed'; code: string; message: string }

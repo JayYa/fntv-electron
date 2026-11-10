@@ -89,13 +89,19 @@ pnpm install
 
 3. 准备 MPV：
 
-`third_party/fntv-mpv` 不入库，开发运行和打包都依赖它。从固定版本的 [fntv-mpv-config Release](https://github.com/JayYa/fntv-mpv-config/releases/tag/fntv-mpv-v20261108_233327) 下载归档，解压到这个目录：
+`third_party/fntv-mpv` 不入库，开发运行和打包都依赖它。从固定版本的 [fntv-mpv-config Release](https://github.com/JayYa/fntv-mpv-config/releases/tag/fntv-mpv-v20261110_224319) 下载归档，解压到这个目录：
 
 ```bash
-curl -fL -o mpv-config.zip https://github.com/JayYa/fntv-mpv-config/releases/download/fntv-mpv-v20261108_233327/mpv-package-20261108_153320.zip
+curl -fL -o mpv-config.zip https://github.com/JayYa/fntv-mpv-config/releases/download/fntv-mpv-v20261110_224319/mpv-package-20261110_144311.zip
 mkdir -p third_party/fntv-mpv
 unzip -q mpv-config.zip -d third_party/fntv-mpv
 rm mpv-config.zip
+```
+
+Windows 上用 PowerShell 的 `Expand-Archive` 解压，和 CI 一样。Git Bash 的 `unzip` 会把归档里的 `mpv/` 目录和 `mpv.exe` 当成同一个名字，`mpv/fonts.conf` 解压不出来：
+
+```powershell
+Expand-Archive -Path mpv-config.zip -DestinationPath third_party/fntv-mpv -Force
 ```
 
 4. 运行开发模式：
