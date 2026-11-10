@@ -6,7 +6,7 @@ import * as core from './core/request';
 
 export { ApiResponse, FnApiResponseData, HttpMethod, DEFAULT_TIMEOUT } from './core/request';
 
-const mainContext: core.RequestContext = {
+export const mainContext: core.RequestContext = {
     accessCookie: getAccessCookieHeader,
     skipVerify: isTrusted,
     log,

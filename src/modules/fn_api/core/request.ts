@@ -74,7 +74,9 @@ export interface RequestContext {
     accessCookie(baseUrl: string): string;
     // 是否跳过证书校验，即证书信任的结果。
     skipVerify(baseUrl: string): boolean;
-    log: { warn: LogMethod; error: LogMethod };
+    log: { warn: LogMethod; error: LogMethod; debug?: LogMethod };
+    // 校验证书用的 CA 列表，不传时用 Node 自带的。Proxy 传入加上系统证书库的列表。
+    ca?: string[];
 }
 
 // API请求函数
@@ -119,6 +121,7 @@ export async function request<T = any>(
         validateStatus: (status: number) => status >= 200 && status < 400,
         httpsAgent: new https.Agent({
             rejectUnauthorized: !shouldIgnoreCert,
+            ...(context.ca ? { ca: context.ca } : {}),
             keepAlive: true,
             timeout: timeout,
             maxSockets: 10,

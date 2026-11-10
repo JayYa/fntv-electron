@@ -59,6 +59,14 @@ const NO_MODULE_EXPORTS = {
     message: '用 ES export，不要写 module.exports =。'
 };
 
+// fn_api/core 由主进程和 Proxy 共用，Proxy 服务运行在 utilityProcess 里，两者都不能加载 electron。
+// logger、cert_trust 和 fn_api 的主进程层会间接加载 electron，所以只允许引用 Node 内置模块、npm 包和 core 本身。
+const NO_ELECTRON = {
+    name: 'electron',
+    message: 'fn_api/core 和 Proxy 服务不能引用 electron，依赖由调用方通过参数传入。'
+};
+const ELECTRON_FREE_HINT = '会间接加载 electron。fn_api/core 只引用 core 内的模块，Proxy 服务只引用 fn_api/core，日志和证书信任由调用方传入。';
+
 export default [
     {
         linterOptions: {
@@ -81,6 +89,24 @@ export default [
             // 各种写法的拦截见 tests/eslintPlatformRules.test.cjs。
             'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX],
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES]
+        }
+    },
+    {
+        files: ['src/modules/fn_api/core/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', {
+                paths: [NO_ELECTRON],
+                patterns: [{ regex: '^\\.\\./', message: `core 以外的模块${ELECTRON_FREE_HINT}` }]
+            }]
+        }
+    },
+    {
+        files: ['src/modules/proxy_service/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', {
+                paths: [NO_ELECTRON],
+                patterns: [{ regex: '^\\.\\./(?!fn_api/core(/|$))', message: `fn_api/core 以外的模块${ELECTRON_FREE_HINT}` }]
+            }]
         }
     },
     {
