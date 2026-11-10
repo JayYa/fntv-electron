@@ -65,7 +65,7 @@ export function genFnAuthx(url: string, data?: any): string {
 // 默认超时时间（毫秒）
 export const DEFAULT_TIMEOUT = 10000;
 
-type LogMethod = (message: string, ...args: any[]) => void;
+export type LogMethod = (message: string, ...args: any[]) => void;
 
 // 调用方所在进程提供的依赖。主进程查进程内的访问授权和证书信任；Proxy 用播放会话里的值。
 // 跟随重定向时按新的 baseUrl 再取一次。

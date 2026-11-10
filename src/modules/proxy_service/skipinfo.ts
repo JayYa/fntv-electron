@@ -4,7 +4,7 @@ import type * as http from 'node:http';
 import type { TtlCache } from '../fn_api/core/ttlCache';
 import type { ProxyLog } from './log';
 import type { PlaybackSessionStore } from './playbackSessions';
-import { sendJson } from './respond';
+import { readBody, sendJson } from './respond';
 import { sessionApiClient } from './sessionApiClient';
 
 export interface SkipInfoDeps {
@@ -61,15 +61,6 @@ interface SkipInfoBody {
     skipEnd: number;
 }
 
-function readBody(req: http.IncomingMessage): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        req.on('data', (chunk: Buffer) => chunks.push(chunk));
-        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-        req.on('error', reject);
-    });
-}
-
 // 按 Go 的 encoding/json 解到 {guid, skipStart, skipEnd}：键名不分大小写，null 当作没写，多余字段忽略；
 // 类型不对、时间点不是整数时返回 undefined。body 里的 session 也当作多余字段（U-13，不照搬 gin）。
 function parseSkipInfoBody(text: string): SkipInfoBody | undefined {
@@ -107,7 +98,7 @@ export async function handleSetSkipInfo(
     deps: SkipInfoDeps,
 ): Promise<void> {
     // 先解析 body，再看 query，与 Go 版的顺序一致。query 只读 session，不覆盖 body 里的值（U-13）。
-    const body = parseSkipInfoBody(await readBody(req));
+    const body = parseSkipInfoBody((await readBody(req)).toString('utf8'));
     if (!body) {
         deps.log.error('解析请求体失败: skipinfo');
         sendError(res, 400, 'Invalid request body');

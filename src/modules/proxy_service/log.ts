@@ -1,6 +1,5 @@
 // Proxy 的日志由调用方传入。这一层不加载 logger，以免间接加载 electron。
-
-type LogMethod = (message: string, ...args: any[]) => void;
+import type { LogMethod } from '../fn_api/core/request';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

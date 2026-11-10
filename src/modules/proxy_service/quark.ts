@@ -1,13 +1,13 @@
 // 夸克直连：先取文件元信息，再按 MPV 请求的区间向直链取最多 10MiB，流式返回。
 // 与 Go 的 ChunkedProxy 一致的地方：从 MPV 请求的起点取、同一请求内按顺序取，不按分片对齐，没有并发上限和预取。
-import * as http from 'node:http';
-import * as https from 'node:https';
+import type * as http from 'node:http';
 import { once } from 'node:events';
 import { pipeline } from 'node:stream';
 import type { TtlCache } from '../fn_api/core/ttlCache';
 import { ForwardTarget, passthroughHeaders, responseHeaders } from './forward';
 import type { ProxyLog } from './log';
-import { sendJson } from './respond';
+import { abortWhenMpvLeaves, readBody, sendJson } from './respond';
+import { openUpstream } from './upstream';
 
 // 单次最多取 10MiB。
 const CHUNK_SIZE = 10 * 1024 * 1024;
@@ -31,24 +31,8 @@ function sendUpstream(
     idleTimeoutMs: number,
     signal: AbortSignal,
 ): Promise<http.IncomingMessage> {
-    const url = new URL(target.url);
-    const isHttps = url.protocol === 'https:';
-    const options: https.RequestOptions = {
-        protocol: url.protocol,
-        hostname: url.hostname.replace(/^\[|\]$/g, ''),
-        port: url.port || undefined,
-        path: `${url.pathname}${url.search}`,
-        method: 'GET',
-        headers,
-        agent: false,
-        signal,
-    };
-    if (isHttps) {
-        options.rejectUnauthorized = !target.skipVerify;
-        options.ca = target.ca;
-    }
     return new Promise((resolve, reject) => {
-        const request = (isHttps ? https : http).request(options);
+        const request = openUpstream(target, headers, 'GET', signal);
         // 空闲超时代替 Go 的 60 秒总超时（U-06，不照搬 Go）：收响应头和 body 期间都算，低速但持续有数据时不会断。
         request.setTimeout(idleTimeoutMs, () => request.destroy(new Error('上游空闲超时')));
         request.on('response', resolve);
@@ -85,10 +69,7 @@ export async function forwardQuark(
     metaKey: string,
     deps: QuarkDeps,
 ): Promise<void> {
-    const controller = new AbortController();
-    res.on('close', () => {
-        if (!res.writableFinished) controller.abort();
-    });
+    const controller = abortWhenMpvLeaves(res);
     // 只发白名单头加直链的 UA、Cookie 和认证，没有 X-Forwarded-For，与 Go 版一致。
     const headers: Record<string, string> = { ...passthroughHeaders(req), ...target.headers };
 
@@ -160,7 +141,7 @@ export async function forwardQuark(
     deps.log.warn(`夸克上游状态异常: ${upstream.statusCode}`);
     let body: Buffer;
     try {
-        body = await readAll(upstream);
+        body = await readBody(upstream);
     } catch {
         res.destroy();
         return;
@@ -195,13 +176,4 @@ async function copySlice(
     // 上游提前结束时 MPV 拿不到足够的字节，断开连接让它知道。
     if (sent < length) res.destroy();
     else res.end();
-}
-
-function readAll(stream: http.IncomingMessage): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-        stream.on('end', () => resolve(Buffer.concat(chunks)));
-        stream.on('error', reject);
-    });
 }
