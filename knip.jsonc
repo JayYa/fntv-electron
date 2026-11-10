@@ -14,7 +14,5 @@
         "resource/login/*.js",
         "scripts/*.{js,cjs}",
         "tests/**/*.cjs"
-    ],
-    // package.json scripts 里调用的系统命令，不是 npm 包：go 是 Go 工具链，lipo 是 macOS Xcode 自带的。
-    "ignoreBinaries": ["go", "lipo"]
+    ]
 }

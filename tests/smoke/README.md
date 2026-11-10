@@ -1,6 +1,6 @@
 # 冒烟测试
 
-把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 通过 `/health`、主窗口图标能用 `nativeImage` 加载（#74）、客户端只有一个 `window-all-closed` 监听（#76，不算 Electron 在 `lib/browser/init.ts` 自带的那个）、主进程没有未捕获异常，最后退出客户端并确认 Proxy 也退出。写法约束见 `TESTING_STANDARDS.md` 的“冒烟测试”。
+把安装包当黑盒：按用户的方式装好或打开，用 `playwright-core` 的 `_electron` 启动，检查主窗口可见、登录页表单和版本号显示、Proxy 对不带 `session` 的 `playvideo` 请求有 HTTP 响应、主窗口图标能用 `nativeImage` 加载（#74）、客户端只有一个 `window-all-closed` 监听（#76，不算 Electron 在 `lib/browser/init.ts` 自带的那个）、主进程没有未捕获异常，退出客户端并确认 Proxy 端口关闭，最后先占住端口 22345 再启动一次，确认 `app.log` 里有端口被占用的报错、没有打开主窗口（报错弹窗要人点击才退出，测试在这里结束进程）。写法约束见 `TESTING_STANDARDS.md` 的“冒烟测试”。
 
 目标 id 是 `<process.platform>-<process.arch>`，如 `linux-x64`、`darwin-arm64`、`win32-x64`，默认取当前机器，用 `FNTV_SMOKE_TARGET` 指定。
 
@@ -12,8 +12,8 @@
 
 ## 输出和排查
 
-- 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（`~/.fntv/logs` 的副本）、`proxy.log`。Proxy 没有自己的日志文件，它的输出由主进程写进 `app.log`，`proxy.log` 是从中挑出的非 Electron 格式的行和 `Proxy stderr` 行。
-- 端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
+- 截图、主进程输出、应用日志写到 `smoke-artifacts/<目标>/`：`screenshot.png`、`main-process.log`（Electron 进程的 stdout 和 stderr）、`logs/`（`~/.fntv/logs` 的副本）、`proxy.log`、`port-in-use-process.log`（端口占用那次启动的 stdout 和 stderr）。Proxy 没有自己的日志文件，它的日志经 IPC 由主进程写进 `app.log`，`proxy.log` 是从中挑出的带 `[Proxy]` 的行。
+- 启动前端口 22345 被占用时测试直接失败，本地跑之前先关掉正在运行的客户端。
 - 主进程异常监听在主窗口出现后才装上。更早的异常只能靠 stderr 里的文字发现，而 Electron 默认弹错误框，不一定打印出来，这是已知盲区：表现为主窗口 30 秒内没出现，报错附有主进程输出的末尾，再看 `logs/app.log`。
 - `test:smoke` 固定用 `spec` reporter：Node 22 在非终端下默认是 TAP，会在测试打印的每行前加 `# `，`::notice::` 之类的注解就不会被 GitHub 识别。
 
@@ -47,7 +47,7 @@ Windows 上先 `pnpm run build:win`，再运行 `pnpm run test:smoke`。测试�
 本机已经装了客户端时，测试用的安装包要换掉 `appId` 和 `productName`：安装标识由 `appId` 决定，相同时安装程序会先卸载已有的那份；快捷方式名由 `productName` 决定，卸载时会删掉同名快捷方式。测试安装前会查注册表，本机装有 `package.json` 里那个 `appId` 的客户端时直接失败（CI 上不查）。改掉这两项后产物名不变，测试照样找得到，再设 `FNTV_SMOKE_ALLOW_INSTALL=1` 运行：
 
 ```bash
-pnpm run build:proxy:win && pnpm run compile
+pnpm run compile
 npx electron-builder --win --publish never -c.appId=com.qiaokes.fntv.smoketest -c.productName=FNMediaSmoke
 FNTV_SMOKE_ALLOW_INSTALL=1 pnpm run test:smoke
 ```

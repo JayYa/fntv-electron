@@ -5,7 +5,6 @@
 - `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`。
 - `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还会被 `readdirSync` 加载。
 - 改完代码后 `pnpm run lint` 和 `pnpm run knip` 也要通过。
-- 改 Go 代码时在 `src/modules/proxy` 下运行 `go test ./...`。
 
 ### `Electron failed to install correctly`
 
@@ -39,7 +38,3 @@
 
 - 配置类改动用 `git grep` 做静态验收，结果只能剩下有意保留的内容。能写成断言的放进 `tests/standards.test.cjs`。
 - 工作流改动要有真实运行记录作为证据，只读 YAML 不算验证。
-
-## Go
-
-- 路由和处理器用 `httptest` 断言响应（`src/modules/proxy/internal/logic/register_test.go`）。

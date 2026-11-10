@@ -8,7 +8,7 @@ const { lines, stub, tempDir, writeProject } = require('./helpers/ciCache.cjs');
 const downloads = require('../scripts/ci-download-cache.cjs');
 
 // main 上的缓存由 cache-warm.yml 维护：缺 Electron 和打包缓存的平台打包一次，删掉被新 key 取代的旧缓存，
-// 依赖文件变了时重建 setup-node、setup-go 的缓存。PR 关闭时 cache-cleanup.yml 删掉它的缓存（2026-11-10）。
+// 依赖文件变了时重建 setup-node 的缓存。PR 关闭时 cache-cleanup.yml 删掉它的缓存（2026-11-10）。
 
 const root = path.resolve(__dirname, '..');
 const PACKAGING_KEY = 'packaging-v2-Linux-electron-38.8.6-electron-builder-26.18.0-app-builder-lib-26.18.0';
@@ -41,8 +41,7 @@ function deleted(calls) {
 test('cache-warm.yml builds on main without uploading, only where caches are missing', () => {
     const warm = workflow('cache-warm.yml');
     assert.deepEqual(warm.on.push.branches, ['main']);
-    for (const file of ['package.json', 'pnpm-lock.yaml', 'src/modules/proxy/go.mod', 'src/modules/proxy/go.sum',
-        'scripts/ci-download-cache.cjs', '.github/workflows/build.yml']) {
+    for (const file of ['package.json', 'pnpm-lock.yaml', 'scripts/ci-download-cache.cjs', '.github/workflows/build.yml']) {
         assert.ok(warm.on.push.paths.includes(file), `${file} does not trigger cache-warm.yml`);
     }
     assert.ok(warm.on.schedule && 'workflow_dispatch' in warm.on);
@@ -103,19 +102,18 @@ test('the prune step deletes the stale caches it lists on main', t => {
     assert.deepEqual(deleted(calls), ['11', '14']);
 });
 
-test('the deps job sets up pnpm, Node.js and Go exactly like ci.yml, so the cache keys match', () => {
+test('the deps job sets up pnpm and Node.js exactly like ci.yml, so the cache keys match', () => {
     const deps = workflow('cache-warm.yml').jobs.deps;
     const ci = workflow('ci.yml').jobs.test;
     assert.equal(deps.if, "github.ref == 'refs/heads/main'");
     assert.deepEqual(deps.strategy.matrix.os, ci.strategy.matrix.os);
-    for (const name of ['Setup pnpm', 'Setup Node.js', 'Setup Go']) {
+    for (const name of ['Setup pnpm', 'Setup Node.js']) {
         const mine = deps.steps.find(step => step.name === name);
         const theirs = ci.steps.find(step => step.name === name);
         assert.deepEqual({ uses: mine.uses, with: mine.with }, { uses: theirs.uses, with: theirs.with }, name);
     }
     assert.ok(deps.steps.some(step => step.run === 'pnpm install --frozen-lockfile'));
-    // 只编译不跑测试，测试由 PR 上的 ci.yml 跑。
-    assert.ok(deps.steps.some(step => step.run === "go test -run '^$' ./..."));
+    // 只装依赖不跑测试，测试由 PR 上的 ci.yml 跑。
     assert.ok(!deps.steps.some(step => step.run === 'pnpm test'));
     // 不给 ci.yml 加 push: main（docs/wiki/ci-download-cache.md）。
     assert.deepEqual(Object.keys(workflow('ci.yml').on), ['pull_request']);

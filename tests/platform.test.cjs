@@ -7,7 +7,6 @@ const path = require('node:path');
 const {
     currentPlatform,
     platformBehavior,
-    proxyExecutablePath,
     mpvUserConfigDir,
     mpvIpcSocket,
 } = require('../dest/public/platform.js');
@@ -71,34 +70,6 @@ test('Linux uses the exit mode, a PNG window icon, restores on tray click and re
     });
     assert.deepEqual(behavior.mpvExecutableExtensions, []);
     assert.equal(behavior.rejectsBasicTextStorage, true);
-});
-
-test('the packaged proxy executable sits in the install directory on Windows, whatever the working directory', () => {
-    assert.equal(
-        proxyExecutablePath('win32', { isPackaged: true, appPath: 'D:\\Apps\\飞牛影视\\resources\\app.asar' }),
-        'D:\\Apps\\飞牛影视\\third_party\\proxy\\proxy.exe',
-    );
-});
-
-test('the packaged proxy executable is two levels above app.asar on macOS and Linux', () => {
-    assert.equal(
-        proxyExecutablePath('darwin', { isPackaged: true, appPath: '/Applications/飞牛影视.app/Contents/Resources/app.asar' }),
-        '/Applications/飞牛影视.app/Contents/third_party/proxy/proxy',
-    );
-    assert.equal(
-        proxyExecutablePath('linux', { isPackaged: true, appPath: '/tmp/.mount_FNMedia/resources/app.asar' }),
-        '/tmp/.mount_FNMedia/third_party/proxy/proxy',
-    );
-});
-
-test('the unpackaged proxy executable is under the project directory, not the working directory', () => {
-    assert.equal(
-        proxyExecutablePath('win32', { isPackaged: false, appPath: 'D:\\src\\fntv' }),
-        'D:\\src\\fntv\\third_party\\proxy\\proxy.exe',
-    );
-    for (const platform of ['darwin', 'linux']) {
-        assert.equal(proxyExecutablePath(platform, { isPackaged: false, appPath: '/src/fntv' }), '/src/fntv/third_party/proxy/proxy');
-    }
 });
 
 const windowsDirs = { homeDir: 'C:\\Users\\me', appDataDir: 'D:\\Profiles\\me\\Roaming' };

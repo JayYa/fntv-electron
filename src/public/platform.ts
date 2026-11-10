@@ -69,22 +69,6 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
     };
 }
 
-/** 目标平台的路径写法：结果和在该平台上运行时一致，与测试所在主机无关。 */
-function pathFor(platform: NodeJS.Platform): typeof path.posix {
-    return platform === 'win32' ? path.win32 : path.posix;
-}
-
-/**
- * Proxy 可执行文件的绝对路径，不依赖当前工作目录（从快捷方式、开机自启或命令行启动时工作目录不一定是安装目录）。
- * 打包后 package.json 的 extraFiles 把 third_party/proxy 放在 app.asar 上两级目录：
- * Windows 和 Linux 是安装目录，macOS 是 .app/Contents。未打包时 appPath 是项目根目录。
- */
-export function proxyExecutablePath(platform: NodeJS.Platform, app: { isPackaged: boolean; appPath: string }): string {
-    const p = pathFor(platform);
-    const baseDir = app.isPackaged ? p.dirname(p.dirname(app.appPath)) : app.appPath;
-    return p.join(baseDir, 'third_party', 'proxy', platform === 'win32' ? 'proxy.exe' : 'proxy');
-}
-
 export interface UserDirs {
     /** os.homedir()。 */
     homeDir: string;
