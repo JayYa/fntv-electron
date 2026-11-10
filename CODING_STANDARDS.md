@@ -35,7 +35,7 @@
 
 ## 模块
 
-- `src/modules/fn_api/core/` 由主进程和 Proxy 共用，不引用 `electron`，也不引用 `logger` 这类会加载 `electron` 的模块。访问授权 Cookie、证书信任和日志由调用方通过 `RequestContext` 传入（`tests/fnApiCore.test.cjs`）。
+- `src/modules/fn_api/core/` 由主进程和 Proxy 共用，`src/modules/proxy_service/` 运行在 Proxy 子进程里，两者不能加载 `electron`，由 ESLint 的 `no-restricted-imports` 检查（`eslint.config.mjs`）。访问授权 Cookie、证书信任和日志由调用方通过 `RequestContext` 或参数传入。
 - 登录页脚本是按顺序加载的经典脚本，不用 `type="module"`，`file:` 下会被拦。顶层 `const`、`let` 和函数跨文件共享，给其它脚本用的名字写进文件头的 `/* exported */`；顶层语句只能用已加载脚本里的名字。会重新赋值的状态放在唯一写它的脚本里（`resource/login/index.html`）。
 - 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`proxyExecutablePath`、`mpvUserConfigDir`、`expectedAssetName`），调用处只读结果。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`src/public/platform.ts`）。
 
