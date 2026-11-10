@@ -9,6 +9,7 @@
 - [平台问题分诊（#74 至 #78、#87、#94）](platform-issues-triage.md)：2026-11-08 在 `b888202` 上核实 #74 至 #78、#87、#94，七个问题都仍然存在，附核实报告给的方案和推荐顺序，维护者当天确认了顺序。当天由 PR #108、#110 至 #113 依次处理，七个 issue 都已关闭；#77 没处理的 `portable_config` 和 `~/.mpv` 两种情况另开 #114、#115。
 - [平台问题分诊（#114、#115、#118、#119）](platform-issues-triage-mpv-sync.md)：2026-11-09 从上一页拆出，原文未改。当天在 `03cd5e0` 上核实 #114、#115，合成一个 PR 修复（#117）。#117 合并后维护者实测发现自选附带 MPV 时插件被清空，开 #118 由 PR #120 修复；`%APPDATA%` 下插件只剩 `.gitignore` 的现象另开 #119。#120 合并（`626a979`）后维护者实测两种自选附带 MPV 的情况都正常；同日只读核实 #119，目录完整、18:43 是安装版 2.7.1 的正常同步，复现不了。“只剩 `.gitignore`”后来查明是 chief of staff 用 `head` 截断列目录输出造成的误判；#119 以 not planned 关闭（不打 `wontfix`）。维护者决定暂不做 `pnpm setup:mpv` 和缺少 `third_party/fntv-mpv` 时的提示。截至当天，两页涉及的 issue 都已关闭。
 - [Proxy 改用 TypeScript](proxy-ts-migration.md)：2026-11-10 决定 Go 版 Proxy 改为 TS、运行在 `utilityProcess`（ADR-0004 草稿），发布 spec #158 和子票 #159 至 #167，附阻塞关系、测试约定和执行计划。
+- [写文件 hook](agent-write-hook.md)：2026-11-10 为拦住代理用 shell 或脚本改源码，在维护者的全局配置里加了 PreToolUse hook。附复盘数据（加 hook 后脚本写源码从约 24 次降到 0）、误拦和多行 sed 的副作用，以及当天对 hook 和全局 CLAUDE.md 的调整。
 
 ## 子系统
 

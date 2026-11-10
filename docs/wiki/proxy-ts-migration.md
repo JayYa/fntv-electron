@@ -140,7 +140,7 @@ chief of staff 当天的计划（维护者待确认）：
 - 2026-11-10 维护者对复盘的回应：
   - 不改单文件 20000 字节的限制，也不把这项检查接进 lint 和 CI，上面“要做”里的这一项撤销。
   - 同意加 hook。chief of staff 当天新增 `~/.claude/hooks/block-shell-source-writes.cjs`，在 `~/.claude/settings.json` 里登记为 Bash、PowerShell 的 PreToolUse hook。它拦截用重定向、`tee`、PowerShell 写入 cmdlet 或 `writeFileSync` 写 `src/`、`tests/` 下的文件，单行 `sed -i` 放行，12 种情况实测通过。
-  - 写 hook 时发现：经 Bash 工具传入的 heredoc 里，`\` 会被压成 `\`，带引号的 heredoc 也一样。全局 CLAUDE.md 里“`node - <<'EOF'` 内容原样传入”的说法，在含反斜杠时不成立；要不要改这句，交维护者决定。
+  - 写 hook 时发现：经 Bash 工具传入的 heredoc 里，两个反斜杠会被压成一个，带引号的 heredoc 也一样。全局 CLAUDE.md 里“`node - <<'EOF'` 内容原样传入”的说法，在含反斜杠时不成立；要不要改这句，交维护者决定。
 - 同日清理分支合并进集成分支（`64ef36d`）：共用 `sessionApiClient`，`fn_api/core` 只缓存 `success: true` 的结果，`TESTING_STANDARDS.md` 写明时间参数可以作为可选参数注入。
 - 2026-11-10 环境分支合并进集成分支（`83c2db4`）：`pnpm test` 加了 30 秒单测超时；`TESTING_STANDARDS.md` 写明按平台跳过的测试由 CI 三平台验证。PR #168 的 15 个 job 都通过。最慢的单测在 CI 上只要 36–51ms，本机编译后第一次跑要 15 秒。
 
@@ -183,3 +183,7 @@ chief of staff 当天的计划（维护者待确认）：
 - 行为变化（chief of staff 接受）：Proxy 启动失败时，先弹窗、调用 `app.quit()`，再抛错。
 - PR #168 的 15 个 job 都通过后转为 ready，正文改成“已完成”的表述，等维护者合并。#166 的手动验收在合并后、发版前进行。
 - 同日清理了这次的 11 个实现、审查 worktree 和对应的本地分支。其中两个 worktree 的目录因为文件被占用没能删掉，只剩空目录。
+
+## 2026-11-10 写文件 hook
+
+hook 的复盘和调整记在 [写文件 hook](agent-write-hook.md)。
