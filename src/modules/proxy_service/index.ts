@@ -8,6 +8,7 @@ import { ProxyLog, silentLog } from './log';
 import { PlaybackSessionInput, PlaybackSessionStore } from './playbackSessions';
 import { handlePlayVideo, PlayVideoDeps } from './playvideo';
 import { sendJson } from './respond';
+import { handleGetSkipInfo, handleSetSkipInfo } from './skipinfo';
 
 export type { PlaybackSessionInput } from './playbackSessions';
 export type { ProxyLog } from './log';
@@ -80,6 +81,16 @@ export function startProxyService(options: ProxyServiceOptions): Promise<ProxySe
             method: 'GET',
             segments: ['api', 'v1', 'playvideo', ':itemGuid'],
             handler: (req, res, [itemGuid], query) => handlePlayVideo(req, res, itemGuid, query, deps),
+        },
+        {
+            method: 'GET',
+            segments: ['api', 'v1', 'skipinfo', ':itemGuid'],
+            handler: (_req, res, [itemGuid], query) => handleGetSkipInfo(res, itemGuid, query, deps),
+        },
+        {
+            method: 'POST',
+            segments: ['api', 'v1', 'skipinfo'],
+            handler: (req, res, _params, query) => handleSetSkipInfo(req, res, query, deps),
         },
     ];
 

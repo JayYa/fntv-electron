@@ -16,6 +16,18 @@ export interface LoginData {
 }
 
 /**
+ * 写入片头片尾信息的请求数据（play/setConfigByItem）
+ */
+export interface SetSkipInfoData {
+    /** 播放项的 parent_guid，不是播放项本身 */
+    guid: string;
+    /** 片头结束的时间点（秒） */
+    skip_opening: number;
+    /** 片尾开始的时间点（秒） */
+    skip_ending: number;
+}
+
+/**
  * 播放信息请求数据
  */
 export interface PlayInfoData {
