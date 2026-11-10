@@ -79,6 +79,32 @@ export interface RequestContext {
     ca?: string[];
 }
 
+// keepAlive 的连接池按 TLS 设置复用，不每次请求新建：常驻的 Proxy 里新建不销毁会让空闲连接越积越多。
+// CA 列表按引用区分（Proxy 一直用同一个列表），列表不再被引用时连接池随之回收。
+const agentsWithoutCa = new Map<string, https.Agent>();
+const agentsByCa = new WeakMap<string[], Map<string, https.Agent>>();
+
+function httpsAgent(rejectUnauthorized: boolean, ca: string[] | undefined, timeout: number): https.Agent {
+    let agents = agentsWithoutCa;
+    if (ca) {
+        agents = agentsByCa.get(ca) ?? new Map();
+        agentsByCa.set(ca, agents);
+    }
+    const key = `${rejectUnauthorized}|${timeout}`;
+    let agent = agents.get(key);
+    if (!agent) {
+        agent = new https.Agent({
+            rejectUnauthorized,
+            ...(ca ? { ca } : {}),
+            keepAlive: true,
+            timeout,
+            maxSockets: 10,
+        });
+        agents.set(key, agent);
+    }
+    return agent;
+}
+
 // API请求函数
 export async function request<T = any>(
     context: RequestContext,
@@ -119,13 +145,7 @@ export async function request<T = any>(
         maxRedirects: 0,
         // 允许 3xx 状态码进入 .then() 而不是 .catch()
         validateStatus: (status: number) => status >= 200 && status < 400,
-        httpsAgent: new https.Agent({
-            rejectUnauthorized: !shouldIgnoreCert,
-            ...(context.ca ? { ca: context.ca } : {}),
-            keepAlive: true,
-            timeout: timeout,
-            maxSockets: 10,
-        }),
+        httpsAgent: httpsAgent(!shouldIgnoreCert, context.ca, timeout),
         ...axiosConfig
     };
 

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
+const https = require('node:https');
 const path = require('node:path');
 const Module = require('node:module');
 
@@ -94,4 +95,37 @@ test('a failed cached call is not cached, so an immediate retry asks the NAS aga
     const cached = await api.getStreamListCached('item-1');
     assert.deepEqual(cached, succeeded);
     assert.equal(requests, 2);
+});
+
+// 常驻的 Proxy 每次 NAS 调用都新建 keepAlive 连接池会让空闲连接越积越多：同样的 TLS 设置共用一个连接池。
+test('requests to an HTTPS NAS with the same TLS settings reuse one connection', async (t) => {
+    withoutElectron(t);
+    const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
+    const tlsDir = path.join(__dirname, 'fixtures', 'tls');
+    const server = https.createServer({
+        key: fs.readFileSync(path.join(tlsDir, 'nas-key.pem')),
+        cert: fs.readFileSync(path.join(tlsDir, 'nas.pem')),
+    }, (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ code: 0, msg: '', data: null }));
+    });
+    let connections = 0;
+    server.on('secureConnection', () => { connections += 1; });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(resolve);
+    }));
+    const baseUrl = `https://127.0.0.1:${server.address().port}`;
+    const ca = [fs.readFileSync(path.join(tlsDir, 'ca.pem'), 'utf8')];
+    const context = (skipVerify) => ({ accessCookie: () => '', skipVerify: () => skipVerify, ca, log: { warn() {}, error() {} } });
+
+    for (let i = 0; i < 3; i++) {
+        assert.equal((await request(context(true), baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1')).success, true);
+    }
+    assert.equal(connections, 1);
+
+    // 校验证书的请求不能用跳过校验时建立的连接。
+    await request(context(false), baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1');
+    assert.equal(connections, 2);
 });
