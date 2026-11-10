@@ -164,3 +164,18 @@ chief of staff 当天的计划（维护者待确认）：
   - ADR-0002 改了两行（会话改为经 IPC 创建）。
   - 重启计数沿用旧逻辑。
   - feat 提交里写了 `Closes #165`。
+- 2026-11-10 #165 合并进集成分支（`2895762`），没有冲突。PR #168 的 15 个 job 都通过，包括三平台 Build 和 5 个冒烟测试目标。
+
+## 2026-11-10 code-review
+
+- 只读 subagent 用 code-review 审查从 merge-base 到 `2895762` 的改动，结果在 `%TEMP%\proxy-ts-notes\code-review-1.md`：必须修 1 条，建议修 7 条，可不修 6 条。
+- 必须修的一条：`forward.ts:128` 把 NAS 主机写进了日志。
+- 建议修里最重要的两条：
+  - 子进程先用 `util.format` 把日志参数拼成字符串再发给主进程，主进程按字段名脱敏就失效了。
+  - 删除旧密钥文件失败时，应用会静默退出。
+- chief of staff 当天的取舍：
+  - 必须修和建议修都修。
+  - 可不修里修三条：GLOSSARY 用词、`platform.ts` 的注释换行、`fn_api/core` 每次请求都新建 `https.Agent`。最后这条要修，是因为 Proxy 常驻，空闲连接会一直堆积。
+  - 不修：Middle Man 两处、`proxyControl` 测试断言 IPC 消息内容。
+  - NAS 调用的缓存 TTL 用 300 秒（Go 是 10 分钟），属于 U-12 以 TS 版为准的结果，不改。
+- 由一个实现 subagent 统一修复，分支 `fix/proxy-ts-review`。
