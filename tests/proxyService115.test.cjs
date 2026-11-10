@@ -99,7 +99,9 @@ test('other cloud types and NAS relay of 115 are not rate limited', async (t) =>
 
         const label = JSON.stringify([streamOptions, sessionOverrides]);
         assert.ok(Date.now() - started < 5 * 1000, label);
-        assert.equal(drive.requests.length + nas.mediaRequests().length, 3, label);
+        // 夸克另有一次取文件大小的请求（bytes=0-0，之后命中缓存），不算在内。
+        const fetches = drive.requests.filter((r) => r.headers.range !== 'bytes=0-0');
+        assert.equal(fetches.length + nas.mediaRequests().length, 3, label);
     }
 });
 
