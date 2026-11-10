@@ -64,3 +64,20 @@ chief of staff 当天的计划（维护者待确认）：
   - `isCertificateError` 和 `composeCookieHeader` 也移进了共用层。
 - 没拆：`ApiService`（`api.ts`）还留在主进程那一层，因为它要用 `app.getPath('temp')`。chief of staff 当天决定由 #160 把 Proxy 需要的调用和缓存拆进共用层，字幕临时目录改为注入。
 - 环境改进：“共用层不引用 `electron` 和 `logger`”目前只写在 `CODING_STANDARDS.md` 里。chief of staff 决定在 #160 里改用 ESLint 规则强制。
+
+## 2026-11-10 #160 完成
+
+- 分支 `feat/proxy-ts-160`（`f415a53`），3 个提交：
+  - 拆出 `FnApiClient`，放进共用层；
+  - 加 lint 规则，禁止共用层和 Proxy 服务引用 `electron` 和 logger；
+  - Proxy 服务 `proxy_service/`。
+- `pnpm test` 共 438 条，436 通过、2 条跳过，其中一条是新增的 Linux 系统证书测试，在 Windows 上跳过。这条测试实现者在 WSL 里手动跑过，CI 上还没有跑过。
+- 清单 G-160 的 45 条里有 33 条写了 Node 测试，没写测试的 12 条都注明了原因（25–29 按 U-12 以 TS 版为准）。
+- 和 Go 不同的地方（chief of staff 当天接受）：
+  - MPV 不带 UA 时，上游收不到 UA；Go 会发 `Go-http-client/1.1`。
+  - 500 响应的 `details` 只给错误码。
+  - 直链媒体暂时按 NAS 本地取流转发，直链直连留给 #162。
+- 遗留给 #165：`PlaybackSessionInput` 有三份定义，分别在 `proxySession.ts`、`proxy_service/playbackSessions.ts` 和 Go 里，接入客户端时合并成一份。
+- 环境：
+  - 提交钩子限制单个文件不超过 20000 字节，测试因此拆成 5 个 `tests/proxyService*.test.cjs`。
+  - 测试证书放在 `tests/fixtures/tls/`，有效期 100 年，CA 私钥已删除。
