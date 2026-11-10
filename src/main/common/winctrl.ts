@@ -82,7 +82,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     // 从配置中恢复 cookie
     let savedConfig;
     try {
-        savedConfig = readConfig();
+        savedConfig = await readConfig();
     } catch (error) {
         const message = error instanceof Error ? error.message : '无法读取配置文件';
         log.error('读取配置失败:', error);
@@ -111,7 +111,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
             if (resolvedBaseUrl !== savedConfig.domain) {
                 savedConfig.domain = resolvedBaseUrl;
                 savedConfig.useHttps = resolvedBaseUrl.startsWith('https://');
-                saveConfig({
+                await saveConfig({
                     account: savedConfig.account || '',
                     domain: savedConfig.domain,
                     token: savedConfig.token,

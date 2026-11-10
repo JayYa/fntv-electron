@@ -51,13 +51,13 @@ function setupAuth(t) {
             removeAllListeners(channel) { listeners.delete(channel); },
         },
         safeStorage: {
-            isEncryptionAvailable() { return true; },
+            async isAsyncEncryptionAvailable() { return true; },
             getSelectedStorageBackend() { return 'gnome_libsecret'; },
-            encryptString(value) { return Buffer.from(`protected:${value}`, 'utf8'); },
-            decryptString(value) {
+            async encryptStringAsync(value) { return Buffer.from(`protected:${value}`, 'utf8'); },
+            async decryptStringAsync(value) {
                 const plaintext = value.toString('utf8').slice('protected:'.length);
                 if (undecryptable.has(plaintext)) throw new Error('cannot decrypt');
-                return plaintext;
+                return { result: plaintext, shouldReEncrypt: false };
             },
         },
     };
@@ -84,9 +84,9 @@ function setupAuth(t) {
     return {
         config,
         undecryptable,
-        send(channel, payload, frameUrl = LOGIN_PAGE_URL) {
+        async send(channel, payload, frameUrl = LOGIN_PAGE_URL) {
             const replies = [];
-            listeners.get(channel)({
+            await listeners.get(channel)({
                 senderFrame: frameUrl === null ? null : { url: frameUrl },
                 reply(replyChannel, data) { replies.push({ channel: replyChannel, data }); },
             }, payload);
@@ -95,17 +95,17 @@ function setupAuth(t) {
     };
 }
 
-function seedLogins({ config }) {
-    config.saveConfig(CURRENT_LOGIN);
-    config.addHistory(FIRST_LOGIN);
-    config.addHistory(SECOND_LOGIN);
+async function seedLogins({ config }) {
+    await config.saveConfig(CURRENT_LOGIN);
+    await config.addHistory(FIRST_LOGIN);
+    await config.addHistory(SECOND_LOGIN);
 }
 
-test('config-data lists logins and says whether an access code is saved without sending credentials', (t) => {
+test('config-data lists logins and says whether an access code is saved without sending credentials', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
 
-    const [reply] = auth.send('get-config');
+    const [reply] = (await auth.send('get-config'));
 
     assert.equal(reply.channel, 'config-data');
     assert.doesNotMatch(JSON.stringify(reply.data), SECRETS);
@@ -123,11 +123,11 @@ test('config-data lists logins and says whether an access code is saved without 
     });
 });
 
-test('clicking a history entry returns only that entry\'s credentials, keyed by domain and account', (t) => {
+test('clicking a history entry returns only that entry\'s credentials, keyed by domain and account', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
 
-    const replies = auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' });
+    const replies = (await auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }));
 
     assert.deepEqual(replies, [{
         channel: 'history-credentials',
@@ -140,11 +140,11 @@ test('clicking a history entry returns only that entry\'s credentials, keyed by 
     }]);
 });
 
-test('an account on another domain does not receive the credentials of a same-named entry', (t) => {
+test('an account on another domain does not receive the credentials of a same-named entry', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
 
-    const [reply] = auth.send('get-history-credentials', { domain: 'second.example', account: 'first-user' });
+    const [reply] = (await auth.send('get-history-credentials', { domain: 'second.example', account: 'first-user' }));
 
     assert.deepEqual(reply.data, {
         domain: 'second.example',
@@ -154,24 +154,24 @@ test('an account on another domain does not receive the credentials of a same-na
     });
 });
 
-test('undecryptable history credentials come back empty so the form stays blank', (t) => {
+test('undecryptable history credentials come back empty so the form stays blank', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
     auth.undecryptable.add('first-password');
     auth.undecryptable.add('first-access-code');
 
-    const [reply] = auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' });
+    const [reply] = (await auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }));
 
     assert.equal(reply.channel, 'history-credentials');
     assert.equal(reply.data.password, '');
     assert.equal(reply.data.accessCode, '');
 });
 
-test('the current access code is available on request and tagged with the current login', (t) => {
+test('the current access code is available on request and tagged with the current login', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
 
-    assert.deepEqual(auth.send('get-current-access-code'), [{
+    assert.deepEqual((await auth.send('get-current-access-code')), [{
         channel: 'current-access-code',
         data: {
             domain: 'https://nas.example:5667',
@@ -181,13 +181,13 @@ test('the current access code is available on request and tagged with the curren
     }]);
 });
 
-test('an undecryptable current access code reads as not saved', (t) => {
+test('an undecryptable current access code reads as not saved', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
     auth.undecryptable.add('saved-access-code');
 
-    assert.equal(auth.send('get-config')[0].data.config.hasAccessCode, false);
-    assert.equal(auth.send('get-current-access-code')[0].data.accessCode, '');
+    assert.equal((await auth.send('get-config'))[0].data.config.hasAccessCode, false);
+    assert.equal((await auth.send('get-current-access-code'))[0].data.accessCode, '');
 });
 
 for (const [name, frameUrl] of [
@@ -197,24 +197,24 @@ for (const [name, frameUrl] of [
     ['a destroyed frame', null],
     ['a malformed frame url', 'not a url'],
 ]) {
-    test(`credential channels refuse ${name}`, (t) => {
+    test(`credential channels refuse ${name}`, async (t) => {
         const auth = setupAuth(t);
-        seedLogins(auth);
+        await seedLogins(auth);
 
         assert.deepEqual(
-            auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }, frameUrl),
+            (await auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }, frameUrl)),
             [],
         );
-        assert.deepEqual(auth.send('get-current-access-code', undefined, frameUrl), []);
+        assert.deepEqual((await auth.send('get-current-access-code', undefined, frameUrl)), []);
     });
 }
 
-test('a credential request without a domain and account is ignored', (t) => {
+test('a credential request without a domain and account is ignored', async (t) => {
     const auth = setupAuth(t);
-    seedLogins(auth);
+    await seedLogins(auth);
 
-    assert.deepEqual(auth.send('get-history-credentials'), []);
-    assert.deepEqual(auth.send('get-history-credentials', { domain: 'first.example' }), []);
+    assert.deepEqual((await auth.send('get-history-credentials')), []);
+    assert.deepEqual((await auth.send('get-history-credentials', { domain: 'first.example' })), []);
 });
 
 test('the preload bridge allows the credential channels', () => {

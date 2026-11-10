@@ -1,16 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'node:path';
-import * as crypto from 'crypto';
-import { app, safeStorage } from 'electron';
+import { app } from 'electron';
 import { USER_DATA_PATH } from '../../public/constants';
-import { platformBehavior } from '../../public/platform';
 import { isMpvPlaybackEnabled } from './playbackPreference';
+import { hasUnusableHistory, isHistoryItem, parseConfig, replaceConfig, warnOnce } from './configFile';
+import {
+    type CredentialField,
+    type PreparedCredentials,
+    decryptCredential,
+    encryptCredential,
+    prepareCredentials,
+} from './credentialCrypto';
 
 const HISTORY_LIMIT = 5;
-const CONFIG_BACKUP_LIMIT = 3;
-const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
-const IV = Buffer.alloc(16, 0); // Initialization vector
-const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
 
 // 解不开的凭据在内存里是空值，磁盘上的原值挂在这个 symbol 下。对象展开和 filter 会带上它，
 // JSON 和 IPC 不带，所以 read-modify-write 不需要知道它的存在，writeConfig 负责原样写回。
@@ -106,208 +108,154 @@ function getConfigPath(): string {
     return path.join(dir, 'config.json');
 }
 
-// 仅用于读取旧版本固定密钥加密的密码。
-function decryptLegacyPassword(encrypted: string): string {
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), IV);
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
+// 新增凭据字段时在这里登记，decodeConfig 和 writeConfig 两边也要用 readCredential、storeCredential。
+function credentialFields(stored: Config): CredentialField[] {
+    const history = Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : [];
+    return [
+        { value: stored.token || '', isLegacyPassword: false },
+        { value: stored.accessCode || '', isLegacyPassword: false },
+        ...history.flatMap(item => [
+            { value: item.password, isLegacyPassword: true },
+            { value: item.accessCode || '', isLegacyPassword: false },
+        ]),
+    ].filter(field => typeof field.value === 'string' && field.value !== '');
 }
 
-function encryptCredential(value: string): string {
-    if (!value) return '';
-    if (!safeStorage.isEncryptionAvailable()) {
-        throw new Error('操作系统安全存储不可用，无法保存登录凭据');
-    }
-    if (platformBehavior().rejectsBasicTextStorage && safeStorage.getSelectedStorageBackend() === 'basic_text') {
-        throw new Error('Linux 系统未提供可用的密钥环，拒绝以明文方式保存登录凭据');
-    }
-    return SAFE_STORAGE_PREFIX + safeStorage.encryptString(value).toString('base64');
-}
-
-function decryptCredential(value: string, isLegacyPassword: boolean): { value: string; legacy: boolean } {
-    if (!value) return { value: '', legacy: false };
-    if (value.startsWith(SAFE_STORAGE_PREFIX)) {
-        return {
-            value: safeStorage.decryptString(Buffer.from(value.slice(SAFE_STORAGE_PREFIX.length), 'base64')),
-            legacy: false,
-        };
-    }
-    return {
-        value: isLegacyPassword ? decryptLegacyPassword(value) : value,
-        legacy: true,
-    };
-}
-
-// readConfig 被频繁调用，同一条只记一次。
-const loggedWarnings = new Set<string>();
-
-function warnOnce(message: string): void {
-    if (loggedWarnings.has(message)) return;
-    loggedWarnings.add(message);
-    // 本模块加载时才设置 userData，静态引入会让 logger 先用默认目录初始化。
-    (require('../logger') as typeof import('../logger')).warn(message);
-}
-
-function readCredential(field: string, value: string, isLegacyPassword: boolean): { value: string; legacy: boolean; retained?: string } {
+function readCredential(field: string, value: string, isLegacyPassword: boolean, prepared: PreparedCredentials): { value: string; rewrite: boolean; retained?: string } {
     try {
-        return decryptCredential(value, isLegacyPassword);
+        return decryptCredential(value, isLegacyPassword, prepared);
     } catch {
         // 只记字段名：错误对象可能带密文。
         warnOnce(`凭据解密失败，按未登录处理: ${field}`);
-        return { value: '', legacy: false, retained: value };
+        return { value: '', rewrite: false, retained: value };
     }
 }
 
 // 空值不算新凭据，解不开的原值要留到用户重新登录。
-function storeCredential(value: string | undefined, retained: string | undefined): string {
-    return value ? encryptCredential(value) : retained ?? '';
+function storeCredential(value: string | undefined, retained: string | undefined, prepared: PreparedCredentials): string {
+    return value ? encryptCredential(value, prepared) : retained ?? '';
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+function writeConfig(config: Config, prepared: PreparedCredentials): void {
+    const stored: Config = {
+        ...config,
+        token: storeCredential(config.token, config[RETAINED]?.token, prepared),
+        accessCode: storeCredential(config.accessCode, config[RETAINED]?.accessCode, prepared),
+        history: config.history?.map(item => ({
+            ...item,
+            password: storeCredential(item.password, item[RETAINED]?.password, prepared),
+            accessCode: storeCredential(item.accessCode, item[RETAINED]?.accessCode, prepared),
+        })),
+    };
+    writeStoredConfig(stored);
 }
 
-// 顶层不是对象的 JSON 和语法错误一样算损坏，读取和备份判定都走 SyntaxError 这条路。
-function parseConfig(text: string): Config {
-    const stored: unknown = JSON.parse(text);
-    if (!isObject(stored)) throw new SyntaxError('配置顶层不是对象');
-    return stored;
+function writeStoredConfig(stored: Config): void {
+    replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
-function isHistoryItem(item: unknown): item is HistoryItem {
-    return isObject(item) && typeof item.domain === 'string' && typeof item.account === 'string';
-}
-
-function hasUnusableHistory(stored: { history?: unknown }): boolean {
-    return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
-}
-
-// 这样的文件读出来会丢内容，被替换前要留底。
-function isDamaged(configPath: string): boolean {
-    if (!fs.existsSync(configPath)) return false;
-    const text = fs.readFileSync(configPath, 'utf-8');
+// 文件不存在或内容损坏时返回 null。
+function readConfigFile(): Config | null {
+    const p = getConfigPath();
+    if (!fs.existsSync(p)) return null;
     try {
-        return hasUnusableHistory(parseConfig(text));
-    } catch {
-        return true;
-    }
-}
-
-// 用复制而不是改名：写入失败时 config.json 还在。备份含密文，只记文件名。
-function backupConfig(configPath: string): void {
-    const prefix = `${path.basename(configPath)}.corrupt-`;
-    for (let stamp = Date.now(); ; stamp++) {
-        try {
-            fs.copyFileSync(configPath, path.join(path.dirname(configPath), prefix + stamp), fs.constants.COPYFILE_EXCL);
-            warnOnce(`配置文件内容损坏，替换前已备份为 ${prefix + stamp}`);
-            break;
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-        }
-    }
-    try {
-        const dir = path.dirname(configPath);
-        const backups = fs.readdirSync(dir).filter(name => name.startsWith(prefix)).sort();
-        backups.slice(0, -CONFIG_BACKUP_LIMIT).forEach(name => fs.rmSync(path.join(dir, name)));
-    } catch {
-        // 备份已经落盘，清理旧备份失败不影响这次写入。
-        warnOnce('清理旧配置备份失败');
-    }
-}
-
-// 先写完临时文件再备份：写不下去时不占备份名额。rename 之前 config.json 始终是旧内容。
-function replaceConfig(configPath: string, content: string): void {
-    const tempPath = `${configPath}.tmp`;
-    const mode = fs.existsSync(configPath) ? fs.statSync(configPath).mode : undefined;
-    try {
-        const fd = fs.openSync(tempPath, 'w', mode);
-        try {
-            fs.writeFileSync(fd, content);
-            fs.fsyncSync(fd);
-        } finally {
-            fs.closeSync(fd);
-        }
-        if (isDamaged(configPath)) backupConfig(configPath);
-        fs.renameSync(tempPath, configPath);
+        return parseConfig(fs.readFileSync(p, 'utf-8'));
     } catch (error) {
-        fs.rmSync(tempPath, { force: true });
+        if (error instanceof SyntaxError) return null;
         throw error;
     }
 }
 
-function writeConfig(config: Config): void {
-    const stored: Config = {
-        ...config,
-        token: storeCredential(config.token, config[RETAINED]?.token),
-        accessCode: storeCredential(config.accessCode, config[RETAINED]?.accessCode),
-        history: config.history?.map(item => ({
-            ...item,
-            password: storeCredential(item.password, item[RETAINED]?.password),
-            accessCode: storeCredential(item.accessCode, item[RETAINED]?.accessCode),
-        })),
+function usableHistory(stored: Config): HistoryItem[] | undefined {
+    const historyUnusable = hasUnusableHistory(stored);
+    if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
+    return Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
+}
+
+/**
+ * 设置项的读写不经过 safeStorage：凭据保持密文，原样写回。
+ * 文件不存在或内容损坏时返回空配置，写入时 replaceConfig 会先备份损坏的文件。
+ */
+function readStoredConfig(): Config {
+    const stored = readConfigFile();
+    // history 为 null 时得到 undefined，写回时这个字段被去掉。
+    return stored ? { ...stored, history: usableHistory(stored) } : {};
+}
+
+function decodeConfig(stored: Config, prepared: PreparedCredentials): { config: Config; needsMigration: boolean } {
+    const token = readCredential('token', stored.token || '', false, prepared);
+    const accessCode = readCredential('accessCode', stored.accessCode || '', false, prepared);
+    // 访问码解不开时过不了网关，token 单独可用也不算已登录，同样隐藏并保留原值。
+    const accessCodeFailed = accessCode.retained !== undefined;
+    let needsMigration = accessCode.rewrite || (token.rewrite && !accessCodeFailed);
+    const config: Config = {
+        ...stored,
+        token: accessCodeFailed ? '' : token.value,
+        accessCode: accessCode.value,
+        [RETAINED]: {
+            token: accessCodeFailed ? stored.token : token.retained,
+            accessCode: accessCode.retained,
+        },
+        history: usableHistory(stored)?.map((item, index) => {
+            const password = readCredential(`history[${index}].password`, item.password, true, prepared);
+            const historyAccessCode = readCredential(`history[${index}].accessCode`, item.accessCode || '', false, prepared);
+            needsMigration ||= password.rewrite || historyAccessCode.rewrite;
+            return {
+                ...item,
+                password: password.value,
+                accessCode: historyAccessCode.value,
+                [RETAINED]: {
+                    password: password.retained,
+                    accessCode: historyAccessCode.retained,
+                },
+            };
+        }),
     };
-    replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
+    return { config, needsMigration };
+}
+
+// 凭据操作按调用顺序逐个执行：上一个的加解密完成之前，下一个不读磁盘。
+let credentialQueue: Promise<unknown> = Promise.resolve();
+
+function serializeCredentialTask<T>(task: () => Promise<T>): Promise<T> {
+    const run = credentialQueue.then(task, task);
+    credentialQueue = run.catch(() => undefined);
+    return run;
+}
+
+/**
+ * 读出带明文凭据的配置。forWrite 见 prepareCredentials：给了就同时准备好写入。
+ * 加解密都完成后才重新读文件，所以期间同步写入的设置项不会丢。文件不存在或损坏时 config 为 null。
+ */
+async function decodeCurrentConfig(forWrite?: (string | undefined)[]): Promise<{ config: Config | null; prepared: PreparedCredentials; needsMigration: boolean }> {
+    const prepared = await prepareCredentials(credentialFields(readConfigFile() ?? {}), forWrite);
+    const stored = readConfigFile();
+    if (!stored) return { config: null, prepared, needsMigration: false };
+    return { ...decodeConfig(stored, prepared), prepared };
+}
+
+// 读取配置（凭据已解密），必要时把旧格式凭据迁移到安全存储。只读不加密，要迁移时再准备一次写入。
+async function loadConfig(): Promise<Config | null> {
+    const read = await decodeCurrentConfig();
+    if (!read.config || !read.needsMigration) return read.config;
+    const { config, prepared, needsMigration } = await decodeCurrentConfig([]);
+    if (config && needsMigration && prepared.encryptionAvailable) {
+        try {
+            writeConfig(config, prepared);
+        } catch {
+            // 迁移失败不影响本次读取，旧值留在磁盘上，下次读取时重试。
+            warnOnce('迁移旧版凭据失败，暂时保留原值');
+        }
+    }
+    return config;
 }
 
 // 读取配置
-export function readConfig(): Config | null {
-    const p = getConfigPath();
-    if (fs.existsSync(p)) {
-        try {
-            const stored = parseConfig(fs.readFileSync(p, 'utf-8'));
-            const token = readCredential('token', stored.token || '', false);
-            const accessCode = readCredential('accessCode', stored.accessCode || '', false);
-            // 访问码解不开时过不了网关，token 单独可用也不算已登录，同样隐藏并保留原值。
-            const accessCodeFailed = accessCode.retained !== undefined;
-            let needsMigration = accessCode.legacy || (token.legacy && !accessCodeFailed);
-            const historyUnusable = hasUnusableHistory(stored);
-            if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
-            const history = Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
-            const config: Config = {
-                ...stored,
-                token: accessCodeFailed ? '' : token.value,
-                accessCode: accessCode.value,
-                [RETAINED]: {
-                    token: accessCodeFailed ? stored.token : token.retained,
-                    accessCode: accessCode.retained,
-                },
-                history: history?.map((item, index) => {
-                    const password = readCredential(`history[${index}].password`, item.password, true);
-                    const historyAccessCode = readCredential(`history[${index}].accessCode`, item.accessCode || '', false);
-                    needsMigration ||= password.legacy || historyAccessCode.legacy;
-                    return {
-                        ...item,
-                        password: password.value,
-                        accessCode: historyAccessCode.value,
-                        [RETAINED]: {
-                            password: password.retained,
-                            accessCode: historyAccessCode.retained,
-                        },
-                    };
-                }),
-            };
-
-            if (needsMigration && safeStorage.isEncryptionAvailable()) {
-                try {
-                    writeConfig(config);
-                } catch {
-                    // 迁移失败不影响本次读取，旧值留在磁盘上，下次读取时重试。
-                    warnOnce('迁移旧版凭据失败，暂时保留原值');
-                }
-            }
-            return config;
-        } catch (error) {
-            if (error instanceof SyntaxError) return null;
-            throw error;
-        }
-    }
-    return null;
+export function readConfig(): Promise<Config | null> {
+    return serializeCredentialTask(loadConfig);
 }
 
-// 保存配置（账号、域名、token、HTTPS设置）
-export function saveConfig({ account, domain, token, accessCode, useHttps }: SaveConfigParams): void {
-    const config: Config = readConfig() || {};
+function applySave(config: Config, { account, domain, token, accessCode, useHttps }: SaveConfigParams): void {
     config.account = account;
     config.domain = domain;
     config.token = token;
@@ -315,7 +263,33 @@ export function saveConfig({ account, domain, token, accessCode, useHttps }: Sav
     // 带新 token 的保存是重新登录，这次的访问码就算为空也要替换解不开的旧值，否则每次启动都回登录页。
     if (token && accessCode !== undefined) delete config[RETAINED]?.accessCode;
     config.useHttps = useHttps || false;
-    writeConfig(config);
+}
+
+// 保存配置（账号、域名、token、HTTPS设置）
+export function saveConfig(params: SaveConfigParams): Promise<void> {
+    return serializeCredentialTask(async () => {
+        const { config, prepared } = await decodeCurrentConfig([params.token, params.accessCode]);
+        const updated: Config = config || {};
+        applySave(updated, params);
+        writeConfig(updated, prepared);
+    });
+}
+
+// 退出登录：清空 token，保留账号、域名和 HTTPS 设置。读和写在同一个凭据操作里，
+// 之后排队的登录保存不会被覆盖。没有可清的内容时不写文件，返回 false。
+export function clearSavedToken(): Promise<boolean> {
+    return serializeCredentialTask(async () => {
+        const { config, prepared } = await decodeCurrentConfig();
+        if (!config || !(config.token || config.domain)) return false;
+        applySave(config, {
+            account: config.account || '',
+            domain: config.domain || '',
+            token: '',
+            useHttps: config.useHttps,
+        });
+        writeConfig(config, prepared);
+        return true;
+    });
 }
 
 // 从最旧的开始淘汰，解不开的留到最后：密钥恢复后它们还能用。下标 0 是刚加的，不淘汰。
@@ -328,66 +302,71 @@ function findEvictionIndex(history: HistoryItem[]): number {
 }
 
 // 添加历史记录（域名、账号、加密密码、HTTPS设置）
-export function addHistory({ domain, account, password, accessCode, useHttps }: AddHistoryParams): void {
-    const config: Config = readConfig() || {};
-    config.history = config.history || [];
-    // 移除重复项
-    config.history = config.history.filter(
-        item => !(item.domain === domain && item.account === account)
-    );
-    // 添加新项
-    config.history.unshift({
-        domain,
-        account,
-        password,
-        accessCode: accessCode || '',
-        useHttps: useHttps || false
+export function addHistory({ domain, account, password, accessCode, useHttps }: AddHistoryParams): Promise<void> {
+    return serializeCredentialTask(async () => {
+        const { config: current, prepared } = await decodeCurrentConfig([password, accessCode]);
+        const config: Config = current || {};
+        config.history = config.history || [];
+        // 移除重复项
+        config.history = config.history.filter(
+            item => !(item.domain === domain && item.account === account)
+        );
+        // 添加新项
+        config.history.unshift({
+            domain,
+            account,
+            password,
+            accessCode: accessCode || '',
+            useHttps: useHttps || false
+        });
+        // 限制最多数量
+        while (config.history.length > HISTORY_LIMIT) {
+            config.history.splice(findEvictionIndex(config.history), 1);
+        }
+        writeConfig(config, prepared);
     });
-    // 限制最多数量
-    while (config.history.length > HISTORY_LIMIT) {
-        config.history.splice(findEvictionIndex(config.history), 1);
-    }
-    writeConfig(config);
 }
 
 // 获取历史记录（解密密码）
-export function getHistory(): HistoryItem[] {
-    const config: Config = readConfig() || {};
-    if (!config.history) return [];
-    return config.history.map(item => ({
-        domain: item.domain,
-        account: item.account,
-        password: item.password,
-        accessCode: item.accessCode || '',
-        useHttps: item.useHttps || false
-    }));
+export function getHistory(): Promise<HistoryItem[]> {
+    return serializeCredentialTask(async () => {
+        const config: Config = (await loadConfig()) || {};
+        if (!config.history) return [];
+        return config.history.map(item => ({
+            domain: item.domain,
+            account: item.account,
+            password: item.password,
+            accessCode: item.accessCode || '',
+            useHttps: item.useHttps || false
+        }));
+    });
 }
 
 // 获取一条历史记录的凭据。找不到或解不开时读出来是空值，由用户手动输入。
-export function getHistoryCredentials({ domain, account }: DeleteHistoryParams): { password: string; accessCode: string } {
-    const item = getHistory().find(entry => entry.domain === domain && entry.account === account);
+export async function getHistoryCredentials({ domain, account }: DeleteHistoryParams): Promise<{ password: string; accessCode: string }> {
+    const item = (await getHistory()).find(entry => entry.domain === domain && entry.account === account);
     return { password: item?.password || '', accessCode: item?.accessCode || '' };
 }
 
 // 清除历史记录
 export function clearHistory(): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.history = [];
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 删除单个历史记录
 export function deleteHistoryItem({ domain, account }: DeleteHistoryParams): boolean {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     if (!config.history) return false;
-    
+
     const originalLength = config.history.length;
     config.history = config.history.filter(
         item => !(item.domain === domain && item.account === account)
     );
-    
+
     if (config.history.length < originalLength) {
-        writeConfig(config);
+        writeStoredConfig(config);
         return true;
     }
     return false;
@@ -395,7 +374,7 @@ export function deleteHistoryItem({ domain, account }: DeleteHistoryParams): boo
 
 // 获取下载代理配置
 export function getAppDownloadProxyConfig(): AppDownloadProxyConfig {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     return {
         enabled: config.downloadProxyEnabled === true, // 默认关闭，只有用户显式开启过才用
         proxyUrl: config.downloadProxy || 'https://ghfast.top'
@@ -404,83 +383,83 @@ export function getAppDownloadProxyConfig(): AppDownloadProxyConfig {
 
 // 设置下载代理配置
 export function setAppDownloadProxyConfig({ enabled = false, proxyUrl = 'https://ghfast.top' }: SetAppDownloadProxyConfigParams = {}): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.downloadProxyEnabled = enabled;
     config.downloadProxy = proxyUrl;
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 获取是否启用 MPV 播放接管（沿用旧字段以兼容已有配置）
 export function getHideOriginalPlayButton(): boolean {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     return isMpvPlaybackEnabled(config.hideOriginalPlayButton);
 }
 
 // 设置是否启用 MPV 播放接管
 export function setHideOriginalPlayButton(enabled: boolean): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.hideOriginalPlayButton = enabled;
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 获取NAS 中转开关
 export function getNasProxyEnabled(): boolean {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     return config.nasProxyEnabled === true; // 默认关闭
 }
 
 // 设置NAS 中转开关
 export function setNasProxyEnabled(enabled: boolean): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.nasProxyEnabled = enabled;
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 获取 macOS 关闭行为偏好
 export function getMacCloseAction(): 'minimize' | 'quit' | 'ask' {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     return config.macCloseAction || 'ask';
 }
 
 // 设置 macOS 关闭行为偏好
 export function setMacCloseAction(action: 'minimize' | 'quit' | 'ask'): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.macCloseAction = action;
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 获取托盘通知是否已显示过
 export function getTrayNotificationShown(): boolean {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     return config.trayNotificationShown || false;
 }
 
 // 设置托盘通知已显示状态
 export function setTrayNotificationShown(shown: boolean): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.trayNotificationShown = shown;
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 获取MPV播放器路径配置
 export function getMpvPlayerPath(): string | undefined {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     return config.mpvPlayerPath;
 }
 
 // 设置MPV播放器路径配置
 export function setMpvPlayerPath(path: string | null): void {
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     if (path === null || path === '') {
         delete config.mpvPlayerPath; // 清空配置
     } else {
         config.mpvPlayerPath = path;
     }
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 export function getMpvVolume(): number {
-    const volume = readConfig()?.mpvVolume;
+    const volume = readStoredConfig().mpvVolume;
     return typeof volume === 'number' && Number.isFinite(volume)
         ? Math.min(100, Math.max(0, Math.round(volume)))
         : 70;
@@ -491,9 +470,9 @@ export function setMpvVolume(volume: number): void {
         throw new Error('MPV音量必须是有限数值');
     }
 
-    const config: Config = readConfig() || {};
+    const config = readStoredConfig();
     config.mpvVolume = Math.min(100, Math.max(0, Math.round(volume)));
-    writeConfig(config);
+    writeStoredConfig(config);
 }
 
 // 向后兼容的函数
@@ -507,15 +486,11 @@ export function setAppDownloadProxyUrl(proxyUrl: string): void {
 }
 
 export function getExitMode(): 'direct' | 'minimize' | 'ask' {
-    const config = readConfig();
-    return config?.exitMode ?? 'ask';
+    return readStoredConfig().exitMode ?? 'ask';
 }
 
 export function setExitMode(mode: 'direct' | 'minimize' | 'ask'): void {
-    const config = readConfig() ?? {};
-    const updatedConfig = {
-        ...config,
-        exitMode: mode
-    };
-    writeConfig(updatedConfig);
+    const config = readStoredConfig();
+    config.exitMode = mode;
+    writeStoredConfig(config);
 }

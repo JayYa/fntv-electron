@@ -46,10 +46,10 @@ function setupLogin(t, onConnection = () => {}) {
         },
         session: { fromPartition() { return {}; } },
         safeStorage: {
-            isEncryptionAvailable() { return true; },
+            async isAsyncEncryptionAvailable() { return true; },
             getSelectedStorageBackend() { return 'gnome_libsecret'; },
-            encryptString(value) { return Buffer.from(value, 'utf8'); },
-            decryptString(value) { return value.toString('utf8'); },
+            async encryptStringAsync(value) { return Buffer.from(value, 'utf8'); },
+            async decryptStringAsync(value) { return { result: value.toString('utf8'), shouldReEncrypt: false }; },
         },
     };
 

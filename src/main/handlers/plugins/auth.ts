@@ -35,10 +35,10 @@ interface HistoryItem {
 let fnIdLoginInProgress = false;
 
 // 获取配置处理
-function handleGetConfig(event: IpcMainEvent): void {
+async function handleGetConfig(event: IpcMainEvent): Promise<void> {
     try {
-        const config = fnConfig.readConfig() || {};
-        const history = fnConfig.getHistory() || [];
+        const config = (await fnConfig.readConfig()) || {};
+        const history = await fnConfig.getHistory();
         // 这里按字段白名单发送：密码、访问码和 token 都不进列表数据，凭据走下面的按需频道。
         event.reply('config-data', {
             config: {
@@ -56,7 +56,7 @@ function handleGetConfig(event: IpcMainEvent): void {
 }
 
 // 按需读取一条历史记录的凭据，明文只回给本地登录页。回复带上域名和账号，登录页靠它丢弃连点时迟到的回复。
-function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partial<HistoryItem>): void {
+async function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partial<HistoryItem>): Promise<void> {
     if (!isLoginPage(event)) {
         log.warn('拒绝了非登录页的历史凭据请求');
         return;
@@ -64,24 +64,21 @@ function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partial<Hist
     const { domain, account } = request ?? {};
     if (typeof domain !== 'string' || typeof account !== 'string') return;
     try {
-        event.reply('history-credentials', {
-            domain,
-            account,
-            ...fnConfig.getHistoryCredentials({ domain, account }),
-        });
+        const credentials = await fnConfig.getHistoryCredentials({ domain, account });
+        event.reply('history-credentials', { domain, account, ...credentials });
     } catch (error) {
         log.error('读取历史凭据失败:', error);
     }
 }
 
 // 按需读取当前配置的访问码，用于回填登录页。
-function handleGetCurrentAccessCode(event: IpcMainEvent): void {
+async function handleGetCurrentAccessCode(event: IpcMainEvent): Promise<void> {
     if (!isLoginPage(event)) {
         log.warn('拒绝了非登录页的访问码请求');
         return;
     }
     try {
-        const { domain, account, accessCode } = fnConfig.readConfig() || {};
+        const { domain, account, accessCode } = (await fnConfig.readConfig()) || {};
         event.reply('current-access-code', { domain, account, accessCode: accessCode || '' });
     } catch (error) {
         log.error('读取当前访问码失败:', error);
@@ -224,7 +221,7 @@ async function handleLogin(
         const { saveConfig, addHistory } = fnConfig;
 
         // 保存配置
-        saveConfig({
+        await saveConfig({
             account: loginData.username,
             domain: server,
             token: response.data.token,
@@ -233,7 +230,7 @@ async function handleLogin(
         });
 
         // 添加到登录历史
-        addHistory({
+        await addHistory({
             domain: loginData.domain,
             account: loginData.username,
             password: loginData.password,
