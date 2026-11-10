@@ -81,3 +81,13 @@ chief of staff 当天的计划（维护者待确认）：
 - 环境：
   - 提交钩子限制单个文件不超过 20000 字节，测试因此拆成 5 个 `tests/proxyService*.test.cjs`。
   - 测试证书放在 `tests/fixtures/tls/`，有效期 100 年，CA 私钥已删除。
+
+## 2026-11-10 #161 完成
+
+- 分支 `feat/proxy-ts-161`（`5cc7858`）。`pnpm test` 共 460 条，458 通过、2 条按平台跳过。清单 G-161 的 12 条都写了 Node 测试；U-20（写入失败最多重发 6 次）照搬 Go。
+- 和 Go 不同的地方（chief of staff 当天接受）：
+  - 请求体里的数字写成 `10.0` 时，TS 接受，Go 拒绝。
+  - JSON 后面跟多余内容时，TS 返回 400，Go 忽略。
+- 遗留问题：
+  - `skipinfo.ts` 复制了一份 `playvideo.ts` 里的 `apiClient(session, deps)`，为的是不碰 #162 要改的文件。chief of staff 决定 #162 合并后由一个小任务抽成共用函数。
+  - `fn_api/core` 的缓存会把失败结果也存 300 秒，Go 只缓存成功的结果。这样一次 `play/info` 失败，之后 5 分钟内写回和取流都会失败。chief of staff 当天决定在同一个小任务里改成不缓存失败结果；主进程也会跟着变，已告知维护者。
