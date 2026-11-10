@@ -6,8 +6,8 @@ name: Warm download caches
 # build.yml 的 packaging-* 缓存存到 main。先用 Actions API 查 main 上每个平台的两个 key，
 # 都在的平台不构建；key 只随 electron、electron-builder、app-builder-lib 的版本变（scripts/ci-download-cache.cjs），
 # 平时合并依赖 PR 只跑一次几秒的查询。新 key 存好后，prune 删掉 main 上被它取代的旧 key。
-# deps 在三个平台上只装依赖、编译 Go，让 setup-node 的 pnpm store 缓存和 setup-go 的缓存跟着锁文件和
-# go.sum 在 main 上更新（key 由 action 按文件 hash 算，不预先查）。不给 ci.yml 加 push: main，见
+# deps 在三个平台上只装依赖，让 setup-node 的 pnpm store 缓存跟着锁文件在 main 上更新
+#（key 由 action 按文件 hash 算，不预先查）。不给 ci.yml 加 push: main，见
 # docs/wiki/ci-download-cache.md。
 # 每周一次的定时运行补上 7 天没被读过、被 GitHub 清掉的缓存。
 on:
@@ -17,8 +17,6 @@ on:
     paths:
       - package.json
       - pnpm-lock.yaml
-      - src/modules/proxy/go.mod
-      - src/modules/proxy/go.sum
       - scripts/ci-download-cache.cjs
       - .github/actions/install-dependencies/**
       - .github/workflows/build.yml
@@ -132,8 +130,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-    # Setup pnpm、Setup Node.js、Setup Go 和 ci.yml 写法相同，缓存 key 才一样（tests/cacheWarm.test.cjs）。
-    # key 已在 main 上时 action 的 post 步骤不保存，这个 job 只花安装和编译的时间。
+    # Setup pnpm、Setup Node.js 和 ci.yml 写法相同，缓存 key 才一样（tests/cacheWarm.test.cjs）。
+    # key 已在 main 上时 action 的 post 步骤不保存，这个 job 只花安装的时间。
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -147,12 +145,6 @@ jobs:
           node-version: '26.13.0'
           cache: pnpm
 
-      - name: Setup Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: src/modules/proxy/go.mod
-          cache-dependency-path: src/modules/proxy/go.sum
-
       - name: Remove local registry config
         run: rm -f .npmrc
         shell: bash
@@ -160,9 +152,3 @@ jobs:
       # 只为填 pnpm store，不需要 Electron 二进制（electron 45 安装时不下载），所以不用 install-dependencies。
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      # 下载模块并编译代码和测试，不运行测试（-run '^$'），GOMODCACHE 和 GOCACHE 由 setup-go 的 post 步骤保存。
-      - name: Build Go packages and tests
-        run: go test -run '^$' ./...
-        shell: bash
-        working-directory: src/modules/proxy

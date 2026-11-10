@@ -4,6 +4,5 @@
 LICENSE -agent-authored
 pnpm-lock.yaml -agent-authored
 package-lock.json -agent-authored
-go.sum -agent-authored
 dest/** -agent-authored
 third_party/** -agent-authored

@@ -62,7 +62,7 @@ if (!gotTheLock) {
                 }
             });
 
-            // 启动代理服务器
+            // 启动 Proxy 子进程，失败时已弹窗说明
             await startProxyProcess();
 
             // 创建主窗口
@@ -222,7 +222,7 @@ function showMacNotification(): void {
 app.on('before-quit', async () => {
     (app as any).isQuiting = true;
 
-    // 使用守护程序优雅关闭proxy进程
+    // 结束 Proxy 子进程
     log.info('应用退出前关闭proxy进程');
     try {
         await shutdownProxyProcess();

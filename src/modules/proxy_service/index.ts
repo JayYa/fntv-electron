@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { TtlCache } from '../fn_api/core/ttlCache';
 import { trustedCaCertificates } from './caCertificates';
 import { RateLimiter } from './cloud115';
+import { PROXY_HOST } from './control';
 import { ProxyLog, silentLog } from './log';
 import { PlaybackSessionInput, PlaybackSessionStore } from './playbackSessions';
 import { handlePlayVideo, PlayVideoDeps } from './playvideo';
@@ -14,8 +15,7 @@ import { handleGetSkipInfo, handleSetSkipInfo } from './skipinfo';
 export type { PlaybackSessionInput } from './playbackSessions';
 export type { ProxyLog } from './log';
 
-// 只监听本机。正式运行时端口为 22345（写死在 MPV 归档 smart_skip 的 api.lua 里），限流间隔为 1 秒。
-const PROXY_HOST = '127.0.0.1';
+// 只监听本机。正式运行时端口为 PROXY_PORT，限流间隔为 1 秒（child.ts）。
 
 export interface ProxyServiceOptions {
     // 监听端口，传 0 时由系统分配。

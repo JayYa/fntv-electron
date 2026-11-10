@@ -211,7 +211,7 @@ test('workflow steps and jobs named in the standards documents exist', () => {
     }
 });
 
-test('CI checks for unused dependencies and untidy Go modules', () => {
+test('CI checks for unused dependencies', () => {
     const yaml = require('js-yaml');
     const steps = yaml.load(read('.github/workflows/ci.yml')).jobs.test.steps;
     const { scripts, devDependencies } = JSON.parse(read('package.json'));
@@ -219,11 +219,24 @@ test('CI checks for unused dependencies and untidy Go modules', () => {
     assert.equal(scripts.knip, 'knip');
     assert.match(devDependencies.knip, /^\d+\.\d+\.\d+$/, 'knip is pinned to an exact version');
     assert.ok(steps.some(step => step.run === 'pnpm run knip'), 'ci.yml does not run knip');
+});
 
-    const tidy = steps.find(step => step.run === 'go mod tidy -diff');
-    assert.ok(tidy, 'ci.yml does not run go mod tidy -diff');
-    assert.equal(tidy['working-directory'], 'src/modules/proxy');
-    // CI 的 Go 版本来自 go.mod 的 go 指令，-diff 从 Go 1.23 起才有。
-    const [major, minor] = read('src/modules/proxy/go.mod').match(/^go (\d+)\.(\d+)/m).slice(1).map(Number);
-    assert.ok(major > 1 || minor >= 23, `go ${major}.${minor} does not support go mod tidy -diff`);
+// Proxy 改用 TypeScript 后（ADR-0004），构建和 CI 只要 Node 和 pnpm。
+test('the repository has no Go code and neither builds nor CI install or run Go', () => {
+    const tracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n');
+    assert.deepEqual(tracked.filter(file => /(^|\/)go\.(mod|sum)$|\.go$/.test(file)), []);
+
+    const yaml = require('js-yaml');
+    for (const { name, lines } of workflows()) {
+        const parsed = yaml.load(lines.join('\n'));
+        const steps = [...Object.values(parsed.jobs ?? {}).flatMap(job => job.steps ?? []), ...(parsed.runs?.steps ?? [])];
+        for (const step of steps) {
+            assert.doesNotMatch(step.uses ?? '', /setup-go/, `${name} installs Go`);
+            assert.doesNotMatch(step.run ?? '', /\bgo (build|test|mod)\b/, `${name} runs Go`);
+        }
+    }
+    const { scripts } = JSON.parse(read('package.json'));
+    for (const [script, command] of Object.entries(scripts)) {
+        assert.doesNotMatch(command, /\bgo build\b|third_party\/proxy/, `package.json script ${script} builds the Go Proxy`);
+    }
 });
