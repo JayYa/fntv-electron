@@ -142,3 +142,25 @@ chief of staff 当天的计划（维护者待确认）：
   - 同意加 hook。chief of staff 当天新增 `~/.claude/hooks/block-shell-source-writes.cjs`，在 `~/.claude/settings.json` 里登记为 Bash、PowerShell 的 PreToolUse hook。它拦截用重定向、`tee`、PowerShell 写入 cmdlet 或 `writeFileSync` 写 `src/`、`tests/` 下的文件，单行 `sed -i` 放行，12 种情况实测通过。
   - 写 hook 时发现：经 Bash 工具传入的 heredoc 里，`\` 会被压成 `\`，带引号的 heredoc 也一样。全局 CLAUDE.md 里“`node - <<'EOF'` 内容原样传入”的说法，在含反斜杠时不成立；要不要改这句，交维护者决定。
 - 同日清理分支合并进集成分支（`64ef36d`）：共用 `sessionApiClient`，`fn_api/core` 只缓存 `success: true` 的结果，`TESTING_STANDARDS.md` 写明时间参数可以作为可选参数注入。
+- 2026-11-10 环境分支合并进集成分支（`83c2db4`）：`pnpm test` 加了 30 秒单测超时；`TESTING_STANDARDS.md` 写明按平台跳过的测试由 CI 三平台验证。PR #168 的 15 个 job 都通过。最慢的单测在 CI 上只要 36–51ms，本机编译后第一次跑要 15 秒。
+
+## 2026-11-10 #165 完成
+
+- 分支 `feat/proxy-ts-165`（`40db0dc`）。`pnpm test` 共 503 条，501 通过。
+- 新增测试：
+  - `proxyControl.test.cjs`：经 IPC 创建会话、超时、退出。
+  - `legacyProxySecret.test.cjs`：删除旧的 `proxy-secret` 文件。
+  - `standards.test.cjs` 新增一条：仓库里没有 Go，CI 也不装 Go。
+- 本机 `pnpm run build:win` 成功。对 `win-unpacked` 跑冒烟测试，10 条通过、1 条跳过，Proxy 从 `app.asar` 启动。
+- 待 CI 和发版门禁验证：NSIS 安装路径，以及 macOS、Linux 的冒烟测试。
+- 有意保留的引用：
+  - GLOSSARY 里的 _Avoid_ 用语。
+  - ADR 的历史内容。
+  - `docs/external-runtime.md` 里旧版 Go Proxy 占端口的说明。
+  - 代码注释里的 U 编号。
+- 偏离：
+  - 端口被占用时会弹出错误框，冒烟测试只断言日志里有这条错误、没有打开主窗口，不验证退出。
+  - 删掉了 `start:mac`。
+  - ADR-0002 改了两行（会话改为经 IPC 创建）。
+  - 重启计数沿用旧逻辑。
+  - feat 提交里写了 `Closes #165`。
