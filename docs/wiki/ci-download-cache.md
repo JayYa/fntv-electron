@@ -2,7 +2,7 @@
 
 2026-11-09 从 [构建依赖与 MPV 插件同步](build-dependencies.md) 拆出，原文未改，原因是原文件接近提交钩子的 20000 字节上限。移来的是 #101、打包时 Electron zip 目录核实、#143、#146 四节。节内“上方第一节”指原页的“三个平台为什么都下载 MPV 压缩包”；“下一节”“见末尾”指本页的节。
 
-相关：[构建依赖与 MPV 插件同步](build-dependencies.md)（MPV 压缩包、插件同步、MPV 归档升级）、[多平台测试策略](multi-platform-testing.md)、[依赖更新（Renovate）](dependency-updates.md)、[发布与更新链路](release-and-update.md)。
+相关：[CI 缓存额度与清理](ci-cache-quota.md)（2026-11-10 起的记录，本页已接近 20000 字节上限）、[构建依赖与 MPV 插件同步](build-dependencies.md)（MPV 压缩包、插件同步、MPV 归档升级）、[多平台测试策略](multi-platform-testing.md)、[依赖更新（Renovate）](dependency-updates.md)、[发布与更新链路](release-and-update.md)。
 
 ## 2026-11-08 构建下载缓存（PR #101，`3c66b15`）
 
@@ -51,7 +51,8 @@
 
 - 起因：Renovate PR #139 的 Smoke Test 运行 [`42569356351`](https://github.com/JayYa/fntv-electron/actions/runs/42569356351) 的 build job 反复失败于 GitHub 下载 504：Windows 在 `pnpm install` 的 electron postinstall（上一节只改了 `ci.yml`）；Linux、macOS 在 electron-builder 打包时。第 3 次尝试里 macOS 仍失败：`packaging-macOS-*` 未命中（key 用锁文件 hash，依赖 PR 每次都变），日志先是 `downloaded label=electron progress=100%`，约 23 秒后 504，没有 URL。
 - 共用安装：新增 composite action `.github/actions/install-dependencies`，即上一节 `ci.yml` 的安装、缓存和下载步骤，`ci.yml`、`build.yml` 都调用它，超时写在调用步骤上（composite 步骤不支持 `timeout-minutes`）。`tests/standards.test.cjs` 的 workflow 规则也检查它。
-- 缓存 key：`scripts/ci-download-cache.cjs keys` 从 `package.json` 读 `electron`、`electron-builder` 的固定版本（不是固定版本时报错），从锁文件读唯一的 `app-builder-lib` 版本。Electron key 改为 `electron-<os>-<electron 版本>`；打包 key 为 `packaging-<os>-electron-<版本>-electron-builder-<版本>-app-builder-lib-<版本>`，`restore-keys` 依次是同一 Electron 版本、同一平台的前缀。安装依赖前也能算。
+- 缓存 key：`scripts/ci-download-cache.cjs keys` 从 `package.json` 读 `electron`、`electron-builder` 的固定版本（不是固定版本时报错），从锁文件读唯一的 `app-builder-lib` 版本。Electron key 改为 `electron-<os>-<electron 版本>`。安装依赖前也能算。
+- 已被取代（2026-11-10，见 [CI 缓存额度与清理](ci-cache-quota.md)）：~~打包 key 为 `packaging-<os>-electron-<版本>-electron-builder-<版本>-app-builder-lib-<版本>`，`restore-keys` 依次是同一 Electron 版本、同一平台的前缀。~~
 - 打包前 `prepare-packaging`：删掉从旧 key 恢复带进来的其它 Electron 版本的 zip，免得越存越大；从 `node_modules/electron/checksums.json` 写 `SHASUMS256.txt-<版本>` 到 `@electron/get` 默认目录。原因：`app-builder-lib/node_modules/@electron/get`（3.1.0）`dist/cjs/index.js` 的 `downloadArtifact` 命中缓存后仍调 `validateArtifact`，没有 `checksums` 时用 `cacheMode: Bypass` 联网下载 `SHASUMS256.txt`，缓存全命中也要联网。`app-builder-lib@26.18.0` 的 `out/util/electronGet.js` 的 `resolveSeededChecksums` 读缓存根目录的 `SHASUMS256.txt-<版本>`，有对应条目时作为 `checksums` 离线校验。本地实测写入后 `buildElectronArtifactConfig` 返回的配置带上了 `checksums`。上面 macOS 的 504 是不是这个请求，没有核实。
 - 打包下载的重试：`electronGet.js` 的 `downloadArtifactToFile` 对 Electron zip 和打包工具都只重试 3 次（`interval` 2000、`backoff` 2000 毫秒），写死，没有配置项或环境变量。`build.electronDownload` 能传 `downloadOptions` 给 got 11，但 `GotDownloader` 用 `got.stream`，got 11 的 `retry` 对 stream 不生效，没有用。所以在 `Build application` 外层重试：日志有 5xx 或网络错误（匹配模式见 `build.yml`）时整条打包命令重跑，共 3 次，间隔 30、60 秒，其它错误直接失败。步骤超时 15 → 30 分钟，job 30 → 45 分钟。
 - main 上预热：缓存按 ref 隔离，PR 只能读自己的和 base 分支的；`ci.yml` 只在 `pull_request` 上跑，main 上只有发版时构建。没有给 `ci.yml` 加 `push: main`：每次合并都要跑三平台 Test，且预热不了打包缓存。新增 `cache-warm.yml`：push 到 main 且改了 `package.json`、锁文件、`build.yml`、action 或脚本时，每周一（补 7 天没读被清掉的缓存），或手动触发。先用 `gh api repos/<仓库>/actions/caches`（`actions: read`）查 main 上每个平台的两个 key，缺的平台才调 `build.yml` 打包一次（`build.yml` 新增输入 `upload`，这里传 `false`，不上传安装包）。成本：仓库是公开的，GitHub 托管的标准 runner 不计费；按 `42569356351` 的 build job 各约 4 分钟算，版本变化时约 13 个 runner 分钟，版本不变时只跑一次查询 job。

@@ -139,8 +139,11 @@ jobs:
       # key 只含 electron、electron-builder 和 app-builder-lib 的版本（scripts/ci-download-cache.cjs）：用锁文件 hash 时
       # 每个依赖 PR 都改锁文件，几乎从不命中。版本变了时按 restore-keys 先找同一 Electron 版本、再找同一平台的旧缓存，
       # 打包工具大多还能用，缺的再下载。PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
-      # Electron zip 由 @electron/get 存到它的默认目录（不读 ELECTRON_CACHE），三个平台的默认目录都列上，
-      # 不存在的会被忽略；打包工具存到 ELECTRON_BUILDER_CACHE，由 Build application 显式指定。
+      # 打包工具存到 ELECTRON_BUILDER_CACHE，由 Build application 显式指定。Electron zip 由 @electron/get
+      # 存到它的默认目录（不读 ELECTRON_CACHE，路径是 <默认目录>/<子目录>/<zip>）。宿主架构的 zip（Linux x64、
+      # macOS arm64、Windows x64）已由 install-dependencies 的 electron-<os> 缓存恢复，这里只存另一个架构的
+      # zip（Linux arm64、macOS x64），不写排除规则：actions/cache 匹配到目录时整个打包，排除不了目录里的文件。
+      # 匹配不到的路径会被忽略。runner 换架构时要跟着改，否则那个 zip 每次重新下载。
       - name: Restore packaging download cache
         id: packaging-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -148,9 +151,8 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/electron-builder-cache
-            ~/.cache/electron
-            ~/Library/Caches/electron
-            ~/AppData/Local/electron/Cache
+            ~/.cache/electron/**/electron-v*-linux-arm64.zip
+            ~/Library/Caches/electron/**/electron-v*-darwin-x64.zip
           key: ${{ steps.install.outputs.packaging-key }}
           restore-keys: |
             ${{ steps.install.outputs.packaging-electron-prefix }}
@@ -199,9 +201,8 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/electron-builder-cache
-            ~/.cache/electron
-            ~/Library/Caches/electron
-            ~/AppData/Local/electron/Cache
+            ~/.cache/electron/**/electron-v*-linux-arm64.zip
+            ~/Library/Caches/electron/**/electron-v*-darwin-x64.zip
           key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
       - name: Upload build artifacts
