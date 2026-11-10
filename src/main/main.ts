@@ -62,7 +62,7 @@ if (!gotTheLock) {
                 }
             });
 
-            // 启动 Proxy 子进程，失败时已弹窗说明
+            // 启动 Proxy 子进程，失败时已弹窗说明并退出
             await startProxyProcess();
 
             // 创建主窗口
