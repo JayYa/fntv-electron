@@ -121,3 +121,19 @@ chief of staff 当天的计划（维护者待确认）：
   - 网盘忽略 Range、返回 200 时，Proxy 先读掉起点之前的字节再丢弃（这是修 U-03 的代价）。
   - 夸克第一次请求会多发一个 `bytes=0-0`，所以 #163 的“其它网盘不限流”测试计数时排除了这个请求。
 - 新增注入点 `quarkIdleTimeoutMs`，和 `TESTING_STANDARDS.md` 第 27 行“不为测试新增接缝”冲突。chief of staff 当天决定接受：它和限流间隔一样，都是时间参数，不注入就只能真等 60 秒。同时决定在下一个小任务里修改标准，写明时间类参数（超时、间隔）可以作为可选参数注入。
+- 2026-11-10 #164 合并进集成分支（`ae7a0f5`），PR #168 上四项 CI 都通过。
+
+## 2026-11-10 复盘 #160、#164 实现会话
+
+复盘由只读 subagent 完成，对象是两个实现会话的记录（#160 约 20 分钟，#164 约 13 分钟）。chief of staff 当天的处理：
+
+- 要做：
+  - `pnpm test` 加 `--test-timeout`。#164 的红测试卡了约 2 分钟，最后靠手动停掉。
+  - 单文件 20000 字节的检查接进 lint 和 CI。目前只有提交钩子检查，#160 到提交时才被拦下。
+  - 把 `TESTING_STANDARDS.md` 第 21 行“只在本机 Windows 通过不算通过”改为：按平台跳过的测试由 CI 三平台验证。#160 为了在本地跑 Linux 测试，从网上拉了非官方的 Node 和 apk。
+  - 以上三项在清理任务合并后，派一个环境任务一起做。
+- chief of staff 自己调整派单方式：
+  - 并行派单时，在 brief 里写明对方会改变、可观察到的行为。#164 合并 #163 后，“其它网盘不限流”测试的上游请求计数不再成立。
+  - 查 issue 改用 `docs/agents/issue-tracker.md` 里的命令。
+  - 合并提交写成 `chore(scope): 合并 …`。#164 用 `merge:` 被 commit-msg 钩子拒绝了一次。
+- 待维护者决定：两个会话都用 heredoc 或 `node` 替换脚本写源码，反复出错，全局 CLAUDE.md 里“用 Write、Edit”的约定没有起作用。复盘建议在用户全局 `~/.claude/settings.json` 加一个 PreToolUse hook，拦截写入 `src/`、`tests/` 的 shell 重定向和 `writeFileSync`。这是维护者的个人配置，不在仓库里。
