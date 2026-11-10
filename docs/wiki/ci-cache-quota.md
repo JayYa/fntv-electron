@@ -41,7 +41,7 @@
 - `cache-warm.yml`：`90b6ced` 的运行 `42734201899` 被 concurrency 取消，`33cf286` 的运行 `42734420975` 全部成功。三平台 `deps`（Dependency caches）成功；`prune`（Delete superseded caches）成功，main 上的 electron 和打包缓存只剩 45.2.3 的 6 条：三平台各一条 `electron-<os>-45.2.3` 和 `packaging-v2-<os>-electron-45.2.3-…`。
 - `deps` 在 main 上存了当前锁文件的 pnpm store（`node-cache-<os>-<arch>-pnpm-73fea9c3…`）和当前 `go.sum` 的 Go 缓存（`setup-go-…-6f20392e…`）。旧锁文件 hash 的 pnpm 缓存（`58c9e1d7…`）和旧 Go 缓存（`191b5caf…`）`prune` 不处理，靠 7 天没被读后过期。
 - `refs/heads/fix/mpv-ipc-hardening` 上的 4 条 pnpm 缓存还在：删除被权限拦下，维护者知情。
-- PR 是否命中 `deps` 存的 key，看下一个 PR，即下一节所在 PR 的 `ci.yml` 运行。
+- PR 是否命中 `deps` 存的 key，看下一个 PR，即下一节所在 PR 的 `ci.yml` 运行：命中了，见下一节最后一条。
 
 ## 2026-11-10 冒烟测试 job 不再完整安装依赖（本节所在 PR）
 
@@ -52,3 +52,5 @@
 - 没用 `pnpm install --filter`：锁文件只有根项目一个 importer，`playwright-core` 就是它的 devDependency，过滤只能按项目选，去不掉同一项目里的其它依赖。没用单独的最小 package 和锁文件：要维护第二份锁文件并保持版本一致，而脚本直接读主锁文件。没给这个包加缓存：tarball 3.2 MB，下载比恢复缓存快，也不占额度。
 - `smoke-test.yml` 的 `pull_request.paths` 加上 `scripts/install-smoke-deps.cjs`。测试：`tests/smokeDeps.test.cjs` 核对 smoke job 不出现 pnpm、setup-node 不开缓存、`tests/smoke/` require 的非内置包正好是脚本的 `SMOKE_PACKAGES`、版本来自锁文件，以及锁文件解析和 integrity 核对的失败情形。
 - 改前耗时（冒烟运行 `42741368099`，#155 的 PR，缓存命中）：`Install dependencies` 2–7 s（linux-x64 2 s、linux-arm64 2 s、darwin-arm64 3 s、darwin-x64 7 s、win32-x64 5 s）。另外 `Setup pnpm` 4–25 s（Windows 25 s），`Setup Node.js` 含恢复 pnpm store 7–33 s（darwin-x64 33 s）。三步合计：linux-x64 14 s、linux-arm64 15 s、darwin-arm64 26 s、darwin-x64 46 s、win32-x64 46 s。
+- 改后耗时（本 PR 的冒烟运行 `42744239040`，5 个目标都通过）：`Install dependencies` 0–1 s，日志里是 `Installed playwright-core@1.65.0 (sha512-vNSK…)`。没有 `Setup pnpm`，`Setup Node.js` 6–13 s（只装 Node，darwin-x64 13 s）。两步合计：linux-x64 8 s、linux-arm64 6 s、darwin-arm64 6 s、darwin-x64 14 s、win32-x64 9 s，原来是 14–46 s。运行结束后 PR 上的缓存是 0 条，没有再存 `node-cache-macOS-x64-pnpm-*`。
+- PR 命中 `deps` 存的 key（本 PR 的 CI 运行 `42744239041`）：三平台的 `Setup Node.js` 都从 main 的 `node-cache-<os>-<arch>-pnpm-73fea9c3…` 恢复，`Setup Go` 都从 `setup-go-…-6f20392e…` 恢复（`Cache restored from key`），post 步骤显示主 key 命中，没有保存。`Run Go tests` 5–7 s，Windows 的 `Post Setup Go` 1 s，整次 CI 2:02。#150 之后的 29–42 s 和 43 s 已经降回来了（2026-11-09 调研）。
