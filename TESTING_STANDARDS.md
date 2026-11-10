@@ -4,6 +4,7 @@
 
 - `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`。
 - `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还会被 `readdirSync` 加载。
+- 改完代码后 `pnpm run lint` 和 `pnpm run knip` 也要通过。
 - 改 Go 代码时在 `src/modules/proxy` 下运行 `go test ./...`。
 
 ### `Electron failed to install correctly`
