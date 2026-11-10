@@ -9,6 +9,9 @@ import type { ProxyLog } from './log';
 import { abortWhenMpvLeaves, readBody, sendJson } from './respond';
 import { openUpstream } from './upstream';
 
+// 飞牛影视服务流信息里夸克的 cloud_storage_type。
+export const CLOUD_TYPE_QUARK = 4;
+
 // 单次最多取 10MiB。
 const CHUNK_SIZE = 10 * 1024 * 1024;
 

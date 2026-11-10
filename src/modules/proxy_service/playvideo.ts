@@ -8,7 +8,7 @@ import { cloudDirectTarget, directLinkOf } from './directLink';
 import { forward } from './forward';
 import type { ProxyLog } from './log';
 import type { PlaybackSessionStore } from './playbackSessions';
-import { FileMeta, forwardQuark } from './quark';
+import { CLOUD_TYPE_QUARK, FileMeta, forwardQuark } from './quark';
 import { sendJson } from './respond';
 import { sessionApiClient } from './sessionApiClient';
 
@@ -90,7 +90,7 @@ export async function handlePlayVideo(
     if (directLink && !session.useNasLocal) {
         deps.log.info(`启用云存储直连: type=${directLink.cloudType}`);
         // 115 和夸克的特殊处理按 directLink.cloudType 在这里分支，其余网盘透明转发。
-        if (directLink.cloudType === 4) {
+        if (directLink.cloudType === CLOUD_TYPE_QUARK) {
             deps.log.info(`开始代理 | 模式: 夸克分片 | itemGuid: ${itemGuid}`);
             await forwardQuark(req, res, cloudDirectTarget(directLink, deps.ca), directLink.url, {
                 metaCache: deps.quarkMetaCache,
