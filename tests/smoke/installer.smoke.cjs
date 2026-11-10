@@ -14,7 +14,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
-const { spawn, spawnSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
@@ -79,64 +79,6 @@ function requestProxyHealth(secret) {
     });
 }
 
-// 预热启动（targets.cjs 的 warmup）：不经 Playwright 直接启动客户端，等 stderr 出现 DevTools listening
-// （electron.launch 等的也是这一行）后杀掉整个进程组，再确认客户端和 Proxy 都已退出。用自己的临时用户数据目录。
-// 进程组只在 macOS 和 Linux 上有，目前只有 darwin-x64 开启预热。
-async function warmUp(executablePath, { timeoutMs }) {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-warmup-'));
-    const startedAt = Date.now();
-    const client = spawn(executablePath, [...target.isolation(home).args, '--remote-debugging-port=0'], {
-        cwd: home,
-        env: { ...process.env, ...target.environment(home) },
-        detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let output = '';
-    const exited = new Promise(resolve => client.once('exit', (code, signal) => resolve(`退出码 ${code}，信号 ${signal}`)));
-    const spawnFailed = new Promise(resolve => client.once('error', error => resolve(error)));
-    const ready = new Promise(resolve => {
-        for (const stream of [client.stdout, client.stderr]) {
-            stream.on('data', chunk => {
-                output += chunk.toString('utf8');
-                if (/DevTools listening/.test(output)) resolve();
-            });
-        }
-    });
-    let failure;
-    try {
-        const outcome = await Promise.race([
-            ready.then(() => ({ ok: true })),
-            exited.then(detail => ({ detail: `客户端在就绪前退出（${detail}）` })),
-            spawnFailed.then(error => ({ detail: `启动失败：${error.message}` })),
-            delay(timeoutMs).then(() => ({ detail: `${timeoutMs / 1000} 秒内没有出现 DevTools listening` })),
-        ]);
-        if (outcome.ok) {
-            console.log(`::notice::smoke ${target.id} warmup: DevTools listening at ${Date.now() - startedAt}ms`);
-        } else {
-            failure = fail('预热启动', `${outcome.detail}\n客户端输出：\n${output.slice(-4000)}`);
-        }
-    } finally {
-        // Proxy 由主进程直接 spawn（src/main/common/proxy.ts，detached: false），和客户端在同一个进程组。
-        if (client.pid) {
-            try { process.kill(-client.pid, 'SIGKILL'); } catch { /* 进程组已经没了 */ }
-        }
-        const clientExited = !client.pid || client.exitCode !== null || client.signalCode !== null
-            || await Promise.race([exited.then(() => true), delay(10000).then(() => false)]);
-        const proxy = await waitProxyStopped(10000);
-        fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 });
-        // 预热本身失败时，清理问题附在后面，不盖掉原因。
-        const leftovers = [
-            !clientExited && '杀掉进程组 10 秒后客户端仍在运行',
-            !proxy.done && `杀掉进程组 10 秒后端口 ${PROXY_PORT} 仍有响应：${proxy.detail}`,
-        ].filter(Boolean);
-        if (leftovers.length) {
-            const cleanup = fail('预热后退出', leftovers.join('；'));
-            failure = failure ? `${failure}\n${cleanup}` : cleanup;
-        }
-    }
-    if (failure) throw new Error(failure);
-}
-
 describe(`installer smoke test (${target.id})`, () => {
     let home;
     let isolation;
@@ -165,8 +107,6 @@ describe(`installer smoke test (${target.id})`, () => {
         installation = process.env.FNTV_SMOKE_EXECUTABLE
             ? { executablePath: path.resolve(process.env.FNTV_SMOKE_EXECUTABLE), uninstall() {} }
             : target.install(findInstaller(target, path.resolve(process.env.FNTV_SMOKE_INSTALLER_DIR || path.join(root, 'release'))));
-
-        if (target.warmup) await warmUp(installation.executablePath, target.warmup);
 
         const outputFile = fs.createWriteStream(path.join(artifactsDir, 'main-process.log'));
         try {
@@ -249,12 +189,21 @@ ${mainOutput.slice(-4000)}`));
         assert.ok(result.done, fail('主窗口打开', `30 秒内没有可见窗口：${JSON.stringify(result.windows)}`));
     });
 
-    it('runs the client as a process of the target architecture', async t => {
-        // 目标 id 的后半段是架构（targets.cjs）。macOS x64 包在 Apple Silicon 上跑，这里是 x64 就说明它经 Rosetta 运行。
+    it('runs the client natively as a process of the target architecture', async t => {
+        // 目标 id 的后半段是架构（targets.cjs）。
         const expected = target.id.split('-').pop();
         const actual = await app.evaluate(() => process.arch);
         t.diagnostic(`client process.arch=${actual}, test runner process.arch=${process.arch}`);
         assert.equal(actual, expected, fail('进程架构检查', `客户端进程架构应为 ${expected}，实际是 ${actual}`));
+        // macOS 上还要确认机器本身就是这个架构，客户端是原生运行：darwin-x64 在 Intel 机器上测，不经 Rosetta
+        // （targets.cjs 的 darwin-x64）。hw.optional.arm64 在 Apple Silicon 上是 1，Rosetta 转译的进程读到的也是 1；
+        // Intel 机器上没有这个键，-i 让 sysctl 输出空。
+        if (target.platform === 'macos') {
+            const appleSilicon = execFileSync('sysctl', ['-in', 'hw.optional.arm64'], { encoding: 'utf8' }).trim() === '1';
+            const hardware = appleSilicon ? 'arm64' : 'x64';
+            t.diagnostic(`hardware=${hardware}`);
+            assert.equal(hardware, expected, fail('进程架构检查', `客户端应在 ${expected} 机器上原生运行，这台机器是 ${hardware}`));
+        }
     });
 
     it('renders the login page with its form and the packaged version', async () => {

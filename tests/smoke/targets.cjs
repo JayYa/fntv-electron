@@ -60,7 +60,7 @@ function detachDmg(mountPoint) {
 }
 
 // macOS：挂载 dmg，启动里面 .app 的可执行文件，和用户双击 dmg 里的应用一样。builderArch 是打包
-// 工具写进文件名的架构名。两个目标都在 Apple Silicon 机器上跑，x64 包经 Rosetta 运行。
+// 工具写进文件名的架构名。每个包都在同架构的机器上原生运行（darwin-x64 的说明见 TARGETS）。
 function macDmgTarget(builderArch) {
     return {
         platform: 'macos',
@@ -133,15 +133,13 @@ function runUninstaller(installDir, uninstaller) {
 
 const TARGETS = {
     'darwin-arm64': macDmgTarget('arm64'),
-    'darwin-x64': {
-        ...macDmgTarget('x64'),
-        // Rosetta 第一次运行 x64 Electron 时要先转译，只在这台机器上发生一次。#92 在同一台 macos-latest
-        // 上连续直接启动 3 次，DevTools listening 分别在 51952ms、5552ms、6733ms，转译缓存 /var/db/oah
-        // 从 2.7M 涨到 255M；darwin-arm64 三次是 2304ms、192ms、216ms，缓存不变。约 50 秒的首次转译加上
-        // Playwright 自己的开销会贴着或超过 electron.launch 的 60 秒，所以正式测试前先启动一次把转译做完。
-        // 上限取首次实测的两倍多。
-        warmup: { timeoutMs: 120000 },
-    },
+    // darwin-x64 在 GitHub 托管的 Intel 机器（build-and-smoke.yml 的 macos-26-intel）上原生运行。以前在
+    // Apple Silicon 的 macos-latest 上经 Rosetta 运行，首次转译耗时不定（#92 约 50 秒，后来 28 到 116 秒），
+    // 正式测试前的 120 秒预热仍偶尔超时，2026-11-10 改到 Intel 机器上，不再需要 Rosetta 和预热。
+    // GitHub 不再提供 Intel macOS 镜像时，回到 macos-latest，从 33cf286 恢复预热：这里的 warmup、
+    // installer.smoke.cjs 的 warmUp() 和调用、build-and-smoke.yml 的 Install Rosetta 步骤，还有
+    // tests/smokeTargets.test.cjs 的预热测试；installer.smoke.cjs 的硬件架构检查改回只查 process.arch。
+    'darwin-x64': macDmgTarget('x64'),
     'linux-x64': {
         platform: 'linux',
         // 打包工具给 Linux x64 的架构名是 x86_64（CODING_STANDARDS.md 的更新检查一节）。

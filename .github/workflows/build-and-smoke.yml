@@ -40,9 +40,11 @@ jobs:
               echo 'smoke-matrix={"include":[{"target":"linux-x64","runner":"ubuntu-latest"},{"target":"linux-arm64","runner":"ubuntu-24.04-arm"}]}' >> "$GITHUB_OUTPUT"
               ;;
             macos)
-              # 一次构建出 x64 和 arm64 两个 dmg，都在 Apple Silicon 机器上测，x64 包经 Rosetta 运行。
+              # 在 Apple Silicon 的 macos-latest 上一次构建出 x64 和 arm64 两个 dmg，各在同架构的机器上原生测：
+              # x64 包在 Intel 的 macos-26-intel 上测，不经 Rosetta（经 Rosetta 时首次转译耗时不定，预热偶尔超时）。
+              # GitHub 不再提供 Intel 镜像时的退路见 tests/smoke/targets.cjs 的 darwin-x64。
               echo 'build-os=macos-latest' >> "$GITHUB_OUTPUT"
-              echo 'smoke-matrix={"include":[{"target":"darwin-arm64","runner":"macos-latest"},{"target":"darwin-x64","runner":"macos-latest"}]}' >> "$GITHUB_OUTPUT"
+              echo 'smoke-matrix={"include":[{"target":"darwin-arm64","runner":"macos-latest"},{"target":"darwin-x64","runner":"macos-26-intel"}]}' >> "$GITHUB_OUTPUT"
               ;;
             windows)
               echo 'build-os=windows-latest' >> "$GITHUB_OUTPUT"
@@ -107,11 +109,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libfuse2t64 xvfb fonts-noto-cjk
-
-      # x64 包要靠 Rosetta 才能在 Apple Silicon 上运行，机器上没装时先装。
-      - name: Install Rosetta
-        if: runner.os == 'macOS'
-        run: /usr/bin/arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
 
       - name: Run smoke test
         shell: bash

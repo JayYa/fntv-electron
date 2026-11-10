@@ -66,14 +66,6 @@ test('each Linux smoke target picks the AppImage of its own architecture from th
     assert.equal(findInstaller(resolveTarget('linux-arm64'), release), path.join(release, 'FNMedia_2.7.1_linux_arm64.AppImage'));
 });
 
-test('only darwin-x64 is warmed up before the smoke test, with its own launch limit', () => {
-    // x64 包在 Apple Silicon 上第一次启动要等 Rosetta 转译约 50 秒（#92），其余目标首次启动只要几秒。
-    assert.deepEqual(Object.keys(TARGETS).filter(id => TARGETS[id].warmup), ['darwin-x64']);
-    const { warmup } = resolveTarget('darwin-x64');
-    assert.ok(warmup.timeoutMs > 60000, '预热上限要比 electron.launch 的 60 秒宽');
-    assert.equal(resolveTarget('darwin-arm64').warmup, undefined);
-});
-
 // 本机按用户装过的客户端，卸载注册表项名是 appId 生成的 GUID（在装有 2.7.1 的 Windows 上用 reg query 看到的值）。
 const INSTALLED_CLIENT_KEY = 'b80d411a-9a19-5c6b-8319-e74d5c792871';
 

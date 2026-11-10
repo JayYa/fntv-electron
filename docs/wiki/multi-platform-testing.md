@@ -64,7 +64,7 @@
 - **Linux FUSE 时序（#86）**：主进程在创建主窗口期间，`app.evaluate` 必然失败。用 FUSE 运行 AppImage 时，这段约 350ms；用 extract-and-run 时约 50ms。规则：先 `await app.firstWindow()`，再 `app.evaluate`。
 - **macOS x64 首次转译（#92）**：Rosetta 首次转译 x64 Electron 约需 50 秒。
   - 证据：同一台 `macos-latest` 上连续直接启动 3 次，DevTools listening 分别在 51952ms、5552ms、6733ms；`/var/db/oah` 从 2.7M 涨到 255M。
-  - 修法：对 darwin-x64 先预热一次，上限 120 秒。#89 上预热实测 47 秒。
+  - 已被取代（2026-11-10，见下方“2026-11-10 决定：darwin-x64 改在 Intel 镜像上原生运行”）：~~修法：对 darwin-x64 先预热一次，上限 120 秒。#89 上预热实测 47 秒。~~
 - **Windows 用户数据隔离**：`app.getPath('home')` 不读 `USERPROFILE`。改用启动参数 `--user-data-dir`，它同时也是 Chromium 的开关，见审查记录 L1。修 #87 时发现，带这个参数时 Electron 默认 userData 和 `~/.fntv` 重合，日志目录取早了也看不出来，所以 CI 上的 Windows 冒烟测试不再带它，改用 runner 的真实用户目录（`TESTING_STANDARDS.md` 的“冒烟测试”）。
 - 已被取代（2026-11-08，见下方核对补记和“2026-11-08 决定：删掉 Release PR 冒烟路径”：会触发，`action_required`，维护者批准后才跑；`release.yml` 里的 Release PR 冒烟路径已删）：~~**Release PR 不触发 CI**：release-please 用 `GITHUB_TOKEN` 开的 PR 不会触发 `pull_request` workflow。#70 上没有任何检查。#95 改为在 `release.yml` 同一次运行里对 Release PR 分支跑冒烟测试。~~
 - **本地验证**：本机 WSL 里只有 docker-desktop。Linux 冒烟测试用 Docker Desktop 的 Ubuntu 24.04 容器跑，要走和 CI 一样的 FUSE 路径。arm64 的 AppImage 在 QEMU 下因为魔数问题跑不起来，改了魔数后又太慢，不值得尝试。
@@ -120,3 +120,18 @@
 - `gh issue list --state open`：#74、#75、#76、#77、#78、#87、#94 仍为 OPEN，标签都只有 `needs-triage`，和上一次核对相同，没有分诊。
 - Release PR 经 `smoke-test.yml` 跑冒烟测试（上方“待验证（2026-11-08 追加）”）仍没有发生：截至 `dff30b2` 没有新的 Release PR。
 - 打包缓存在 main 上的命中只验证了 Windows（见[CI 下载与缓存](ci-download-cache.md)，2026-11-09 从构建依赖与 MPV 插件同步拆出），macOS、Linux 要等下次发版看 `Build on macos-latest`、`Build on ubuntu-latest` 的日志。
+
+## 2026-11-10 决定：darwin-x64 改在 Intel 镜像上原生运行
+
+- 起因：经 Rosetta 运行时首次转译耗时不定，预热实测 28 到 116 秒，120 秒上限不够。PR #154 的 `actions/runs/42729062227` 第 1 次尝试里 `macos / Smoke test darwin-x64` 失败（00:35:41Z 至 00:39:10Z），第 2 次尝试通过。
+- 维护者 2026-11-10 决定：darwin-x64 改在 GitHub 托管的 Intel 镜像上原生运行，构建仍在 `macos-latest` 上一次打两个 dmg。
+- 镜像核实（2026-11-10）：
+  - [actions/runner-images README](https://github.com/actions/runner-images#available-images) 列出两个 x64 macOS 镜像：macOS 15（`macos-15-intel`、`macos-15-large`）和 macOS 26（`macos-26-intel`、`macos-26-large`、`macos-latest-large`）。`-large` 是付费的 larger runner。
+  - [GitHub 托管 runner 文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)把 `macos-15-intel`、`macos-26-intel` 列为标准 runner（Intel，4 CPU、14 GB），公开仓库可用。
+  - [#13045](https://github.com/actions/runner-images/issues/13045)（2025-09-19）：`macos-15-intel` 提供到 2027 年 8 月，当时称它是最后一个 x86_64 镜像。之后 [#13637](https://github.com/actions/runner-images/issues/13637)（2026-02-06 beta）和 [#13739](https://github.com/actions/runner-images/issues/13739)（2026-02-26 GA）又推出了 `macos-26-intel`，公告里没写下线日期。
+  - 选 `macos-26-intel`：和 `macos-latest`（macOS 26 arm64）同一个系统版本，比 `macos-15-intel` 新，下线不会更早。Electron 45 最低 macOS 13，满足。
+- 实现：`build-and-smoke.yml` 的 `select-targets` 把 darwin-x64 的 runner 改为 `macos-26-intel`；删掉 `targets.cjs` 的 `warmup`、`installer.smoke.cjs` 的 `warmUp()` 和调用、`Install Rosetta` 步骤和 `tests/smokeTargets.test.cjs` 的预热测试。架构断言除了客户端的 `process.arch`，macOS 上还读 `sysctl -in hw.optional.arm64`，确认机器就是目标架构（Rosetta 转译的进程读到的也是 1）。`tests/releaseGate.test.cjs` 锁住两个 macOS 目标的 runner，并检查 smoke job 里没有 Rosetta 步骤。代码改动在 `1de0b15`。
+- 退路：GitHub 不再提供 Intel macOS 镜像时，darwin-x64 回到 `macos-latest`，从 `33cf286`（本次改动前的 main）恢复预热方案，要恢复的几处写在 `tests/smoke/targets.cjs` 的 darwin-x64 注释里。预热最早由 #96 合入（`58e82f1`）。
+- 本地 `pnpm run lint` 通过，`pnpm test` 393 个：392 通过、1 个跳过、0 失败。
+- 2026-11-10，PR #155 在 `7bb75ec` 上的 smoke-test.yml（`actions/runs/42739490203`）5 个目标全部通过。`macos / Smoke test darwin-x64` 跑在 `macos-26-intel`（镜像 `macos-26` 版本 20260819.586）：02:01:46Z 创建，02:01:50Z 开始，排队 4 秒；02:04:12Z 结束，job 共 2 分 22 秒，其中 `Run smoke test` 38 秒（测试 10 个全部通过，`duration_ms` 约 37494），日志里 `client process.arch=x64`、`hardware=x64`。同一次运行里 darwin-arm64 在 `macos-latest` 上排队 2 秒、job 1 分 21 秒。
+- 同一次运行里 linux-x64 用了 11 分 44 秒，其中 `Install Linux runtime dependencies`（`apt-get`）占 10 分 36 秒，和本次改动无关，没有处理。
