@@ -1,18 +1,11 @@
 // smart_skip 读写片头片尾信息：GET /api/v1/skipinfo/:itemGuid?session=…、POST /api/v1/skipinfo?session=…。
 // 响应格式与 Go 版一致：成功 {code:0,msg:"success"}，失败 {code:1000,msg}。
 import type * as http from 'node:http';
-import type { TtlCache } from '../fn_api/core/ttlCache';
-import type { ProxyLog } from './log';
 import type { PlaybackSessionStore } from './playbackSessions';
 import { readBody, sendJson } from './respond';
-import { sessionApiClient } from './sessionApiClient';
+import { SessionApiDeps, sessionApiClient } from './sessionApiClient';
 
-export interface SkipInfoDeps {
-    sessions: PlaybackSessionStore;
-    cache: TtlCache;
-    ca: string[];
-    log: ProxyLog;
-}
+export type SkipInfoDeps = SessionApiDeps & { sessions: PlaybackSessionStore };
 
 const INTERNAL_ERROR_CODE = 1000;
 

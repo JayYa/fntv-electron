@@ -6,23 +6,19 @@ import type { TtlCache } from '../fn_api/core/ttlCache';
 import { CLOUD_TYPE_115, forward115, RateLimiter } from './cloud115';
 import { cloudDirectTarget, directLinkOf } from './directLink';
 import { forward } from './forward';
-import type { ProxyLog } from './log';
 import type { PlaybackSessionStore } from './playbackSessions';
 import { CLOUD_TYPE_QUARK, FileMeta, forwardQuark } from './quark';
 import { sendJson } from './respond';
-import { sessionApiClient } from './sessionApiClient';
+import { SessionApiDeps, sessionApiClient } from './sessionApiClient';
 
-export interface PlayVideoDeps {
+export type PlayVideoDeps = SessionApiDeps & {
     sessions: PlaybackSessionStore;
-    cache: TtlCache;
-    ca: string[];
-    log: ProxyLog;
     // 115 直连的限流，所有会话共用。
     limiter115: RateLimiter;
     // 夸克的文件元信息，按直链 URL 缓存，所有会话共用。
     quarkMetaCache: TtlCache<FileMeta>;
     quarkIdleTimeoutMs: number;
-}
+};
 
 const INT32_MIN = -(2 ** 31);
 const INT32_MAX = 2 ** 31 - 1;
