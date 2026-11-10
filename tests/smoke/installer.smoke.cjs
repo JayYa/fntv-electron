@@ -14,8 +14,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const http = require('node:http');
-const net = require('node:net');
-const { execFileSync, spawn, spawnSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
@@ -26,14 +25,12 @@ const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const target = resolveTarget(process.env.FNTV_SMOKE_TARGET || `${process.platform}-${process.arch}`);
 const artifactsDir = path.resolve(process.env.FNTV_SMOKE_ARTIFACTS || path.join(root, 'smoke-artifacts', target.id));
 
-// Proxy 固定监听这个地址（src/modules/proxy_service/control.ts）。
-const PROXY_PORT = 22345;
 // Electron 在主进程未捕获异常时打到 stderr 的文字，以及 Node 未处理 Promise 拒绝的警告。
 const UNCAUGHT_PATTERN = /Uncaught Exception|A JavaScript error occurred in the main process|UnhandledPromiseRejection/;
 // Proxy 的日志经 IPC 由主进程写进 app.log，每行带这个标记（src/main/common/proxy.ts）。
 const PROXY_LOG_MARK = '[Proxy]';
-// 端口被占用时主进程写进 app.log 的错误（src/main/common/proxy.ts）。
-const PORT_IN_USE_LOG = `端口 ${PROXY_PORT} 已被占用`;
+// Proxy 端口由系统分配，主进程在它就绪时把实际端口写进 app.log（src/main/common/proxy.ts）。
+const PROXY_READY_PATTERN = /Proxy 已就绪，端口 (\d+)/g;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -53,9 +50,9 @@ async function poll(check, timeoutMs, intervalMs = 250) {
 }
 
 // 客户端退出后 Proxy 应随之退出，端口不再响应。
-function waitProxyStopped(timeoutMs) {
+function waitProxyStopped(port, timeoutMs) {
     return poll(async () => {
-        const response = await requestPlayVideo();
+        const response = await requestPlayVideo(port);
         return { done: Boolean(response.error), detail: JSON.stringify(response) };
     }, timeoutMs);
 }
@@ -64,13 +61,10 @@ function readText(file) {
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
 }
 
-// 先占住 Proxy 的端口，结束时释放。
-function occupyProxyPort() {
-    return new Promise((resolve, reject) => {
-        const server = net.createServer(socket => socket.destroy());
-        server.once('error', reject);
-        server.listen(PROXY_PORT, '127.0.0.1', () => resolve(server));
-    });
+// app.log 里最后一次“Proxy 已就绪”报告的端口，还没有时返回 undefined。
+function readProxyPort(appLog) {
+    const matches = [...readText(appLog).matchAll(PROXY_READY_PATTERN)];
+    return matches.length ? Number(matches[matches.length - 1][1]) : undefined;
 }
 
 // Windows 上 kill 只结束客户端主进程，Proxy 子进程会留下来锁住安装目录、占着端口，要结束整个进程树。
@@ -83,9 +77,9 @@ function killProcessTree(child) {
 }
 
 // 不带 session 的 playvideo：Proxy 在线时返回 400，不碰 NAS。只要有 HTTP 响应就说明 Proxy 在监听。
-function requestPlayVideo() {
+function requestPlayVideo(port) {
     return new Promise(resolve => {
-        const request = http.get({ host: '127.0.0.1', port: PROXY_PORT, path: '/api/v1/playvideo/smoke', timeout: 1000 }, response => {
+        const request = http.get({ host: '127.0.0.1', port, path: '/api/v1/playvideo/smoke', timeout: 1000 }, response => {
             const chunks = [];
             response.on('data', chunk => chunks.push(chunk));
             response.on('end', () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
@@ -104,13 +98,11 @@ describe(`installer smoke test (${target.id})`, () => {
     let page;
     let mainOutput = '';
     let launchedAt;
+    let proxyPort;
 
     before(async () => {
         fs.rmSync(artifactsDir, { recursive: true, force: true });
         fs.mkdirSync(artifactsDir, { recursive: true });
-
-        const occupied = await requestPlayVideo();
-        assert.ok(occupied.error, fail('启动前检查', `端口 ${PROXY_PORT} 已被占用，先关掉本机正在运行的客户端`));
 
         home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-'));
         isolation = target.isolation(home);
@@ -236,12 +228,17 @@ ${mainOutput.slice(-4000)}`));
         await page.screenshot({ path: path.join(artifactsDir, 'screenshot.png') });
     });
 
-    it('starts a Proxy that answers HTTP', async () => {
+    it('starts a Proxy that answers HTTP', async t => {
+        const appLog = path.join(isolation.logDir, 'app.log');
         const result = await poll(async () => {
-            const response = await requestPlayVideo();
-            return { done: Boolean(response.status), detail: JSON.stringify(response) };
+            const port = readProxyPort(appLog);
+            if (!port) return { done: false, detail: 'app.log 里还没有“Proxy 已就绪，端口 N”' };
+            const response = await requestPlayVideo(port);
+            return { done: Boolean(response.status), port, detail: `端口 ${port}：${JSON.stringify(response)}` };
         }, 20000);
-        assert.ok(result.done, fail('Proxy 在线检查', `20 秒内端口 ${PROXY_PORT} 没有 HTTP 响应：${result.detail}，Proxy 日志见 proxy.log`));
+        assert.ok(result.done, fail('Proxy 在线检查', `20 秒内 Proxy 没有 HTTP 响应：${result.detail}，Proxy 日志见 proxy.log`));
+        proxyPort = result.port;
+        t.diagnostic(`proxy port=${proxyPort}`);
     });
 
     it('writes app.log under ~/.fntv/logs', async () => {
@@ -304,37 +301,9 @@ ${mainOutput.slice(-4000)}`));
         await page?.screenshot({ path: path.join(artifactsDir, 'screenshot.png') }).catch(() => {});
         const exited = await Promise.race([app.close().then(() => true), delay(20000).then(() => false)]);
         assert.ok(exited, fail('退出客户端', '20 秒内客户端没有退出'));
-        const result = await waitProxyStopped(10000);
-        assert.ok(result.done, fail('退出后 Proxy 检查', `客户端退出 10 秒后端口 ${PROXY_PORT} 仍有响应：${result.detail}`));
-    });
-
-    it('reports a taken Proxy port and opens no main window', async t => {
-        // 在上一条之后跑：客户端已退出，端口已释放。主进程弹出错误框后停在那里等用户点击，
-        // 关掉弹窗后退出应用这一步测试自动化不了，这里确认报错已写进日志、主窗口没有创建，然后结束进程。
-        // 不用 Playwright 启动：错误框阻塞主进程，Playwright 连接时可能一直等不到它。
-        const server = await occupyProxyPort();
-        t.after(() => new Promise(resolve => server.close(resolve)));
-        const appLog = path.join(isolation.logDir, 'app.log');
-        const logOffset = readText(appLog).length;
-        const output = fs.createWriteStream(path.join(artifactsDir, 'port-in-use-process.log'));
-        const blocked = spawn(installation.executablePath, isolation.args, {
-            cwd: home,
-            env: { ...process.env, ...target.environment(home) },
-            stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        blocked.stdout.pipe(output);
-        blocked.stderr.pipe(output);
-        t.after(() => {
-            if (blocked.exitCode === null && blocked.signalCode === null) killProcessTree(blocked);
-        });
-
-        const result = await poll(async () => {
-            const text = readText(appLog).slice(logOffset);
-            return { done: text.includes(PORT_IN_USE_LOG), text };
-        }, 30000);
-        assert.ok(result.done, fail('端口占用检查', `30 秒内 app.log 里没有“${PORT_IN_USE_LOG}”，这次启动的日志：\n${result.text.slice(-4000)}`));
-        // 主窗口创建前会写“主窗口图标:”（src/main/common/mainwin.ts）。再等一会儿，确认报错后没有接着打开窗口。
-        await delay(3000);
-        assert.doesNotMatch(readText(appLog).slice(logOffset), /主窗口图标: /, fail('端口占用检查', '端口被占用时不应打开主窗口'));
+        // 在线检查失败时没有端口可查，这一条也跟着失败，不去探测一个猜的端口。
+        assert.ok(proxyPort, fail('退出后 Proxy 检查', '没有拿到 Proxy 端口，先看 Proxy 在线检查'));
+        const result = await waitProxyStopped(proxyPort, 10000);
+        assert.ok(result.done, fail('退出后 Proxy 检查', `客户端退出 10 秒后端口 ${proxyPort} 仍有响应：${result.detail}`));
     });
 });

@@ -1,6 +1,6 @@
 // Proxy 子进程入口，由主进程用 utilityProcess.fork() 启动（src/main/common/proxy.ts）。
 // 只把 parentPort 的消息转给 Proxy 服务、回报启动结果和日志，不含业务逻辑。
-import { handleControlRequest, PROXY_PORT, ProxyMessage } from './control';
+import { handleControlRequest, ProxyMessage } from './control';
 import { startProxyService } from './index';
 import { ipcLog } from './log';
 
@@ -16,7 +16,7 @@ function post(message: ProxyMessage): void {
 // 日志交给主进程的 logger 写，脱敏规则和主进程一致。
 const log = ipcLog(post);
 
-startProxyService({ port: PROXY_PORT, rateLimitIntervalMs: RATE_LIMIT_INTERVAL_MS, log }).then((service) => {
+startProxyService({ port: 0, rateLimitIntervalMs: RATE_LIMIT_INTERVAL_MS, log }).then((service) => {
     parentPort.on('message', (event) => post(handleControlRequest(service, event.data)));
     post({ type: 'ready', port: service.port });
 }, (error: NodeJS.ErrnoException) => {

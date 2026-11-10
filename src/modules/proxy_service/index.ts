@@ -15,7 +15,7 @@ import { handleGetSkipInfo, handleSetSkipInfo } from './skipinfo';
 export type { PlaybackSessionInput } from './playbackSessions';
 export type { ProxyLog } from './log';
 
-// 只监听本机。正式运行时端口为 PROXY_PORT，限流间隔为 1 秒（child.ts）。
+// 只监听本机。正式运行时端口由系统分配，限流间隔为 1 秒（child.ts）。
 
 export interface ProxyServiceOptions {
     // 监听端口，传 0 时由系统分配。

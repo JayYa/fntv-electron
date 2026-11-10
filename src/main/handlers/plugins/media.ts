@@ -410,7 +410,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         playList[currentIndex] = applyRestart(playList[currentIndex], true);
     }
 
-    const session = await createPlaybackSession({
+    const playback = await createPlaybackSession({
         token: config.token,
         account: config.account,
         domain: config.domain,
@@ -421,7 +421,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
     });
     playList = playList.map(item => ({
         ...item,
-        playLink: createProxyPlaybackUrl(session, item.itemGuid),
+        playLink: createProxyPlaybackUrl(playback, item.itemGuid),
     }));
 
     // 检查是否选择了特定的播放源索引
@@ -430,7 +430,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         log.info(`使用指定的播放源索引: ${selectedSourceIndex}`);
         // 修改播放列表中的源索引
         playList[currentIndex].playLink = createProxyPlaybackUrl(
-            session,
+            playback,
             playList[currentIndex].itemGuid,
             selectedSourceIndex,
         );

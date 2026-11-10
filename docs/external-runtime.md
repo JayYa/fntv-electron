@@ -12,7 +12,7 @@
 
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
 - Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/build.yml` 的 `Download third-party dependencies` 步骤。
-- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261108_233327`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
+- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261110_224319`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
 - tag、资产名和 sha256 写在 `build` job 的 `env`。压缩包缓存在 `$RUNNER_TEMP/mpv-archive`，key 含 sha256，换版本时自动失效。缓存用 `actions/cache/restore` 和 `actions/cache/save` 分开写，下载并校验通过后立即保存，后面的构建失败也不丢；命中时不保存，缓存出错不让构建失败。命中缓存也校验 sha256，不通过就重新下载。未命中时 `curl` 对所有错误重试 5 次，每次隔 10 秒，最多 5 分钟，避免 Release 下载偶发的 5xx 让构建失败。这些由 `tests/releaseGate.test.cjs` 检查。
 - electron-builder 打包时下载的 Electron zip 和打包工具也缓存，key 是 `runner.os` 加 `pnpm-lock.yaml` 的 hash，构建成功后保存，命中时不保存。打包工具存在 `ELECTRON_BUILDER_CACHE`（`Build application` 设为 `$RUNNER_TEMP/electron-builder-cache`）。Electron zip 存在 `@electron/get` 的默认目录（Linux `~/.cache/electron`，macOS `~/Library/Caches/electron`，Windows `%LOCALAPPDATA%\electron\Cache`），它不读 `ELECTRON_CACHE`。
 - 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再同时改 `build` job `env` 里的 tag、资产名和 sha256，以及 `README.md` 的准备步骤。
@@ -68,7 +68,7 @@ const enabled = isMpvPlaybackEnabled(value)
 
 Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动时用 Electron `utilityProcess.fork()` 在子进程里运行，入口是 `src/modules/proxy_service/child.ts`，主进程这一侧在 `src/main/common/proxy.ts`。决策原因见 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
 
-- 只监听 `127.0.0.1:22345`。端口固定，因为 MPV 归档里 `smart_skip` 插件的 `api.lua` 写死了 `http://127.0.0.1:22345/api/v1/skipinfo`。改端口要先改 `fntv-mpv-config`，让 `smart_skip` 从播放地址解析主机和端口。
+- 只监听 `127.0.0.1`，端口由系统分配（监听端口 0），每次启动都可能不同。Proxy 就绪时把实际端口报给主进程，主进程写一行“Proxy 已就绪，端口 N”到 `app.log`，播放地址用这个端口拼。MPV 归档里 `smart_skip` 插件的 `api.lua` 从播放地址取 scheme、主机和端口去请求 `skipinfo`（#167）。
 - HTTP 只给 MPV 用：`GET /api/v1/playvideo/:itemGuid`、`GET /api/v1/skipinfo/:itemGuid`、`POST /api/v1/skipinfo`。视频流量只在 Proxy 子进程和 MPV 之间，不经过主进程。
 - 主进程和 Proxy 之间的控制走 `parentPort` IPC（消息定义在 `src/modules/proxy_service/control.ts`）：Proxy 监听成功后回报就绪，监听失败时回报错误码；主进程经 IPC 创建播放会话。没有 HTTP 控制接口，也没有密钥。
 - Proxy 的日志经 IPC 交给主进程，写进 `app.log`，每行带 `[Proxy]`。
@@ -76,14 +76,14 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 情况 | 行为 |
 | --- | --- |
 | 启动后 10 秒内没有回报就绪，或就绪前退出 | 弹窗说明，退出应用 |
-| 端口 22345 被占用 | 弹窗说明，提示结束残留的 `proxy`/`proxy.exe` 进程（旧版 Go Proxy）或重启电脑，退出应用，不自动重试 |
+| 就绪前请求播放 | 创建播放会话直接失败（“Proxy 未运行”），不等待；崩溃后重启期间也一样 |
 | 运行中意外退出 | 隔 3 秒重启，最多 5 次，仍然失败就弹窗并退出应用；重启后连续运行 60 秒，次数清零 |
 | 客户端退出 | 结束 Proxy 子进程；客户端崩溃时 Electron 也会结束它，不留下占端口的进程 |
 | `userData` 下有旧版留下的 `proxy-secret` | 启动时删除（`src/main/common/legacyProxySecret.ts`） |
 
 ## 播放会话
 
-- 播放地址只带 `session`，不带登录 token（`createProxyPlaybackUrl`，`src/main/common/proxySession.ts`）。格式是 `http://127.0.0.1:22345/api/v1/playvideo/<itemGuid>?session=<session>[&sourceIndex=<n>]`。
+- 播放地址只带 `session`，不带登录 token（`createProxyPlaybackUrl`，`src/main/common/proxySession.ts`）。格式是 `http://127.0.0.1:<port>/api/v1/playvideo/<itemGuid>?session=<session>[&sourceIndex=<n>]`。会话只在创建它的那个 Proxy 子进程里有效，所以 `createPlaybackSession` 把会话 ID 和该进程的端口一起返回。
 - 入参 `PlaybackSessionInput` 只定义一次（`src/modules/proxy_service/playbackSessions.ts`），主进程经 IPC 原样传入。
 - `session` 是 64 位十六进制，有效期 24 小时，每次访问顺延。
 - 每个会话只允许访问创建时列出的 `itemGuids`。
@@ -100,6 +100,6 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 删除旧版 Proxy 密钥文件 | `tests/legacyProxySecret.test.cjs` |
 | 播放地址不暴露登录凭据 | `tests/proxySession.test.cjs` |
 | Proxy 取流和片头片尾接口 | `tests/proxyService*.test.cjs` |
-| Proxy 在打包产物里启动、端口被占用时报错、客户端退出后端口关闭 | `tests/smoke/installer.smoke.cjs` |
+| Proxy 在打包产物里启动（端口从 `app.log` 读）、客户端退出后端口关闭 | `tests/smoke/installer.smoke.cjs` |
 
 构建（`build.yml`）不覆盖上游插件这一条没有自动化测试，改工作流时用 `grep -n -i danmaku .github/workflows/build.yml .github/workflows/release.yml` 确认没有结果。

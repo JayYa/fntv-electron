@@ -1,5 +1,5 @@
 // 主进程这一侧的播放会话：经 IPC 让 Proxy 创建，再拼出交给 MPV 的播放地址。
-import { CreatePlaybackSessionRequest, PROXY_HOST, PROXY_PORT, ProxyMessage } from '../../modules/proxy_service/control';
+import { CreatePlaybackSessionRequest, PROXY_HOST, ProxyMessage } from '../../modules/proxy_service/control';
 import type { PlaybackSessionInput } from '../../modules/proxy_service/playbackSessions';
 
 export type { PlaybackSessionInput } from '../../modules/proxy_service/playbackSessions';
@@ -66,8 +66,14 @@ export class ProxyControlClient {
     }
 }
 
-export function createProxyPlaybackUrl(session: string, itemGuid: string, sourceIndex: number = 0): string {
-    const query = new URLSearchParams({ session });
+// 播放会话只在创建它的那个 Proxy 子进程里有效，所以会话 ID 和该进程的端口一起返回。
+export interface ProxyPlaybackSession {
+    session: string;
+    port: number;
+}
+
+export function createProxyPlaybackUrl(playback: ProxyPlaybackSession, itemGuid: string, sourceIndex: number = 0): string {
+    const query = new URLSearchParams({ session: playback.session });
     if (sourceIndex > 0) query.set('sourceIndex', String(sourceIndex));
-    return `http://${PROXY_HOST}:${PROXY_PORT}/api/v1/playvideo/${encodeURIComponent(itemGuid)}?${query}`;
+    return `http://${PROXY_HOST}:${playback.port}/api/v1/playvideo/${encodeURIComponent(itemGuid)}?${query}`;
 }
