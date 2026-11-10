@@ -6,7 +6,7 @@ import { registerHandler } from '../core/ipcHandler';
 import { registerAppHook } from '../core/appHook';
 import * as log from '../../../modules/logger';
 import * as fs from 'fs';
-import { ItemListRequest } from '../../../modules/fn_api/types';
+import { ItemListRequest } from '../../../modules/fn_api/core/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
