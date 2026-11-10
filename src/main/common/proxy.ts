@@ -4,6 +4,7 @@ import { app, dialog, utilityProcess, UtilityProcess } from 'electron';
 import * as path from 'node:path';
 import * as log from '../../modules/logger';
 import { PROXY_PORT, ProxyMessage } from '../../modules/proxy_service/control';
+import { writeProxyLog } from '../../modules/proxy_service/log';
 import { removeLegacyProxySecret } from './legacyProxySecret';
 import { PlaybackSessionInput, ProxyControlClient } from './proxySession';
 
@@ -48,7 +49,7 @@ function launch(): Promise<RunningProxy> {
         child.on('message', (message: ProxyMessage) => {
             switch (message.type) {
                 case 'log':
-                    log[message.level](`[Proxy] ${message.message}`);
+                    writeProxyLog(log, message);
                     break;
                 case 'ready':
                     ready = true;
