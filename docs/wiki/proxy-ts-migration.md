@@ -137,3 +137,8 @@ chief of staff 当天的计划（维护者待确认）：
   - 查 issue 改用 `docs/agents/issue-tracker.md` 里的命令。
   - 合并提交写成 `chore(scope): 合并 …`。#164 用 `merge:` 被 commit-msg 钩子拒绝了一次。
 - 待维护者决定：两个会话都用 heredoc 或 `node` 替换脚本写源码，反复出错，全局 CLAUDE.md 里“用 Write、Edit”的约定没有起作用。复盘建议在用户全局 `~/.claude/settings.json` 加一个 PreToolUse hook，拦截写入 `src/`、`tests/` 的 shell 重定向和 `writeFileSync`。这是维护者的个人配置，不在仓库里。
+- 2026-11-10 维护者对复盘的回应：
+  - 不改单文件 20000 字节的限制，也不把这项检查接进 lint 和 CI，上面“要做”里的这一项撤销。
+  - 同意加 hook。chief of staff 当天新增 `~/.claude/hooks/block-shell-source-writes.cjs`，在 `~/.claude/settings.json` 里登记为 Bash、PowerShell 的 PreToolUse hook。它拦截用重定向、`tee`、PowerShell 写入 cmdlet 或 `writeFileSync` 写 `src/`、`tests/` 下的文件，单行 `sed -i` 放行，12 种情况实测通过。
+  - 写 hook 时发现：经 Bash 工具传入的 heredoc 里，`\` 会被压成 `\`，带引号的 heredoc 也一样。全局 CLAUDE.md 里“`node - <<'EOF'` 内容原样传入”的说法，在含反斜杠时不成立；要不要改这句，交维护者决定。
+- 同日清理分支合并进集成分支（`64ef36d`）：共用 `sessionApiClient`，`fn_api/core` 只缓存 `success: true` 的结果，`TESTING_STANDARDS.md` 写明时间参数可以作为可选参数注入。
