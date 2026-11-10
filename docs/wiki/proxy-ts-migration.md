@@ -53,3 +53,14 @@ chief of staff 当天的计划（维护者待确认）：
   - U-09：流信息里的 UA 对所有直连网盘生效。
 - U-12：#159 的共用 `Request` 以 TS 版为准；唯一例外是访问授权 Cookie 由参数传入，因为 Proxy 进程里没有主进程那张 Map。Proxy 调 NAS 的行为和 Go 的差异留到 #166 手测时确认。
 - 其余 11 条照搬 Go，并在测试里写明。
+- 2026-11-10 已按这些决定修改 #158 和 #159 至 #164 的正文和验收条件，每张票各加一条评论，注明依据的 U 编号。标签、依赖关系和标题都没动，7 张票仍是打开状态。
+
+## 2026-11-10 #159 完成
+
+- 实现在分支 `feat/proxy-ts-159`（`51601d9`）上，`pnpm test` 共 402 条，401 通过、1 条按平台跳过，lint、knip、tsc 都通过。共用层放在 `src/modules/fn_api/core/`。
+- 和票的写法不同的地方：
+  - 访问授权 Cookie 和证书信任通过 `RequestContext` 里的函数 `(baseUrl) => …` 传入。这样跨 origin 重定向时会按新 origin 重新取，主进程的行为不变。
+  - 日志由调用方传入，共用层不加载 `logger`，因此也不会间接加载 `electron`。
+  - `isCertificateError` 和 `composeCookieHeader` 也移进了共用层。
+- 没拆：`ApiService`（`api.ts`）还留在主进程那一层，因为它要用 `app.getPath('temp')`。chief of staff 当天决定由 #160 把 Proxy 需要的调用和缓存拆进共用层，字幕临时目录改为注入。
+- 环境改进：“共用层不引用 `electron` 和 `logger`”目前只写在 `CODING_STANDARDS.md` 里。chief of staff 决定在 #160 里改用 ESLint 规则强制。
