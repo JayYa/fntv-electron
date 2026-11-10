@@ -36,7 +36,7 @@ export class FnApiClient {
      * @param defaultTtl - 默认缓存过期时间（秒），默认为300秒（5分钟）
      * @returns 返回带缓存的函数，支持可选的 options 参数
      */
-    protected createCachedFunction<T extends (...args: any[]) => Promise<any>>(
+    protected createCachedFunction<T extends (...args: any[]) => Promise<ApiResponse>>(
         fn: T,
         name: string,
         defaultTtl: number = 300
@@ -70,9 +70,11 @@ export class FnApiClient {
                 return existingPromise;
             }
 
+            // 只缓存成功的结果，与 Go 版一致。抛错或 success 为 false（NAS 返回非 0 的 code、网络错误等）都不缓存。
             const promise = fn(...args).then(result => {
-                this.cache.set(key, result, options.ttl);
                 this.cache.del(cachePromiseKey); // 清理promise缓存
+                if (!result.success) return result;
+                this.cache.set(key, result, options.ttl);
                 this.context.log.debug?.(`缓存设置: ${name}, TTL: ${options.ttl}s`);
                 return result;
             }).catch(error => {

@@ -1,17 +1,16 @@
 // GET /api/v1/playvideo/:itemGuid?session=…&sourceIndex=…：按播放源选流，转发视频流。
 import * as crypto from 'node:crypto';
 import type * as http from 'node:http';
-import { FnApiClient } from '../fn_api/core/apiClient';
 import { composeCookieHeader } from '../fn_api/core/cookie';
-import type { RequestContext } from '../fn_api/core/request';
 import type { TtlCache } from '../fn_api/core/ttlCache';
 import { CLOUD_TYPE_115, forward115, RateLimiter } from './cloud115';
 import { cloudDirectTarget, directLinkOf } from './directLink';
 import { forward } from './forward';
 import type { ProxyLog } from './log';
-import type { PlaybackSession, PlaybackSessionStore } from './playbackSessions';
+import type { PlaybackSessionStore } from './playbackSessions';
 import { FileMeta, forwardQuark } from './quark';
 import { sendJson } from './respond';
+import { sessionApiClient } from './sessionApiClient';
 
 export interface PlayVideoDeps {
     sessions: PlaybackSessionStore;
@@ -43,16 +42,6 @@ function stringToUuid(value: string): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function apiClient(session: PlaybackSession, deps: PlayVideoDeps): FnApiClient {
-    const context: RequestContext = {
-        accessCookie: () => session.accessCookie,
-        skipVerify: () => session.skipVerify,
-        log: deps.log,
-        ca: deps.ca,
-    };
-    return new FnApiClient(context, session.domain, session.token, deps.cache);
-}
-
 export async function handlePlayVideo(
     req: http.IncomingMessage,
     res: http.ServerResponse,
@@ -76,7 +65,7 @@ export async function handlePlayVideo(
         return;
     }
 
-    const api = apiClient(session, deps);
+    const api = sessionApiClient(session, deps);
     const list = await api.getStreamListCached(itemGuid);
     const videoStreams = list.success ? list.data?.video_streams ?? [] : [];
     if (videoStreams.length === 0) {

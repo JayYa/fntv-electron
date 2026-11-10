@@ -61,3 +61,37 @@ test('the core request sends the access grant cookie it is given', async (t) => 
     assert.equal(received[0].authorization, 'token-1');
     assert.equal(received[0].cookie, 'gateway=granted; mode=relay');
 });
+
+test('a failed cached call is not cached, so an immediate retry asks the NAS again and only the success is reused', async (t) => {
+    withoutElectron(t);
+    const { FnApiClient } = require(path.join(CORE_DIR, 'apiClient.js'));
+    const { TtlCache } = require(path.join(CORE_DIR, 'ttlCache.js'));
+
+    let requests = 0;
+    const server = http.createServer((req, res) => {
+        requests += 1;
+        res.setHeader('Content-Type', 'application/json');
+        const body = requests === 1
+            ? { code: 1001, msg: 'item not ready', data: null }
+            : { code: 0, msg: '', data: { list: ['video'] } };
+        res.end(JSON.stringify(body));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn() {}, error() {} } };
+    const api = new FnApiClient(context, baseUrl, 'token-1', new TtlCache());
+
+    const failed = await api.getStreamListCached('item-1');
+    assert.equal(failed.success, false);
+    assert.equal(requests, 1);
+
+    const succeeded = await api.getStreamListCached('item-1');
+    assert.deepEqual(succeeded, { success: true, data: { list: ['video'] } });
+    assert.equal(requests, 2);
+
+    const cached = await api.getStreamListCached('item-1');
+    assert.deepEqual(cached, succeeded);
+    assert.equal(requests, 2);
+});

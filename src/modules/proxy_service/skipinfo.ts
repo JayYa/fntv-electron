@@ -1,12 +1,11 @@
 // smart_skip 读写片头片尾信息：GET /api/v1/skipinfo/:itemGuid?session=…、POST /api/v1/skipinfo?session=…。
 // 响应格式与 Go 版一致：成功 {code:0,msg:"success"}，失败 {code:1000,msg}。
 import type * as http from 'node:http';
-import { FnApiClient } from '../fn_api/core/apiClient';
-import type { RequestContext } from '../fn_api/core/request';
 import type { TtlCache } from '../fn_api/core/ttlCache';
 import type { ProxyLog } from './log';
-import type { PlaybackSession, PlaybackSessionStore } from './playbackSessions';
+import type { PlaybackSessionStore } from './playbackSessions';
 import { sendJson } from './respond';
+import { sessionApiClient } from './sessionApiClient';
 
 export interface SkipInfoDeps {
     sessions: PlaybackSessionStore;
@@ -19,16 +18,6 @@ const INTERNAL_ERROR_CODE = 1000;
 
 function sendError(res: http.ServerResponse, status: number, msg: string): void {
     sendJson(res, status, { code: INTERNAL_ERROR_CODE, msg });
-}
-
-function apiClient(session: PlaybackSession, deps: SkipInfoDeps): FnApiClient {
-    const context: RequestContext = {
-        accessCookie: () => session.accessCookie,
-        skipVerify: () => session.skipVerify,
-        log: deps.log,
-        ca: deps.ca,
-    };
-    return new FnApiClient(context, session.domain, session.token, deps.cache);
 }
 
 export async function handleGetSkipInfo(
@@ -52,7 +41,7 @@ export async function handleGetSkipInfo(
 
     deps.log.info(`开始获取跳过片头片尾信息: itemGuid=${itemGuid}`);
     // 不走缓存，每次都取 NAS 上的最新值。
-    const info = await apiClient(session, deps).getPlayInfo(itemGuid);
+    const info = await sessionApiClient(session, deps).getPlayInfo(itemGuid);
     if (!info.success) {
         deps.log.error('获取跳过片头片尾信息失败');
         sendError(res, 500, 'Failed to get skip info');
@@ -136,7 +125,7 @@ export async function handleSetSkipInfo(
         return;
     }
 
-    const api = apiClient(session, deps);
+    const api = sessionApiClient(session, deps);
     const info = await api.getPlayInfoCached(body.guid);
     if (!info.success) {
         deps.log.error('获取播放信息缓存失败');
