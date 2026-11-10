@@ -124,8 +124,9 @@ export async function forward(
 
     const headers: Record<string, string> = { ...passthroughHeaders(req), ...target.headers, 'x-forwarded-for': '127.0.0.1' };
     const method = req.method || 'GET';
-    const { host, pathname } = targetUrl;
-    log.info(`代理请求 method=${method} host=${host} path=${pathname} range=${headers.range ?? ''}`);
+    const { pathname } = targetUrl;
+    // 不记主机：NAS 路径下就是完整 NAS 地址（CODING_STANDARDS）。
+    log.info(`转发请求 method=${method} path=${pathname} range=${headers.range ?? ''}`);
 
     let upstream: http.IncomingMessage;
     try {

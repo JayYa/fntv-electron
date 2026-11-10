@@ -17,6 +17,20 @@ test('playvideo passes the MPV Range through to the NAS and returns the partial 
     assert.equal(nas.mediaRequests()[0].headers.range, 'bytes=100-199');
 });
 
+// CODING_STANDARDS：完整 NAS 地址不进日志，不靠 logger 的兜底脱敏。
+test('forwarding to the NAS keeps the NAS address out of the Proxy logs', async (t) => {
+    const nas = await startFakeFnMedia(t, { media: { 'media-1': MEDIA }, streams: { 'item-1': ['media-1'] } });
+    const { service, logs } = await startProxy(t);
+    const session = service.createPlaybackSession(sessionInput(nas));
+
+    const response = await get(service, `/api/v1/playvideo/item-1?session=${session}`, { Range: 'bytes=0-9' });
+
+    assert.equal(response.status, 206);
+    const { host } = new URL(nas.domain);
+    assert.ok(logs.length > 0);
+    assert.deepEqual(logs.filter((line) => line.includes(host)), []);
+});
+
 test('a 416 for the initial open range bytes=0- is retried once without Range and If-Range', async (t) => {
     const nas = await startFakeFnMedia(t, {
         streams: { 'item-1': ['media-1'] },
