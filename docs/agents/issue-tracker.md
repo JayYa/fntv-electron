@@ -19,7 +19,7 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 ## This repo is a fork
 
 `origin` is `JayYa/fntv-electron`, independently maintained since 2026-11-05. It stays in the GitHub
-fork network of the upstream `QiaoKes/fntv-electron` (see `docs/wiki/independent-maintenance.md`). All issues,
+fork network of the upstream `QiaoKes/fntv-electron`. All issues,
 comments, and labels belong on **the fork**. Never open an issue, comment, or apply a label on
 the upstream repo.
 

@@ -47,7 +47,7 @@
 ## 依赖
 
 - `nodeLinker` 保持 `hoisted`，这个布局打包出的生产依赖和迁移前一致。改依赖布局时解开产物的 `app.asar`，核对 `node_modules` 里生产依赖齐全，构建成功不算验证。
-- `node-mpv-2` 带一个 `pnpm patch` 补丁（`patches/`），只给 socket 消息加按行缓冲。补丁按版本号绑定，换版本时先确认新版本是否已修，没修就在新版本上重做补丁（`docs/wiki/mpv-ipc.md`）。
+- `node-mpv-2` 带一个 `pnpm patch` 补丁（`patches/`），只给 socket 消息加按行缓冲。补丁按版本号绑定，换版本时先确认新版本是否已修，没修就在新版本上重做补丁。
 
 ## GitHub Workflow
 

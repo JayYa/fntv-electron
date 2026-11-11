@@ -5,7 +5,7 @@ import { currentPlatform, mpvIpcSocket, MpvIpcSocket } from '../../../public/pla
 
 /**
  * 一次播放用的 MPV IPC 地址，进程号加随机串，同一进程的多次播放和同时运行的多份客户端都不重复。
- * 不能用 node-mpv-2 的固定默认值：start() 先连那个地址，连上已有的 MPV 就直接接管（docs/wiki/mpv-ipc.md）。
+ * 不能用 node-mpv-2 的固定默认值：start() 先连那个地址，连上已有的 MPV 就直接接管。
  */
 export function createPlaybackIpcSocket(): MpvIpcSocket {
     return mpvIpcSocket(currentPlatform(), os.tmpdir(), `${process.pid}-${crypto.randomBytes(4).toString('hex')}`);

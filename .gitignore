@@ -18,6 +18,5 @@ play_video.py
 docs/*
 !docs/agents/
 !docs/adr/
-!docs/wiki/
 !docs/external-runtime.md
 smoke-artifacts

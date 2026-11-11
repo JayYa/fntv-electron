@@ -20,7 +20,7 @@ import NodeMpv, { TimePosition } from 'node-mpv-2';
 
 export class MpvPlayer extends BasePlayer {
     private mpvInstance: NodeMpv | null = null;
-    // 这次播放的 IPC 地址，不用 node-mpv-2 的固定默认值（docs/wiki/mpv-ipc.md）
+    // 这次播放的 IPC 地址，不用 node-mpv-2 的固定默认值
     private ipcSocket: MpvIpcSocket | null = null;
     // 节流调用
     private lastProgressTime: number = 0;

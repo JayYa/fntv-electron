@@ -4,11 +4,11 @@
 
 ## Release PR
 
-release-please 在 push 到 `main` 时维护 Release PR，版本号和 `CHANGELOG.md` 只由它改。`release.yml` 不对 Release PR 构建（`docs/wiki/multi-platform-testing.md`）。Release PR 由 GITHUB_TOKEN 开，会触发 `pull_request` workflow，但要维护者批准后才运行；它总会改 `package.json`，批准后 `smoke-test.yml` 测 5 个目标。合并前先批准并等这些检查通过。
+release-please 在 push 到 `main` 时维护 Release PR，版本号和 `CHANGELOG.md` 只由它改。`release.yml` 不对 Release PR 构建。Release PR 由 GITHUB_TOKEN 开，会触发 `pull_request` workflow，但要维护者批准后才运行；它总会改 `package.json`，批准后 `smoke-test.yml` 测 5 个目标。合并前先批准并等这些检查通过。
 
 ## 只用 squash 合并
 
-仓库设置只允许 squash，提交标题取 PR 标题、正文留空，进入 `main` 的只有 PR 标题。用合并提交时，release-please 会把合并提交正文里的 PR 标题和 PR 里的每个提交都收录，同一改动出现两次（`docs/wiki/release-and-update.md`）。所以 PR 标题就是 changelog 条目，`feat`、`fix`、`perf` 的标题要写用户看到的变化。只改内部实现、用户感觉不到时用 `refactor` 或 `chore`，它们不进 changelog；一个 PR 里两种改动都有时，标题按用户能看到的那部分写。
+仓库设置只允许 squash，提交标题取 PR 标题、正文留空，进入 `main` 的只有 PR 标题。用合并提交时，release-please 会把合并提交正文里的 PR 标题和 PR 里的每个提交都收录，同一改动出现两次。所以 PR 标题就是 changelog 条目，`feat`、`fix`、`perf` 的标题要写用户看到的变化。只改内部实现、用户感觉不到时用 `refactor` 或 `chore`，它们不进 changelog；一个 PR 里两种改动都有时，标题按用户能看到的那部分写。
 
 ## Consequences
 
