@@ -16,7 +16,7 @@
 - 测试名用一句英文写清行为，例如 `first initialization does not overwrite pre-existing user state`。
 - 用到文件系统时，在 `fs.mkdtempSync(path.join(os.tmpdir(), ...))` 里操作，并用 `t.after` 清理（`tests/mpvConfigMigration.test.cjs`）。
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
-- 模块直接使用 Electron API 时，替换 `Module._load` 返回 `electron` 的假对象，结束后恢复（`tests/helpers/credentialConfig.cjs`）。
+- 模块直接使用 Electron API 时，用 `tests/helpers/fakeElectron.cjs` 的 `useFakeElectron(t, 假对象, { platform })` 替换 `electron`，它负责恢复、清理 `dest/` 模块缓存和模拟平台（`tests/trayMpvMenu.test.cjs`）。
 - CI 在 Windows、macOS 和 Linux 上都跑，Electron 假对象要包含各平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。按平台跳过的测试由 CI 三平台矩阵验证，本地只确认它在本机是跳过而不是失败，并在报告里写明哪个平台的分支待 CI 验证，不要在本机临时拼装其他平台的运行环境。单独跑测试文件时也加 `--test-timeout=30000`，和 `pnpm test` 一致。
 - 更新检查的测试替换 `axios.get` 返回 GitHub 响应，HTTP 错误用真实的 `axios.AxiosError` 构造（`tests/updateChecker.test.cjs`）。
 

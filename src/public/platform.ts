@@ -42,6 +42,8 @@ export interface PlatformBehavior {
     };
     /** 选择 MPV 播放器时“可执行文件”过滤器的扩展名。 */
     mpvExecutableExtensions: string[];
+    /** 播放时找不到 MPV 的提示。Windows 总有附带 MPV，用不到这条。 */
+    mpvNotFoundMessage: string;
     /** safeStorage 后端是 basic_text 时拒绝保存凭据。只有 Linux 会落到这个后端。 */
     rejectsBasicTextStorage: boolean;
 }
@@ -65,6 +67,9 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
             showsMinimizeBalloon: isWindows,
         },
         mpvExecutableExtensions: isWindows ? ['exe'] : [],
+        mpvNotFoundMessage: isMac
+            ? 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv'
+            : 'Linux平台未找到mpv播放器，请安装mpv播放器后重试',
         rejectsBasicTextStorage: platform === 'linux',
     };
 }
@@ -115,6 +120,49 @@ export function mpvUserConfigDir(
         return legacyDir;
     }
     return standardDir;
+}
+
+/** 没有自选 MPV 时，macOS 和 Linux 依次检查的 mpv 位置。 */
+const MPV_SEARCH_PATHS: Partial<Record<NodeJS.Platform, string[]>> = {
+    darwin: [
+        '/opt/homebrew/bin/mpv',                     // Apple Silicon 上的 Homebrew
+        '/usr/local/bin/mpv',                        // Intel 上的 Homebrew 或手动安装
+        '/Applications/mpv.app/Contents/MacOS/mpv',  // App bundle
+    ],
+    linux: [
+        '/usr/bin/mpv',       // 系统包管理器
+        '/usr/local/bin/mpv', // 手动编译安装
+        '/snap/bin/mpv',      // Snap
+        '/usr/games/mpv',     // 某些发行版
+        '/opt/mpv/bin/mpv',   // 可选安装位置
+    ],
+};
+
+export interface MpvPlayer {
+    path: string;
+    /** 是附带 MPV。播放时要用 --config-dir 把它指向用户配置，否则它读安装目录里的 portable_config。 */
+    bundled: boolean;
+}
+
+/**
+ * 客户端这次会运行的 MPV：自选 MPV 优先，不检查它是否存在；否则 Windows 用附带 MPV（同样不检查），
+ * macOS 和 Linux 取 MPV_SEARCH_PATHS 里第一个存在的。找不到时返回 undefined，由调用方决定是否提示。
+ * 托盘显示和播放都用它，两处看到的是同一个 MPV。pathExists 通常是 fs.existsSync。
+ */
+export function mpvPlayer(
+    platform: NodeJS.Platform,
+    userMpvPath: string | undefined,
+    bundledMpvPath: string,
+    pathExists: (target: string) => boolean,
+): MpvPlayer | undefined {
+    if (userMpvPath) {
+        return { path: userMpvPath, bundled: false };
+    }
+    if (platform === 'win32') {
+        return { path: bundledMpvPath, bundled: true };
+    }
+    const found = (MPV_SEARCH_PATHS[platform] ?? []).find(pathExists);
+    return found ? { path: found, bundled: false } : undefined;
 }
 
 /** MPV JSON IPC 的地址。isFile 为 true 时它是文件系统里的 Unix socket，播放结束后由调用方删除。 */

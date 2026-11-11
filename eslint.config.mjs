@@ -64,6 +64,17 @@ const OS_IMPORT_SYNTAX = [
     }
 ];
 
+// 调用处拿 currentPlatform()、currentArch() 和字符串比较或 switch，就是把平台分支写在了 platform.ts 外面。
+// 差异写进 platformBehavior() 或接收平台参数的纯函数，调用处只读结果（CODING_STANDARDS.md「平台差异」）。
+// 先存进变量再比较的写法拦不住，留给审查。
+const PLATFORM_FUNCTION = '/^current(Platform|Arch)$/';
+const PLATFORM_BRANCH_MESSAGE = '平台分支写进 src/public/platform.ts 的 platformBehavior() 或接收平台参数的纯函数，调用处只读结果，不要比较 currentPlatform()、currentArch()。';
+const PLATFORM_BRANCH_SYNTAX = [
+    `BinaryExpression[left.callee.name=${PLATFORM_FUNCTION}]`,
+    `BinaryExpression[right.callee.name=${PLATFORM_FUNCTION}]`,
+    `SwitchStatement[discriminant.callee.name=${PLATFORM_FUNCTION}]`,
+].map((selector) => ({ selector, message: PLATFORM_BRANCH_MESSAGE }));
+
 // module.exports = 整体替换 export 的结果，新函数没加进表时运行时是 undefined，tsc 查不出。
 const NO_MODULE_EXPORTS = {
     selector: "AssignmentExpression[left.object.name='module'][left.property.name='exports']",
@@ -98,7 +109,7 @@ export default [
             // 平台判断散在各处时，macOS 和 Linux 分支只能在对应系统上验证。集中到 platform.ts，
             // 由接收平台参数的纯函数决定，在 Windows 上也能测三条分支（tests/platform.test.cjs）。
             // 各种写法的拦截见 tests/eslintPlatformRules.test.cjs。
-            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX],
+            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX],
             // safeStorage 同步方法的拦截见 tests/eslintSafeStorageRules.test.cjs。
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES]
         }

@@ -1,18 +1,16 @@
-import { app, dialog, IpcMainEvent } from 'electron';
+import { dialog, IpcMainEvent } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
 import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
 import { registerAppHook } from '../core/appHook';
 import * as log from '../../../modules/logger';
-import * as fs from 'fs';
 import { ItemListRequest } from '../../../modules/fn_api/core/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
-import { getMpvConfigDir } from './mpvConfig';
-import { currentPlatform } from '../../../public/platform';
-import { resolveBundledMpvPath } from '../../common/mpvConfigHelpers';
+import { getCurrentMpvPlayer, getMpvConfigDir } from './mpvConfig';
+import { MpvPlayer, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
@@ -29,77 +27,16 @@ import { isPlayRequest, PlayRequest } from '../../../modules/playback/playReques
 let currentPlayer: ply.BasePlayer | null = null;
 let playbackStarting = false;
 
-// MPV播放器路径缓存
-let cachedPlayerPath: string | null = null;
-
-// 设置MPV播放器路径（用于覆盖默认路径）
-export function setMpvPlayerPath(path: string | null): void {
-    cachedPlayerPath = path;
-}
-
-/**
- * 获取MPV播放器路径（带缓存）
- * @returns 播放器路径或undefined
- */
-function getMpvPlayerPath(): string | undefined {
-    // 如果已经缓存了路径，直接返回
-    if (cachedPlayerPath) {
-        return cachedPlayerPath;
+// 找不到 MPV 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
+function getPlayerOrNotify(): MpvPlayer | undefined {
+    const player = getCurrentMpvPlayer();
+    if (player) {
+        log.info(`MPV播放器路径: ${player.path}`);
+        return player;
     }
-
-    const platform = currentPlatform();
-
-    if (platform === 'win32') {
-        cachedPlayerPath = resolveBundledMpvPath({
-            appPath: app.getAppPath(),
-            execPath: process.execPath,
-            isPackaged: app.isPackaged,
-        });
-        return cachedPlayerPath;
-    } else if (platform === 'darwin') {
-        // macOS 常用安装路径
-        const macPaths = [
-            '/opt/homebrew/bin/mpv',  // Apple Silicon Mac (M1/M2)
-            '/usr/local/bin/mpv',     // Intel Mac 或手动安装
-            '/Applications/mpv.app/Contents/MacOS/mpv', // App bundle
-        ];
-
-        for (const path of macPaths) {
-            if (fs.existsSync(path)) {
-                cachedPlayerPath = path;
-                log.info(`找到MPV播放器路径: ${path}`);
-                return cachedPlayerPath;
-            }
-        }
-
-        // 未找到mpv播放器
-        dialog.showErrorBox('错误', 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv');
-        log.error('macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv');
-        return undefined;
-    } else if (platform === 'linux') {
-        // Linux 常用安装路径
-        const linuxPaths = [
-            '/usr/bin/mpv',           // 系统包管理器安装
-            '/usr/local/bin/mpv',     // 手动编译安装
-            '/snap/bin/mpv',          // Snap 包
-            '/usr/games/mpv',         // 某些发行版
-            '/opt/mpv/bin/mpv',       // 可选安装位置
-        ];
-
-        for (const path of linuxPaths) {
-            if (fs.existsSync(path)) {
-                cachedPlayerPath = path;
-                log.info(`找到MPV播放器路径: ${path}`);
-                return cachedPlayerPath;
-            }
-        }
-
-        // 未找到mpv播放器
-        dialog.showErrorBox('错误', 'Linux平台未找到mpv播放器，请安装mpv播放器后重试');
-        log.error('Linux平台未找到mpv播放器，请安装mpv播放器后重试');
-        return undefined;
-    }
-
+    const message = platformBehavior().mpvNotFoundMessage;
+    dialog.showErrorBox('错误', message);
+    log.error(message);
     return undefined;
 }
 
@@ -436,10 +373,9 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         );
     }
 
-    // 获取MPV播放器路径
-    const playerPath = getMpvPlayerPath();
-    if (!playerPath) {
-        log.error('无法找到MPV播放器路径');
+    // 获取MPV播放器
+    const mpv = getPlayerOrNotify();
+    if (!mpv) {
         return;
     }
 
@@ -449,14 +385,14 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         '--network-timeout=180',
         `--volume=${fnConfig.getMpvVolume()}`,
     ];
-    if (currentPlatform() === 'win32' && !fnConfig.getMpvPlayerPath()) {
-        // bundled mpv.exe 自带 portable_config；显式指向用户目录，避免状态写入安装目录。
+    if (mpv.bundled) {
+        // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
         mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 
     const playConfig: ply.Config = {
         fnapi: fnapi,
-        playerPath: playerPath,
+        playerPath: mpv.path,
         // headers: {
         //     Authorization: token,
         // },
@@ -515,20 +451,10 @@ function handleBeforeQuit(): void {
         currentPlayer.stop();
         currentPlayer = null;
     }
-
-    // 清理播放器路径缓存
-    cachedPlayerPath = null;
 }
 
 // 注册媒体播放处理器
 function init(): void {
-    // 从配置中读取MPV播放器路径并设置
-    const configMpvPath = fnConfig.getMpvPlayerPath();
-    if (configMpvPath) {
-        setMpvPlayerPath(configMpvPath);
-        log.info(`从配置中加载MPV播放器路径: ${configMpvPath}`);
-    }
-
     registerHandler('play-movie', handlePlayMovie);
     registerAppHook('beforeQuit', handleBeforeQuit);
 }
