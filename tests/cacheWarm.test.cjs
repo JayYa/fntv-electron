@@ -115,7 +115,7 @@ test('the deps job sets up pnpm and Node.js exactly like ci.yml, so the cache ke
     assert.ok(deps.steps.some(step => step.run === 'pnpm install --frozen-lockfile'));
     // 只装依赖不跑测试，测试由 PR 上的 ci.yml 跑。
     assert.ok(!deps.steps.some(step => step.run === 'pnpm test'));
-    // 不给 ci.yml 加 push: main（docs/wiki/ci-download-cache.md）。
+    // 不给 ci.yml 加 push: main：每次合并都要跑三平台测试，且预热不了打包缓存。
     assert.deepEqual(Object.keys(workflow('ci.yml').on), ['pull_request']);
 });
 

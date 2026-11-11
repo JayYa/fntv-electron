@@ -7,8 +7,8 @@ name: Warm download caches
 # 都在的平台不构建；key 只随 electron、electron-builder、app-builder-lib 的版本变（scripts/ci-download-cache.cjs），
 # 平时合并依赖 PR 只跑一次几秒的查询。新 key 存好后，prune 删掉 main 上被它取代的旧 key。
 # deps 在三个平台上只装依赖，让 setup-node 的 pnpm store 缓存跟着锁文件在 main 上更新
-#（key 由 action 按文件 hash 算，不预先查）。不给 ci.yml 加 push: main，见
-# docs/wiki/ci-download-cache.md。
+#（key 由 action 按文件 hash 算，不预先查）。不给 ci.yml 加 push: main：
+# 每次合并都要跑三平台测试，且预热不了打包缓存。
 # 每周一次的定时运行补上 7 天没被读过、被 GitHub 清掉的缓存。
 on:
   push:

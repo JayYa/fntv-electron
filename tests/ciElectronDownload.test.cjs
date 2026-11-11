@@ -63,7 +63,7 @@ test('ci.yml and build.yml install dependencies through the shared action', () =
 
 test('the electron package downloads its binary on demand, not at install time', () => {
     // 下载步骤依赖这几点：安装依赖时不下载，install.js 还在。electron 重新加回安装脚本或去掉 install.js 时，
-    // 这里失败，提醒重新核对下载步骤（Electron 45 的机制见 docs/wiki/ci-download-cache.md）。
+    // 这里失败，提醒重新核对下载步骤。
     const electronDir = path.join(__dirname, '..', 'node_modules', 'electron');
     const pkg = JSON.parse(fs.readFileSync(path.join(electronDir, 'package.json'), 'utf8'));
     for (const script of ['preinstall', 'install', 'postinstall']) {

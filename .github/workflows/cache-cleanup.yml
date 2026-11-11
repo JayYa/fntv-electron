@@ -2,7 +2,7 @@ name: Clean up PR caches
 
 # PR 上运行存的缓存在 refs/pull/<编号>/merge 下，只有这个 PR 自己的运行读得到。PR 关闭（含合并）后
 # 再也不会被读到，但要等 7 天没被读过才被 GitHub 清掉，期间占着仓库 10 GiB 的缓存额度，
-# 超出时 GitHub 按最近访问时间淘汰，可能挤掉 main 上的缓存（docs/wiki/ci-download-cache.md）。
+# 超出时 GitHub 按最近访问时间淘汰，可能挤掉 main 上的缓存。
 # 这里在 PR 关闭时删掉它的缓存。删除要 actions: write；fork 来的 PR 拿到的 token 只读，删不了，跳过。
 on:
   pull_request:
