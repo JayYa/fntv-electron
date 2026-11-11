@@ -3,13 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const LINUX_MPV_LOCATIONS = ['/usr/bin/mpv', '/usr/local/bin/mpv', '/snap/bin/mpv', '/usr/games/mpv', '/opt/mpv/bin/mpv'];
 
 // 用假的 electron 加载 tray.js，截下每次 setContextMenu 收到的菜单模板。
 // MPV_HOME 指向临时目录，用户配置目录在三个平台上都落在这里，不碰本机真实的 mpv 配置。
-function setupTray(t, { platform = process.platform, mpvHomeExists = true, openPathError = '' } = {}) {
+function setupTray(t, { platform, mpvHomeExists = true, openPathError = '' } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-tray-'));
     const mpvHome = path.join(testRoot, 'mpv-home');
     if (mpvHomeExists) fs.mkdirSync(mpvHome);
@@ -50,28 +50,14 @@ function setupTray(t, { platform = process.platform, mpvHomeExists = true, openP
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-    Object.defineProperty(process, 'platform', { ...originalPlatform, value: platform });
+    useFakeElectron(t, electronMock, { platform });
     const originalMpvHome = process.env.MPV_HOME;
     process.env.MPV_HOME = mpvHome;
-
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
     t.after(() => {
-        Module._load = originalLoad;
-        Object.defineProperty(process, 'platform', originalPlatform);
         if (originalMpvHome === undefined) delete process.env.MPV_HOME;
         else process.env.MPV_HOME = originalMpvHome;
-        clearCompiledModules();
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
-    clearCompiledModules();
 
     const settingsItems = () => menus.at(-1).find((item) => item.label === '设置').submenu;
     const item = (prefix) => {

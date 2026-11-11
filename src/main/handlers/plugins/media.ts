@@ -9,8 +9,8 @@ import { ItemListRequest } from '../../../modules/fn_api/core/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
-import { getCurrentMpvPlayerPath, getMpvConfigDir } from './mpvConfig';
-import { currentPlatform, platformBehavior } from '../../../public/platform';
+import { getCurrentMpvPlayer, getMpvConfigDir } from './mpvConfig';
+import { MpvPlayer, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
@@ -28,11 +28,11 @@ let currentPlayer: ply.BasePlayer | null = null;
 let playbackStarting = false;
 
 // 找不到 MPV 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
-function getPlayerPathOrNotify(): string | undefined {
-    const playerPath = getCurrentMpvPlayerPath();
-    if (playerPath) {
-        log.info(`MPV播放器路径: ${playerPath}`);
-        return playerPath;
+function getPlayerOrNotify(): MpvPlayer | undefined {
+    const player = getCurrentMpvPlayer();
+    if (player) {
+        log.info(`MPV播放器路径: ${player.path}`);
+        return player;
     }
     const message = platformBehavior().mpvNotFoundMessage;
     dialog.showErrorBox('错误', message);
@@ -373,9 +373,9 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         );
     }
 
-    // 获取MPV播放器路径
-    const playerPath = getPlayerPathOrNotify();
-    if (!playerPath) {
+    // 获取MPV播放器
+    const mpv = getPlayerOrNotify();
+    if (!mpv) {
         return;
     }
 
@@ -385,14 +385,14 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         '--network-timeout=180',
         `--volume=${fnConfig.getMpvVolume()}`,
     ];
-    if (currentPlatform() === 'win32' && !fnConfig.getMpvPlayerPath()) {
+    if (mpv.bundled) {
         // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
         mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 
     const playConfig: ply.Config = {
         fnapi: fnapi,
-        playerPath: playerPath,
+        playerPath: mpv.path,
         // headers: {
         //     Authorization: token,
         // },

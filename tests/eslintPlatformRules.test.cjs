@@ -22,6 +22,10 @@ const forbidden = {
     'require(os).platform()': "export const p = require('os').platform();\n",
     'destructured require arch': "const { arch } = require('node:os');\nexport const a = arch();\n",
     'process.platform': 'export const p = process.platform;\n',
+    'comparing currentPlatform() at the call site': "import { currentPlatform } from '../public/platform';\nexport const w = currentPlatform() === 'win32';\n",
+    'comparing currentPlatform() on the right': "import { currentPlatform } from '../public/platform';\nexport const m = 'darwin' !== currentPlatform();\n",
+    'comparing currentArch() at the call site': "import { currentArch } from '../public/platform';\nexport const a = currentArch() === 'arm64';\n",
+    'switching on currentPlatform()': "import { currentPlatform } from '../public/platform';\nexport function f(): number { switch (currentPlatform()) { case 'linux': return 1; default: return 0; } }\n",
 };
 
 for (const [name, code] of Object.entries(forbidden)) {
@@ -30,6 +34,11 @@ for (const [name, code] of Object.entries(forbidden)) {
         assert.ok(messages.some((message) => message.includes('platform.ts')), messages.join('\n'));
     });
 }
+
+test('lint allows passing currentPlatform() to platform functions outside platform.ts', async () => {
+    const code = "import { currentPlatform, platformBehavior } from '../public/platform';\nexport const b = platformBehavior(currentPlatform());\n";
+    assert.deepEqual(await messagesFor(code), []);
+});
 
 test('lint allows other os functions outside platform.ts', async () => {
     assert.deepEqual(await messagesFor("import * as os from 'os';\nexport const h = os.homedir();\n"), []);

@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./fakeElectron.cjs');
 
 function legacyEncrypt(value) {
     const key = Buffer.from('U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H');
@@ -76,24 +76,10 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-
-    t.after(() => {
-        Module._load = originalLoad;
-        clearCompiledModules();
-        fs.rmSync(testRoot, { recursive: true, force: true });
-    });
+    useFakeElectron(t, electronMock);
+    t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    clearCompiledModules();
     return {
         loadConfig: () => require('../../dest/modules/fn_config/config.js'),
         loadWinctrl: () => require('../../dest/main/common/winctrl.js'),

@@ -8,7 +8,7 @@ import {
     resolvePortableConfigDir,
     synchronizeMpvConfig,
 } from '../../common/mpvConfigHelpers';
-import { currentPlatform, mpvPlayerPath, mpvUserConfigDir } from '../../../public/platform';
+import { currentPlatform, mpvPlayer, MpvPlayer, mpvUserConfigDir } from '../../../public/platform';
 
 /**
  * MPV配置文件管理插件
@@ -28,13 +28,13 @@ export function getMpvConfigDir(userMpvPath?: string): string {
 }
 
 // 客户端这次会运行的 MPV（自选 MPV、附带 MPV 或在常见位置找到的 MPV），找不到时是 undefined。托盘显示和播放共用。
-export function getCurrentMpvPlayerPath(): string | undefined {
+export function getCurrentMpvPlayer(): MpvPlayer | undefined {
     const bundledMpvPath = resolveBundledMpvPath({
         appPath: app.getAppPath(),
         execPath: process.execPath,
         isPackaged: app.isPackaged,
     });
-    return mpvPlayerPath(currentPlatform(), fnConfig.getMpvPlayerPath(), bundledMpvPath, fs.existsSync);
+    return mpvPlayer(currentPlatform(), fnConfig.getMpvPlayerPath(), bundledMpvPath, fs.existsSync);
 }
 
 // 获取应用中的portable_config目录

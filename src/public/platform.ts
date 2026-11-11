@@ -138,24 +138,31 @@ const MPV_SEARCH_PATHS: Partial<Record<NodeJS.Platform, string[]>> = {
     ],
 };
 
+export interface MpvPlayer {
+    path: string;
+    /** 是附带 MPV。播放时要用 --config-dir 把它指向用户配置，否则它读安装目录里的 portable_config。 */
+    bundled: boolean;
+}
+
 /**
- * 客户端这次会运行的 mpv：自选 MPV 优先，不检查它是否存在；否则 Windows 用附带 MPV（同样不检查），
+ * 客户端这次会运行的 MPV：自选 MPV 优先，不检查它是否存在；否则 Windows 用附带 MPV（同样不检查），
  * macOS 和 Linux 取 MPV_SEARCH_PATHS 里第一个存在的。找不到时返回 undefined，由调用方决定是否提示。
- * 托盘显示和播放都用它，两处看到的是同一个 mpv。pathExists 通常是 fs.existsSync。
+ * 托盘显示和播放都用它，两处看到的是同一个 MPV。pathExists 通常是 fs.existsSync。
  */
-export function mpvPlayerPath(
+export function mpvPlayer(
     platform: NodeJS.Platform,
     userMpvPath: string | undefined,
     bundledMpvPath: string,
     pathExists: (target: string) => boolean,
-): string | undefined {
+): MpvPlayer | undefined {
     if (userMpvPath) {
-        return userMpvPath;
+        return { path: userMpvPath, bundled: false };
     }
     if (platform === 'win32') {
-        return bundledMpvPath;
+        return { path: bundledMpvPath, bundled: true };
     }
-    return (MPV_SEARCH_PATHS[platform] ?? []).find(pathExists);
+    const found = (MPV_SEARCH_PATHS[platform] ?? []).find(pathExists);
+    return found ? { path: found, bundled: false } : undefined;
 }
 
 /** MPV JSON IPC 的地址。isFile 为 true 时它是文件系统里的 Unix socket，播放结束后由调用方删除。 */

@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCurrentMpvPlayerPath, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
+import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
@@ -39,7 +39,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     const mpvEnabled = fnConfig.getHideOriginalPlayButton();
     const nasProxyEnabled = fnConfig.getNasProxyEnabled();
     const currentMpvPath = fnConfig.getMpvPlayerPath();
-    const playerPath = getCurrentMpvPlayerPath();
+    const playerPath = getCurrentMpvPlayer()?.path;
     const mpvConfigDir = getMpvConfigDir(currentMpvPath);
 
     const submenu: Electron.MenuItemConstructorOptions[] = [

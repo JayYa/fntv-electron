@@ -10,7 +10,7 @@
 
 ## 运行哪个 MPV
 
-入口是 `mpvPlayerPath`（`src/public/platform.ts`），托盘显示和播放都用它，两处看到的是同一个 MPV。
+入口是 `mpvPlayer`（`src/public/platform.ts`），它同时说明是不是附带 MPV（决定是否传 `--config-dir`），托盘显示和播放都用它，两处看到的是同一个 MPV。
 
 - 有自选 MPV（托盘里设置的路径）时用它，不检查文件是否存在。
 - Windows 上没有自选 MPV 时用附带 MPV `third_party/fntv-mpv/mpv.exe`，同样不检查。
