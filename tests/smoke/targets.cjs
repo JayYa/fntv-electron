@@ -173,8 +173,12 @@ const TARGETS = {
                 uninstall: () => runUninstaller(installDir, uninstaller),
             };
         },
-        // USERPROFILE 隔离 os.homedir() 下的 MPV 用户配置。
-        environment: home => ({ USERPROFILE: home }),
+        // USERPROFILE 隔离 os.homedir() 下的 MPV 用户配置。Windows 按 %USERPROFILE%\AppData\Roaming 解析
+        // 漫游 AppData，目录不存在时 app.getPath('appData') 会失败，所以先建好，像真实的用户目录一样。
+        environment: home => {
+            fs.mkdirSync(path.join(home, 'AppData', 'Roaming'), { recursive: true });
+            return { USERPROFILE: home };
+        },
         isolation: windowsIsolation,
     },
 };

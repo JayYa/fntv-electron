@@ -9,7 +9,8 @@ const LINUX_MPV_LOCATIONS = ['/usr/bin/mpv', '/usr/local/bin/mpv', '/snap/bin/mp
 
 // 用假的 electron 加载 tray.js，截下每次 setContextMenu 收到的菜单模板。
 // MPV_HOME 指向临时目录，用户配置目录在三个平台上都落在这里，不碰本机真实的 mpv 配置。
-function setupTray(t, { platform, mpvHomeExists = true, openPathError = '' } = {}) {
+// appDataError 让 app.getPath('appData') 抛这个错，像 Windows 上 USERPROFILE 指向的目录下没有 AppData\Roaming 时那样。
+function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appDataError = '' } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-tray-'));
     const mpvHome = path.join(testRoot, 'mpv-home');
     if (mpvHomeExists) fs.mkdirSync(mpvHome);
@@ -32,7 +33,10 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '' } = {
         app: {
             isPackaged: false,
             getAppPath() { return testRoot; },
-            getPath(name) { return paths[name]; },
+            getPath(name) {
+                if (name === 'appData' && appDataError) throw new Error(appDataError);
+                return paths[name];
+            },
             setPath(name, value) { paths[name] = value; },
             commandLine: { getSwitchValue() { return ''; } },
             getVersion() { return '0.0.0'; },
@@ -163,4 +167,14 @@ test('a failure to open the MPV config folder shows the reason and is logged', a
     assert.ok(tray.errorBoxes[0].content.includes('Access is denied.'));
     assert.ok(tray.errorBoxes[0].content.includes(tray.mpvHome));
     assert.match(tray.logText(), /ERROR.*打开MPV用户配置目录失败.*Access is denied\./);
+});
+
+test('when the MPV config folder cannot be determined the tray still opens and says so', async (t) => {
+    const tray = setupTray(t, { appDataError: "Failed to get 'appData' path" });
+    await tray.createTray();
+
+    const configItem = tray.item(CONFIG_ITEM);
+    assert.equal(configItem.label, `${CONFIG_ITEM} (无法确定)`);
+    assert.equal(configItem.enabled, false);
+    assert.match(tray.logText(), /获取MPV用户配置目录失败.*Failed to get 'appData' path/);
 });
