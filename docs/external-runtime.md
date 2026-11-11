@@ -8,9 +8,9 @@
 - **便携配置**：归档里的 `portable_config`，是同步的来源，由 `resolvePortableConfigDir` 定位。
 - **用户配置**：同步的目标，按 mpv 自己的查找规则定（`mpvUserConfigDir`，`src/public/platform.ts`）：设了 `MPV_HOME` 就是它；否则 Windows 是 `app.getPath('appData')` 下的 `mpv`（通常是 `%APPDATA%mpv`），其它平台是 `$XDG_CONFIG_HOME/mpv`，未设或不是绝对路径时 `~/.config/mpv`。Windows 上用打包的 mpv 时，`media.ts` 用 `--config-dir` 把同一个目录传给 mpv。Windows 上用户自己指定的 `mpv.exe` 旁边有 `portable_config` 时，mpv 只读那里，同步也写那里（`MPV_HOME` 仍优先，#114）；指定的是 scoop 之类的 shim 时找不到真实 `mpv.exe` 旁边的目录，不处理。macOS 和 Linux 上标准目录不存在而 `~/.mpv` 存在时，同步写 `~/.mpv`，不新建标准目录（#115）。同步只在客户端启动时进行，改了 MPV 播放器路径后要重启客户端才同步到新目录。
 
-## 运行哪个 mpv
+## 运行哪个 MPV
 
-入口是 `mpvPlayerPath`（`src/public/platform.ts`），托盘显示和播放都用它，两处看到的是同一个 mpv。
+入口是 `mpvPlayerPath`（`src/public/platform.ts`），托盘显示和播放都用它，两处看到的是同一个 MPV。
 
 - 有自选 MPV（托盘里设置的路径）时用它，不检查文件是否存在。
 - Windows 上没有自选 MPV 时用附带 MPV `third_party/fntv-mpv/mpv.exe`，同样不检查。
@@ -19,7 +19,7 @@
 托盘“设置”子菜单：
 
 - `设置MPV播放器路径 (<路径>)` 总是显示上面算出的路径，找不到时显示 `(未找到)`。
-- `打开MPV用户配置目录 (<路径>)` 显示按当前设置算出的用户配置目录，也就是下次播放时 mpv 读的目录。改了 MPV 播放器路径后它立刻变化，但要重启客户端才会同步到新目录。目录不存在时只弹提示，不创建：空目录会让下次同步按首次初始化处理。`shell.openPath` 失败时弹错误框并记 ERROR 日志。
+- `打开MPV用户配置目录 (<路径>)` 显示按当前设置算出的用户配置目录，也就是下次播放时 MPV 读的目录。改了 MPV 播放器路径后它立刻变化，但要重启客户端才会同步到新目录。目录不存在时只弹提示，不创建：空目录会让下次同步按首次初始化处理。`shell.openPath` 失败时弹错误框并记 ERROR 日志。
 
 ## MPV 归档
 
@@ -107,7 +107,7 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 行为 | 测试 |
 | --- | --- |
 | 用户配置同步 | `tests/mpvConfigMigration.test.cjs` |
-| 用户配置目录、运行哪个 mpv | `tests/platform.test.cjs` |
+| 用户配置目录、运行哪个 MPV | `tests/platform.test.cjs` |
 | 托盘显示 mpv 路径、打开用户配置目录 | `tests/trayMpvMenu.test.cjs` |
 | 默认播放方式 | `tests/playbackPreference.test.cjs` |
 | 经 IPC 创建播放会话，入参不变 | `tests/proxyControl.test.cjs` |

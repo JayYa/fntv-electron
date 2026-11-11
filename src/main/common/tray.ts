@@ -125,7 +125,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             }
         },
         {
-            // 按当前设置算出的目录，是下次播放时 mpv 读的目录；改了 mpv 路径后要重启客户端才会同步到这里。
+            // 按当前设置算出的目录，是下次播放时 MPV 读的目录；改了自选 MPV 后要重启客户端才会同步到这里。
             label: `打开MPV用户配置目录 (${mpvConfigDir})`,
             click: () => openMpvConfigDir(mainWindow, mpvConfigDir),
         }

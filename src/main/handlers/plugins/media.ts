@@ -10,7 +10,7 @@ import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
 import { getCurrentMpvPlayerPath, getMpvConfigDir } from './mpvConfig';
-import { currentPlatform } from '../../../public/platform';
+import { currentPlatform, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
@@ -27,16 +27,14 @@ import { isPlayRequest, PlayRequest } from '../../../modules/playback/playReques
 let currentPlayer: ply.BasePlayer | null = null;
 let playbackStarting = false;
 
-// 找不到 mpv 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
+// 找不到 MPV 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
 function getPlayerPathOrNotify(): string | undefined {
     const playerPath = getCurrentMpvPlayerPath();
     if (playerPath) {
         log.info(`MPV播放器路径: ${playerPath}`);
         return playerPath;
     }
-    const message = currentPlatform() === 'darwin'
-        ? 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv'
-        : 'Linux平台未找到mpv播放器，请安装mpv播放器后重试';
+    const message = platformBehavior().mpvNotFoundMessage;
     dialog.showErrorBox('错误', message);
     log.error(message);
     return undefined;
@@ -378,7 +376,6 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
     // 获取MPV播放器路径
     const playerPath = getPlayerPathOrNotify();
     if (!playerPath) {
-        log.error('无法找到MPV播放器路径');
         return;
     }
 
@@ -389,7 +386,7 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest): Promise
         `--volume=${fnConfig.getMpvVolume()}`,
     ];
     if (currentPlatform() === 'win32' && !fnConfig.getMpvPlayerPath()) {
-        // bundled mpv.exe 自带 portable_config；显式指向用户目录，避免状态写入安装目录。
+        // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
         mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 

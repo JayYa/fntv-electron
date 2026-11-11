@@ -143,11 +143,11 @@ _Avoid_: 忽略证书、跳过校验、skip verify
 _Avoid_: MPV 包、第三方依赖
 
 **附带 MPV (bundled MPV)**：
-MPV 归档里随客户端分发的 mpv 程序；Windows 上没有自选 MPV 时用它。
+MPV 归档里随客户端分发的 MPV 程序；Windows 上没有自选 MPV 时用它。
 _Avoid_: 打包的 mpv、内置 mpv
 
 **自选 MPV (user-chosen MPV)**：
-用户自己指定的 mpv 程序；指定后优先于附带 MPV 和自动查找。
+用户自己指定的 MPV 程序；指定后优先于附带 MPV 和自动查找。
 _Avoid_: 自定义 mpv、外部 mpv
 
 **便携配置 (portable config)**：

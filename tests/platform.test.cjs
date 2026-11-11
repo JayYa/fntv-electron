@@ -32,6 +32,7 @@ test('macOS keeps running in the status bar and dock and asks about closing the 
         showsMinimizeBalloon: false,
     });
     assert.deepEqual(behavior.mpvExecutableExtensions, []);
+    assert.equal(behavior.mpvNotFoundMessage, 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv');
     assert.equal(behavior.rejectsBasicTextStorage, false);
 });
 
@@ -70,6 +71,7 @@ test('Linux uses the exit mode, a PNG window icon, restores on tray click and re
         showsMinimizeBalloon: false,
     });
     assert.deepEqual(behavior.mpvExecutableExtensions, []);
+    assert.equal(behavior.mpvNotFoundMessage, 'Linux平台未找到mpv播放器，请安装mpv播放器后重试');
     assert.equal(behavior.rejectsBasicTextStorage, true);
 });
 

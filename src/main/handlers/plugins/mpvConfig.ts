@@ -15,8 +15,8 @@ import { currentPlatform, mpvPlayerPath, mpvUserConfigDir } from '../../../publi
  * 初始化用户 MPV 配置，并同步由应用托管的插件代码。
  */
 
-// 获取用户MPV配置目录。打包的 mpv 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
-// userMpvPath 是用户自己指定的 mpv；打包的 mpv 不传，它旁边的 portable_config 会被 --config-dir 盖过。
+// 获取用户MPV配置目录。附带 MPV 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
+// userMpvPath 是自选 MPV；附带 MPV 不传，它旁边的 portable_config 会被 --config-dir 盖过。
 export function getMpvConfigDir(userMpvPath?: string): string {
     return mpvUserConfigDir(
         currentPlatform(),
@@ -27,7 +27,7 @@ export function getMpvConfigDir(userMpvPath?: string): string {
     );
 }
 
-// 客户端这次会运行的 mpv（自选 MPV、附带 MPV 或在常见位置找到的 mpv），找不到时是 undefined。托盘显示和播放共用。
+// 客户端这次会运行的 MPV（自选 MPV、附带 MPV 或在常见位置找到的 MPV），找不到时是 undefined。托盘显示和播放共用。
 export function getCurrentMpvPlayerPath(): string | undefined {
     const bundledMpvPath = resolveBundledMpvPath({
         appPath: app.getAppPath(),

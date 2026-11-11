@@ -42,6 +42,8 @@ export interface PlatformBehavior {
     };
     /** 选择 MPV 播放器时“可执行文件”过滤器的扩展名。 */
     mpvExecutableExtensions: string[];
+    /** 播放时找不到 MPV 的提示。Windows 总有附带 MPV，用不到这条。 */
+    mpvNotFoundMessage: string;
     /** safeStorage 后端是 basic_text 时拒绝保存凭据。只有 Linux 会落到这个后端。 */
     rejectsBasicTextStorage: boolean;
 }
@@ -65,6 +67,9 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
             showsMinimizeBalloon: isWindows,
         },
         mpvExecutableExtensions: isWindows ? ['exe'] : [],
+        mpvNotFoundMessage: isMac
+            ? 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv'
+            : 'Linux平台未找到mpv播放器，请安装mpv播放器后重试',
         rejectsBasicTextStorage: platform === 'linux',
     };
 }
