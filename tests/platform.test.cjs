@@ -9,6 +9,7 @@ const {
     platformBehavior,
     mpvUserConfigDir,
     mpvIpcSocket,
+    mpvPlayerPath,
 } = require('../dest/public/platform.js');
 
 test('platformBehavior defaults to the platform the app runs on', () => {
@@ -170,4 +171,35 @@ test('macOS and Linux put the socket file in the temp directory instead of /tmp/
 test('a temp directory too long for a Unix socket address falls back to /tmp', () => {
     const longTmp = `/home/me/${'x'.repeat(100)}`;
     assert.deepEqual(mpvIpcSocket('linux', longTmp, '4242-0a1b2c3d'), { path: '/tmp/fntv-mpv-4242-0a1b2c3d.sock', isFile: true });
+});
+
+const bundledMpv = 'C:\\Program Files\\fntv\\third_party\\fntv-mpv\\mpv.exe';
+const existing = (...paths) => (target) => paths.includes(target);
+
+test('a user-chosen MPV wins on every platform, even when it does not exist', () => {
+    for (const platform of ['win32', 'darwin', 'linux']) {
+        assert.equal(mpvPlayerPath(platform, 'E:\\tools\\mpv.exe', bundledMpv, existing('/usr/bin/mpv')), 'E:\\tools\\mpv.exe');
+    }
+});
+
+test('Windows without a user-chosen MPV uses the bundled MPV without checking that it exists', () => {
+    assert.equal(mpvPlayerPath('win32', undefined, bundledMpv, existing()), bundledMpv);
+});
+
+test('macOS uses the first existing mpv among Homebrew, /usr/local and the app bundle', () => {
+    const appBundle = '/Applications/mpv.app/Contents/MacOS/mpv';
+    assert.equal(mpvPlayerPath('darwin', undefined, bundledMpv, existing(appBundle, '/usr/local/bin/mpv')), '/usr/local/bin/mpv');
+    assert.equal(mpvPlayerPath('darwin', undefined, bundledMpv, existing(appBundle, '/opt/homebrew/bin/mpv')), '/opt/homebrew/bin/mpv');
+    assert.equal(mpvPlayerPath('darwin', undefined, bundledMpv, existing(appBundle)), appBundle);
+});
+
+test('Linux uses the first existing mpv among the system, local, snap, games and /opt locations', () => {
+    assert.equal(mpvPlayerPath('linux', undefined, bundledMpv, existing('/snap/bin/mpv', '/opt/mpv/bin/mpv')), '/snap/bin/mpv');
+    assert.equal(mpvPlayerPath('linux', undefined, bundledMpv, existing('/usr/games/mpv', '/usr/bin/mpv')), '/usr/bin/mpv');
+    assert.equal(mpvPlayerPath('linux', undefined, bundledMpv, existing('/opt/mpv/bin/mpv')), '/opt/mpv/bin/mpv');
+});
+
+test('macOS and Linux find no mpv when none of the known locations exist, and never fall back to the bundled MPV', () => {
+    assert.equal(mpvPlayerPath('darwin', undefined, bundledMpv, existing(bundledMpv, '/usr/bin/mpv')), undefined);
+    assert.equal(mpvPlayerPath('linux', undefined, bundledMpv, existing(bundledMpv, '/opt/homebrew/bin/mpv')), undefined);
 });

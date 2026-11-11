@@ -117,6 +117,42 @@ export function mpvUserConfigDir(
     return standardDir;
 }
 
+/** 没有自选 MPV 时，macOS 和 Linux 依次检查的 mpv 位置。 */
+const MPV_SEARCH_PATHS: Partial<Record<NodeJS.Platform, string[]>> = {
+    darwin: [
+        '/opt/homebrew/bin/mpv',                     // Apple Silicon 上的 Homebrew
+        '/usr/local/bin/mpv',                        // Intel 上的 Homebrew 或手动安装
+        '/Applications/mpv.app/Contents/MacOS/mpv',  // App bundle
+    ],
+    linux: [
+        '/usr/bin/mpv',       // 系统包管理器
+        '/usr/local/bin/mpv', // 手动编译安装
+        '/snap/bin/mpv',      // Snap
+        '/usr/games/mpv',     // 某些发行版
+        '/opt/mpv/bin/mpv',   // 可选安装位置
+    ],
+};
+
+/**
+ * 客户端这次会运行的 mpv：自选 MPV 优先，不检查它是否存在；否则 Windows 用附带 MPV（同样不检查），
+ * macOS 和 Linux 取 MPV_SEARCH_PATHS 里第一个存在的。找不到时返回 undefined，由调用方决定是否提示。
+ * 托盘显示和播放都用它，两处看到的是同一个 mpv。pathExists 通常是 fs.existsSync。
+ */
+export function mpvPlayerPath(
+    platform: NodeJS.Platform,
+    userMpvPath: string | undefined,
+    bundledMpvPath: string,
+    pathExists: (target: string) => boolean,
+): string | undefined {
+    if (userMpvPath) {
+        return userMpvPath;
+    }
+    if (platform === 'win32') {
+        return bundledMpvPath;
+    }
+    return (MPV_SEARCH_PATHS[platform] ?? []).find(pathExists);
+}
+
 /** MPV JSON IPC 的地址。isFile 为 true 时它是文件系统里的 Unix socket，播放结束后由调用方删除。 */
 export interface MpvIpcSocket {
     path: string;

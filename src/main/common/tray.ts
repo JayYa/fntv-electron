@@ -1,5 +1,7 @@
-import { Tray, Menu, nativeImage, BrowserWindow, app, dialog } from 'electron';
+import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
+import { getCurrentMpvPlayerPath, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
@@ -8,6 +10,25 @@ import { platformBehavior } from '../../public/platform';
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null; // 主窗口引用
+
+// 不存在时只提示，不创建：空目录会让下次启动的同步按首次初始化处理。
+async function openMpvConfigDir(mainWindow: BrowserWindow | null, dir: string): Promise<void> {
+    if (!fs.existsSync(dir)) {
+        const options: Electron.MessageBoxOptions = {
+            type: 'info',
+            title: 'MPV用户配置目录',
+            message: 'MPV用户配置目录尚不存在',
+            detail: `${dir}\n\n客户端启动时会把默认配置同步到这里。`,
+        };
+        await (mainWindow ? dialog.showMessageBox(mainWindow, options) : dialog.showMessageBox(options));
+        return;
+    }
+    const error = await shell.openPath(dir);
+    if (error) {
+        log.error(`打开MPV用户配置目录失败: ${error}`, dir);
+        dialog.showErrorBox('打开MPV用户配置目录失败', `${error}\n\n${dir}`);
+    }
+}
 
 /**
  * 创建设置子菜单
@@ -18,6 +39,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     const mpvEnabled = fnConfig.getHideOriginalPlayButton();
     const nasProxyEnabled = fnConfig.getNasProxyEnabled();
     const currentMpvPath = fnConfig.getMpvPlayerPath();
+    const playerPath = getCurrentMpvPlayerPath();
+    const mpvConfigDir = getMpvConfigDir(currentMpvPath);
 
     const submenu: Electron.MenuItemConstructorOptions[] = [
         {
@@ -65,7 +88,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'separator'
         },
         {
-            label: `设置MPV播放器路径${currentMpvPath ? ` (${currentMpvPath})` : ''}`,
+            label: `设置MPV播放器路径 (${playerPath ?? '未找到'})`,
             click: async () => {
                 if (mainWindow) {
                     const result = await dialog.showOpenDialog(mainWindow, {
@@ -82,15 +105,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
                     if (!result.canceled && result.filePaths.length > 0) {
                         const selectedPath = result.filePaths[0];
                         fnConfig.setMpvPlayerPath(selectedPath);
-
-                        // 导入media模块并刷新MPV路径
-                        try {
-                            const media = await import('../handlers/plugins/media.js');
-                            media.setMpvPlayerPath(selectedPath);
-                            log.info(`MPV播放器路径已设置为: ${selectedPath}`);
-                        } catch (error) {
-                            log.error('刷新MPV播放器路径失败:', error);
-                        }
+                        log.info(`MPV播放器路径已设置为: ${selectedPath}`);
 
                         // 更新托盘菜单以显示新路径
                         updateTrayMenu();
@@ -101,21 +116,18 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
         {
             label: '清空MPV播放器路径',
             enabled: !!currentMpvPath, // 只有当有设置路径时才启用
-            click: async () => {
+            click: () => {
                 fnConfig.setMpvPlayerPath(''); // 清空配置中的路径
-
-                // 导入media模块并重置MPV路径
-                try {
-                    const media = await import('../handlers/plugins/media.js');
-                    media.setMpvPlayerPath(null); // 传入null来清除缓存
-                    log.info('MPV播放器路径已清空，将使用自动检测');
-                } catch (error) {
-                    log.error('清空MPV播放器路径失败:', error);
-                }
+                log.info('MPV播放器路径已清空，将使用自动检测');
 
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
             }
+        },
+        {
+            // 按当前设置算出的目录，是下次播放时 mpv 读的目录；改了 mpv 路径后要重启客户端才会同步到这里。
+            label: `打开MPV用户配置目录 (${mpvConfigDir})`,
+            click: () => openMpvConfigDir(mainWindow, mpvConfigDir),
         }
     ];
 
