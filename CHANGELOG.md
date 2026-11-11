@@ -1,5 +1,19 @@
 # 更新日志
 
+## [3.1.0](https://github.com/JayYa/fntv-electron/compare/v3.0.0...v3.1.0) (2026-11-11)
+
+
+### 新功能
+
+* **proxy:** Proxy 改用 TypeScript，移除 Go 组件 ([#168](https://github.com/JayYa/fntv-electron/issues/168)) ([259a581](https://github.com/JayYa/fntv-electron/commit/259a5815124c8f9644ad4a90da5302afe650996c))
+* **proxy:** Proxy 监听随机端口，smart_skip 按播放地址取端口 ([#170](https://github.com/JayYa/fntv-electron/issues/170)) ([aad4de1](https://github.com/JayYa/fntv-electron/commit/aad4de10169627028eaade554255e2e1a00f2ff8))
+* **tray:** 托盘总是显示当前 MPV 路径，新增打开 MPV 用户配置目录 ([#174](https://github.com/JayYa/fntv-electron/issues/174)) ([ea51fcf](https://github.com/JayYa/fntv-electron/commit/ea51fcfcc695a3bbd9d70a7027e975b710e35f3d))
+
+
+### 问题修复
+
+* **tray:** 取不到 MPV 用户配置目录时托盘照常创建，不让客户端启动失败 ([#176](https://github.com/JayYa/fntv-electron/issues/176)) ([e216263](https://github.com/JayYa/fntv-electron/commit/e216263446b7348d96e03044b69763a68a687f10))
+
 ## [3.0.0](https://github.com/JayYa/fntv-electron/compare/v2.8.0...v3.0.0) (2026-11-09)
 
 
