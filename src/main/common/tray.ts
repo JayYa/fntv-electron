@@ -40,7 +40,13 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     const nasProxyEnabled = fnConfig.getNasProxyEnabled();
     const currentMpvPath = fnConfig.getMpvPlayerPath();
     const playerPath = getCurrentMpvPlayer()?.path;
-    const mpvConfigDir = getMpvConfigDir(currentMpvPath);
+    // 取不到目录（Windows 上 app.getPath('appData') 可能失败）时只让这一项不可用，托盘和启动照常。
+    let mpvConfigDir: string | undefined;
+    try {
+        mpvConfigDir = getMpvConfigDir(currentMpvPath);
+    } catch (error) {
+        log.error('获取MPV用户配置目录失败', error);
+    }
 
     const submenu: Electron.MenuItemConstructorOptions[] = [
         {
@@ -126,8 +132,9 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
         },
         {
             // 按当前设置算出的目录，是下次播放时 MPV 读的目录；改了自选 MPV 后要重启客户端才会同步到这里。
-            label: `打开MPV用户配置目录 (${mpvConfigDir})`,
-            click: () => openMpvConfigDir(mainWindow, mpvConfigDir),
+            label: `打开MPV用户配置目录 (${mpvConfigDir ?? '无法确定'})`,
+            enabled: mpvConfigDir !== undefined,
+            click: () => (mpvConfigDir ? openMpvConfigDir(mainWindow, mpvConfigDir) : undefined),
         }
     ];
 
