@@ -181,7 +181,7 @@ async function updateTrayMenu(): Promise<void> {
             type: 'separator'
         },
         {
-            label: checkForUpdatesLabel(getUpdateChecker().downloadPercent()),
+            label: checkForUpdatesLabel(getUpdateChecker().downloadProgress.percent()),
             click: () => {
                 getUpdateChecker().manualCheckForUpdates().catch(error => {
                     log.error('手动检查更新失败:', error);
@@ -331,7 +331,7 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     await updateTrayMenu();
 
     // 下载百分比变了就重建菜单，刷新「检查更新」项
-    getUpdateChecker().onDownloadProgress(() => {
+    getUpdateChecker().downloadProgress.onChange(() => {
         updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
     });
 

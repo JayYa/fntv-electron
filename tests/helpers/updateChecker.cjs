@@ -47,10 +47,24 @@ class FakeAutoUpdater extends EventEmitter {
     quitAndInstall(isSilent, isForceRunAfter) { this.installs.push({ isSilent, isForceRunAfter }); }
 }
 
-// 等更新流程里已排队的 Promise 回调跑完
+const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
+
+// 等到 condition() 为真，超时就失败。要断言的事会发生时用它。
+async function waitFor(condition, timeoutMs = 2000) {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition()) {
+        if (Date.now() > deadline) {
+            throw new Error(`等待超时（${timeoutMs}ms）：${condition}`);
+        }
+        await nextTurn();
+    }
+}
+
+// 让更新流程里已排队的回调跑完。只用于断言某事「没有发生」：这时没有可等的条件，
+// 只能给它足够的机会发生。20 轮远多于流程里最长的 await 链（约 6 层）。
 async function settle() {
     for (let i = 0; i < 20; i += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
+        await nextTurn();
     }
 }
 
@@ -179,6 +193,7 @@ module.exports = {
     LATEST_RELEASE_PAGE,
     setupUpdateChecker,
     settle,
+    waitFor,
     quitApp,
     release,
     httpError,

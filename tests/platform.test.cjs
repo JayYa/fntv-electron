@@ -43,6 +43,8 @@ test('Linux updates in app only when running as an AppImage in a writable direct
         assert.equal(result.available, available, label);
         if (!available) {
             assert.ok(result.reason.length > 0, label);
+            // 原因写进日志，AppImage 路径里可能有系统用户名
+            assert.ok(!result.reason.includes('/home/user'), `${label}: ${result.reason}`);
         }
         if (appImagePath !== undefined) {
             assert.deepEqual(checkedDirs, ['/home/user/Apps'], label);

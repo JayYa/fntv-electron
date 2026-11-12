@@ -219,7 +219,7 @@ export function inAppUpdateAvailability(
         }
         const appImageDir = path.posix.dirname(appImagePath);
         if (!isWritableDir(appImageDir)) {
-            return { available: false, reason: `AppImage 所在目录不可写：${appImageDir}` };
+            return { available: false, reason: 'AppImage 所在目录不可写' };
         }
     }
     return { available: true };

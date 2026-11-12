@@ -10,7 +10,7 @@ interface StoppablePlayer {
     stop(): void;
 }
 
-interface PlaybackSession {
+export interface PlaybackSession {
     /**
      * 播放器创建后、开始播放前调用。返回 false 表示启动期间已请求停止，
      * 媒体播放插件不要再开始播放，并调用 ended。

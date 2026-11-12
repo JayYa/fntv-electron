@@ -10,7 +10,15 @@ import { isPlaying, stopPlaybackAndWait } from '../playback/playbackState';
  * 任何一步失败都退回手动更新：弹框提供「打开下载页面」。
  */
 
-type Phase = 'idle' | 'downloading' | 'downloaded' | 'installing';
+type Phase =
+    | 'idle'
+    | 'downloading'
+    | 'downloaded'
+    // 用户选了「退出时安装」，还没开始装
+    | 'awaitingQuit'
+    | 'installing'
+    // 正在退出时安装；失败后照常退出
+    | 'installingOnQuit';
 
 export interface InAppUpdateOptions {
     /** 更新源地址，每次开始下载时读取，下载加速开关随时生效 */
@@ -20,6 +28,19 @@ export interface InAppUpdateOptions {
 }
 
 type ProgressListener = (percent: number | null) => void;
+
+/** 应用内更新的下载进度，只读。托盘的「检查更新」项和主窗口的任务栏进度条显示它。 */
+export interface DownloadProgress {
+    /** 下载中返回 0 到 100 的整数，其它时候是 null */
+    percent(): number | null;
+    /** 下载进度变化时通知，下载结束（完成或失败）时收到 null */
+    onChange(listener: ProgressListener): void;
+}
+
+/** 日志里记错误的 message，没有就记错误本身 */
+function errorMessage(error: any): unknown {
+    return error?.message ?? error;
+}
 
 /**
  * 安装前先停止 MPV，并等这次退出的进度回传完成：Windows 上附带的 MPV 在安装目录里，
@@ -32,30 +53,24 @@ async function stopPlaybackBeforeInstall(): Promise<void> {
     try {
         await stopPlaybackAndWait();
     } catch (error: any) {
-        log.error('安装前停止播放失败，继续安装:', error?.message ?? error);
+        log.error('安装前停止播放失败，继续安装:', errorMessage(error));
     }
 }
 
-export class InAppUpdate {
+export class InAppUpdate implements DownloadProgress {
     private phase: Phase = 'idle';
-    private percent: number | null = null;
+    private currentPercent: number | null = null;
     private listeners: ProgressListener[] = [];
     private updaterEventsBound = false;
-    // 用户选了「退出时安装」，还没开始装
-    private installOnQuit = false;
     private quitHandlerBound = false;
-    // 正在退出时安装；失败后照常退出
-    private installingOnQuit = false;
 
     constructor(private readonly options: InAppUpdateOptions) {}
 
-    /** 下载中返回 0 到 100 的整数，其它时候是 null */
-    downloadPercent(): number | null {
-        return this.percent;
+    percent(): number | null {
+        return this.currentPercent;
     }
 
-    /** 下载进度变化时通知，下载结束（完成或失败）时收到 null */
-    onDownloadProgress(listener: ProgressListener): void {
+    onChange(listener: ProgressListener): void {
         this.listeners.push(listener);
     }
 
@@ -69,9 +84,11 @@ export class InAppUpdate {
                 log.info('应用内更新正在下载，不再开始新的下载');
                 return;
             case 'downloaded':
+            case 'awaitingQuit':
                 await this.askHowToInstall();
                 return;
             case 'installing':
+            case 'installingOnQuit':
                 return;
         }
 
@@ -98,7 +115,7 @@ export class InAppUpdate {
             autoUpdater.autoInstallOnAppQuit = false;
             this.phase = 'idle';
             this.setPercent(null);
-            log.error('应用内更新下载失败:', error?.message ?? error);
+            log.error('应用内更新下载失败:', errorMessage(error));
             await this.showFailure(error);
             return;
         }
@@ -130,7 +147,7 @@ export class InAppUpdate {
         } else {
             log.info('应用内更新：退出时安装');
             autoUpdater.autoInstallOnAppQuit = true;
-            this.installOnQuit = true;
+            this.phase = 'awaitingQuit';
             if (!this.quitHandlerBound) {
                 this.quitHandlerBound = true;
                 // 排在其它 before-quit 处理前面：拦下退出时，主进程的退出收尾（关 Proxy 等）看到 defaultPrevented 先不做，
@@ -146,11 +163,9 @@ export class InAppUpdate {
      * quitAndInstall 之后 electron-updater 看到安装已经开始，就不会在 quit 时再装一次。
      */
     private installBeforeQuit(event: Electron.Event): void {
-        if (!this.installOnQuit || this.phase !== 'downloaded') return;
+        if (this.phase !== 'awaitingQuit') return;
         event.preventDefault();
-        this.installOnQuit = false;
-        this.phase = 'installing';
-        this.installingOnQuit = true;
+        this.phase = 'installingOnQuit';
         log.info('应用内更新：客户端退出，开始安装');
         void stopPlaybackBeforeInstall().then(() => {
             // 安装失败时由 error 事件弹框后退出，electron-updater 不必在 quit 时再试一次
@@ -173,11 +188,10 @@ export class InAppUpdate {
         // 下载阶段的错误同时会让 downloadUpdate 失败，在那里处理；
         // 安装阶段（quitAndInstall 启动安装程序失败）只有这个事件。没有监听时 EventEmitter 会把 error 抛出去。
         autoUpdater.on('error', (error: Error) => {
-            if (this.phase !== 'installing') return;
-            log.error('应用内更新安装失败:', error?.message ?? error);
+            if (this.phase !== 'installing' && this.phase !== 'installingOnQuit') return;
+            log.error('应用内更新安装失败:', errorMessage(error));
+            const quitAfterwards = this.phase === 'installingOnQuit';
             this.phase = 'downloaded';
-            const quitAfterwards = this.installingOnQuit;
-            this.installingOnQuit = false;
             this.showFailure(error)
                 .catch(dialogError => log.error('显示应用内更新失败提示失败:', dialogError))
                 .finally(() => {
@@ -188,8 +202,8 @@ export class InAppUpdate {
     }
 
     private setPercent(percent: number | null): void {
-        if (percent === this.percent) return;
-        this.percent = percent;
+        if (percent === this.currentPercent) return;
+        this.currentPercent = percent;
         for (const listener of this.listeners) {
             listener(percent);
         }

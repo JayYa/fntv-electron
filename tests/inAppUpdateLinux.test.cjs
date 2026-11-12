@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {
     setupUpdateChecker,
-    settle,
+    waitFor,
     release,
     simulateHost,
 } = require('./helpers/updateChecker.cjs');
@@ -60,7 +60,7 @@ test('a Linux AppImage in a writable directory offers download and install and d
     const { checker, dialogs, opened, updater } = setupLinux(t);
 
     await checker.manualCheckForUpdates();
-    await settle();
+    await waitFor(() => updater.downloads === 1);
 
     assert.deepEqual(dialogs[0].buttons, ['下载并安装', '查看详情', '稍后提醒']);
     assert.deepEqual(updater.feeds, [{ provider: 'generic', url: FEED }]);
@@ -75,7 +75,7 @@ test('the Linux feed goes through the download proxy the user turned on', async 
     });
 
     await checker.autoCheckForUpdates();
-    await settle();
+    await waitFor(() => updater.feeds.length === 1);
 
     assert.deepEqual(updater.feeds, [{ provider: 'generic', url: `https://ghfast.top/${FEED}` }]);
 });
@@ -85,7 +85,7 @@ test('a Linux client not running as an AppImage keeps the manual download button
     const { checker, dialogs, opened, updater } = setupLinux(t);
 
     await checker.manualCheckForUpdates();
-    await settle();
+    await waitFor(() => opened.length === 1);
 
     assert.deepEqual(dialogs[0].buttons, ['立即下载', '查看详情', '稍后提醒']);
     assert.deepEqual(opened, [ASSET_URL]);
@@ -102,7 +102,7 @@ test('a Linux AppImage in a read-only directory keeps the manual download button
     const { checker, dialogs, opened, updater } = setupLinux(t);
 
     await checker.manualCheckForUpdates();
-    await settle();
+    await waitFor(() => opened.length === 1);
 
     assert.deepEqual(dialogs[0].buttons, ['立即下载', '查看详情', '稍后提醒']);
     assert.deepEqual(opened, [ASSET_URL]);

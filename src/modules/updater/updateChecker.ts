@@ -14,7 +14,7 @@ import {
     releasePageUrl
 } from './githubRelease';
 import { formatReleaseNotes } from './releaseNotes';
-import { InAppUpdate } from './inAppUpdate';
+import { DownloadProgress, InAppUpdate } from './inAppUpdate';
 import { isPlaying, onPlaybackEnded } from '../playback/playbackState';
 import { currentArch, currentPlatform, inAppUpdateAvailability } from '../../public/platform';
 
@@ -91,6 +91,8 @@ export class UpdateChecker {
         ),
         releasePageUrl: releasePageUrl(UPDATE_REPOSITORY)
     });
+    /** 应用内更新的下载进度，托盘和主窗口读它 */
+    readonly downloadProgress: DownloadProgress = this.inAppUpdate;
     // 取消播放结束后再弹的新版本提示；没有推迟的提示时什么都不做
     private cancelDeferredUpdateDialog: () => void = () => {};
 
@@ -301,23 +303,24 @@ export class UpdateChecker {
         return originalUrl;
     }
 
-    /** 应用内更新下载中返回 0 到 100 的整数，其它时候是 null。托盘的「检查更新」项显示它。 */
-    downloadPercent(): number | null {
-        return this.inAppUpdate.downloadPercent();
-    }
-
-    /** 应用内更新的下载进度变化时通知，下载结束时收到 null */
-    onDownloadProgress(listener: (percent: number | null) => void): void {
-        this.inAppUpdate.onDownloadProgress(listener);
-    }
-
     /**
-     * 显示更新对话框
+     * 显示更新对话框。应用内更新正在下载时只说明下载进度，不再问要不要下载。
      * @param updateInfo - 更新信息
      * @returns 用户是否选择立即更新
      */
     async showUpdateDialog(updateInfo: UpdateInfo): Promise<boolean> {
         const { latestVersion, releaseNotes, downloadUrl, htmlUrl } = updateInfo;
+        const percent = this.inAppUpdate.percent();
+        if (percent !== null) {
+            await dialog.showMessageBox({
+                type: 'info',
+                title: '检查更新',
+                message: `新版本正在下载（${percent}%）`,
+                detail: `当前版本: ${this.currentVersion}\n最新版本: ${latestVersion}\n\n下载完成后会提示安装。`,
+                buttons: ['确定']
+            });
+            return false;
+        }
         const availability = inAppUpdateAvailability(currentPlatform(), app.isPackaged, process.env.APPIMAGE, isWritableDir);
         if (!availability.available) {
             log.info(`手动更新：${availability.reason}`);

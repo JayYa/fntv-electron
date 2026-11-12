@@ -91,7 +91,7 @@ if (!gotTheLock) {
 
             // 应用内更新下载中，主窗口的任务栏图标显示进度条，下载结束时去掉
             const windowForProgress = mainWindow;
-            getUpdateChecker().onDownloadProgress(percent => {
+            getUpdateChecker().downloadProgress.onChange(percent => {
                 if (!windowForProgress.isDestroyed()) {
                     windowForProgress.setProgressBar(percent === null ? -1 : percent / 100);
                 }

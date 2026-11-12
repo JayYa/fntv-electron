@@ -24,8 +24,6 @@ import * as playbackState from '../../../modules/playback/playbackState';
 * 处理视频播放相关功能。播放开始和结束记进播放状态模块，其它模块从那里读取。
 */
 
-type PlaybackSession = ReturnType<typeof playbackState.beginPlayback>;
-
 // 找不到 MPV 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
 function getPlayerOrNotify(): MpvPlayer | undefined {
     const player = getCurrentMpvPlayer();
@@ -184,7 +182,7 @@ async function finishPlayItem(fnapi: fn.ApiService, status: ply.PlayStatusData):
  * @param session - 这次播放在播放状态模块里的记录
  * @returns 事件处理函数
  */
-function eventHandler(fnapi: fn.ApiService, session: PlaybackSession) {
+function eventHandler(fnapi: fn.ApiService, session: playbackState.PlaybackSession) {
     return async (type: ply.EventType, data: ply.EventData) => {
         switch (type) {
             case ply.EventType.PROGRESS:
@@ -271,7 +269,7 @@ async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<
 }
 
 // 返回 MPV 是否开始播放
-async function startPlayback({ id, sourceIndex, restart }: PlayRequest, session: PlaybackSession): Promise<boolean> {
+async function startPlayback({ id, sourceIndex, restart }: PlayRequest, session: playbackState.PlaybackSession): Promise<boolean> {
     log.info('Play movie event received id:', id, ' index:', sourceIndex, ' restart:', restart === true);
 
     const config = await fnConfig.readConfig();
