@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 
 const { TARGETS } = require('./smoke/targets.cjs');
 const { asList, assertRestoreAndSave, posixPath, runStep, workflow } = require('./helpers/workflowSteps.cjs');
+const { UPDATE_FEED_URL, UPDATE_METADATA } = require('./helpers/updateFeed.cjs');
 
 // 发版门禁：release.yml 的 publish 只在 5 个安装包的冒烟测试都通过后运行，测的就是要上传的那批文件。
 // workflow 本身跑不了单测，这里读 workflow 文件，锁住 job 之间的依赖关系，并核对 workflow 里的
@@ -135,8 +136,6 @@ test('each platform in the workflows smoke tests exactly its targets from target
     }
 });
 
-// 应用内更新读的更新元数据：Windows 一个，Linux x64 和 arm64 各一个。macOS 不做应用内更新，不核对。
-const UPDATE_METADATA = ['latest.yml', 'latest-linux.yml', 'latest-linux-arm64.yml'];
 const checkReleaseAssets = step => step.name === 'Check release assets';
 
 // dist 为空时，step 列出它要找的每个文件名。
@@ -188,7 +187,7 @@ test('the build artifact carries the update metadata next to the installers', ()
 // 客户端按 generic 地址拼出最新正式 Release 的下载链接。
 test('electron-builder publishes to the latest release download URL of this repository', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    assert.deepEqual(pkg.build.publish, { provider: 'generic', url: 'https://github.com/JayYa/fntv-electron/releases/latest/download/' });
+    assert.deepEqual(pkg.build.publish, { provider: 'generic', url: UPDATE_FEED_URL });
     assert.equal(pkg.build.artifactName, 'FNMedia_${version}_${os}_${arch}.${ext}');
     for (const script of ['build:win', 'build:mac', 'build:linux:x64', 'build:linux:arm64']) {
         assert.match(pkg.scripts[script], /--publish never/, script);

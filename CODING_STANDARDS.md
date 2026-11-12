@@ -15,6 +15,8 @@
 | `persist:fntv` | `src/main/common/mainwin.ts` 等，用 `git grep` 找全 | 登录 Cookie 和访问码网关 Cookie 存在这个分区。改了用户要重新登录；只改一处则读写的不是同一个会话。 |
 | `third_party/fntv-mpv` | `package.json` 的 `extraFiles`、`mpvConfigHelpers.ts`、`build.yml` | 构建、打包和运行时都按这个路径找 MPV。 |
 | `FNMedia_*` 产物名 | `package.json` 的 `artifactName` | `src/modules/updater/updateChecker.ts` 按这个前缀和 `_win_x64` 这类后缀匹配下载链接。 |
+| 更新源 `releases/latest/download/` | `package.json` 的 `build.publish`、`src/modules/updater/updateChecker.ts` | 已发的客户端按 `https://github.com/JayYa/fntv-electron/releases/latest/download/` 找应用内更新。改地址或换仓库，已发客户端就找不到新版本，只能手动升级（`tests/releaseGate.test.cjs`）。 |
+| `latest.yml`、`latest-linux.yml`、`latest-linux-arm64.yml` | electron-builder 生成，`build.yml` 上传，`release.yml` 发布前核对 | 已发客户端里的 electron-updater 按平台和架构从更新源读这几个文件名：Windows 读 `latest.yml`，Linux x64 读 `latest-linux.yml`，Linux arm64 读 `latest-linux-arm64.yml`。Release 里缺一个或改了名，对应平台就收不到应用内更新（`tests/releaseGate.test.cjs`）。 |
 | `build.copyright` | `package.json` | 同时写原作者和修改声明。不设时打包工具可能从 `author` 派生版权行，抹掉原作者。 |
 | 旧版解密密钥 `ENCRYPTION_KEY` | `src/modules/fn_config/config.ts` | 只用来读取旧版本加密的历史密码，读出后迁移到 `safeStorage`。改掉后这些密码解不开（`tests/credentialStorage.test.cjs`）。 |
 
