@@ -66,16 +66,19 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
 
     const dialogs = [];
     const opened = [];
+    // app 是 EventEmitter，测试用 quitApp(app) 模拟客户端退出
     const electronMock = {
-        app: {
+        app: Object.assign(new EventEmitter(), {
             isPackaged,
+            quits: 0,
+            quit() { this.quits += 1; },
             // 未打包时日志写在 getAppPath()/log
             getAppPath() { return testRoot; },
             getVersion() { return version; },
             getPath(name) { return paths[name]; },
             commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
-        },
+        }),
         dialog: {
             async showMessageBox(options) {
                 dialogs.push(options);
@@ -116,7 +119,17 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
-    return { checker: getInstance(), dialogs, opened, requests, updater };
+    return { checker: getInstance(), app: electronMock.app, dialogs, opened, requests, updater };
+}
+
+// 模拟客户端退出：和 Electron 一样发 before-quit，返回事件，看有没有被拦下
+function quitApp(app) {
+    const event = {
+        defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true; },
+    };
+    app.emit('before-quit', event);
+    return event;
 }
 
 function release(tagName, assetNames = []) {
@@ -166,6 +179,7 @@ module.exports = {
     LATEST_RELEASE_PAGE,
     setupUpdateChecker,
     settle,
+    quitApp,
     release,
     httpError,
     networkError,
