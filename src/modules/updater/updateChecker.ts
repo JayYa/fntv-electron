@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
 import { getAppDownloadProxyConfig } from '../fn_config/config';
@@ -55,6 +56,16 @@ export interface DialogResult {
     response: number;
 }
 
+/** 应用内更新要在这个目录里放新的 AppImage（Linux）。 */
+function isWritableDir(dir: string): boolean {
+    try {
+        fs.accessSync(dir, fs.constants.W_OK);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * 延时函数
  * @param ms - 延时毫秒数
@@ -72,7 +83,7 @@ export class UpdateChecker {
     private userAgent: string;
     // GitHub API 额度恢复前不再请求 API，只存在内存里
     private rateLimitedUntil: Date | null = null;
-    // 应用内更新的 electron-updater 更新源：Release 的 latest/download/ 目录，里面有 latest.yml 和安装包
+    // 应用内更新的 electron-updater 更新源：Release 的 latest/download/ 目录，里面有安装包和 electron-updater 按平台、架构读的 latest.yml、latest-linux.yml、latest-linux-arm64.yml
     private readonly inAppUpdate = new InAppUpdate({
         feedUrl: () => this.withDownloadProxy(
             `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/latest/download/`
@@ -304,7 +315,7 @@ export class UpdateChecker {
      */
     async showUpdateDialog(updateInfo: UpdateInfo): Promise<boolean> {
         const { latestVersion, releaseNotes, downloadUrl, htmlUrl } = updateInfo;
-        const availability = inAppUpdateAvailability(currentPlatform(), app.isPackaged);
+        const availability = inAppUpdateAvailability(currentPlatform(), app.isPackaged, process.env.APPIMAGE, isWritableDir);
         if (!availability.available) {
             log.info(`手动更新：${availability.reason}`);
         }

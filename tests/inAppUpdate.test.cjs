@@ -37,7 +37,7 @@ test('on Windows the new version dialog offers download and install, keeping the
     assert.equal(dialogs[0].detail, '当前版本: 2.6.2\n最新版本: 2.7.0\n\n更新内容:\nnotes');
 });
 
-for (const [platform, arch] of [['darwin', 'arm64'], ['linux', 'x64']]) {
+for (const [platform, arch] of [['darwin', 'arm64']]) {
     test(`on ${platform} the new version dialog keeps the manual download buttons`, async (t) => {
         simulateHost(t, platform, arch);
         const { checker, dialogs, updater } = setupUpdateChecker(t, {
