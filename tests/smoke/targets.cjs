@@ -7,7 +7,7 @@
 // 这里是目标的唯一来源。加平台或架构时在这里加一项，再同步 workflow 里的这几处，漏改哪一处
 // tests/releaseGate.test.cjs 都会失败：
 // - build-and-smoke.yml 的 select-targets：平台的构建机器和冒烟目标；
-// - release.yml 的 Select platforms 和 workflow_dispatch 选项，publish 的 Check installers 安装包名；
+// - release.yml 的 Select platforms 和 workflow_dispatch 选项，publish 的 Check release assets 安装包名；
 // - smoke-test.yml 的平台列表和 workflow_dispatch 选项。
 
 const crypto = require('node:crypto');

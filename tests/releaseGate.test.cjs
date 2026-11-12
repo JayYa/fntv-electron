@@ -135,23 +135,64 @@ test('each platform in the workflows smoke tests exactly its targets from target
     }
 });
 
-test('publish checks for exactly one installer per smoke target', t => {
-    const publish = workflow('release.yml').jobs.publish;
-    const check = step => step.name === 'Check installers';
-    // dist 为空时，step 列出它要找的每个安装包名。
-    const missing = runStep(t, publish, check, { VERSION: '9.9.9' }, cwd => fs.mkdirSync(path.join(cwd, 'dist')));
+// 应用内更新读的更新元数据：Windows 一个，Linux x64 和 arm64 各一个。macOS 不做应用内更新，不核对。
+const UPDATE_METADATA = ['latest.yml', 'latest-linux.yml', 'latest-linux-arm64.yml'];
+const checkReleaseAssets = step => step.name === 'Check release assets';
+
+// dist 为空时，step 列出它要找的每个文件名。
+function missingReleaseAssets(t) {
+    const missing = runStep(t, workflow('release.yml').jobs.publish, checkReleaseAssets, { VERSION: '9.9.9' }, cwd => fs.mkdirSync(path.join(cwd, 'dist')));
     assert.notEqual(missing.status, 0);
-    const names = [...missing.stdout.matchAll(/^::error::missing (.+)$/gm)].map(match => match[1]);
+    return [...missing.stdout.matchAll(/^::error::missing (.+)$/gm)].map(match => match[1]);
+}
+
+function runAssetCheckWith(t, names) {
+    return runStep(t, workflow('release.yml').jobs.publish, checkReleaseAssets, { VERSION: '9.9.9' }, cwd => {
+        fs.mkdirSync(path.join(cwd, 'dist'));
+        for (const name of names) fs.writeFileSync(path.join(cwd, 'dist', name), '');
+    });
+}
+
+test('publish checks for exactly one installer per smoke target', t => {
+    const names = missingReleaseAssets(t).filter(name => !UPDATE_METADATA.includes(name));
     for (const [id, target] of Object.entries(TARGETS)) {
         assert.equal(names.filter(name => target.installerPattern.test(name)).length, 1, `${id}: ${names.join(', ')}`);
     }
     assert.equal(names.length, Object.keys(TARGETS).length, names.join(', '));
+});
 
-    const present = runStep(t, publish, check, { VERSION: '9.9.9' }, cwd => {
-        fs.mkdirSync(path.join(cwd, 'dist'));
-        for (const name of names) fs.writeFileSync(path.join(cwd, 'dist', name), '');
-    });
+test('publish checks for the update metadata of Windows, Linux x64 and Linux arm64', t => {
+    const names = missingReleaseAssets(t);
+    assert.deepEqual(names.filter(name => /\.yml$/.test(name)).sort(), [...UPDATE_METADATA].sort());
+
+    const present = runAssetCheckWith(t, names);
     assert.equal(present.status, 0, present.stdout + present.stderr);
+    // 缺任何一个更新元数据都不发布。
+    for (const absent of UPDATE_METADATA) {
+        const result = runAssetCheckWith(t, names.filter(name => name !== absent));
+        assert.notEqual(result.status, 0, `publish proceeds without ${absent}`);
+        assert.match(result.stdout, new RegExp(`^::error::missing ${absent.replace(/\./g, '\\.')}$`, 'm'));
+    }
+});
+
+// 发布的是 build.yml 上传的 <platform>-build artifact，更新元数据要和安装包一起上传，
+// sha512 才和同一份冒烟测试过的安装包对得上。
+test('the build artifact carries the update metadata next to the installers', () => {
+    const upload = workflow('build.yml').jobs.build.steps.find(step => step.name === 'Upload build artifacts');
+    const paths = upload.with.path.split('\n').map(line => line.trim()).filter(Boolean);
+    assert.ok(paths.includes('release/latest*.yml'), paths.join(', '));
+    assert.equal(upload.with['if-no-files-found'], 'error');
+});
+
+// 生成更新元数据需要 publish 配置；--publish never 只是不上传。更新元数据里的 url 是相对文件名，
+// 客户端按 generic 地址拼出最新正式 Release 的下载链接。
+test('electron-builder publishes to the latest release download URL of this repository', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    assert.deepEqual(pkg.build.publish, { provider: 'generic', url: 'https://github.com/JayYa/fntv-electron/releases/latest/download/' });
+    assert.equal(pkg.build.artifactName, 'FNMedia_${version}_${os}_${arch}.${ext}');
+    for (const script of ['build:win', 'build:mac', 'build:linux:x64', 'build:linux:arm64']) {
+        assert.match(pkg.scripts[script], /--publish never/, script);
+    }
 });
 
 test('running the Release workflow by hand builds and smoke tests but does not publish', () => {
