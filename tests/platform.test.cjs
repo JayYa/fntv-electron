@@ -13,13 +13,46 @@ const {
     inAppUpdateAvailability,
 } = require('../dest/public/platform.js');
 
-test('only a packaged Windows client can update in app', () => {
-    assert.deepEqual(inAppUpdateAvailability('win32', true), { available: true });
-    for (const [platform, isPackaged] of [['win32', false], ['darwin', true], ['linux', true]]) {
-        const result = inAppUpdateAvailability(platform, isPackaged);
+const APPIMAGE = '/home/user/Apps/FNMedia_3.1.0_linux_x86_64.AppImage';
+
+test('a packaged Windows client can update in app, an unpackaged one and macOS cannot', () => {
+    const anyDirWritable = () => true;
+    assert.deepEqual(inAppUpdateAvailability('win32', true, undefined, anyDirWritable), { available: true });
+    for (const [platform, isPackaged] of [['win32', false], ['darwin', true]]) {
+        const result = inAppUpdateAvailability(platform, isPackaged, APPIMAGE, anyDirWritable);
         assert.equal(result.available, false, `${platform} packaged=${isPackaged}`);
         assert.ok(result.reason.length > 0);
     }
+});
+
+test('Linux updates in app only when running as an AppImage in a writable directory', () => {
+    const cases = [
+        { appImagePath: APPIMAGE, writable: true, available: true },
+        { appImagePath: APPIMAGE, writable: false, available: false },
+        { appImagePath: undefined, writable: true, available: false },
+        { appImagePath: undefined, writable: false, available: false },
+    ];
+    for (const { appImagePath, writable, available } of cases) {
+        const checkedDirs = [];
+        const isWritableDir = (dir) => {
+            checkedDirs.push(dir);
+            return writable;
+        };
+        const result = inAppUpdateAvailability('linux', true, appImagePath, isWritableDir);
+        const label = `AppImage=${appImagePath !== undefined} writable=${writable}`;
+        assert.equal(result.available, available, label);
+        if (!available) {
+            assert.ok(result.reason.length > 0, label);
+        }
+        if (appImagePath !== undefined) {
+            assert.deepEqual(checkedDirs, ['/home/user/Apps'], label);
+        }
+    }
+});
+
+test('an unpackaged Linux client does not update in app even with APPIMAGE set', () => {
+    const result = inAppUpdateAvailability('linux', false, APPIMAGE, () => true);
+    assert.equal(result.available, false);
 });
 
 test('platformBehavior defaults to the platform the app runs on', () => {
