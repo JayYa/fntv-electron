@@ -36,7 +36,7 @@
 ## 安装包体积
 
 - 打包配置（`package.json` 的 `build`）：
-  - `nsis.differentialPackage: false`：NSIS 安装包整体 solid 压缩，exe 不再有 `.blockmap`。更新检查只按文件名打开完整安装包的下载地址（`githubRelease.ts` 的 `expectedAssetName`），不用 blockmap。
+  - `nsis.differentialPackage` 保持默认的 `true`：exe 旁边生成 `.blockmap`，供应用内更新做差量下载。改成 `false` 能让 Windows 包小一些（整体 solid 压缩），但每次更新都要下载完整安装包；按已发布版本的 blockmap 估算，只改客户端代码的版本差量下载约 3~8 MB。
   - `electronLanguages` 只留 `zh-CN` 和 `en-US`，Chromium 自带的文案（右键菜单、文件对话框）在其它系统语言下显示英文。
   - `appImage.compression: "xz"`：只在 electron-builder 26.x 的 FUSE2 toolset 下生效。27 默认改用 static runtime，`xz` 会被映射成 `zstd`，升级时要重新量体积、改预算。
   - dmg 由 `scripts/convert-dmg-to-ulmo.cjs`（`afterAllArtifactBuild`）从 UDZO 转成 ULMO。26.x 的 `dmg.format` 不收 ULMO，升级到 27 后改用 `dmg.format: "ULMO"` 并删掉这个钩子。转换后原来的 blockmap 对不上，所以 `dmg.writeUpdateInfo: false` 不再生成。

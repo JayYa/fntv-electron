@@ -172,7 +172,6 @@
             "compression": "xz"
         },
         "nsis": {
-            "differentialPackage": false,
             "allowToChangeInstallationDirectory": true,
             "oneClick": false,
             "createDesktopShortcut": true,
