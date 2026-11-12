@@ -53,8 +53,9 @@ function runAppHooks(type: HookType, ...args: any[]): void {
  * 初始化应用钩子
  */
 function initAppHooks(): void {
-    app.on('before-quit', () => {
-        runAppHooks('beforeQuit');
+    // 钩子拿到 before-quit 的事件对象，退出被拦下时（event.defaultPrevented）可以先不收尾
+    app.on('before-quit', (event) => {
+        runAppHooks('beforeQuit', event);
     });
     
     app.on('ready', () => {
