@@ -62,6 +62,10 @@
         "appId": "com.qiaokes.fntv",
         "copyright": "Copyright (c) 2025 Tag mig hånden and fntv-electron contributors; modifications (c) 2026 JayYa",
         "compression": "normal",
+        "publish": {
+            "provider": "generic",
+            "url": "https://github.com/JayYa/fntv-electron/releases/latest/download/"
+        },
         "win": {
             "target": [
                 {
