@@ -30,9 +30,8 @@
 - electron-builder 打包时下载的 Electron zip 和打包工具也缓存，key 是 `runner.os` 加 `pnpm-lock.yaml` 的 hash，构建成功后保存，命中时不保存。打包工具存在 `ELECTRON_BUILDER_CACHE`（`Build application` 设为 `$RUNNER_TEMP/electron-builder-cache`）。Electron zip 存在 `@electron/get` 的默认目录（Linux `~/.cache/electron`，macOS `~/Library/Caches/electron`，Windows `%LOCALAPPDATA%\electron\Cache`），它不读 `ELECTRON_CACHE`。
 - 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再改 `build` job `env` 里的 tag、资产名和 sha256。`README.md` 的准备步骤和本页上面那条 tag 也要跟着改，漏改时 `tests/releaseGate.test.cjs` 失败。归档约 55 MB，`gh release download` 常超过 2 分钟，放到后台跑；sha256 要和 `gh release view <tag> --json assets` 里的 digest 核对。
 - Windows 打包 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
-- `extraFiles` 的 `filter` 排除客户端用不到的文件，归档本身不动：
-  - 三个平台都不带 `portable_config/scripts/uosc/bin/`（uosc 的 `ziggy-*`，三份合计约 17 MB）。代价是 uosc 字幕菜单里的在线下载和 `Update uosc` 不能用，uosc 在菜单里显示调用 ziggy 失败，播放不受影响。uosc 菜单里的粘贴和复制先读写 MPV 自己的 `clipboard/text` 属性，读不到时才调 ziggy，那时也不能用（2026-11-12 在 Windows 上用附带的 MPV 加 `--vo=null` 读这个属性，结果是不可用）。uosc 5.13 没有隐藏这些入口的配置项（字幕菜单的下载按钮写死在 `scripts/uosc/main.lua`），要隐藏只能在 `fntv-mpv-config` 改。
-  - Windows 再排除 `mpv.com`、`*.bat`、`installer/` 和 `d3dcompiler_43.dll`。客户端只启动 `mpv.exe`（`mpvConfigHelpers.ts`）。`d3dcompiler_43.dll` 是 MPV 找 D3D 编译器时的最后一个候选，Windows 10 起系统自带 `d3dcompiler_47.dll`，冒烟测试实际播放一次并检查日志里的 `D3DCompiler version`。
+- Windows 的 `extraFiles` 用 `filter` 排除 `mpv.com`、`*.bat`、`installer/` 和 `d3dcompiler_43.dll`，归档本身不动。客户端只启动 `mpv.exe`（`mpvConfigHelpers.ts`）。`d3dcompiler_43.dll` 是 MPV 找 D3D 编译器时的最后一个候选，Windows 10 起系统自带 `d3dcompiler_47.dll`，冒烟测试实际播放一次并检查日志里的 `D3DCompiler version`。
+- `portable_config/scripts/uosc/bin/` 的三个 `ziggy-*`（合计约 17 MB）三个平台都照常打包，不排除：uosc 的在线字幕下载、`Update uosc`，以及 MPV 读不到剪贴板时的粘贴和复制都靠它。
 
 ## 安装包体积
 

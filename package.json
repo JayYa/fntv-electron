@@ -86,8 +86,7 @@
                         "!mpv.com",
                         "!*.bat",
                         "!installer{,/**}",
-                        "!d3dcompiler_43.dll",
-                        "!portable_config/scripts/uosc/bin{,/**}"
+                        "!d3dcompiler_43.dll"
                     ]
                 }
             ]
@@ -114,8 +113,7 @@
                     "from": "third_party/fntv-mpv/portable_config",
                     "to": "third_party/fntv-mpv/portable_config",
                     "filter": [
-                        "**/*",
-                        "!scripts/uosc/bin{,/**}"
+                        "**/*"
                     ]
                 }
             ]
@@ -165,8 +163,7 @@
                     "from": "third_party/fntv-mpv/portable_config",
                     "to": "third_party/fntv-mpv/portable_config",
                     "filter": [
-                        "**/*",
-                        "!scripts/uosc/bin{,/**}"
+                        "**/*"
                     ]
                 }
             ]
