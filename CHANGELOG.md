@@ -1,5 +1,12 @@
 # 更新日志
 
+## [3.2.0](https://github.com/JayYa/fntv-electron/compare/v3.1.0...v3.2.0) (2026-11-12)
+
+
+### 新功能
+
+* **updater:** Windows 和 Linux 支持应用内更新，客户端自己下载并在重启时安装 ([#184](https://github.com/JayYa/fntv-electron/issues/184)) ([c8a4d35](https://github.com/JayYa/fntv-electron/commit/c8a4d35059ce02536e9788d652e78d0e55c862dd))
+
 ## [3.1.0](https://github.com/JayYa/fntv-electron/compare/v3.0.0...v3.1.0) (2026-11-11)
 
 
