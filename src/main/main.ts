@@ -227,7 +227,10 @@ function showMacNotification(): void {
 }
 
 // 应用退出事件处理
-app.on('before-quit', async () => {
+app.on('before-quit', async (event) => {
+    // 应用内更新「退出时安装」会先拦下退出，停止 MPV、等进度回传后再重新退出；
+    // 这次先不收尾，免得 MPV 停止前 Proxy 先被关掉（src/modules/updater/inAppUpdate.ts）
+    if (event.defaultPrevented) return;
     (app as any).isQuiting = true;
 
     // 结束 Proxy 子进程

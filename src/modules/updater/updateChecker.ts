@@ -14,6 +14,7 @@ import {
 } from './githubRelease';
 import { formatReleaseNotes } from './releaseNotes';
 import { InAppUpdate } from './inAppUpdate';
+import { isPlaying, onPlaybackEnded } from '../playback/playbackState';
 import { currentArch, currentPlatform, inAppUpdateAvailability } from '../../public/platform';
 
 // 尝试获取semver模块
@@ -79,6 +80,8 @@ export class UpdateChecker {
         ),
         releasePageUrl: releasePageUrl(UPDATE_REPOSITORY)
     });
+    // 取消播放结束后再弹的新版本提示；没有推迟的提示时什么都不做
+    private cancelDeferredUpdateDialog: () => void = () => {};
 
     constructor() {
         this.currentVersion = app.getVersion();
@@ -382,7 +385,10 @@ export class UpdateChecker {
         try {
             const updateInfo = await this.checkForUpdates();
             
-            if (updateInfo.hasUpdate) {
+            if (updateInfo.hasUpdate && isPlaying()) {
+                log.info('发现新版本，MPV 正在播放，播放结束后再显示更新提示');
+                this.deferUpdateDialog(updateInfo);
+            } else if (updateInfo.hasUpdate) {
                 log.info('发现新版本，显示更新提示');
                 await this.showUpdateDialog(updateInfo);
             } else {
@@ -395,6 +401,29 @@ export class UpdateChecker {
     }
 
     /**
+     * 播放结束后再弹新版本提示，只弹一次。之前推迟的提示由这次替换；
+     * 客户端在播放结束前退出，或手动检查已经弹过提示时，不再弹。
+     */
+    private deferUpdateDialog(updateInfo: UpdateInfo): void {
+        this.cancelDeferredUpdateDialog();
+        const stopWaitingForPlayback = onPlaybackEnded(() => {
+            this.cancelDeferredUpdateDialog();
+            log.info('播放已结束，显示推迟的更新提示');
+            this.showUpdateDialog(updateInfo).catch(error => log.error('显示推迟的更新提示失败:', error));
+        });
+        const dropOnQuit = () => {
+            log.info('客户端退出，不再显示推迟的更新提示');
+            this.cancelDeferredUpdateDialog();
+        };
+        app.once('before-quit', dropOnQuit);
+        this.cancelDeferredUpdateDialog = () => {
+            stopWaitingForPlayback();
+            app.removeListener('before-quit', dropOnQuit);
+            this.cancelDeferredUpdateDialog = () => {};
+        };
+    }
+
+    /**
      * 手动检查更新（显示所有结果）
      */
     async manualCheckForUpdates(): Promise<void> {
@@ -402,6 +431,8 @@ export class UpdateChecker {
             const updateInfo = await this.checkForUpdates();
             
             if (updateInfo.hasUpdate) {
+                // 用户主动检查，播放中也照常弹框；推迟的提示就不用再弹了
+                this.cancelDeferredUpdateDialog();
                 await this.showUpdateDialog(updateInfo);
             } else {
                 await this.showNoUpdateDialog();
