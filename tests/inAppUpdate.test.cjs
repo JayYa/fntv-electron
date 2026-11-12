@@ -176,7 +176,7 @@ test('restart and install now installs silently and reopens the client', async (
 
     assert.deepEqual(dialogs.map((d) => d.buttons), [
         ['下载并安装', '查看详情', '稍后提醒'],
-        ['立即重启安装', '退出时安装'],
+        ['立即重启安装', '退出时安装', '稍后提醒'],
     ]);
     assert.deepEqual(updater.installs, [{ isSilent: true, isForceRunAfter: true }]);
 });
@@ -195,6 +195,30 @@ test('install on quit leaves the client running and installs when it quits', asy
     await settle();
 
     assert.deepEqual(updater.installs, []);
+});
+
+test('closing the downloaded dialog installs nothing and the next check asks again', async (t) => {
+    let downloadedDialogs = 0;
+    const click = clicking({ 发现新版本: '下载并安装' });
+    const { checker, updater } = setupWindows(t, {
+        dialogResponse: (options) => {
+            if (options.title === '新版本已下载') downloadedDialogs += 1;
+            return click(options);
+        },
+    });
+
+    await checker.manualCheckForUpdates();
+    await waitFor(() => updater.downloads === 1);
+    updater.finishDownload();
+    await waitFor(() => downloadedDialogs === 1);
+    // 断言关掉之后既没安装、也没改成退出时安装，没有可等的条件
+    await settle();
+    assert.deepEqual(updater.installs, []);
+    assert.equal(updater.autoInstallOnAppQuit, false);
+
+    await checker.manualCheckForUpdates();
+    await waitFor(() => downloadedDialogs === 2);
+    assert.equal(updater.downloads, 1);
 });
 
 test('a downloaded update is not installed on quit until the user chooses so', async (t) => {

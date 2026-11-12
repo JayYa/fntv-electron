@@ -133,12 +133,15 @@ export class InAppUpdate implements DownloadProgress {
             title: '新版本已下载',
             message: '新版本已下载完成',
             detail: '立即重启安装会关闭客户端，装完后自动重新打开；也可以等下次退出客户端时再安装。',
-            buttons: ['立即重启安装', '退出时安装'],
+            // 关掉对话框等于「稍后提醒」：什么都不装，下次检查再问（安装要用户点头）
+            buttons: ['立即重启安装', '退出时安装', '稍后提醒'],
             defaultId: 0,
-            cancelId: 1
+            cancelId: 2
         });
 
-        if (result.response === 0) {
+        if (result.response === 2) {
+            log.info('应用内更新：稍后提醒，暂不安装');
+        } else if (result.response === 0) {
             log.info('应用内更新：立即重启安装');
             this.phase = 'installing';
             // 之前选过「退出时安装」时这一项还开着。这次安装失败的话，electron-updater 会在退出时自己再装，
