@@ -129,7 +129,9 @@ jobs:
 
       # 更新检查按这些名字匹配安装包（src/modules/updater/updateChecker.ts），缺一个就不发布。
       # 每个冒烟目标一个（tests/smoke/targets.cjs 的 installerPattern，tests/releaseGate.test.cjs 核对）。
-      - name: Check installers
+      # 应用内更新读 Windows、Linux x64 和 Linux arm64 的更新元数据，同样缺一个就不发布。它们和安装包
+      # 来自同一份 artifact，sha512 对得上。macOS 的 latest-mac.yml 不核对（docs/adr/0003-release-gate.md）。
+      - name: Check release assets
         shell: bash
         run: |
           missing=0
@@ -138,7 +140,10 @@ jobs:
             "FNMedia_${VERSION}_mac_x64.dmg" \
             "FNMedia_${VERSION}_mac_arm64.dmg" \
             "FNMedia_${VERSION}_linux_x86_64.AppImage" \
-            "FNMedia_${VERSION}_linux_arm64.AppImage"; do
+            "FNMedia_${VERSION}_linux_arm64.AppImage" \
+            latest.yml \
+            latest-linux.yml \
+            latest-linux-arm64.yml; do
             if [ ! -f "dist/$name" ]; then
               echo "::error::missing $name"
               missing=1

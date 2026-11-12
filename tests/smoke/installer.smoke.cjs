@@ -290,7 +290,7 @@ ${mainOutput.slice(-4000)}`));
     });
 
     it('raises no uncaught exception in the main process', async () => {
-        // 启动 3 秒后有一次自动更新检查（src/main/main.ts），等它跑过再看。
+        // 启动 3 秒后有一次自动检查更新（src/main/main.ts），等它跑过再看。
         await delay(Math.max(0, launchedAt + 8000 - Date.now()));
         const recorded = await app.evaluate(() => globalThis.__fntvSmokeErrors);
         const printed = mainOutput.split(/\r?\n/).filter(line => UNCAUGHT_PATTERN.test(line));

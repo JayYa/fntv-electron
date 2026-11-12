@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
 import { getAppDownloadProxyConfig } from '../fn_config/config';
@@ -13,7 +14,9 @@ import {
     releasePageUrl
 } from './githubRelease';
 import { formatReleaseNotes } from './releaseNotes';
-import { currentArch, currentPlatform } from '../../public/platform';
+import { DownloadProgress, InAppUpdate } from './inAppUpdate';
+import { isPlaying, onPlaybackEnded } from '../playback/playbackState';
+import { currentArch, currentPlatform, inAppUpdateAvailability } from '../../public/platform';
 
 // 尝试获取semver模块
 let semver: any;
@@ -54,6 +57,16 @@ export interface DialogResult {
     response: number;
 }
 
+/** 应用内更新要在这个目录里放新的 AppImage（Linux）。 */
+function isWritableDir(dir: string): boolean {
+    try {
+        fs.accessSync(dir, fs.constants.W_OK);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * 延时函数
  * @param ms - 延时毫秒数
@@ -71,6 +84,17 @@ export class UpdateChecker {
     private userAgent: string;
     // GitHub API 额度恢复前不再请求 API，只存在内存里
     private rateLimitedUntil: Date | null = null;
+    // 应用内更新的 electron-updater 更新源：Release 的 latest/download/ 目录，里面有安装包和 electron-updater 按平台、架构读的 latest.yml、latest-linux.yml、latest-linux-arm64.yml
+    private readonly inAppUpdate = new InAppUpdate({
+        feedUrl: () => this.withDownloadProxy(
+            `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/latest/download/`
+        ),
+        releasePageUrl: releasePageUrl(UPDATE_REPOSITORY)
+    });
+    /** 应用内更新的下载进度，托盘和主窗口读它 */
+    readonly downloadProgress: DownloadProgress = this.inAppUpdate;
+    // 取消播放结束后再弹的新版本提示；没有推迟的提示时什么都不做
+    private cancelDeferredUpdateDialog: () => void = () => {};
 
     constructor() {
         this.currentVersion = app.getVersion();
@@ -253,8 +277,14 @@ export class UpdateChecker {
             return null;
         }
         log.info(`找到匹配的安装包: ${asset.name}`);
+        return this.withDownloadProxy(asset.browser_download_url);
+    }
 
-        const originalUrl = asset.browser_download_url;
+    /**
+     * 开了应用更新下载加速时，GitHub 地址前加中转前缀（去掉前缀末尾的斜杠后拼上原地址）。
+     * 安装包链接和应用内更新的更新源都按这条规则改写。
+     */
+    private withDownloadProxy(originalUrl: string): string {
         try {
             const proxyConfig = getAppDownloadProxyConfig();
             if (proxyConfig.enabled && proxyConfig.proxyUrl && proxyConfig.proxyUrl.trim() !== '') {
@@ -274,26 +304,46 @@ export class UpdateChecker {
     }
 
     /**
-     * 显示更新对话框
+     * 显示更新对话框。应用内更新正在下载时只说明下载进度，不再问要不要下载。
      * @param updateInfo - 更新信息
      * @returns 用户是否选择立即更新
      */
     async showUpdateDialog(updateInfo: UpdateInfo): Promise<boolean> {
         const { latestVersion, releaseNotes, downloadUrl, htmlUrl } = updateInfo;
-        
+        const percent = this.inAppUpdate.percent();
+        if (percent !== null) {
+            await dialog.showMessageBox({
+                type: 'info',
+                title: '检查更新',
+                message: `新版本正在下载（${percent}%）`,
+                detail: `当前版本: ${this.currentVersion}\n最新版本: ${latestVersion}\n\n下载完成后会提示安装。`,
+                buttons: ['确定']
+            });
+            return false;
+        }
+        const availability = inAppUpdateAvailability(currentPlatform(), app.isPackaged, process.env.APPIMAGE, isWritableDir);
+        if (!availability.available) {
+            log.info(`手动更新：${availability.reason}`);
+        }
+
         const result: DialogResult = await dialog.showMessageBox({
             type: 'info',
             title: '发现新版本',
             message: `飞牛影视有新版本可用！`,
             detail: `当前版本: ${this.currentVersion}\n最新版本: ${latestVersion}\n\n更新内容:\n${formatReleaseNotes(releaseNotes)}`,
-            buttons: ['立即下载', '查看详情', '稍后提醒'],
+            buttons: [availability.available ? '下载并安装' : '立即下载', '查看详情', '稍后提醒'],
             defaultId: 0,
             cancelId: 2
         });
 
         switch (result.response) {
-            case 0: // 立即下载
-                if (downloadUrl) {
+            case 0: // 下载并安装 / 立即下载
+                if (availability.available) {
+                    // 后台下载，不等它结束；失败由应用内更新自己弹框
+                    this.inAppUpdate.downloadAndInstall().catch(error => {
+                        log.error('应用内更新出错:', error);
+                    });
+                } else if (downloadUrl) {
                     shell.openExternal(downloadUrl);
                 } else if (htmlUrl) {
                     shell.openExternal(htmlUrl);
@@ -349,7 +399,10 @@ export class UpdateChecker {
         try {
             const updateInfo = await this.checkForUpdates();
             
-            if (updateInfo.hasUpdate) {
+            if (updateInfo.hasUpdate && isPlaying()) {
+                log.info('发现新版本，MPV 正在播放，播放结束后再显示更新提示');
+                this.deferUpdateDialog(updateInfo);
+            } else if (updateInfo.hasUpdate) {
                 log.info('发现新版本，显示更新提示');
                 await this.showUpdateDialog(updateInfo);
             } else {
@@ -362,6 +415,29 @@ export class UpdateChecker {
     }
 
     /**
+     * 播放结束后再弹新版本提示，只弹一次。之前推迟的提示由这次替换；
+     * 客户端在播放结束前退出，或手动检查已经弹过提示时，不再弹。
+     */
+    private deferUpdateDialog(updateInfo: UpdateInfo): void {
+        this.cancelDeferredUpdateDialog();
+        const stopWaitingForPlayback = onPlaybackEnded(() => {
+            this.cancelDeferredUpdateDialog();
+            log.info('播放已结束，显示推迟的更新提示');
+            this.showUpdateDialog(updateInfo).catch(error => log.error('显示推迟的更新提示失败:', error));
+        });
+        const dropOnQuit = () => {
+            log.info('客户端退出，不再显示推迟的更新提示');
+            this.cancelDeferredUpdateDialog();
+        };
+        app.once('before-quit', dropOnQuit);
+        this.cancelDeferredUpdateDialog = () => {
+            stopWaitingForPlayback();
+            app.removeListener('before-quit', dropOnQuit);
+            this.cancelDeferredUpdateDialog = () => {};
+        };
+    }
+
+    /**
      * 手动检查更新（显示所有结果）
      */
     async manualCheckForUpdates(): Promise<void> {
@@ -369,6 +445,8 @@ export class UpdateChecker {
             const updateInfo = await this.checkForUpdates();
             
             if (updateInfo.hasUpdate) {
+                // 用户主动检查，播放中也照常弹框；推迟的提示就不用再弹了
+                this.cancelDeferredUpdateDialog();
                 await this.showUpdateDialog(updateInfo);
             } else {
                 await this.showNoUpdateDialog();

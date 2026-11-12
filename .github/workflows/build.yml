@@ -199,6 +199,8 @@ jobs:
             ~/Library/Caches/electron/**/electron-v*-darwin-x64.zip
           key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
+      # latest*.yml 是应用内更新读的更新元数据（package.json 的 build.publish），记录安装包的文件名和 sha512。
+      # Linux 两次构建写到同一个 release 目录，x64 是 latest-linux.yml，arm64 是 latest-linux-arm64.yml，互不覆盖。
       - name: Upload build artifacts
         if: inputs.upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -209,6 +211,7 @@ jobs:
             release/*.dmg
             release/*.AppImage
             release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
           retention-days: 30
       # —— 构建后：兜底清理（避免影响后续/下次流水线）——

@@ -191,3 +191,36 @@ export function mpvIpcSocket(platform: NodeJS.Platform, tmpDir: string, id: stri
     }
     return { path: path.posix.join('/tmp', `${name}.sock`), isFile: true };
 }
+
+/** 能不能做应用内更新。不能时 reason 写进日志，提示框改回手动更新的按钮。 */
+export type InAppUpdateAvailability = { available: true } | { available: false; reason: string };
+
+/**
+ * 应用内更新用于打包后的 Windows（NSIS）和 Linux（AppImage）客户端。macOS 的包没有 Developer ID 签名，装不了。
+ * Linux 上 electron-updater 删掉 APPIMAGE 指向的文件，把新 AppImage 移到同一目录，所以要以 AppImage 运行
+ * （appImagePath 是 APPIMAGE 环境变量，解包后运行时没有），并且这个目录可写。
+ * isWritableDir 由调用方传入（通常用 fs.accessSync 的 W_OK），本函数不碰文件系统。
+ */
+export function inAppUpdateAvailability(
+    platform: NodeJS.Platform,
+    isPackaged: boolean,
+    appImagePath: string | undefined,
+    isWritableDir: (dir: string) => boolean,
+): InAppUpdateAvailability {
+    if (platform !== 'win32' && platform !== 'linux') {
+        return { available: false, reason: `${platform} 不支持应用内更新` };
+    }
+    if (!isPackaged) {
+        return { available: false, reason: '未打包的客户端不做应用内更新' };
+    }
+    if (platform === 'linux') {
+        if (!appImagePath) {
+            return { available: false, reason: '没有以 AppImage 运行（APPIMAGE 未设置），不做应用内更新' };
+        }
+        const appImageDir = path.posix.dirname(appImagePath);
+        if (!isWritableDir(appImageDir)) {
+            return { available: false, reason: 'AppImage 所在目录不可写' };
+        }
+    }
+    return { available: true };
+}
