@@ -13,12 +13,12 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const http = require('node:http');
 const { execFileSync, spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
 const { resolveTarget, findInstaller } = require('./targets.cjs');
+const { delay, poll, readText, readProxyPort, requestPlayVideo, waitProxyStopped, killProcessTree } = require('./probes.cjs');
 
 const root = path.resolve(__dirname, '..', '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -29,64 +29,9 @@ const artifactsDir = path.resolve(process.env.FNTV_SMOKE_ARTIFACTS || path.join(
 const UNCAUGHT_PATTERN = /Uncaught Exception|A JavaScript error occurred in the main process|UnhandledPromiseRejection/;
 // Proxy 的日志经 IPC 由主进程写进 app.log，每行带这个标记（src/main/common/proxy.ts）。
 const PROXY_LOG_MARK = '[Proxy]';
-// Proxy 端口由系统分配，主进程在它就绪时把实际端口写进 app.log（src/main/common/proxy.ts）。
-const PROXY_READY_PATTERN = /Proxy 已就绪，端口 (\d+)/g;
-
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function fail(step, detail) {
     return `${step}失败：${detail}\n截图和日志：${artifactsDir}`;
-}
-
-async function poll(check, timeoutMs, intervalMs = 250) {
-    const deadline = Date.now() + timeoutMs;
-    let last;
-    while (Date.now() < deadline) {
-        last = await check();
-        if (last.done) return last;
-        await delay(intervalMs);
-    }
-    return last;
-}
-
-// 客户端退出后 Proxy 应随之退出，端口不再响应。
-function waitProxyStopped(port, timeoutMs) {
-    return poll(async () => {
-        const response = await requestPlayVideo(port);
-        return { done: Boolean(response.error), detail: JSON.stringify(response) };
-    }, timeoutMs);
-}
-
-function readText(file) {
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-}
-
-// app.log 里最后一次“Proxy 已就绪”报告的端口，还没有时返回 undefined。
-function readProxyPort(appLog) {
-    const matches = [...readText(appLog).matchAll(PROXY_READY_PATTERN)];
-    return matches.length ? Number(matches[matches.length - 1][1]) : undefined;
-}
-
-// Windows 上 kill 只结束客户端主进程，Proxy 子进程会留下来锁住安装目录、占着端口，要结束整个进程树。
-function killProcessTree(child) {
-    if (process.platform === 'win32') {
-        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    } else {
-        child.kill('SIGKILL');
-    }
-}
-
-// 不带 session 的 playvideo：Proxy 在线时返回 400，不碰 NAS。只要有 HTTP 响应就说明 Proxy 在监听。
-function requestPlayVideo(port) {
-    return new Promise(resolve => {
-        const request = http.get({ host: '127.0.0.1', port, path: '/api/v1/playvideo/smoke', timeout: 1000 }, response => {
-            const chunks = [];
-            response.on('data', chunk => chunks.push(chunk));
-            response.on('end', () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
-        });
-        request.on('timeout', () => request.destroy(new Error('timeout')));
-        request.on('error', error => resolve({ error: error.code || error.message }));
-    });
 }
 
 describe(`installer smoke test (${target.id})`, () => {
@@ -99,6 +44,7 @@ describe(`installer smoke test (${target.id})`, () => {
     let mainOutput = '';
     let launchedAt;
     let proxyPort;
+    let windowIconPath;
 
     before(async () => {
         fs.rmSync(artifactsDir, { recursive: true, force: true });
@@ -274,6 +220,55 @@ ${mainOutput.slice(-4000)}`));
         }, result.iconPath);
         assert.equal(icon.empty, false, fail('主窗口图标检查', `${result.iconPath} 加载后是空图像`));
         console.log(`::notice::smoke ${target.id} window icon: ${result.iconPath} ${icon.size.width}x${icon.size.height}`);
+        windowIconPath = result.iconPath;
+    });
+
+    it('creates the tray with its packaged icon', async () => {
+        // 托盘图标和主窗口图标在 app.asar 的同一个 build/ 目录里（src/main/common/tray.ts），asar 只带列出的图标
+        // （package.json 的 files）。tray.ts 读不到图标时仍会创建托盘，只记一条警告，macOS 还会先退回 icon.png，
+        // 所以除了日志还要直接加载这个图标，macOS 的 @2x 也要在。
+        const appLog = path.join(isolation.logDir, 'app.log');
+        const result = await poll(async () => ({ done: readText(appLog).includes('系统托盘创建成功') }), 10000);
+        assert.ok(result.done, fail('托盘检查', `10 秒内 ${appLog} 里没有“系统托盘创建成功”`));
+        assert.doesNotMatch(readText(appLog), /托盘图标加载失败/, fail('托盘检查', 'app.log 里有“托盘图标加载失败”'));
+
+        assert.ok(windowIconPath, fail('托盘检查', '没有拿到主窗口图标路径，先看主窗口图标检查'));
+        const iconPath = path.join(path.dirname(windowIconPath), target.trayIcon.file);
+        const icon = await app.evaluate(({ nativeImage }, file) => {
+            const image = nativeImage.createFromPath(file);
+            return { empty: image.isEmpty(), scaleFactors: image.getScaleFactors() };
+        }, iconPath);
+        assert.equal(icon.empty, false, fail('托盘检查', `${iconPath} 加载后是空图像`));
+        assert.deepEqual(icon.scaleFactors, target.trayIcon.scaleFactors, fail('托盘检查', `${iconPath} 的缩放倍数不对`));
+        console.log(`::notice::smoke ${target.id} tray icon: ${iconPath} scale ${icon.scaleFactors.join(',')}`);
+    });
+
+    it('plays a test video with the packaged MPV on Windows', async t => {
+        // 只有 Windows 安装包带 mpv.exe（package.json 的 win.extraFiles），macOS 和 Linux 用用户装的 MPV。
+        // 冒烟测试连不上 NAS，客户端不会自己调起 MPV，这里直接运行安装目录里的 mpv.exe：它旁边的 portable_config
+        // 自动生效，读的是和用户一样的 mpv.conf（vo=gpu-next，Windows 上默认走 d3d11）、uosc 和其它脚本。
+        // 归档里的 d3dcompiler_43.dll 不打包，d3d11 用系统的 d3dcompiler_47，日志里的 “D3DCompiler version” 说明加载成功。
+        if (target.platform !== 'windows') {
+            t.skip('只有 Windows 安装包带 MPV');
+            return;
+        }
+        const mpv = path.join(path.dirname(installation.executablePath), 'third_party', 'fntv-mpv', 'mpv.exe');
+        const logFile = path.join(artifactsDir, 'mpv.log');
+        const result = spawnSync(mpv, [
+            '--ao=null',
+            '--length=2',
+            `--log-file=${logFile}`,
+            'av://lavfi:testsrc=size=640x360:rate=30',
+        ], { cwd: home, encoding: 'utf8', timeout: 60000 });
+        const log = readText(logFile);
+        assert.equal(result.error, undefined, fail('MPV 播放', `${mpv} 没能运行：${result.error?.message}`));
+        assert.equal(result.status, 0, fail('MPV 播放', `${mpv} 退出码 ${result.status}，日志见 mpv.log`));
+        assert.match(log, /VO: \[gpu-next\]/, fail('MPV 播放', 'mpv.log 里没有 gpu-next 输出视频'));
+        assert.match(log, /\[vo\/gpu-next\/d3d11\] D3DCompiler version: \S+/, fail('MPV 播放', 'mpv.log 里没有加载 D3DCompiler'));
+        assert.match(log, /Exiting\.\.\. \(End of file\)/, fail('MPV 播放', 'MPV 没有播到结尾'));
+        // smart_skip 从 Proxy 的播放地址里取参数，测试视频不是这种地址，它报错是预期的，不检查。
+        assert.doesNotMatch(log, /\]\[e\]\[(uosc|uosc_danmaku|thumbfast)\]/, fail('MPV 播放', 'mpv.log 里有脚本报错'));
+        console.log(`::notice::smoke ${target.id} mpv: ${/D3DCompiler version: \S+/.exec(log)[0]}`);
     });
 
     it('keeps a single window-all-closed listener', async () => {

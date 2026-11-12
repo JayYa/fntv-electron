@@ -1,14 +1,16 @@
 'use strict';
 
 // 冒烟测试的目标平台。每个目标说明：在哪个 workflow 平台上构建（platform）、安装包叫什么、
-// 怎样按用户的方式变成可执行文件、怎样把用户数据隔离到临时目录。断言在 installer.smoke.cjs 里，
-// 所有目标共用一套。
+// 托盘用 build/ 下的哪个图标（trayIcon）、怎样按用户的方式变成可执行文件、怎样把用户数据隔离到临时目录。
+// 断言在 installer.smoke.cjs 里，所有目标共用一套。安装包的体积预算也按这里的目标写
+// （scripts/installer-size-budget.json）。
 //
 // 这里是目标的唯一来源。加平台或架构时在这里加一项，再同步 workflow 里的这几处，漏改哪一处
 // tests/releaseGate.test.cjs 都会失败：
 // - build-and-smoke.yml 的 select-targets：平台的构建机器和冒烟目标；
 // - release.yml 的 Select platforms 和 workflow_dispatch 选项，publish 的 Check installers 安装包名；
-// - smoke-test.yml 的平台列表和 workflow_dispatch 选项。
+// - smoke-test.yml 的平台列表和 workflow_dispatch 选项；
+// - scripts/installer-size-budget.json 的体积预算。
 
 const crypto = require('node:crypto');
 const { execFileSync, spawnSync } = require('node:child_process');
@@ -65,6 +67,8 @@ function macDmgTarget(builderArch) {
     return {
         platform: 'macos',
         installerPattern: new RegExp(`^FNMedia_.+_mac_${builderArch}\\.dmg$`),
+        // 菜单栏用模板图标，Retina 屏读 @2x。
+        trayIcon: { file: 'iconTemplate2.png', scaleFactors: [1, 2] },
         install(installerPath) {
             // 挂到自己的临时目录，不进 /Volumes，不会和同名卷或构建残留冲突。
             const mountPoint = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-dmg-'));
@@ -144,6 +148,7 @@ const TARGETS = {
         platform: 'linux',
         // 打包工具给 Linux x64 的架构名是 x86_64（githubRelease.ts 的 expectedAssetName）。
         installerPattern: /^FNMedia_.+_linux_x86_64\.AppImage$/,
+        trayIcon: { file: 'icon.png', scaleFactors: [1] },
         // 直接运行用户下载的那个 AppImage。artifact 下载后丢失可执行位，这里补上。
         install(installerPath) {
             fs.chmodSync(installerPath, 0o755);
@@ -155,6 +160,7 @@ const TARGETS = {
     'win32-x64': {
         platform: 'windows',
         installerPattern: /^FNMedia_.+_win_x64\.exe$/,
+        trayIcon: { file: 'icon.ico', scaleFactors: [1] },
         // NSIS 安装包 /S 静默安装到临时目录，从安装目录启动。/D 必须是最后一个参数，路径不加引号。
         install(installerPath) {
             checkWindowsInstallAllowed({ env: process.env, appId: packagedAppId(), isInstalled: uninstallKeyExists });

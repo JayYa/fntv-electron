@@ -199,6 +199,17 @@ jobs:
             ~/Library/Caches/electron/**/electron-v*-darwin-x64.zip
           key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
+      # 体积门禁：每个安装包不超过 scripts/installer-size-budget.json 的预算，结果写进 Step Summary，
+      # 并列出和最新 Release 同目标资产的差。只在上传安装包时检查，cache-warm.yml 只填缓存，不检查。
+      # 预算按 tests/smoke/targets.cjs 的目标写，tests/releaseGate.test.cjs 核对这一步和预算覆盖全部目标。
+      - name: Check installer size
+        if: inputs.upload
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-installer-size.cjs "$PLATFORM" release
+        shell: bash
+
       - name: Upload build artifacts
         if: inputs.upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

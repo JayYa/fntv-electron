@@ -62,6 +62,11 @@
         "appId": "com.qiaokes.fntv",
         "copyright": "Copyright (c) 2025 Tag mig hånden and fntv-electron contributors; modifications (c) 2026 JayYa",
         "compression": "normal",
+        "electronLanguages": [
+            "zh-CN",
+            "en-US"
+        ],
+        "afterAllArtifactBuild": "scripts/convert-dmg-to-ulmo.cjs",
         "win": {
             "target": [
                 {
@@ -77,7 +82,12 @@
                     "from": "third_party/fntv-mpv",
                     "to": "third_party/fntv-mpv",
                     "filter": [
-                        "**/*"
+                        "**/*",
+                        "!mpv.com",
+                        "!*.bat",
+                        "!installer{,/**}",
+                        "!d3dcompiler_43.dll",
+                        "!portable_config/scripts/uosc/bin{,/**}"
                     ]
                 }
             ]
@@ -104,12 +114,14 @@
                     "from": "third_party/fntv-mpv/portable_config",
                     "to": "third_party/fntv-mpv/portable_config",
                     "filter": [
-                        "**/*"
+                        "**/*",
+                        "!scripts/uosc/bin{,/**}"
                     ]
                 }
             ]
         },
         "dmg": {
+            "writeUpdateInfo": false,
             "title": "FNMedia_${version}_${arch}",
             "icon": "build/icon.icns",
             "window": {
@@ -153,21 +165,32 @@
                     "from": "third_party/fntv-mpv/portable_config",
                     "to": "third_party/fntv-mpv/portable_config",
                     "filter": [
-                        "**/*"
+                        "**/*",
+                        "!scripts/uosc/bin{,/**}"
                     ]
                 }
             ]
         },
+        "appImage": {
+            "compression": "xz"
+        },
         "nsis": {
+            "differentialPackage": false,
             "allowToChangeInstallationDirectory": true,
             "oneClick": false,
             "createDesktopShortcut": true,
             "createStartMenuShortcut": true
         },
         "files": [
-            "dest",
-            "build",
-            "resource/login"
+            "dest/**/*",
+            "!dest/.tsbuildinfo",
+            "!dest/preload/**/!(bundle.js)",
+            "build/icon.ico",
+            "build/icon.png",
+            "build/iconTemplate2.png",
+            "build/iconTemplate2@2x.png",
+            "resource/login",
+            "!**/*.map"
         ]
     }
 }

@@ -18,7 +18,8 @@ function touch(file) {
 }
 
 test('each macOS smoke target picks the dmg of its own architecture from the macOS build', t => {
-    // build:mac 一次产出两个 dmg 和各自的 blockmap（package.json 的 artifactName）。
+    // build:mac 一次产出两个 dmg（package.json 的 artifactName）。3.1.0 及以前每个 dmg 旁边还有 blockmap，
+    // 之后由 dmg.writeUpdateInfo: false 关掉，旁边有 blockmap 时也只挑 dmg。
     const release = tempDir(t);
     for (const name of [
         'FNMedia_2.7.1_mac_x64.dmg',
@@ -86,6 +87,19 @@ test('a Windows smoke test installs when no client with the same appId is instal
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: {}, appId: 'com.qiaokes.fntv.smoketest', isInstalled: installed }));
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: { CI: 'true' }, appId: 'com.qiaokes.fntv', isInstalled: installed }));
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: { FNTV_SMOKE_ALLOW_INSTALL: '1' }, appId: 'com.qiaokes.fntv', isInstalled: installed }));
+});
+
+// app.asar 只带 package.json 的 files 列出的 build/ 图标，漏列时托盘没有图标（冒烟测试的托盘检查会失败，
+// 这里在打包前就发现）。@2x 由 nativeImage 按文件名自动读取，也要列出。
+test('every tray icon the smoke tests expect is listed in the packaged files', () => {
+    const files = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).build.files;
+    for (const [id, { trayIcon }] of Object.entries(TARGETS)) {
+        const expected = trayIcon.scaleFactors.map(scale => `build/${trayIcon.file.replace(/\.png$/, scale === 1 ? '.png' : `@${scale}x.png`)}`);
+        for (const file of expected) {
+            assert.ok(fs.existsSync(path.join(__dirname, '..', file)), `${id}: ${file} does not exist`);
+            assert.ok(files.includes(file), `${id}: ${file} is not in package.json build.files`);
+        }
+    }
 });
 
 test('every smoke target names the workflow platform it is built on', () => {

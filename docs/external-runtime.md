@@ -29,7 +29,23 @@
 - tag、资产名和 sha256 写在 `build` job 的 `env`。压缩包缓存在 `$RUNNER_TEMP/mpv-archive`，key 含 sha256，换版本时自动失效。缓存用 `actions/cache/restore` 和 `actions/cache/save` 分开写，下载并校验通过后立即保存，后面的构建失败也不丢；命中时不保存，缓存出错不让构建失败。命中缓存也校验 sha256，不通过就重新下载。未命中时 `curl` 对所有错误重试 5 次，每次隔 10 秒，最多 5 分钟，避免 Release 下载偶发的 5xx 让构建失败。这些由 `tests/releaseGate.test.cjs` 检查。
 - electron-builder 打包时下载的 Electron zip 和打包工具也缓存，key 是 `runner.os` 加 `pnpm-lock.yaml` 的 hash，构建成功后保存，命中时不保存。打包工具存在 `ELECTRON_BUILDER_CACHE`（`Build application` 设为 `$RUNNER_TEMP/electron-builder-cache`）。Electron zip 存在 `@electron/get` 的默认目录（Linux `~/.cache/electron`，macOS `~/Library/Caches/electron`，Windows `%LOCALAPPDATA%\electron\Cache`），它不读 `ELECTRON_CACHE`。
 - 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再改 `build` job `env` 里的 tag、资产名和 sha256。`README.md` 的准备步骤和本页上面那条 tag 也要跟着改，漏改时 `tests/releaseGate.test.cjs` 失败。归档约 55 MB，`gh release download` 常超过 2 分钟，放到后台跑；sha256 要和 `gh release view <tag> --json assets` 里的 digest 核对。
-- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
+- Windows 打包 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
+- `extraFiles` 的 `filter` 排除客户端用不到的文件，归档本身不动：
+  - 三个平台都不带 `portable_config/scripts/uosc/bin/`（uosc 的 `ziggy-*`，三份合计约 17 MB）。代价是 uosc 字幕菜单里的在线下载和 `Update uosc` 不能用，uosc 在菜单里显示调用 ziggy 失败，播放不受影响。uosc 菜单里的粘贴和复制先读写 MPV 自己的 `clipboard/text` 属性，读不到时才调 ziggy，那时也不能用（2026-11-12 在 Windows 上用附带的 MPV 加 `--vo=null` 读这个属性，结果是不可用）。uosc 5.13 没有隐藏这些入口的配置项（字幕菜单的下载按钮写死在 `scripts/uosc/main.lua`），要隐藏只能在 `fntv-mpv-config` 改。
+  - Windows 再排除 `mpv.com`、`*.bat`、`installer/` 和 `d3dcompiler_43.dll`。客户端只启动 `mpv.exe`（`mpvConfigHelpers.ts`）。`d3dcompiler_43.dll` 是 MPV 找 D3D 编译器时的最后一个候选，Windows 10 起系统自带 `d3dcompiler_47.dll`，冒烟测试实际播放一次并检查日志里的 `D3DCompiler version`。
+
+## 安装包体积
+
+- 打包配置（`package.json` 的 `build`）：
+  - `nsis.differentialPackage: false`：NSIS 安装包整体 solid 压缩，exe 不再有 `.blockmap`。更新检查只按文件名打开完整安装包的下载地址（`githubRelease.ts` 的 `expectedAssetName`），不用 blockmap。
+  - `electronLanguages` 只留 `zh-CN` 和 `en-US`，Chromium 自带的文案（右键菜单、文件对话框）在其它系统语言下显示英文。
+  - `appImage.compression: "xz"`：只在 electron-builder 26.x 的 FUSE2 toolset 下生效。27 默认改用 static runtime，`xz` 会被映射成 `zstd`，升级时要重新量体积、改预算。
+  - dmg 由 `scripts/convert-dmg-to-ulmo.cjs`（`afterAllArtifactBuild`）从 UDZO 转成 ULMO。26.x 的 `dmg.format` 不收 ULMO，升级到 27 后改用 `dmg.format: "ULMO"` 并删掉这个钩子。转换后原来的 blockmap 对不上，所以 `dmg.writeUpdateInfo: false` 不再生成。
+  - `files` 只列运行时用到的文件：`dest/` 去掉 `.tsbuildinfo` 和 preload 除 `bundle.js` 以外的 tsc 输出，`build/` 只带托盘和窗口图标（含 `@2x`），全部去掉 `*.map`。代码里新引用 `build/` 下的文件时要加进 `files`；冒烟测试用到的托盘图标由 `tests/smokeTargets.test.cjs` 核对。
+- 体积门禁：`build.yml` 打包后的 `Check installer size` 运行 `scripts/check-installer-size.cjs`，每个安装包不能超过 `scripts/installer-size-budget.json` 里对应冒烟目标的字节数，结果和最新 Release 的对比写进 Step Summary。发版和冒烟测试的构建都会检查，`cache-warm.yml` 不检查。
+  - 预算取实测值加约 2.5%，只降不升。安装包变小后在同一个 PR 里下调；确实要变大时（例如 Electron 大版本升级、换 MPV 构建）在 PR 里改预算并说明原因。
+  - 预算文件不放 `build/`，那里的文件曾经整个打进 `app.asar`。
+  - 加冒烟目标时预算也要加，漏了 `tests/releaseGate.test.cjs` 失败。
 
 ## 用户配置同步
 
