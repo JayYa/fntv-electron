@@ -263,6 +263,29 @@ test('a failed install offers the Release page for a manual update', async (t) =
     assert.deepEqual(opened, [LATEST_RELEASE_PAGE]);
 });
 
+test('a failed restart-and-install after choosing install on quit leaves nothing to install on quit', async (t) => {
+    // 先选「退出时安装」，再检查一次改选「立即重启安装」，安装失败。electron-updater 不能在退出时自己装：那条路径不先停 MPV
+    let downloadedDialogs = 0;
+    const { checker, updater } = setupWindows(t, {
+        dialogResponse: (options) => {
+            if (options.title === '新版本已下载') {
+                downloadedDialogs += 1;
+                return downloadedDialogs === 1 ? 1 : 0;
+            }
+            return clicking({ 发现新版本: '下载并安装' })(options);
+        },
+    });
+
+    await checker.manualCheckForUpdates();
+    await waitFor(() => updater.downloads === 1);
+    updater.finishDownload();
+    await waitFor(() => updater.autoInstallOnAppQuit === true);
+    await checker.manualCheckForUpdates();
+    await waitFor(() => updater.installs.length === 1);
+    updater.emit('error', new Error('spawn EACCES'));
+    await waitFor(() => downloadedDialogs === 2 && updater.autoInstallOnAppQuit === false);
+});
+
 test('remind me later neither downloads nor opens anything', async (t) => {
     const { checker, dialogs, opened, updater } = setupWindows(t, { dialogResponse: clicking({ 发现新版本: '稍后提醒' }) });
 

@@ -141,6 +141,9 @@ export class InAppUpdate implements DownloadProgress {
         if (result.response === 0) {
             log.info('应用内更新：立即重启安装');
             this.phase = 'installing';
+            // 之前选过「退出时安装」时这一项还开着。这次安装失败的话，electron-updater 会在退出时自己再装，
+            // 那条路径不先停 MPV，所以关掉；失败后用户可以重新检查再选
+            autoUpdater.autoInstallOnAppQuit = false;
             await stopPlaybackBeforeInstall();
             // 静默安装（不显示向导，沿用原安装目录），装完重新启动客户端
             autoUpdater.quitAndInstall(true, true);
