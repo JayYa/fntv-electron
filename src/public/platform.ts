@@ -191,3 +191,20 @@ export function mpvIpcSocket(platform: NodeJS.Platform, tmpDir: string, id: stri
     }
     return { path: path.posix.join('/tmp', `${name}.sock`), isFile: true };
 }
+
+/** 能不能做应用内更新。不能时 reason 写进日志，提示框改回手动更新的按钮。 */
+export type InAppUpdateAvailability = { available: true } | { available: false; reason: string };
+
+/**
+ * 应用内更新只用于打包后的 Windows（NSIS）客户端。macOS 的包没有 Developer ID 签名，装不了；
+ * Linux 尚未接入，暂时和 macOS 一样走手动更新。
+ */
+export function inAppUpdateAvailability(platform: NodeJS.Platform, isPackaged: boolean): InAppUpdateAvailability {
+    if (platform !== 'win32') {
+        return { available: false, reason: `${platform} 不支持应用内更新` };
+    }
+    if (!isPackaged) {
+        return { available: false, reason: '未打包的客户端不做应用内更新' };
+    }
+    return { available: true };
+}

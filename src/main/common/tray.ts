@@ -141,6 +141,11 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     return submenu;
 }
 
+/** 应用内更新下载中时，「检查更新」项后面显示下载百分比 */
+function checkForUpdatesLabel(downloadPercent: number | null): string {
+    return downloadPercent === null ? '检查更新' : `检查更新（正在下载新版本 ${downloadPercent}%）`;
+}
+
 /**
  * 更新托盘菜单
  */
@@ -176,7 +181,7 @@ async function updateTrayMenu(): Promise<void> {
             type: 'separator'
         },
         {
-            label: '检查更新',
+            label: checkForUpdatesLabel(getUpdateChecker().downloadPercent()),
             click: () => {
                 getUpdateChecker().manualCheckForUpdates().catch(error => {
                     log.error('手动检查更新失败:', error);
@@ -324,6 +329,11 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
 
     // 初始创建菜单
     await updateTrayMenu();
+
+    // 下载百分比变了就重建菜单，刷新「检查更新」项
+    getUpdateChecker().onDownloadProgress(() => {
+        updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
+    });
 
     // 根据平台设置不同的恢复窗口操作：Windows 双击，macOS 和 Linux 单击
     tray.on(behavior.tray.restoreEvent as 'click', () => {

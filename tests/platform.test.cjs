@@ -10,7 +10,17 @@ const {
     mpvUserConfigDir,
     mpvIpcSocket,
     mpvPlayer,
+    inAppUpdateAvailability,
 } = require('../dest/public/platform.js');
+
+test('only a packaged Windows client can update in app', () => {
+    assert.deepEqual(inAppUpdateAvailability('win32', true), { available: true });
+    for (const [platform, isPackaged] of [['win32', false], ['darwin', true], ['linux', true]]) {
+        const result = inAppUpdateAvailability(platform, isPackaged);
+        assert.equal(result.available, false, `${platform} packaged=${isPackaged}`);
+        assert.ok(result.reason.length > 0);
+    }
+});
 
 test('platformBehavior defaults to the platform the app runs on', () => {
     assert.deepEqual(platformBehavior(), platformBehavior(currentPlatform()));

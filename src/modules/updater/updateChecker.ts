@@ -13,7 +13,8 @@ import {
     releasePageUrl
 } from './githubRelease';
 import { formatReleaseNotes } from './releaseNotes';
-import { currentArch, currentPlatform } from '../../public/platform';
+import { InAppUpdate } from './inAppUpdate';
+import { currentArch, currentPlatform, inAppUpdateAvailability } from '../../public/platform';
 
 // 尝试获取semver模块
 let semver: any;
@@ -71,6 +72,13 @@ export class UpdateChecker {
     private userAgent: string;
     // GitHub API 额度恢复前不再请求 API，只存在内存里
     private rateLimitedUntil: Date | null = null;
+    // 应用内更新的 electron-updater 更新源：Release 的 latest/download/ 目录，里面有 latest.yml 和安装包
+    private readonly inAppUpdate = new InAppUpdate({
+        feedUrl: () => this.withDownloadProxy(
+            `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.repo}/releases/latest/download/`
+        ),
+        releasePageUrl: releasePageUrl(UPDATE_REPOSITORY)
+    });
 
     constructor() {
         this.currentVersion = app.getVersion();
@@ -253,8 +261,14 @@ export class UpdateChecker {
             return null;
         }
         log.info(`找到匹配的安装包: ${asset.name}`);
+        return this.withDownloadProxy(asset.browser_download_url);
+    }
 
-        const originalUrl = asset.browser_download_url;
+    /**
+     * 开了应用更新下载加速时，GitHub 地址前加中转前缀（去掉前缀末尾的斜杠后拼上原地址）。
+     * 安装包链接和应用内更新的更新源都按这条规则改写。
+     */
+    private withDownloadProxy(originalUrl: string): string {
         try {
             const proxyConfig = getAppDownloadProxyConfig();
             if (proxyConfig.enabled && proxyConfig.proxyUrl && proxyConfig.proxyUrl.trim() !== '') {
@@ -273,6 +287,16 @@ export class UpdateChecker {
         return originalUrl;
     }
 
+    /** 应用内更新下载中返回 0 到 100 的整数，其它时候是 null。托盘的「检查更新」项显示它。 */
+    downloadPercent(): number | null {
+        return this.inAppUpdate.downloadPercent();
+    }
+
+    /** 应用内更新的下载进度变化时通知，下载结束时收到 null */
+    onDownloadProgress(listener: (percent: number | null) => void): void {
+        this.inAppUpdate.onDownloadProgress(listener);
+    }
+
     /**
      * 显示更新对话框
      * @param updateInfo - 更新信息
@@ -280,20 +304,29 @@ export class UpdateChecker {
      */
     async showUpdateDialog(updateInfo: UpdateInfo): Promise<boolean> {
         const { latestVersion, releaseNotes, downloadUrl, htmlUrl } = updateInfo;
-        
+        const availability = inAppUpdateAvailability(currentPlatform(), app.isPackaged);
+        if (!availability.available) {
+            log.info(`手动更新：${availability.reason}`);
+        }
+
         const result: DialogResult = await dialog.showMessageBox({
             type: 'info',
             title: '发现新版本',
             message: `飞牛影视有新版本可用！`,
             detail: `当前版本: ${this.currentVersion}\n最新版本: ${latestVersion}\n\n更新内容:\n${formatReleaseNotes(releaseNotes)}`,
-            buttons: ['立即下载', '查看详情', '稍后提醒'],
+            buttons: [availability.available ? '下载并安装' : '立即下载', '查看详情', '稍后提醒'],
             defaultId: 0,
             cancelId: 2
         });
 
         switch (result.response) {
-            case 0: // 立即下载
-                if (downloadUrl) {
+            case 0: // 下载并安装 / 立即下载
+                if (availability.available) {
+                    // 后台下载，不等它结束；失败由应用内更新自己弹框
+                    this.inAppUpdate.downloadAndInstall().catch(error => {
+                        log.error('应用内更新出错:', error);
+                    });
+                } else if (downloadUrl) {
                     shell.openExternal(downloadUrl);
                 } else if (htmlUrl) {
                     shell.openExternal(htmlUrl);
