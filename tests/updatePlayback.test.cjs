@@ -140,6 +140,24 @@ test('restart and install now stops playback and waits for the progress report b
     assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: true }]);
 });
 
+test('restart and install now still installs 5 seconds after stopping when the progress report never returns', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const env = setupDownload(t, '立即重启安装');
+    t.mock.method(require('../dest/modules/logger/index.js'), 'warn', () => {});
+    const { player } = startPlaying(env.playback, new Promise(() => {}));
+
+    await startDownload(env);
+    await downloadAndChoose(env, () => player.stops === 1);
+    t.mock.timers.tick(4999);
+    // 断言超时前没有安装，没有可等的条件
+    await settle();
+    assert.deepEqual(env.updater.installs, []);
+
+    t.mock.timers.tick(1);
+    await waitFor(() => env.updater.installs.length === 1);
+    assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: true }]);
+});
+
 test('restart and install now installs right away when nothing is playing', async (t) => {
     const env = setupDownload(t, '立即重启安装');
 
