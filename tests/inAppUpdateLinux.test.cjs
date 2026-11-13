@@ -92,6 +92,21 @@ test('a Linux client not running as an AppImage keeps the manual download button
     assert.equal(updater.downloads, 0);
 });
 
+test('when the installed AppImage gets a new file name the new path is logged', async (t) => {
+    runAsAppImage(t, tempDir(t));
+    const { checker, updater, logText } = setupLinux(t);
+    const newPath = '/home/user/Applications/FNMedia_2.7.0_linux_x86_64.AppImage';
+
+    await checker.manualCheckForUpdates();
+    await waitFor(() => updater.downloads === 1);
+    // AppImage 文件名带版本号时，electron-updater 安装时换成新文件名并发这个事件
+    updater.emit('appimage-filename-updated', newPath);
+
+    const lines = logText().split('\n').filter((line) => line.includes(newPath));
+    assert.equal(lines.length, 1, logText());
+    assert.match(lines[0], /\bINFO\b/);
+});
+
 // Windows 上目录的只读属性不影响写入，造不出不可写的目录；root 能写任何目录。这条由 CI 的 Linux 和 macOS 验证。
 const cannotMakeReadOnlyDir = process.platform === 'win32' || process.getuid?.() === 0;
 

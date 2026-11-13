@@ -191,6 +191,11 @@ export class InAppUpdate implements DownloadProgress {
                 this.setPercent(Math.floor(progress.percent));
             }
         });
+        // Linux：AppImage 文件名带 x.y.z 版本号时，electron-updater 安装时换成新版本的文件名、删掉旧文件，
+        // 指向旧文件名的快捷方式会失效；文件名不带版本号时原地覆盖，不发这个事件（README 的 Linux 安装说明）
+        autoUpdater.on('appimage-filename-updated', (newPath: string) => {
+            log.info(`应用内更新：AppImage 换了文件名，新文件是 ${newPath}`);
+        });
         // 下载阶段的错误同时会让 downloadUpdate 失败，在那里处理；
         // 安装阶段（quitAndInstall 启动安装程序失败）只有这个事件。没有监听时 EventEmitter 会把 error 抛出去。
         autoUpdater.on('error', (error: Error) => {

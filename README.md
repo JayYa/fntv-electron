@@ -50,7 +50,12 @@ brew install mpv
 sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null
 ```
 
-- Linux 需要自己安装 MPV 播放器（版本 > 0.37.0）。AppImage 下载后先执行 `chmod +x` 加上可执行权限。
+- Linux 需要自己安装 MPV 播放器（版本 > 0.37.0）。AppImage 下载后按顺序做：
+  1. 把文件改成不带版本号的名字，例如 `FNMedia.AppImage`。
+  2. 执行 `chmod +x FNMedia.AppImage` 加上可执行权限。
+  3. 再建桌面快捷方式、`.desktop` 文件或开机自启项，指向改名后的文件。
+
+  这样之后的应用内更新会原地替换这个文件，快捷方式一直有效。保留带版本号的文件名的话，每次应用内更新后文件名都会变成新版本号，快捷方式要重新指向新文件。
 
 macOS 和 Linux 的安装包不带 MPV 播放器，只带 MPV 插件和配置。客户端每次启动会把它们同步到 `~/.config/mpv`（设了 `XDG_CONFIG_HOME` 时是 `$XDG_CONFIG_HOME/mpv`，设了 `MPV_HOME` 时是它本身，和 MPV 读取配置的目录一致），不用自己装插件：
 

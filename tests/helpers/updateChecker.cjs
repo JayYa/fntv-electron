@@ -133,7 +133,11 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
-    return { checker: getInstance(), app: electronMock.app, dialogs, opened, requests, updater };
+    // 打包后日志写在 userData（~/.fntv）/logs；未打包时写在 getAppPath()/log
+    const logFile = isPackaged ? path.join(paths.userData, 'logs', 'app.log') : path.join(testRoot, 'log', 'app.log');
+    const logText = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
+
+    return { checker: getInstance(), app: electronMock.app, dialogs, opened, requests, updater, logText };
 }
 
 // 模拟客户端退出：和 Electron 一样发 before-quit，返回事件，看有没有被拦下
