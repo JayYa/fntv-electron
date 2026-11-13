@@ -191,6 +191,11 @@ export class InAppUpdate implements DownloadProgress {
                 this.setPercent(Math.floor(progress.percent));
             }
         });
+        // Linux：electron-updater 安装时先删掉旧 AppImage。旧文件名里有 x.y.z 三段数字时，新文件用新版本的文件名，
+        // 指向旧文件名的快捷方式会失效，并发这个事件；没有时用原文件名，不发。用户该怎么做见 README 的 Linux 安装说明
+        autoUpdater.on('appimage-filename-updated', (newPath: string) => {
+            log.info(`应用内更新：AppImage 换了文件名，新文件是 ${newPath}`);
+        });
         // 下载阶段的错误同时会让 downloadUpdate 失败，在那里处理；
         // 安装阶段（quitAndInstall 启动安装程序失败）只有这个事件。没有监听时 EventEmitter 会把 error 抛出去。
         autoUpdater.on('error', (error: Error) => {
