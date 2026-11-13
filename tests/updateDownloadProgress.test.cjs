@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+// taskbarProgress.js 只引入 electron 的类型，不需要假 electron
+const { bindTaskbarProgress } = require('../dest/main/common/taskbarProgress.js');
 
 // 应用内更新的下载进度在界面上的两处显示：托盘的「检查更新」项和主窗口的任务栏进度条。
 // 两处都只读 DownloadProgress（percent、onChange），这里用一个可以手动推进的假进度代替真实下载。
@@ -21,7 +23,7 @@ function fakeDownloadProgress() {
 }
 
 // 用假的 electron 加载 tray.js，截下每次 setContextMenu 收到的菜单模板（写法同 tests/trayMpvMenu.test.cjs）。
-// 托盘从更新检查器单例读下载进度，这里把单例的 downloadProgress 换成假进度。
+// 托盘从更新检查器单例读下载进度，这里把单例的 downloadProgress 换成假进度；useFakeElectron 在测试结束时清掉 dest/ 模块缓存，单例不会带到下一个测试。
 function setupTray(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-tray-progress-'));
     const mpvHome = path.join(testRoot, 'mpv-home');
@@ -112,10 +114,6 @@ function fakeWindow() {
         isDestroyed: () => destroyed,
         setProgressBar(value) { progressBarValues.push(value); },
     };
-}
-
-function bindTaskbarProgress(window, progress) {
-    require('../dest/main/common/taskbarProgress.js').bindTaskbarProgress(window, progress);
 }
 
 test('the taskbar progress bar follows the download percent and clears when the download ends', () => {
