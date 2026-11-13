@@ -75,4 +75,4 @@ function posixPath(file) {
         : file;
 }
 
-module.exports = { action, asList, assertRestoreAndSave, posixPath, runStep, workflow };
+module.exports = { action, asList, assertRestoreAndSave, posixPath, root, runStep, workflow };
