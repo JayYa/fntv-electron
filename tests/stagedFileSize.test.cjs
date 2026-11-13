@@ -33,8 +33,8 @@ function stage(dir, file, content) {
     git(dir, 'add', '--', file);
 }
 
-function check(dir) {
-    return spawnSync(process.execPath, [script], { cwd: dir, encoding: 'utf8' });
+function check(dir, ...args) {
+    return spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: 'utf8' });
 }
 
 test('allows a staged file of exactly 5000 tokens', t => {
@@ -134,4 +134,156 @@ test('pnpm install points git at the tracked hooks and lockfiles stay exempt', (
 
     const attributes = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8');
     assert.match(attributes, /^pnpm-lock\.yaml -agent-authored$/m);
+});
+
+const WARN_BYTES = LIMIT_BYTES * 0.85;
+
+function commit(dir, message) {
+    git(dir, 'commit', '-q', '--no-verify', '-m', message);
+}
+
+// 模拟 PR：main 是 base，feature 分支是 head。
+function createPullRequest(t, baseFiles) {
+    const dir = createRepo(t);
+    git(dir, 'checkout', '-q', '-b', 'main');
+    stage(dir, 'README.md', 'base');
+    for (const [file, content] of Object.entries(baseFiles)) stage(dir, file, content);
+    commit(dir, 'base');
+    git(dir, 'checkout', '-q', '-b', 'feature');
+    return dir;
+}
+
+test('warns about a staged file over 80% of the limit but still passes', t => {
+    const dir = createRepo(t);
+    stage(dir, 'src/near.ts', 'a'.repeat(WARN_BYTES));
+
+    const result = check(dir);
+
+    assert.equal(result.status, 0);
+    assert.match(result.stderr, /src\/near\.ts: 4250 tokens（85%）/);
+});
+
+test('does not warn about a staged file at exactly 80% of the limit', t => {
+    const dir = createRepo(t);
+    stage(dir, 'a.ts', 'a'.repeat(LIMIT_BYTES * 0.8));
+
+    const result = check(dir);
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+});
+
+test('neither warns nor fails for exempt and binary files in either mode', t => {
+    const files = {
+        '.gitattributes': 'big.lock -agent-authored\nnear.lock -agent-authored\n',
+        'big.lock': 'a'.repeat(LIMIT_BYTES + 1),
+        'near.lock': 'a'.repeat(WARN_BYTES),
+        'big.png': Buffer.concat([Buffer.from([0x89, 0x00]), Buffer.alloc(LIMIT_BYTES + 1, 1)]),
+        'near.png': Buffer.concat([Buffer.from([0x89, 0x00]), Buffer.alloc(WARN_BYTES, 1)]),
+    };
+    const staged = createRepo(t);
+    const pr = createPullRequest(t, {});
+    for (const [file, content] of Object.entries(files)) {
+        stage(staged, file, content);
+        stage(pr, file, content);
+    }
+    commit(pr, 'head');
+
+    for (const result of [check(staged), check(pr, '--base', 'main')]) {
+        assert.equal(result.status, 0);
+        assert.equal(result.stderr, '');
+        assert.equal(result.stdout, '');
+    }
+});
+
+test('PR mode skips large files that exist in the base and were not changed', t => {
+    const dir = createPullRequest(t, { 'old-big.ts': 'a'.repeat(LIMIT_BYTES + 1), 'old-near.ts': 'a'.repeat(WARN_BYTES) });
+    stage(dir, 'README.md', 'changed');
+    commit(dir, 'head');
+
+    const result = check(dir, '--base', 'main');
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, '');
+    assert.equal(result.stdout, '');
+});
+
+test('PR mode checks added, modified and renamed files in the head commit, not the index', t => {
+    const dir = createPullRequest(t, { 'modified.ts': 'a', 'renamed-from.ts': 'b'.repeat(LIMIT_BYTES + 1) });
+    stage(dir, 'added.ts', 'a'.repeat(LIMIT_BYTES + 1));
+    stage(dir, 'modified.ts', 'a'.repeat(WARN_BYTES));
+    git(dir, 'mv', 'renamed-from.ts', 'renamed-to.ts');
+    commit(dir, 'head');
+    stage(dir, 'added.ts', 'a');
+    stage(dir, 'staged-only.ts', 'a'.repeat(LIMIT_BYTES + 1));
+
+    const result = check(dir, '--base', 'main');
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /added\.ts: 5001 tokens/);
+    assert.match(result.stderr, /renamed-to\.ts: 5001 tokens/);
+    assert.match(result.stderr, /modified\.ts: 4250 tokens（85%）/);
+    assert.doesNotMatch(result.stderr, /staged-only\.ts|renamed-from\.ts/);
+});
+
+test('PR mode ignores changes the base branch made after the PR branched off', t => {
+    const dir = createPullRequest(t, {});
+    stage(dir, 'feature.ts', 'a');
+    commit(dir, 'head');
+    git(dir, 'checkout', '-q', 'main');
+    stage(dir, 'main-big.ts', 'a'.repeat(LIMIT_BYTES + 1));
+    commit(dir, 'main moved on');
+    git(dir, 'checkout', '-q', 'feature');
+
+    assert.equal(check(dir, '--base', 'main').status, 0);
+});
+
+test('PR mode reads agent-authored from the head .gitattributes, not the base or the index', t => {
+    const dir = createPullRequest(t, { '.gitattributes': 'gen.js -agent-authored\n' });
+    stage(dir, '.gitattributes', 'other.js -agent-authored\n');
+    stage(dir, 'gen.js', 'a'.repeat(LIMIT_BYTES + 1));
+    commit(dir, 'head');
+    stage(dir, '.gitattributes', 'gen.js -agent-authored\n');
+
+    const result = check(dir, '--base', 'main');
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /gen\.js: 5001 tokens/);
+});
+
+test('PR mode emits GitHub error and warning annotations', t => {
+    const dir = createPullRequest(t, {});
+    stage(dir, 'src/big.ts', 'a'.repeat(LIMIT_BYTES + 1));
+    stage(dir, 'src/near.ts', 'a'.repeat(WARN_BYTES));
+    stage(dir, 'odd,name%.ts', 'a'.repeat(WARN_BYTES));
+    commit(dir, 'head');
+
+    const result = check(dir, '--base', 'main');
+
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /^::error file=src\/big\.ts::5001 tokens，超过上限 5000 tokens$/m);
+    assert.match(result.stdout, /^::warning file=src\/near\.ts::4250 tokens，已到上限 5000 tokens 的 85%25$/m);
+    assert.match(result.stdout, /^::warning file=odd%2Cname%25\.ts::/m);
+});
+
+test('staged mode emits no annotations', t => {
+    const dir = createRepo(t);
+    stage(dir, 'big.ts', 'a'.repeat(LIMIT_BYTES + 1));
+    stage(dir, 'near.ts', 'a'.repeat(WARN_BYTES));
+
+    assert.equal(check(dir).stdout, '');
+});
+
+test('CI runs the size check on pull requests against the base commit', () => {
+    const yaml = require('js-yaml');
+    const workflow = yaml.load(fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8'));
+    const job = Object.values(workflow.jobs).find(candidate =>
+        candidate.steps.some(step => /check-staged-file-size\.cjs --base\b/.test(step.run ?? '')));
+
+    assert.ok(job, 'ci.yml does not run the size check in PR mode');
+    const checkout = job.steps.find(step => /^actions\/checkout@/.test(step.uses ?? ''));
+    assert.equal(checkout.with['fetch-depth'], 0);
+    assert.equal(checkout.with.ref, '${{ github.event.pull_request.head.sha }}');
+    const run = job.steps.find(step => /--base/.test(step.run ?? ''));
+    assert.equal(run.env.BASE_SHA, '${{ github.event.pull_request.base.sha }}');
 });

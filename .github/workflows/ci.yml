@@ -14,6 +14,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 和 pre-commit 钩子同一个脚本，拦住用 --no-verify 绕过钩子的提交。只看这个 PR 相对 base 改动的文件，
+  # 读 PR head 的内容；fetch-depth: 0 才拿得到 base 提交和合并基点。脚本只用 git 和 Node 自带模块，不装依赖。
+  file-size:
+    name: Check file size
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.13.0'
+          package-manager-cache: false
+
+      - name: Check changed file size
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-staged-file-size.cjs --base "$BASE_SHA"
+
   test:
     # 维护者只有 Windows 电脑，macOS 和 Linux 的问题靠 CI 暴露。fail-fast 关掉，一个平台失败时其它平台照样跑完。
     name: Test (${{ matrix.os }})
