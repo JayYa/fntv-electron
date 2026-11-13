@@ -140,7 +140,7 @@ test('stopping while playback is still starting cancels the start', async () => 
 });
 
 // 换成假时钟并记下 warn 日志，不真等超时
-function useFakeClock(t) {
+function useFakeClockAndCaptureWarnings(t) {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     return t.mock.method(log, 'warn', () => {});
 }
@@ -148,7 +148,7 @@ function useFakeClock(t) {
 const warnings = (warn) => warn.mock.calls.map((call) => call.arguments.join(' '));
 
 test('stopping gives up waiting after 5 seconds when the exit progress report never finishes', async (t) => {
-    const warn = useFakeClock(t);
+    const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
     session.attach({ stop: () => session.ended(new Promise(() => {})) });
 
@@ -167,7 +167,7 @@ test('stopping gives up waiting after 5 seconds when the exit progress report ne
 });
 
 test('stopping returns with the exit progress report when it finishes in time, without a timeout warning', async (t) => {
-    const warn = useFakeClock(t);
+    const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
     const report = deferred();
     session.attach({ stop: () => session.ended(report.promise) });
@@ -184,7 +184,7 @@ test('stopping returns with the exit progress report when it finishes in time, w
 });
 
 test('stopping gives up after 5 seconds when the attached player never reports its exit', async (t) => {
-    const warn = useFakeClock(t);
+    const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
     // MPV 实例还没建好时 stop() 不发退出事件（#190）
     session.attach({ stop: () => {} });
@@ -201,7 +201,7 @@ test('stopping gives up after 5 seconds when the attached player never reports i
 });
 
 test('a progress report that finishes after the stop timed out still notifies subscribers', async (t) => {
-    useFakeClock(t);
+    useFakeClockAndCaptureWarnings(t);
     const notified = [];
     t.after(onPlaybackEnded(() => notified.push('ended')));
     const session = beginPlayback();
