@@ -44,7 +44,8 @@ function errorMessage(error: any): unknown {
 
 /**
  * 安装前先停止 MPV，并等这次退出的进度回传完成：Windows 上附带的 MPV 在安装目录里，
- * mpv.exe 运行时安装程序覆盖不了它。回传失败由媒体播放插件记日志，不阻止安装。
+ * mpv.exe 运行时安装程序覆盖不了它。回传失败由媒体播放插件记日志，不阻止安装；
+ * 回传或 MPV 退出迟迟不来时，stopPlaybackAndWait 最多等 5 秒，之后照常安装。
  */
 async function stopPlaybackBeforeInstall(): Promise<void> {
     if (isPlaying()) {

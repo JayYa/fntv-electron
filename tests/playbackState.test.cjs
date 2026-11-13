@@ -6,6 +6,7 @@ const {
     onPlaybackEnded,
     stopPlaybackAndWait,
 } =require('../dest/modules/playback/playbackState.js');
+const log = require('../dest/modules/logger/index.js');
 
 function deferred() {
     let resolve;
@@ -135,5 +136,87 @@ test('stopping while playback is still starting cancels the start', async () => 
 
     assert.deepEqual(stops, []);
     assert.equal(stopped.settled, true);
+    assert.equal(isPlaying(), false);
+});
+
+// 换成假时钟并记下 warn 日志，不真等超时
+function useFakeClock(t) {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    return t.mock.method(log, 'warn', () => {});
+}
+
+const warnings = (warn) => warn.mock.calls.map((call) => call.arguments.join(' '));
+
+test('stopping gives up waiting after 5 seconds when the exit progress report never finishes', async (t) => {
+    const warn = useFakeClock(t);
+    const session = beginPlayback();
+    session.attach({ stop: () => session.ended(new Promise(() => {})) });
+
+    const stopped = trackSettled(stopPlaybackAndWait());
+    t.mock.timers.tick(4999);
+    await settle();
+    assert.equal(stopped.settled, false);
+    assert.deepEqual(warnings(warn), []);
+
+    t.mock.timers.tick(1);
+    await settle();
+    assert.equal(stopped.settled, true);
+    assert.equal(warnings(warn).length, 1);
+    assert.match(warnings(warn)[0], /等进度回传超时，继续/);
+    assert.match(warnings(warn)[0], /hasEnded=true/);
+});
+
+test('stopping returns with the exit progress report when it finishes in time, without a timeout warning', async (t) => {
+    const warn = useFakeClock(t);
+    const session = beginPlayback();
+    const report = deferred();
+    session.attach({ stop: () => session.ended(report.promise) });
+
+    const stopped = trackSettled(stopPlaybackAndWait());
+    t.mock.timers.tick(1000);
+    report.resolve();
+    await settle();
+    assert.equal(stopped.settled, true);
+
+    t.mock.timers.tick(10000);
+    await settle();
+    assert.deepEqual(warnings(warn), []);
+});
+
+test('stopping gives up after 5 seconds when the attached player never reports its exit', async (t) => {
+    const warn = useFakeClock(t);
+    const session = beginPlayback();
+    // MPV 实例还没建好时 stop() 不发退出事件（#190）
+    session.attach({ stop: () => {} });
+
+    const stopped = trackSettled(stopPlaybackAndWait());
+    t.mock.timers.tick(5000);
+    await settle();
+
+    assert.equal(stopped.settled, true);
+    assert.equal(warnings(warn).length, 1);
+    assert.match(warnings(warn)[0], /hasEnded=false/);
+    session.ended();
+    await settle();
+});
+
+test('a progress report that finishes after the stop timed out still notifies subscribers', async (t) => {
+    useFakeClock(t);
+    const notified = [];
+    t.after(onPlaybackEnded(() => notified.push('ended')));
+    const session = beginPlayback();
+    const report = deferred();
+    session.attach({ stop: () => session.ended(report.promise) });
+
+    const stopped = trackSettled(stopPlaybackAndWait());
+    t.mock.timers.tick(5000);
+    await settle();
+    assert.equal(stopped.settled, true);
+    assert.equal(isPlaying(), false);
+    assert.deepEqual(notified, []);
+
+    report.resolve();
+    await settle();
+    assert.deepEqual(notified, ['ended']);
     assert.equal(isPlaying(), false);
 });
