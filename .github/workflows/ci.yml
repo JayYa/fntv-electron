@@ -36,7 +36,7 @@ jobs:
       - name: Check changed file size
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node scripts/check-staged-file-size.cjs --base "$BASE_SHA"
+        run: node scripts/check-file-size.cjs --base "$BASE_SHA"
 
   test:
     # 维护者只有 Windows 电脑，macOS 和 Linux 的问题靠 CI 暴露。fail-fast 关掉，一个平台失败时其它平台照样跑完。

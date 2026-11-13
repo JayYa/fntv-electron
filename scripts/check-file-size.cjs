@@ -20,30 +20,36 @@ function splitZ(buffer) {
     return buffer.toString('utf8').split('\0').filter(Boolean);
 }
 
+// 输入来源：改动了哪些文件、按什么对象名读内容、check-attr 读哪份 .gitattributes，以及超限时怎么说、
+// 要不要输出 GitHub annotation。
 const stagedSource = {
     files: () => splitZ(git(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'])),
     object: file => `:${file}`,
     attrArgs: ['--cached'],
+    verdict: '提交被拒绝',
+    annotate: false,
 };
 
+// check-attr --source 要求 git 2.40 及以上。
 function pullRequestSource(base) {
     return {
         files: () => splitZ(git(['diff', '--name-only', '--diff-filter=ACMR', '-z', `${base}...HEAD`])),
         object: file => `HEAD:${file}`,
         attrArgs: ['--source', 'HEAD'],
+        verdict: '检查未通过',
+        annotate: true,
     };
 }
 
-function parseArgs(args) {
-    if (args.length === 0) return { source: stagedSource, annotate: false };
-    if (args.length === 2 && args[0] === '--base' && args[1]) {
-        return { source: pullRequestSource(args[1]), annotate: true };
-    }
-    process.stderr.write('用法：check-staged-file-size.cjs [--base <ref>]\n');
+function sourceFromArgs(args) {
+    if (args.length === 0) return stagedSource;
+    if (args.length === 2 && args[0] === '--base' && args[1]) return pullRequestSource(args[1]);
+    process.stderr.write('用法：check-file-size.cjs [--base <ref>]\n');
     process.exit(2);
 }
 
-function measure(source) {
+// 受限文件里超过上限的（oversized）和超过预警线但没超上限的（warned）。
+function classify(source) {
     const isAgentAuthored = file =>
         splitZ(git(['check-attr', ...source.attrArgs, '-z', 'agent-authored', '--', file]))[2] !== 'unset';
     const isBinary = file =>
@@ -51,9 +57,13 @@ function measure(source) {
     const tokensOf = file =>
         Math.ceil(Number(git(['cat-file', '-s', source.object(file)]).toString('utf8').trim()) / BYTES_PER_TOKEN);
 
-    return source.files()
+    const flagged = source.files()
         .map(file => ({ file, tokens: tokensOf(file) }))
         .filter(({ file, tokens }) => tokens > WARN_TOKENS && isAgentAuthored(file) && !isBinary(file));
+    return {
+        oversized: flagged.filter(({ tokens }) => tokens > MAX_TOKENS),
+        warned: flagged.filter(({ tokens }) => tokens <= MAX_TOKENS),
+    };
 }
 
 function percentOf(tokens) {
@@ -64,8 +74,7 @@ function listOf(files, describe) {
     return files.map(({ file, tokens }) => `  ${file}: ${describe(tokens)}`).join('\n');
 }
 
-function oversizeReport(files, annotate) {
-    const verdict = annotate ? '检查未通过' : '提交被拒绝';
+function oversizeReport(files, verdict) {
     return `${verdict}：下面的文件超过 ${MAX_TOKENS} tokens（字节数 / ${BYTES_PER_TOKEN}，即 ${MAX_TOKENS * BYTES_PER_TOKEN} 字节）。
 
 ${listOf(files, tokens => `${tokens} tokens`)}
@@ -112,14 +121,12 @@ function annotations(oversized, warned) {
     ].join('');
 }
 
-const { source, annotate } = parseArgs(process.argv.slice(2));
-const measured = measure(source);
-const oversized = measured.filter(({ tokens }) => tokens > MAX_TOKENS);
-const warned = measured.filter(({ tokens }) => tokens <= MAX_TOKENS);
+const source = sourceFromArgs(process.argv.slice(2));
+const { oversized, warned } = classify(source);
 
-if (annotate) process.stdout.write(annotations(oversized, warned));
+if (source.annotate) process.stdout.write(annotations(oversized, warned));
 if (warned.length > 0) process.stderr.write(warningReport(warned));
 if (oversized.length > 0) {
-    process.stderr.write(oversizeReport(oversized, annotate));
+    process.stderr.write(oversizeReport(oversized, source.verdict));
     process.exit(1);
 }

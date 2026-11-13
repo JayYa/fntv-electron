@@ -221,6 +221,19 @@ test('CI checks for unused dependencies', () => {
     assert.ok(steps.some(step => step.run === 'pnpm run knip'), 'ci.yml does not run knip');
 });
 
+// PR head 的内容和合并基点都要拿得到，base 提交经 env 传给脚本（scripts/check-file-size.cjs）。
+test('CI checks the size of files a pull request changes', () => {
+    const yaml = require('js-yaml');
+    const steps = yaml.load(read('.github/workflows/ci.yml')).jobs['file-size'].steps;
+    const checkout = steps.find(step => /^actions\/checkout@/.test(step.uses ?? ''));
+    const check = steps.find(step => step.run === 'node scripts/check-file-size.cjs --base "$BASE_SHA"');
+
+    assert.equal(checkout.with.ref, '${{ github.event.pull_request.head.sha }}');
+    assert.equal(checkout.with['fetch-depth'], 0);
+    assert.ok(check, 'ci.yml does not run the size check in PR mode');
+    assert.equal(check.env.BASE_SHA, '${{ github.event.pull_request.base.sha }}');
+});
+
 // Proxy 改用 TypeScript 后（ADR-0004），构建和 CI 只要 Node 和 pnpm。
 test('the repository has no Go code and neither builds nor CI install or run Go', () => {
     const tracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n');

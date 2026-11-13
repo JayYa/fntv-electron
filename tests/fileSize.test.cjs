@@ -6,7 +6,7 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const script = path.join(root, 'scripts', 'check-staged-file-size.cjs');
+const script = path.join(root, 'scripts', 'check-file-size.cjs');
 const LIMIT_BYTES = 20000;
 
 function createRepo(t) {
@@ -116,7 +116,7 @@ test('handles non-ASCII file names', t => {
 
 test('the installed hook blocks a real commit', t => {
     const dir = createRepo(t);
-    write(dir, 'scripts/check-staged-file-size.cjs', fs.readFileSync(script));
+    write(dir, 'scripts/check-file-size.cjs', fs.readFileSync(script));
     write(dir, '.githooks/pre-commit', fs.readFileSync(path.join(root, '.githooks', 'pre-commit')));
     fs.chmodSync(path.join(dir, '.githooks', 'pre-commit'), 0o755);
     git(dir, 'config', 'core.hooksPath', '.githooks');
@@ -272,18 +272,4 @@ test('staged mode emits no annotations', t => {
     stage(dir, 'near.ts', 'a'.repeat(WARN_BYTES));
 
     assert.equal(check(dir).stdout, '');
-});
-
-test('CI runs the size check on pull requests against the base commit', () => {
-    const yaml = require('js-yaml');
-    const workflow = yaml.load(fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8'));
-    const job = Object.values(workflow.jobs).find(candidate =>
-        candidate.steps.some(step => /check-staged-file-size\.cjs --base\b/.test(step.run ?? '')));
-
-    assert.ok(job, 'ci.yml does not run the size check in PR mode');
-    const checkout = job.steps.find(step => /^actions\/checkout@/.test(step.uses ?? ''));
-    assert.equal(checkout.with['fetch-depth'], 0);
-    assert.equal(checkout.with.ref, '${{ github.event.pull_request.head.sha }}');
-    const run = job.steps.find(step => /--base/.test(step.run ?? ''));
-    assert.equal(run.env.BASE_SHA, '${{ github.event.pull_request.base.sha }}');
 });
