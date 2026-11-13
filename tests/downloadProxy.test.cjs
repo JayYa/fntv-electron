@@ -4,7 +4,7 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { openLoginPage } = require('./helpers/loginPage.cjs');
 
 // 在临时 userData 里加载编译后的配置模块和配置 IPC 插件；storedConfig 为 undefined 时不建 config.json
@@ -23,29 +23,14 @@ function setupMain(t, storedConfig) {
         },
         safeStorage: {},
     };
-
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-
-    t.after(() => {
-        Module._load = originalLoad;
-        clearCompiledModules();
-        fs.rmSync(testRoot, { recursive: true, force: true });
-    });
+    useFakeElectron(t, electronMock);
+    t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     fs.mkdirSync(paths.userData, { recursive: true });
     const configPath = path.join(paths.userData, 'config.json');
     if (storedConfig !== undefined) {
         fs.writeFileSync(configPath, JSON.stringify(storedConfig));
     }
-    clearCompiledModules();
     return {
         ipcMain,
         configPath,
@@ -54,7 +39,7 @@ function setupMain(t, storedConfig) {
     };
 }
 
-// 打开登录页，把它发出的下载加速请求交给主进程的配置插件，回复再送回页面
+// 打开登录页，把它发出的应用更新下载加速请求交给主进程的配置插件，回复再送回页面
 function openConnectedLoginPage(ipcMain) {
     const page = openLoginPage();
     let delivered = 0;
@@ -80,7 +65,7 @@ function openConnectedLoginPage(ipcMain) {
     };
 }
 
-test('the download proxy uses the built-in relay when no address was ever saved', (t) => {
+test('the app download proxy uses the built-in relay when no address was ever saved', (t) => {
     const { config } = setupMain(t, undefined);
 
     assert.deepEqual(config.getAppDownloadProxyConfig(), {
@@ -88,6 +73,14 @@ test('the download proxy uses the built-in relay when no address was ever saved'
         proxyUrl: config.DEFAULT_DOWNLOAD_PROXY_URL,
     });
 });
+
+for (const unusable of ['', '   ', 42, null]) {
+    test(`a saved relay address ${JSON.stringify(unusable)} reads as the built-in relay`, (t) => {
+        const { config } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: unusable });
+
+        assert.equal(config.getAppDownloadProxyConfig().proxyUrl, config.DEFAULT_DOWNLOAD_PROXY_URL);
+    });
+}
 
 for (const legacy of ['https://ghfast.top', 'https://ghfast.top/', '  https://ghfast.top/  ']) {
     test(`a saved legacy default relay ${JSON.stringify(legacy)} reads as the built-in relay without rewriting the config file`, (t) => {

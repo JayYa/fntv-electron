@@ -57,7 +57,7 @@ function saveProxySettings() {
     const proxyUrl = proxyUrlInput.value.trim();
     const hideOriginalPlayButton = hideOriginalPlayButtonSwitch.checked;
     
-    // 保存代理设置。地址留空时发空值，由主进程用默认地址
+    // 保存应用更新下载加速设置。地址留空时发空值，由主进程用默认地址
     ipcRenderer.send('set-download-proxy', {
         enabled: enabled,
         proxyUrl: proxyUrl
@@ -91,7 +91,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// 监听代理设置响应。主进程下发的 proxyUrl 已经回退到默认地址
+// 监听应用更新下载加速设置。主进程下发的 proxyUrl 已经回退到默认地址
 ipcRenderer.on('download-proxy-info', (event, data) => {
     if (data) {
         proxyEnabledSwitch.checked = data.enabled === true; // 默认关闭

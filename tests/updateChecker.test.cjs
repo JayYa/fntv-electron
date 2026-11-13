@@ -208,7 +208,7 @@ test('download link keeps the proxy a user explicitly turned on', async (t) => {
     assert.equal(downloadUrl, 'https://relay.example.test/https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe');
 });
 
-test('download link goes through the built-in relay when the proxy is on and no address was saved', async (t) => {
+test('download link goes through the built-in relay when the app download proxy is on and no address was saved', async (t) => {
     simulateHost(t, 'win32', 'x64');
     const { checker } = setupUpdateChecker(t, {
         config: { downloadProxyEnabled: true },

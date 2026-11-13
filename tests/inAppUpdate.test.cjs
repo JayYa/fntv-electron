@@ -88,7 +88,7 @@ test('the feed goes through the download proxy the user turned on', async (t) =>
     assert.deepEqual(updater.feeds, [{ provider: 'generic', url: `https://relay.example.test/${FEED}` }]);
 });
 
-test('the feed goes through the built-in relay when the proxy is on and no address was saved', async (t) => {
+test('the feed goes through the built-in relay when the app download proxy is on and no address was saved', async (t) => {
     const { checker, updater } = setupWindows(t, {
         config: { downloadProxyEnabled: true },
         dialogResponse: clicking({ 发现新版本: '下载并安装' }),

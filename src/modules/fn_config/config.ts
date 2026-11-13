@@ -378,10 +378,10 @@ export const DEFAULT_DOWNLOAD_PROXY_URL = 'https://gh-proxy.com/';
 // 旧版默认中转地址。旧版设置面板保存时会把它写进配置，读到它就当作没自定义
 const LEGACY_DEFAULT_DOWNLOAD_PROXY_URL = 'https://ghfast.top';
 
-// 获取下载代理配置。没存过、存的是空白或旧版默认地址时返回默认地址，配置文件不改
+// 获取应用更新下载加速配置。没存过、存的是空白或旧版默认地址时返回默认地址，配置文件不改
 export function getAppDownloadProxyConfig(): AppDownloadProxyConfig {
     const config = readStoredConfig();
-    const stored = config.downloadProxy ?? '';
+    const stored = typeof config.downloadProxy === 'string' ? config.downloadProxy : '';
     const normalized = stored.trim().replace(/\/$/, '');
     const isCustom = normalized !== '' && normalized !== LEGACY_DEFAULT_DOWNLOAD_PROXY_URL;
     return {
