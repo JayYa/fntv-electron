@@ -51,7 +51,7 @@ sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {
 ```
 
 - Linux 需要自己安装 MPV 播放器（版本 > 0.37.0）。AppImage 下载后按顺序做：
-  1. 把文件改成不带版本号的名字，例如 `FNMedia.AppImage`。
+  1. 把文件改成不带版本号的名字，例如 `FNMedia.AppImage`。文件名里不能出现 `3.2.0` 这种三段数字，出现了就算带版本号。
   2. 执行 `chmod +x FNMedia.AppImage` 加上可执行权限。
   3. 再建桌面快捷方式、`.desktop` 文件或开机自启项，指向改名后的文件。
 
