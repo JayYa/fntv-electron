@@ -26,9 +26,9 @@
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
 - Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/build.yml` 的 `Download third-party dependencies` 步骤。
 - 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261110_224319`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
-- tag、资产名和 sha256 写在 `build` job 的 `env`。压缩包缓存在 `$RUNNER_TEMP/mpv-archive`，key 含 sha256，换版本时自动失效。缓存用 `actions/cache/restore` 和 `actions/cache/save` 分开写，下载并校验通过后立即保存，后面的构建失败也不丢；命中时不保存，缓存出错不让构建失败。命中缓存也校验 sha256，不通过就重新下载。未命中时 `curl` 对所有错误重试 5 次，每次隔 10 秒，最多 5 分钟，避免 Release 下载偶发的 5xx 让构建失败。这些由 `tests/releaseGate.test.cjs` 检查。
+- tag、资产名和 sha256 写在 `build` job 的 `env`。压缩包缓存在 `$RUNNER_TEMP/mpv-archive`，key 含 sha256，换版本时自动失效。缓存用 `actions/cache/restore` 和 `actions/cache/save` 分开写，下载并校验通过后立即保存，后面的构建失败也不丢；命中时不保存，缓存出错不让构建失败。命中缓存也校验 sha256，不通过就重新下载。以上缓存约定由 `tests/mpvArchiveCache.test.cjs` 检查。未命中时 `curl` 对所有错误重试 5 次，每次隔 10 秒，最多 5 分钟，避免 Release 下载偶发的 5xx 让构建失败。
 - electron-builder 打包时下载的 Electron zip 和打包工具也缓存，key 是 `runner.os` 加 `pnpm-lock.yaml` 的 hash，构建成功后保存，命中时不保存。打包工具存在 `ELECTRON_BUILDER_CACHE`（`Build application` 设为 `$RUNNER_TEMP/electron-builder-cache`）。Electron zip 存在 `@electron/get` 的默认目录（Linux `~/.cache/electron`，macOS `~/Library/Caches/electron`，Windows `%LOCALAPPDATA%\electron\Cache`），它不读 `ELECTRON_CACHE`。
-- 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再改 `build` job `env` 里的 tag、资产名和 sha256。`README.md` 的准备步骤和本页上面那条 tag 也要跟着改，漏改时 `tests/releaseGate.test.cjs` 失败。归档约 55 MB，`gh release download` 常超过 2 分钟，放到后台跑；sha256 要和 `gh release view <tag> --json assets` 里的 digest 核对。
+- 升级归档时，先在 `JayYa/fntv-mpv-config` 发布新 Release，再改 `build` job `env` 里的 tag、资产名和 sha256。`README.md` 的准备步骤和本页上面那条 tag 也要跟着改，漏改时 `tests/mpvArchiveCache.test.cjs` 失败。归档约 55 MB，`gh release download` 常超过 2 分钟，放到后台跑；sha256 要和 `gh release view <tag> --json assets` 里的 digest 核对。
 - Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
 
 ## 用户配置同步

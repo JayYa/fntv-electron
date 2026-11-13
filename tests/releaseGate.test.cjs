@@ -1,19 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 
 const { TARGETS } = require('./smoke/targets.cjs');
-const { asList, assertRestoreAndSave, posixPath, runStep, workflow } = require('./helpers/workflowSteps.cjs');
+const { asList, root, runStep, workflow } = require('./helpers/workflowSteps.cjs');
 const { UPDATE_FEED_URL, UPDATE_METADATA } = require('./helpers/updateFeed.cjs');
 
 // 发版门禁：release.yml 的 publish 只在 5 个安装包的冒烟测试都通过后运行，测的就是要上传的那批文件。
 // workflow 本身跑不了单测，这里读 workflow 文件，锁住 job 之间的依赖关系，并核对 workflow 里的
 // 平台、目标和安装包名与 tests/smoke/targets.cjs 一致，加平台时漏改哪一处这里就会失败。
 
-const root = path.resolve(__dirname, '..');
 const BUILD_AND_SMOKE = './.github/workflows/build-and-smoke.yml';
 const BUILD = './.github/workflows/build.yml';
 
@@ -212,101 +209,4 @@ test('only release-please and publish can write to the repository', () => {
         if (name === 'release-please' || name === 'publish') continue;
         assert.ok(!Object.values(job.permissions ?? {}).includes('write'), `${name} has write permissions`);
     }
-});
-
-test('smoke test annotations are printed at the start of a line so GitHub picks them up', t => {
-    // 默认 reporter 随 Node 版本和输出是否是终端而变，CI 上的 TAP 会在测试输出前加 "# "。
-    const script = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts['test:smoke'];
-    const flags = script.split(/\s+/).filter(arg => arg.startsWith('--test-'));
-    assert.ok(flags.some(flag => flag.startsWith('--test-reporter=')), `test:smoke does not choose a reporter: ${script}`);
-
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-smoke-notice-'));
-    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-    const file = path.join(dir, 'notice.smoke.cjs');
-    fs.writeFileSync(file, "require('node:test')('warmup', () => { console.log('::notice::smoke warmup: 1ms'); });\n");
-    // 外层 node --test 设的 NODE_TEST_CONTEXT 会让子进程改用内部格式输出，要去掉。
-    const { NODE_TEST_CONTEXT: _context, ...env } = process.env;
-    const result = spawnSync(process.execPath, ['--test', ...flags, file], { encoding: 'utf8', env });
-
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.match(result.stdout, /^::notice::smoke warmup: 1ms$/m);
-});
-
-// MPV 归档按 sha256 缓存：换版本时 key 跟着变，命中缓存也要校验，不通过就重新下载。
-function mpvArchiveSteps() {
-    const job = workflow('build.yml').jobs.build;
-    const cache = job.steps.find(step => step.id === 'mpv-archive-cache');
-    const download = job.steps.find(step => step.name === 'Download third-party dependencies');
-    const save = job.steps.find(step => step.name === 'Save MPV archive cache');
-    return { job, cache, download, save };
-}
-
-// 在临时目录里放好缓存的压缩包，用桩代替 curl 和 unzip 运行下载步骤，返回桩被调用的记录。
-function runMpvDownload(t, archive, sha256) {
-    const { job } = mpvArchiveSteps();
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-archive-'));
-    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-    const bin = path.join(dir, 'bin');
-    const temp = path.join(dir, 'temp');
-    const calls = path.join(dir, 'calls');
-    fs.mkdirSync(bin);
-    fs.mkdirSync(path.join(temp, 'mpv-archive'), { recursive: true });
-    fs.writeFileSync(path.join(temp, 'mpv-archive', 'mpv-config.zip'), archive);
-    fs.writeFileSync(calls, '');
-    for (const tool of ['curl', 'unzip']) {
-        fs.writeFileSync(path.join(bin, tool), `#!/bin/sh\necho ${tool} >> "${posixPath(calls)}"\n`, { mode: 0o755 });
-    }
-    const result = runStep(t, job, step => step.name === 'Download third-party dependencies', {
-        PATH: `${posixPath(bin)}:/usr/bin:${process.env.PATH}`,
-        RUNNER_TEMP: posixPath(temp),
-        RUNNER_OS: 'Linux',
-        MPV_CONFIG_SHA256: sha256,
-    });
-    return { result, calls: fs.readFileSync(calls, 'utf8').split(/\r?\n/).filter(Boolean) };
-}
-
-test('the MPV archive cache key changes with the archive sha256', () => {
-    const { job, cache, download } = mpvArchiveSteps();
-    assert.ok(cache, 'build.yml has no mpv-archive-cache step');
-    assert.match(cache.with.key, /\$\{\{\s*env\.MPV_CONFIG_SHA256\s*\}\}/);
-    assert.match(job.env.MPV_CONFIG_SHA256, /^[0-9a-f]{64}$/);
-    assert.ok(job.steps.indexOf(cache) < job.steps.indexOf(download), 'cache must be restored before the download step');
-    assert.equal(cache.with.path, '${{ runner.temp }}/mpv-archive');
-    assert.match(download.run, /\$RUNNER_TEMP\/mpv-archive\/mpv-config\.zip/);
-});
-
-test('the MPV archive is cached as soon as it is downloaded and verified', () => {
-    // 后面的构建失败也要保住已下载的压缩包。
-    const { job, cache, download, save } = mpvArchiveSteps();
-    assertRestoreAndSave(job, cache, save, download);
-});
-
-test('a cached MPV archive is verified and used without downloading', t => {
-    const archive = Buffer.from('cached archive');
-    const sha256 = require('node:crypto').createHash('sha256').update(archive).digest('hex');
-    const { result, calls } = runMpvDownload(t, archive, sha256);
-    assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.deepEqual(calls, ['unzip']);
-});
-
-test('a cached MPV archive that fails verification is downloaded again', t => {
-    const { result, calls } = runMpvDownload(t, Buffer.from('corrupted archive'), '0'.repeat(64));
-    // 桩 curl 不写文件，重新下载后的校验失败，步骤也要失败。
-    assert.notEqual(result.status, 0);
-    assert.deepEqual(calls, ['curl']);
-});
-
-// 升级归档时 build.yml 的 env 是唯一来源，README 的准备步骤和 docs/external-runtime.md 都要跟着改。
-test('README and docs/external-runtime.md pin the same MPV archive as build.yml', () => {
-    const { MPV_CONFIG_REPO, MPV_CONFIG_TAG, MPV_CONFIG_ASSET } = mpvArchiveSteps().job.env;
-    const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
-    const runtimeDoc = fs.readFileSync(path.join(root, 'docs', 'external-runtime.md'), 'utf8');
-    const tagsIn = text => [...new Set(text.match(/fntv-mpv-v\d{8}_\d{6}/g) ?? [])];
-    const assetsIn = text => [...new Set(text.match(/mpv-package-\d{8}_\d{6}\.zip/g) ?? [])];
-
-    assert.ok(readme.includes(`https://github.com/${MPV_CONFIG_REPO}/releases/download/${MPV_CONFIG_TAG}/${MPV_CONFIG_ASSET}`),
-        'README 的下载命令要用 build.yml 固定的 tag 和资产名');
-    assert.deepEqual(tagsIn(readme), [MPV_CONFIG_TAG], 'README 只应出现 build.yml 固定的 tag');
-    assert.deepEqual(assetsIn(readme), [MPV_CONFIG_ASSET], 'README 只应出现 build.yml 固定的资产名');
-    assert.deepEqual(tagsIn(runtimeDoc), [MPV_CONFIG_TAG], 'docs/external-runtime.md 只应出现 build.yml 固定的 tag');
 });
