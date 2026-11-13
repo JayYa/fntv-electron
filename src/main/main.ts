@@ -3,6 +3,7 @@ import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import * as winctrl from './common/winctrl';
 import { createTray, showTrayNotification, destroyTray } from './common/tray';
+import { bindTaskbarProgress } from './common/taskbarProgress';
 import { getMacCloseAction, setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './common/preferences';
 import * as fnConfig from '../modules/fn_config/config';
 import * as log from '../modules/logger';
@@ -90,12 +91,7 @@ if (!gotTheLock) {
             await winctrl.setupCookieRestore(mainWindow);
 
             // 应用内更新下载中，主窗口的任务栏图标显示进度条，下载结束时去掉
-            const windowForProgress = mainWindow;
-            getUpdateChecker().downloadProgress.onChange(percent => {
-                if (!windowForProgress.isDestroyed()) {
-                    windowForProgress.setProgressBar(percent === null ? -1 : percent / 100);
-                }
-            });
+            bindTaskbarProgress(mainWindow, getUpdateChecker().downloadProgress);
 
             // 延迟3秒后检查更新，避免影响应用启动速度
             setTimeout(() => {
