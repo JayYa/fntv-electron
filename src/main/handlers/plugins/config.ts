@@ -17,18 +17,18 @@ interface PlayButtonConfig {
     hideOriginalPlayButton: boolean;
 }
 
-// 获取当前代理设置
+// 获取当前代理设置，带上默认地址给登录页做 placeholder
 function handleGetAppDownloadProxy(event: IpcMainEvent): void {
     const proxyConfig = fnConfig.getAppDownloadProxyConfig();
-    event.reply('download-proxy-info', proxyConfig);
+    event.reply('download-proxy-info', { ...proxyConfig, defaultProxyUrl: fnConfig.DEFAULT_DOWNLOAD_PROXY_URL });
 }
 
-// 设置代理配置
+// 设置代理配置，地址为空时用默认地址
 function handleSetAppDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Partial<ProxyConfig>): void {
     try {
-        fnConfig.setAppDownloadProxyConfig({ 
-            enabled: enabled === true, 
-            proxyUrl: proxyUrl || 'https://ghfast.top' 
+        fnConfig.setAppDownloadProxyConfig({
+            enabled: enabled === true,
+            proxyUrl: proxyUrl || fnConfig.DEFAULT_DOWNLOAD_PROXY_URL
         });
         event.reply('download-proxy-set', { success: true });
     } catch (error) {

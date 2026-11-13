@@ -57,10 +57,10 @@ function saveProxySettings() {
     const proxyUrl = proxyUrlInput.value.trim();
     const hideOriginalPlayButton = hideOriginalPlayButtonSwitch.checked;
     
-    // 保存代理设置
-    ipcRenderer.send('set-download-proxy', { 
+    // 保存代理设置。地址留空时发空值，由主进程用默认地址
+    ipcRenderer.send('set-download-proxy', {
         enabled: enabled,
-        proxyUrl: proxyUrl || 'https://ghfast.top'
+        proxyUrl: proxyUrl
     });
 
     // 保存播放方式
@@ -91,11 +91,12 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// 监听代理设置响应
+// 监听代理设置响应。主进程下发的 proxyUrl 已经回退到默认地址
 ipcRenderer.on('download-proxy-info', (event, data) => {
     if (data) {
         proxyEnabledSwitch.checked = data.enabled === true; // 默认关闭
-        proxyUrlInput.value = data.proxyUrl || 'https://ghfast.top';
+        proxyUrlInput.value = data.proxyUrl;
+        proxyUrlInput.placeholder = data.defaultProxyUrl;
     }
 });
 
@@ -109,6 +110,8 @@ ipcRenderer.on('play-button-config-info', (event, data) => {
 ipcRenderer.on('download-proxy-set', (event, data) => {
     if (data && data.success) {
         window.log.info('代理设置保存成功');
+        // 重新读取，输入框留空保存后回显实际生效的默认地址
+        ipcRenderer.send('get-download-proxy');
     } else {
         window.log.error('代理设置保存失败:', data.error);
     }

@@ -78,14 +78,29 @@ test('download and install starts a background download from the repository feed
 
 test('the feed goes through the download proxy the user turned on', async (t) => {
     const { checker, updater } = setupWindows(t, {
-        config: { downloadProxyEnabled: true, downloadProxy: 'https://ghfast.top/' },
+        config: { downloadProxyEnabled: true, downloadProxy: 'https://relay.example.test/' },
         dialogResponse: clicking({ 发现新版本: '下载并安装' }),
     });
 
     await checker.autoCheckForUpdates();
     await waitFor(() => updater.feeds.length === 1);
 
-    assert.deepEqual(updater.feeds, [{ provider: 'generic', url: `https://ghfast.top/${FEED}` }]);
+    assert.deepEqual(updater.feeds, [{ provider: 'generic', url: `https://relay.example.test/${FEED}` }]);
+});
+
+test('the feed goes through the built-in relay when the proxy is on and no address was saved', async (t) => {
+    const { checker, updater } = setupWindows(t, {
+        config: { downloadProxyEnabled: true },
+        dialogResponse: clicking({ 发现新版本: '下载并安装' }),
+    });
+    const { DEFAULT_DOWNLOAD_PROXY_URL } = require('../dest/modules/fn_config/config.js');
+
+    await checker.autoCheckForUpdates();
+    await waitFor(() => updater.feeds.length === 1);
+
+    const [{ url }] = updater.feeds;
+    assert.equal(url, `${DEFAULT_DOWNLOAD_PROXY_URL}${FEED}`);
+    assert.doesNotMatch(url.replaceAll('://', ''), /\/\//);
 });
 
 test('checking again while downloading does not start a second download', async (t) => {

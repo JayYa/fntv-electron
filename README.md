@@ -57,7 +57,7 @@ macOS 和 Linux 的安装包不带 MPV 播放器，只带 MPV 插件和配置。
 - `~/.config/mpv/scripts` 不存在时，复制全部插件和配置，已有的同名文件（例如你自己的 `mpv.conf`、`input.conf`）保留不覆盖。
 - `~/.config/mpv/scripts` 已存在时，只更新弹幕插件 `scripts/uosc_danmaku`，其它文件不动。之前用过 MPV、已经有 `scripts` 目录的话，`uosc`、`smart_skip` 等其它插件不会自动补上，需要从 [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config/releases) 的归档里把 `portable_config` 下缺的文件手动复制过去。
 
-应用只提示新版本并打开下载链接，不会自动安装。下载链接默认直连 GitHub；GitHub 下载慢时，可以在托盘菜单的“设置”里打开“应用更新下载加速”，链接会经第三方 `ghfast.top` 中转，加速地址可在登录页右上角的“通用设置”里修改。
+发现新版本时，Windows 和 Linux（以 AppImage 运行时）可以在客户端内下载并安装；macOS 仍然打开下载链接，需要自己下载安装。更新默认直连 GitHub；GitHub 下载慢时，可以在托盘菜单的“设置”里打开“应用更新下载加速”，应用内更新和下载链接都会经第三方 `gh-proxy.com` 中转，加速地址可在登录页右上角的“通用设置”里修改。
 
 ### 安装包没有签名
 

@@ -71,13 +71,13 @@ test('a Linux AppImage in a writable directory offers download and install and d
 test('the Linux feed goes through the download proxy the user turned on', async (t) => {
     runAsAppImage(t, tempDir(t));
     const { checker, updater } = setupLinux(t, {
-        config: { downloadProxyEnabled: true, downloadProxy: 'https://ghfast.top/' },
+        config: { downloadProxyEnabled: true, downloadProxy: 'https://relay.example.test/' },
     });
 
     await checker.autoCheckForUpdates();
     await waitFor(() => updater.feeds.length === 1);
 
-    assert.deepEqual(updater.feeds, [{ provider: 'generic', url: `https://ghfast.top/${FEED}` }]);
+    assert.deepEqual(updater.feeds, [{ provider: 'generic', url: `https://relay.example.test/${FEED}` }]);
 });
 
 test('a Linux client not running as an AppImage keeps the manual download buttons and opens the AppImage link', async (t) => {
