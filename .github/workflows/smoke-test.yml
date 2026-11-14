@@ -2,7 +2,7 @@ name: Smoke Test
 
 # 构建安装包并启动它做冒烟测试，比普通 CI 慢得多，只在这几种情况跑：
 # - 手动触发，可选平台；
-# - PR 改了冒烟测试、构建相关的 workflow 或 package.json，开发时在 PR 上验证。
+# - PR 改了冒烟测试、构建相关的 workflow、package.json 或 mpv-archive.json（自动升级 MPV 归档的 PR），开发时在 PR 上验证。
 # release-please 用 GITHUB_TOKEN 开的 Release PR 也会触发这里（它总会改 package.json），但结论先是
 # action_required，维护者在 PR 上点 “Approve workflows to run” 后才跑 5 个目标，结果显示在 PR 上，
 # 截图在那次运行的 smoke-<目标> artifact 里。release.yml 不对 Release PR 构建。
@@ -28,6 +28,7 @@ on:
       - .github/workflows/smoke-test.yml
       - package.json
       - scripts/install-smoke-deps.cjs
+      - mpv-archive.json
 
 permissions:
   contents: read

@@ -9,7 +9,7 @@ const { assertArchivePinsConsistent, pinnedArchive, PIN_FILES } = require('./hel
 const { archiveFromRelease, isNewerTag, run } = require('../scripts/update-mpv-archive.cjs');
 
 // 自动升级 MPV 归档（2026-11-14）：scripts/update-mpv-archive.cjs 从 Release API 取资产名和 digest，
-// 改 build.yml、README.md、docs/external-runtime.md；update-mpv-archive.yml 定时运行它并开 PR。
+// 改 mpv-archive.json、README.md、docs/external-runtime.md；update-mpv-archive.yml 定时运行它并开 PR。
 
 const NEW_TAG = 'fntv-mpv-v20261201_093000';
 // 资产名故意和 tag 的时间不同：脚本必须用 API 给的名字，不能按 tag 推算。
@@ -50,7 +50,7 @@ async function runIn(dir, args, rel) {
     return { result, requests, outputs: Object.fromEntries(lines(output).map(line => line.split('='))) };
 }
 
-test('a newer release is pinned in build.yml, README and docs, and the pins stay consistent', async t => {
+test('a newer release is pinned in mpv-archive.json, README and docs, and the pins stay consistent', async t => {
     const dir = copyRepo(t);
     const before = pinnedArchive(root);
     const { result, requests, outputs } = await runIn(dir, [], release());
@@ -58,14 +58,16 @@ test('a newer release is pinned in build.yml, README and docs, and the pins stay
     assert.equal(result.updated, true);
     assert.deepEqual(requests, [{ repo: 'JayYa/fntv-mpv-config', tag: null, token: 'token' }]);
     const after = pinnedArchive(dir);
-    assert.equal(after.MPV_CONFIG_TAG, NEW_TAG);
-    assert.equal(after.MPV_CONFIG_ASSET, NEW_ASSET);
-    assert.equal(after.MPV_CONFIG_SHA256, NEW_SHA);
-    assert.equal(after.MPV_CONFIG_REPO, before.MPV_CONFIG_REPO);
+    assert.equal(after.tag, NEW_TAG);
+    assert.equal(after.asset, NEW_ASSET);
+    assert.equal(after.sha256, NEW_SHA);
+    assert.equal(after.repo, before.repo);
     assertArchivePinsConsistent(dir);
-    assert.deepEqual(outputs, { updated: 'true', 'previous-tag': before.MPV_CONFIG_TAG, tag: NEW_TAG, asset: NEW_ASSET, sha256: NEW_SHA });
+    assert.deepEqual(outputs, { updated: 'true', 'previous-tag': before.tag, tag: NEW_TAG, asset: NEW_ASSET, sha256: NEW_SHA });
 
-    // 只换这三个值，build.yml 其余部分不动。
+    // 只换这三个值，mpv-archive.json 其余部分不动。
+    // 改动的文件都不在 .github/workflows 下：GITHUB_TOKEN 推不了改 workflow 的提交（2026-11-14 实际失败过）。
+    assert.ok(PIN_FILES.every(file => !file.startsWith('.github/workflows/')), PIN_FILES.join(', '));
     const lineDiff = (a, b) => a.split('\n').filter((line, i) => line !== b.split('\n')[i]);
     assert.equal(lineDiff(fs.readFileSync(path.join(root, PIN_FILES[0]), 'utf8'), snapshot(dir)[0]).length, 3);
 });
@@ -75,12 +77,12 @@ test('the latest release is ignored unless its tag is newer than the pinned one'
     const before = snapshot(dir);
     const pinned = pinnedArchive(root);
     for (const rel of [
-        release(pinned.MPV_CONFIG_TAG, [{ name: pinned.MPV_CONFIG_ASSET, digest: `sha256:${pinned.MPV_CONFIG_SHA256}` }]),
+        release(pinned.tag, [{ name: pinned.asset, digest: `sha256:${pinned.sha256}` }]),
         release('fntv-mpv-v20250101_000000'),
     ]) {
         const { result, outputs } = await runIn(dir, [], rel);
         assert.equal(result.updated, false);
-        assert.deepEqual(outputs, { updated: 'false', 'previous-tag': pinned.MPV_CONFIG_TAG });
+        assert.deepEqual(outputs, { updated: 'false', 'previous-tag': pinned.tag });
         assert.deepEqual(snapshot(dir), before);
     }
 });
@@ -91,7 +93,7 @@ test('--tag pins the requested release even when it is older', async t => {
     const { result, requests } = await runIn(dir, ['--tag', old], release(old));
     assert.equal(result.updated, true);
     assert.equal(requests[0].tag, old);
-    assert.equal(pinnedArchive(dir).MPV_CONFIG_TAG, old);
+    assert.equal(pinnedArchive(dir).tag, old);
     assertArchivePinsConsistent(dir);
     await assert.rejects(runIn(dir, ['--tag', 'fntv-mpv-v20251002_120000'], release(NEW_TAG)), /请求的是/);
 });
@@ -145,6 +147,11 @@ test('update-mpv-archive.yml runs on a schedule and by hand, from main, with the
     assert.equal(pr.env.GH_TOKEN, '${{ github.token }}');
 });
 
+// 升级 PR 只改 PIN_FILES，Smoke Test 要因为它们触发，才会用新归档构建并测试安装包。
+test('the smoke test runs on a PR that changes the pinned MPV archive', () => {
+    assert.ok(workflow('smoke-test.yml').on.pull_request.paths.includes(PIN_FILES[0]));
+});
+
 // 用桩 git 和 gh 运行开 PR 的步骤。openPr 是 gh pr list 返回的 PR 号，sameFiles 表示远端分支上三处文件已经一样。
 function runPrStep(t, { openPr = '', sameFiles = false } = {}) {
     const dir = tempDir(t, 'fntv-mpv-pr-');
@@ -174,7 +181,7 @@ test('a new archive opens a PR from the automation branch against main', t => {
     assert.ok(calls.includes('push --force origin HEAD:refs/heads/automation/mpv-archive'), calls.join('\n'));
     const create = calls.find(call => call.startsWith('pr create'));
     assert.match(create, /--base main --head automation\/mpv-archive --title fix\(deps\): 附带的 MPV 和插件更新到 fntv-mpv-v20261201_093000/);
-    assert.match(calls.find(call => call.startsWith('commit')), /-- \.github\/workflows\/build\.yml README\.md docs\/external-runtime\.md$/);
+    assert.match(calls.find(call => call.startsWith('commit')), /-- mpv-archive\.json README\.md docs\/external-runtime\.md$/);
     assert.ok(body.includes(NEW_ASSET) && body.includes(NEW_SHA) && body.includes('Approve workflows to run'), body);
 });
 

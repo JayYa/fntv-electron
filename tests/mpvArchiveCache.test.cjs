@@ -42,12 +42,47 @@ function runMpvDownload(t, archive, sha256) {
 
 test('the MPV archive cache key changes with the archive sha256', () => {
     const { job, cache, download } = mpvArchiveSteps();
+    const read = job.steps.find(step => step.name === 'Read pinned MPV archive');
     assert.ok(cache, 'build.yml has no mpv-archive-cache step');
     assert.match(cache.with.key, /\$\{\{\s*env\.MPV_CONFIG_SHA256\s*\}\}/);
-    assert.match(job.env.MPV_CONFIG_SHA256, /^[0-9a-f]{64}$/);
+    assert.ok(job.steps.indexOf(read) < job.steps.indexOf(cache), 'the pinned archive must be read before the cache is restored');
     assert.ok(job.steps.indexOf(cache) < job.steps.indexOf(download), 'cache must be restored before the download step');
     assert.equal(cache.with.path, '${{ runner.temp }}/mpv-archive');
     assert.match(download.run, /\$RUNNER_TEMP\/mpv-archive\/mpv-config\.zip/);
+});
+
+// 固定值不写在 build.yml 的 env：GITHUB_TOKEN 推不了改 workflow 的提交，update-mpv-archive.yml 开不了 PR。
+function runReadPinned(t, pinned) {
+    const { job } = mpvArchiveSteps();
+    assert.equal(job.env?.MPV_CONFIG_SHA256, undefined, 'build.yml pins the MPV archive in its env again');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-pinned-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const githubEnv = path.join(dir, 'github-env');
+    fs.writeFileSync(githubEnv, '');
+    const result = runStep(t, job, step => step.name === 'Read pinned MPV archive', { GITHUB_ENV: githubEnv },
+        cwd => fs.writeFileSync(path.join(cwd, 'mpv-archive.json'), pinned));
+    return { result, env: fs.readFileSync(githubEnv, 'utf8').split(/\r?\n/).filter(Boolean) };
+}
+
+test('build.yml reads the pinned MPV archive from mpv-archive.json into MPV_CONFIG_*', t => {
+    const pinned = JSON.parse(fs.readFileSync(path.join(root, 'mpv-archive.json'), 'utf8'));
+    const { result, env } = runReadPinned(t, JSON.stringify(pinned));
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(env, [
+        `MPV_CONFIG_REPO=${pinned.repo}`,
+        `MPV_CONFIG_TAG=${pinned.tag}`,
+        `MPV_CONFIG_ASSET=${pinned.asset}`,
+        `MPV_CONFIG_SHA256=${pinned.sha256}`,
+    ]);
+});
+
+test('build.yml rejects an mpv-archive.json with a bad sha256 or unsafe values', t => {
+    const good = { repo: 'JayYa/fntv-mpv-config', tag: 'fntv-mpv-v20261110_224319', asset: 'a.zip', sha256: 'a'.repeat(64) };
+    for (const bad of [{ ...good, sha256: 'abc' }, { ...good, asset: 'a b.zip' }, { ...good, tag: 'x\nMPV_CONFIG_SHA256=0' }, { ...good, repo: undefined }]) {
+        const { result, env } = runReadPinned(t, JSON.stringify(bad));
+        assert.notEqual(result.status, 0, JSON.stringify(bad));
+        assert.ok(!env.some(line => line.startsWith('MPV_CONFIG_SHA256=0')), env.join('\n'));
+    }
 });
 
 test('the MPV archive is cached as soon as it is downloaded and verified', () => {
@@ -71,8 +106,8 @@ test('a cached MPV archive that fails verification is downloaded again', t => {
     assert.deepEqual(calls, ['curl']);
 });
 
-// 升级归档时 build.yml 的 env 是唯一来源，README 的准备步骤和 docs/external-runtime.md 都要跟着改
+// 升级归档时 mpv-archive.json 是唯一来源，README 的准备步骤和 docs/external-runtime.md 都要跟着改
 //（scripts/update-mpv-archive.cjs 一起改，tests/mpvArchiveUpdate.test.cjs）。
-test('README and docs/external-runtime.md pin the same MPV archive as build.yml', () => {
+test('README and docs/external-runtime.md pin the same MPV archive as mpv-archive.json', () => {
     assertArchivePinsConsistent(root);
 });
