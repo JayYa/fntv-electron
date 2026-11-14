@@ -414,15 +414,8 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest, session:
     // 创建播放器实例
     const player = ply.PlayerFactory.createPlayer(ply.PlayerType.MPV, playConfig);
 
-    // 启动期间已请求停止播放（例如应用内更新要安装）就不再打开 MPV。
-    // attach 和 playList 之间不能有 await：playList 同步建好 MPV 实例，之后的 stop() 才会发出退出事件。
-    if (!session.attach(player)) {
-        log.info('启动播放期间已请求停止，不再打开 MPV');
-        return false;
-    }
-
-    // 开始播放
-    return player.playList(playList, currentIndex);
+    // 开始播放。启动期间已请求停止播放（例如应用内更新要安装）时不打开 MPV，返回 false；契约见 PlaybackSession.start
+    return session.start(player, () => player.playList(playList, currentIndex));
 }
 
 // 处理当前播放的媒体信息

@@ -14,10 +14,14 @@ interface StoppablePlayer {
 
 export interface PlaybackSession {
     /**
-     * 播放器创建后、开始播放前调用。返回 false 表示启动期间已请求停止，
-     * 媒体播放插件不要再开始播放，并调用 ended。
+     * 播放器创建后调用，开始播放：在这一次同步调用里记录播放器并调用 play，返回 play 的结果。
+     * 启动期间已请求停止或播放已结束时不调用 play，返回兑现为 false 的 Promise；媒体播放插件随后调用 ended。
+     *
+     * play 必须在返回前同步建好播放器（MPV 实例），之后的 stop() 才会报告退出。
+     * 记录播放器后 stopPlaybackAndWait 就会对它调 stop()；若此时实例还没建好，stop() 不发退出事件，
+     * ended 不被调用，stopPlaybackAndWait 只能等到超时。
      */
-    attach(player: StoppablePlayer): boolean;
+    start(player: StoppablePlayer, play: () => Promise<boolean>): Promise<boolean>;
     /**
      * 播放结束（MPV 退出），或启动失败。调用后立即不再算在播放；
      * report 是这次退出的进度回传，它完成后才算结束完成。重复调用只有第一次生效。
@@ -54,12 +58,13 @@ export function beginPlayback(): PlaybackSession {
     current = state;
 
     return {
-        attach(player: StoppablePlayer): boolean {
+        start(player: StoppablePlayer, play: () => Promise<boolean>): Promise<boolean> {
             if (state.stopRequested || state.hasEnded) {
-                return false;
+                log.info(`启动播放期间已请求停止或播放已结束，不再开始播放（stopRequested=${state.stopRequested}，hasEnded=${state.hasEnded}）`);
+                return Promise.resolve(false);
             }
             state.player = player;
-            return true;
+            return play();
         },
         ended(report?: Promise<unknown>): void {
             if (state.hasEnded) {

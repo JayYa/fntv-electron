@@ -48,7 +48,12 @@ function startPlaying(playback, report = Promise.resolve()) {
             session.ended(report);
         },
     };
-    assert.equal(session.attach(player), true);
+    let played = false;
+    session.start(player, () => {
+        played = true;
+        return Promise.resolve(true);
+    });
+    assert.equal(played, true);
     return { session, player };
 }
 
