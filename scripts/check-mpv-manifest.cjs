@@ -27,7 +27,7 @@ function parseArgs(args) {
 // 返回问题列表和读到的清单；没有问题时列表为空。
 function checkPinnedManifest({ archive, pin }) {
     const { MANIFEST_FILE_NAME, readManifest } = require(path.join(SYNC_DIR, 'manifest.js'));
-    const { MPV_REQUIRED_CAPABILITIES, unmetCapabilities } = require(path.join(SYNC_DIR, 'capabilities.js'));
+    const { describeUnmetCapability, unmetCapabilities } = require(path.join(SYNC_DIR, 'capabilities.js'));
     const pinnedTag = JSON.parse(fs.readFileSync(pin, 'utf8')).tag;
     const read = readManifest(path.join(archive, MANIFEST_FILE_NAME));
     if (!read.ok) return { problems: [`${read.reason}: ${read.detail}`] };
@@ -37,8 +37,8 @@ function checkPinnedManifest({ archive, pin }) {
     if (manifest.archiveVersion !== pinnedTag) {
         problems.push(`清单的 archiveVersion 是 ${manifest.archiveVersion}，mpv-archive.json 固定的是 ${pinnedTag}`);
     }
-    for (const { name, required, provided } of unmetCapabilities(manifest.provides, MPV_REQUIRED_CAPABILITIES)) {
-        problems.push(`provides 不满足 requires: ${name}, 需要 ${required}, ${provided === undefined ? '未提供' : `当前 ${provided}`}`);
+    for (const unmet of unmetCapabilities(manifest.provides)) {
+        problems.push(`provides 不满足 requires: ${describeUnmetCapability(unmet)}`);
     }
     return { problems, manifest };
 }

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import type { ManifestFileRole } from './manifest';
-import { nodeFileOps, Staging } from './stagedWrites';
+import { nodeFileOps, resolveRelative, Staging } from './stagedWrites';
 
 // 安装记录：用户配置目录下的 fntv/installed.json，只在同步全部完成后写。
 // 换目标目录时自然换一份记录（#219 用户故事 27）。
@@ -28,7 +27,7 @@ export interface InstallRecord {
 }
 
 export function installRecordFile(mpvConfigDir: string): string {
-    return path.join(mpvConfigDir, ...INSTALL_RECORD_PATH.split('/'));
+    return resolveRelative(mpvConfigDir, INSTALL_RECORD_PATH);
 }
 
 /** 读不到或内容坏了都当成没有记录：最坏情况是按历史哈希判断，多一次 `.fntv-new`。 */

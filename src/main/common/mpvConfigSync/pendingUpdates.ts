@@ -1,10 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { STAGING_PREFIX } from './stagedWrites';
+import { PENDING_UPDATE_SUFFIX, STAGING_PREFIX } from './stagedWrites';
 
 // 用户配置里还在的待合并更新（`<文件>.fntv-new`），托盘“设置”子菜单显示它们的个数（#223）。
 
-const PENDING_SUFFIX = '.fntv-new';
 const REFRESH_DELAY_MS = 200;
 
 export function countPendingUpdates(mpvConfigDir: string): number {
@@ -18,7 +17,7 @@ export function countPendingUpdates(mpvConfigDir: string): number {
     for (const entry of entries) {
         if (entry.isDirectory()) {
             if (!entry.name.startsWith(STAGING_PREFIX)) count += countPendingUpdates(path.join(mpvConfigDir, entry.name));
-        } else if (entry.isFile() && entry.name.endsWith(PENDING_SUFFIX)) {
+        } else if (entry.isFile() && entry.name.endsWith(PENDING_UPDATE_SUFFIX)) {
             count += 1;
         }
     }
@@ -39,7 +38,7 @@ export function watchPendingUpdates(mpvConfigDir: string | undefined, onChange: 
         const current: NonNullable<typeof watched> = {
             dir: mpvConfigDir,
             watcher: fs.watch(mpvConfigDir, { recursive: true }, (_event, filename) => {
-                if (filename && !filename.toString().endsWith(PENDING_SUFFIX)) return;
+                if (filename && !filename.toString().endsWith(PENDING_UPDATE_SUFFIX)) return;
                 clearTimeout(current.timer);
                 current.timer = setTimeout(onChange, REFRESH_DELAY_MS);
             }),

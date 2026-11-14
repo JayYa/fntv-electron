@@ -7,6 +7,14 @@ import * as path from 'node:path';
 
 export const STAGING_PREFIX = '.fntv-sync-';
 
+/** 待合并更新：用户改过的配置旁边的 `<文件>.fntv-new`，内容是新版。 */
+export const PENDING_UPDATE_SUFFIX = '.fntv-new';
+
+/** 清单和安装记录里的相对路径（正斜杠）在 root 下的文件系统路径。 */
+export function resolveRelative(root: string, relative: string): string {
+    return path.join(root, ...relative.split('/'));
+}
+
 /** 同步对用户配置的全部写操作。默认是 node:fs；测试注入在第 N 次写入时抛错的实现。 */
 export interface SyncFileOps {
     mkdir(dir: string): void;
@@ -68,7 +76,7 @@ function restoreInterruptedSwap(mpvConfigDir: string, swapDir: string, ops: Sync
         return;
     }
     if (typeof relative !== 'string') return;
-    const destination = path.join(mpvConfigDir, ...relative.split('/'));
+    const destination = resolveRelative(mpvConfigDir, relative);
     const previous = path.join(swapDir, 'old');
     if (fs.existsSync(previous) && !fs.existsSync(destination)) {
         ops.mkdir(path.dirname(destination));
@@ -126,7 +134,7 @@ export class Staging {
         const swapDir = this.nextPath();
         const fresh = path.join(swapDir, 'new');
         const previous = path.join(swapDir, 'old');
-        const destination = path.join(this.mpvConfigDir, ...relative.split('/'));
+        const destination = resolveRelative(this.mpvConfigDir, relative);
         this.ops.mkdir(fresh);
         build(fresh);
         this.ops.writeFile(path.join(swapDir, SWAP_MARKER), JSON.stringify(relative));

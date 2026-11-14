@@ -9,7 +9,7 @@ import {
     writeInstallRecord,
 } from './installRecord';
 import { type FntvManifest, type ManifestFile, type ManifestProblem, readManifest } from './manifest';
-import { cleanupLeftoverStaging, nodeFileOps, sha256File, Staging, type SyncFileOps } from './stagedWrites';
+import { cleanupLeftoverStaging, nodeFileOps, PENDING_UPDATE_SUFFIX, resolveRelative, sha256File, Staging, type SyncFileOps } from './stagedWrites';
 
 // 按清单把便携配置同步到用户配置（规则见 docs/external-runtime.md“用户配置同步”和 spec #219）。
 
@@ -115,8 +115,18 @@ function asError(error: unknown): Error {
     return error instanceof Error ? error : new Error(String(error));
 }
 
-function toFsPath(root: string, relative: string): string {
-    return path.join(root, ...relative.split('/'));
+/** 用户配置里一个清单文件的状态：已是新版、缺失、没改过、改过。 */
+type FileState = 'unchanged' | 'missing' | 'unmodified' | 'modified';
+
+/** 写入新版（托管文件改过也照写）时记的动作。 */
+function overwriteAction(state: FileState): MpvFileAction {
+    const actions: Record<FileState, MpvFileAction> = {
+        unchanged: 'unchanged',
+        missing: 'added',
+        unmodified: 'replaced',
+        modified: 'overwrote-modified',
+    };
+    return actions[state];
 }
 
 function listFiles(dir: string, prefix: string): string[] {
@@ -146,14 +156,14 @@ class SyncRun {
         for (const entry of manifest.obsolete) this.obsoleteHashes.set(entry.path, entry.knownHashes);
     }
 
-    private get user(): string {
+    private get mpvConfigDir(): string {
         return this.input.mpvConfigDir;
     }
 
     execute(): MpvConfigSyncResult {
-        this.ops.mkdir(this.user);
-        this.record = readInstallRecord(this.user);
-        this.staging = new Staging(this.user, this.ops);
+        this.ops.mkdir(this.mpvConfigDir);
+        this.record = readInstallRecord(this.mpvConfigDir);
+        this.staging = new Staging(this.mpvConfigDir, this.ops);
 
         const managedDirFiles = new Set<string>();
         for (const dir of this.manifest.managedDirs) {
@@ -183,14 +193,17 @@ class SyncRun {
         return this.record?.files[relative];
     }
 
-    // 有记录看是否等于记录值；没有记录看是否在历史哈希里。
-    private isUnmodified(current: string, file: ManifestFile): boolean {
+    // 当前内容和新版、记录比：“没改过”按单个文件判断，这个文件有记录看是否等于记录值，没有记录看是否在历史哈希里。
+    private stateOf(current: string | undefined, file: ManifestFile): FileState {
+        if (current === file.sha256) return 'unchanged';
+        if (current === undefined) return 'missing';
         const recorded = this.recorded(file.path);
-        return recorded ? current === recorded.sha256 : file.knownHashes.includes(current);
+        const unmodified = recorded ? current === recorded.sha256 : file.knownHashes.includes(current);
+        return unmodified ? 'unmodified' : 'modified';
     }
 
     private source(relative: string): string {
-        return toFsPath(this.input.portableConfigDir, relative);
+        return resolveRelative(this.input.portableConfigDir, relative);
     }
 
     private install(file: ManifestFile, target: string): void {
@@ -199,7 +212,7 @@ class SyncRun {
     }
 
     private syncFile(file: ManifestFile): void {
-        const target = toFsPath(this.user, file.path);
+        const target = resolveRelative(this.mpvConfigDir, file.path);
         const current = sha256File(target);
         const add = (action: MpvFileAction, reason?: string): void => {
             this.entries.push(reason ? { path: file.path, action, reason } : { path: file.path, action });
@@ -208,26 +221,21 @@ class SyncRun {
             if (file.role !== 'seed') this.installed[file.path] = { sha256: file.sha256, role: file.role };
         };
 
-        if (current === file.sha256) {
+        const state = this.stateOf(current, file);
+        if (state === 'unchanged') {
             remember();
             return add('unchanged');
         }
-        if (current === undefined) {
-            this.install(file, target);
-            remember();
-            return add('added');
-        }
-        if (file.role === 'seed') {
+        if (file.role === 'seed' && state !== 'missing') {
             return add('kept', 'seed exists');
         }
-        const unmodified = this.isUnmodified(current, file);
-        if (unmodified || file.role === 'managed') {
+        if (file.role === 'managed' || state !== 'modified') {
             this.install(file, target);
             remember();
-            return add(unmodified ? 'replaced' : 'overwrote-modified');
+            return add(overwriteAction(state));
         }
         // config，用户改过。
-        const newFile = `${target}.fntv-new`;
+        const newFile = `${target}${PENDING_UPDATE_SUFFIX}`;
         if (this.recorded(file.path)?.sha256 === file.sha256) {
             remember();
             // 上次写的 .fntv-new 还在：仍是待合并的冲突，提示没关掉就退出时下次启动再弹（#223）。
@@ -257,23 +265,19 @@ class SyncRun {
         const prefix = `${dir}/`;
         const files = this.manifest.files.filter(file => file.path.startsWith(prefix));
         const listed = new Set(files.map(file => file.path));
-        const existing = listFiles(toFsPath(this.user, dir), dir);
+        const existing = listFiles(resolveRelative(this.mpvConfigDir, dir), dir);
 
         let changed = false;
         for (const file of files) {
-            const current = sha256File(toFsPath(this.user, file.path));
-            let action: MpvFileAction;
-            if (current === file.sha256) action = 'unchanged';
-            else if (current === undefined) action = 'added';
-            else action = this.isUnmodified(current, file) ? 'replaced' : 'overwrote-modified';
-            changed ||= action !== 'unchanged';
+            const action = overwriteAction(this.stateOf(sha256File(resolveRelative(this.mpvConfigDir, file.path)), file));
+            changed ||=action !== 'unchanged';
             this.entries.push({ path: file.path, action });
             this.installed[file.path] = { sha256: file.sha256, role: 'managed' };
         }
 
         const carried: string[] = [];
         for (const relative of existing.filter(file => !listed.has(file))) {
-            const current = sha256File(toFsPath(this.user, relative)) as string;
+            const current = sha256File(resolveRelative(this.mpvConfigDir, relative)) as string;
             if (this.removable(relative, current)) {
                 this.entries.push({ path: relative, action: 'removed' });
                 changed = true;
@@ -289,10 +293,10 @@ class SyncRun {
             const staging = this.staging as Staging;
             staging.replaceDirectory(dir, fresh => {
                 for (const file of files) {
-                    staging.stageCopy(this.source(file.path), file.sha256, toFsPath(fresh, file.path.slice(prefix.length)));
+                    staging.stageCopy(this.source(file.path), file.sha256, resolveRelative(fresh, file.path.slice(prefix.length)));
                 }
                 for (const relative of carried) {
-                    staging.stageCarry(toFsPath(this.user, relative), toFsPath(fresh, relative.slice(prefix.length)));
+                    staging.stageCarry(resolveRelative(this.mpvConfigDir, relative), resolveRelative(fresh, relative.slice(prefix.length)));
                 }
             });
         }
@@ -305,7 +309,7 @@ class SyncRun {
         const candidates = new Set([...Object.keys(this.record?.files ?? {}), ...this.obsoleteHashes.keys()]);
         for (const relative of candidates) {
             if (listed.has(relative) || inManagedDir(relative)) continue;
-            const target = toFsPath(this.user, relative);
+            const target = resolveRelative(this.mpvConfigDir, relative);
             const current = sha256File(target);
             if (current === undefined) continue;
             if (this.recorded(relative)?.role === 'config') {
@@ -326,6 +330,6 @@ class SyncRun {
             provides: this.manifest.provides,
             acknowledgedConflicts: this.record?.acknowledgedConflicts ?? [],
         };
-        writeInstallRecord(this.staging as Staging, this.user, record);
+        writeInstallRecord(this.staging as Staging, this.mpvConfigDir, record);
     }
 }

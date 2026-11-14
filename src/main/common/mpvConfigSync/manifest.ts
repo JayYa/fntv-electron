@@ -32,6 +32,13 @@ export interface FntvManifest {
 
 export type ManifestProblem = 'manifest-missing' | 'manifest-unsupported' | 'manifest-invalid';
 
+/** 清单问题写进日志的说法：同步跳过和能力检查共用。 */
+export const MANIFEST_PROBLEM_TEXT: Readonly<Record<ManifestProblem, string>> = {
+    'manifest-missing': 'MPV 归档清单缺失',
+    'manifest-unsupported': 'MPV 归档清单格式版本不受支持',
+    'manifest-invalid': 'MPV 归档清单无效',
+};
+
 export type ManifestReadResult =
     | { ok: true; manifest: FntvManifest }
     | { ok: false; reason: ManifestProblem; detail: string };
