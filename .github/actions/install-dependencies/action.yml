@@ -38,9 +38,13 @@ runs:
     # Electron zip 由 @electron/get 存到默认目录（env-paths('electron').cache，不读 ELECTRON_CACHE），
     # 三个平台的默认目录都列上，不存在的会被忽略。
     # PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
-    - name: Restore Electron download cache
+    # 单步 actions/cache：未命中时由 job 结束后的 post 步骤保存，job 失败时不保存，下次运行再下载。
+    # 保存的是 job 结束时目录里的全部内容：build.yml 打包时下载的另一个架构的 zip 也会被存进来。同一个 key
+    # 只存第一次，main 上通常是 ci.yml（约 2 分钟）先于 cache-warm.yml 的打包（4 分钟以上）存好。
+    # key 带 runner.arch（scripts/ci-download-cache.cjs），zip 只对一种架构有用，runner 换架构时不会恢复出用不上的 zip。
+    - name: Cache Electron download
       id: electron-cache
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       continue-on-error: true
       with:
         path: |
@@ -65,14 +69,3 @@ runs:
         test -f node_modules/electron/path.txt
         test -f node_modules/electron/dist/version
       shell: bash
-
-    - name: Save Electron download cache
-      if: steps.electron-cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      continue-on-error: true
-      with:
-        path: |
-          ~/.cache/electron
-          ~/Library/Caches/electron
-          ~/AppData/Local/electron/Cache
-        key: ${{ steps.electron-cache.outputs.cache-primary-key }}

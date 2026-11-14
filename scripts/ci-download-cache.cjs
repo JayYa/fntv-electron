@@ -27,9 +27,11 @@ function appBuilderLibVersion(lockfile) {
     return versions[0];
 }
 
-// runnerOs 是 Actions 的 runner.os：Linux、Windows、macOS。
-function cacheKeys(runnerOs, dir = root) {
+// runner 是 { os, arch }，取自 Actions 的 runner.os（Linux、Windows、macOS）和 runner.arch（X64、ARM64）。
+// Electron zip 只对一种架构有用，Electron 下载缓存的 key 带架构；打包缓存要存另一个架构的 zip，只按平台区分。
+function cacheKeys({ os: runnerOs, arch } = {}, dir = root) {
     if (!runnerOs) throw new Error('RUNNER_OS is not set');
+    if (!arch) throw new Error('RUNNER_ARCH is not set');
     const packageJson = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
     const electron = exactVersion(packageJson, 'electron');
     const builder = exactVersion(packageJson, 'electron-builder');
@@ -39,7 +41,7 @@ function cacheKeys(runnerOs, dir = root) {
     const packagingElectronPrefix = `${packagingPrefix}electron-${electron}-`;
     return {
         'electron-version': electron,
-        'electron-key': `electron-${runnerOs}-${electron}`,
+        'electron-key': `electron-${runnerOs}-${arch}-${electron}`,
         'packaging-key': `${packagingElectronPrefix}electron-builder-${builder}-app-builder-lib-${appBuilderLib}`,
         'packaging-electron-prefix': packagingElectronPrefix,
         'packaging-prefix': packagingPrefix,
@@ -48,16 +50,17 @@ function cacheKeys(runnerOs, dir = root) {
 
 // main 上被当前 key 取代的旧 Electron 下载缓存和打包缓存。caches 是 Actions API 返回的 { id, key }。
 // 当前 key 已在 caches 里时，同一平台、同一类的其它 key 才算旧的：先存新的再删旧的，
-// 新 key 没存成时旧缓存还能经 restore-keys 用上。打包缓存也认换前缀之前的 packaging-<os>-。
-function staleCaches(runnerOs, caches, dir = root) {
-    const keys = cacheKeys(runnerOs, dir);
+// 新 key 没存成时旧缓存还能经 restore-keys 用上。打包缓存也认换前缀之前的 packaging-<os>-，
+// Electron 缓存也认 key 加架构之前的 electron-<os>-<版本>；同一平台其它架构的 Electron 缓存不算旧的。
+function staleCaches(runner, caches, dir = root) {
+    const keys = cacheKeys(runner, dir);
     const present = new Set(caches.map(cache => cache.key));
+    const legacyElectron = new RegExp(`^electron-${runner.os}-\\d`);
     const kinds = [
-        { current: keys['electron-key'], prefixes: [`electron-${runnerOs}-`] },
-        { current: keys['packaging-key'], prefixes: [keys['packaging-prefix'], `packaging-${runnerOs}-`] },
+        { current: keys['electron-key'], matches: key => key.startsWith(`electron-${runner.os}-${runner.arch}-`) || legacyElectron.test(key) },
+        { current: keys['packaging-key'], matches: key => [keys['packaging-prefix'], `packaging-${runner.os}-`].some(prefix => key.startsWith(prefix)) },
     ].filter(kind => present.has(kind.current));
-    return caches.filter(cache => kinds.some(kind =>
-        cache.key !== kind.current && kind.prefixes.some(prefix => cache.key.startsWith(prefix))));
+    return caches.filter(cache => kinds.some(kind => cache.key !== kind.current && kind.matches(cache.key)));
 }
 
 // @electron/get 不传 cacheRoot 时的默认目录（env-paths('electron').cache），和 app-builder-lib 的
@@ -109,9 +112,13 @@ function writeOutputs(outputs) {
     process.stdout.write(text);
 }
 
+function runnerFromEnv(env = process.env) {
+    return { os: env.RUNNER_OS, arch: env.RUNNER_ARCH };
+}
+
 function main(command) {
     if (command === 'keys') {
-        writeOutputs(cacheKeys(process.env.RUNNER_OS));
+        writeOutputs(cacheKeys(runnerFromEnv()));
     } else if (command === 'prepare-packaging') {
         const cacheRoot = electronCacheRoot();
         const checksumsFile = require.resolve('electron/checksums.json', { paths: [process.cwd()] });
@@ -124,7 +131,7 @@ function main(command) {
             const [id, key] = line.split('\t');
             return { id, key };
         });
-        for (const { id, key } of staleCaches(process.env.RUNNER_OS, caches)) process.stdout.write(`${id}\t${key}\n`);
+        for (const { id, key } of staleCaches(runnerFromEnv(), caches)) process.stdout.write(`${id}\t${key}\n`);
     } else {
         throw new Error(`usage: ci-download-cache.cjs keys|prepare-packaging|stale, got ${command}`);
     }

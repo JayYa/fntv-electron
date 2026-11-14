@@ -20,32 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 和 pre-commit 钩子同一个脚本，拦住用 --no-verify 绕过钩子的提交。只看这个 PR 相对 base 改动的文件，
-  # 读 PR head 的内容；fetch-depth: 0 才拿得到 base 提交和合并基点。脚本只用 git 和 Node 自带模块，不装依赖。
-  # push 上没有 PR 的 base 提交，不跑；合并进 main 的改动在 PR 上已经检查过。
-  file-size:
-    name: Check file size
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '26.13.0'
-          package-manager-cache: false
-
-      - name: Check changed file size
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node scripts/check-file-size.cjs --base "$BASE_SHA"
-
   test:
     # 维护者只有 Windows 电脑，macOS 和 Linux 的问题靠 CI 暴露。fail-fast 关掉，一个平台失败时其它平台照样跑完。
     name: Test (${{ matrix.os }})
@@ -56,8 +30,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      # PR 上检出的是合并提交，第一个父提交是 base，fetch-depth: 2 才拿得到它（Run checks 的文件大小检查）。
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
 
       # 不写 version：版本来自 package.json 的 packageManager。放在 setup-node 前面，cache: pnpm 要用到 pnpm。
       - name: Setup pnpm
@@ -80,12 +57,36 @@ jobs:
         uses: ./.github/actions/install-dependencies
         timeout-minutes: 15
 
-      - name: Run lint
-        run: pnpm run lint
+      # 和本地同一条命令（scripts/check.cjs）：文件大小、lint、knip、测试，结尾汇总每步结果。
+      # 文件大小检查和 pre-commit 钩子是同一个脚本，拦住用 --no-verify 绕过钩子的提交；只在 Linux 那一格的 PR 上跑，
+      # 对比合并提交的第一个父提交（base），读合并后的内容。push 到 main 时不跑，合并进来的改动在 PR 上已经检查过。
+      - name: Run checks
+        shell: bash
+        env:
+          FILE_SIZE: ${{ matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' }}
+        run: |
+          if [ "$FILE_SIZE" = true ]; then
+            pnpm run check --base HEAD^1
+          else
+            pnpm run check --no-file-size
+          fi
 
-      # 没用到的依赖、用到却没写进 package.json 的包和命令（配置在 knip.jsonc）。
-      - name: Check unused dependencies
-        run: pnpm run knip
-
-      - name: Run Node tests
-        run: pnpm test
+  # 分支保护只要求这一个 job，以后调整矩阵、增减 job 不用改 ruleset。needs 列出所有必需的 job，
+  # 任何一个失败或取消就失败。always() 让它在前面失败时也运行，否则会被跳过，跳过在分支保护里算通过。
+  check:
+    name: Check
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all jobs to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              failure|cancelled) echo "::error::A required job did not succeed: $RESULTS"; exit 1 ;;
+            esac
+          done

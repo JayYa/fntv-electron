@@ -2,9 +2,9 @@
 
 ## 运行
 
+- 改完代码跑 `pnpm run check`：依次跑文件大小检查（HEAD 相对 `origin/main` 合并基点改动的文件）、lint、knip 和 `pnpm test`，结尾汇总每步结果，任一步失败则整体失败。CI 的 `ci.yml` 跑同一条命令。macOS、Linux 的平台分支由 CI 三平台矩阵验证。
 - `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`。
 - `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还会被 `readdirSync` 加载。
-- 改完代码后 `pnpm run lint` 和 `pnpm run knip` 也要通过。
 
 ### `Electron failed to install correctly`
 

@@ -10,6 +10,7 @@
         "build:preload": "node scripts/build-preload.cjs",
         "lint": "eslint src resource/login tests",
         "knip": "knip",
+        "check": "node scripts/check.cjs",
         "prepare": "git config core.hooksPath .githooks",
         "test": "pnpm run compile && node --test --test-timeout=30000 tests/*.test.cjs",
         "test:smoke": "node --test --test-reporter=spec --test-timeout=300000 tests/smoke/installer.smoke.cjs",
