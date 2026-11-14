@@ -62,6 +62,8 @@ macOS 和 Linux 的安装包不带 MPV 播放器，只带 MPV 插件和配置。
 - `~/.config/mpv/scripts` 不存在时，复制全部插件和配置，已有的同名文件（例如你自己的 `mpv.conf`、`input.conf`）保留不覆盖。
 - `~/.config/mpv/scripts` 已存在时，只更新弹幕插件 `scripts/uosc_danmaku`，其它文件不动。之前用过 MPV、已经有 `scripts` 目录的话，`uosc`、`smart_skip` 等其它插件不会自动补上，需要从 [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config/releases) 的归档里把 `portable_config` 下缺的文件手动复制过去。
 
+Windows 的安装包附带 MPV，但它不读安装目录里的配置：客户端启动它时用 `--config-dir` 指向用户 MPV 配置目录 `%APPDATA%\mpv`（设了 `MPV_HOME` 时是它本身）。安装目录里的 `third_party\fntv-mpv\portable_config` 只是同步的来源，同步规则和上面一样：`%APPDATA%\mpv\scripts` 不存在时复制全部插件和配置，已存在时只更新 `scripts/uosc_danmaku`。在托盘菜单的“设置”里点“打开MPV用户配置目录”，打开的就是 MPV 实际读取的目录（三个平台都有这一项）。
+
 发现新版本时，Windows 和 Linux（以 AppImage 运行时）可以在客户端内下载并安装；macOS 仍然打开下载链接，需要自己下载安装。更新默认直连 GitHub；GitHub 下载慢时，可以在托盘菜单的“设置”里打开“应用更新下载加速”，应用内更新和下载链接都会经第三方 `gh-proxy.com` 中转，加速地址可在登录页右上角的“通用设置”里修改。
 
 ### 安装包没有签名
@@ -130,9 +132,9 @@ pnpm run build:linux
 1. 自动方法
    克隆 fntv-mpv 仓库，自己改一下相关配置：[fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
 2. 手动方法
-   打开安装目录的 `third_party`，只修改 `third_party\fntv-mpv\portable_config` 下面的插件，其余的不要动。其中 `input.conf` 是快捷键配置。
+   在托盘菜单的“设置”里点“打开MPV用户配置目录”（Windows 通常是 `%APPDATA%\mpv`，macOS 和 Linux 通常是 `~/.config/mpv`），在这里改配置和插件。其中 `mpv.conf` 是播放器配置，`input.conf` 是快捷键配置，`script-opts` 下是各插件的选项。
 
-注意重新安装或者更新，会清空安装目录，注意备份你的 MPV 插件目录。
+不要改安装目录 `third_party\fntv-mpv\portable_config` 里的文件：MPV 不读它，它只在用户配置目录还没有 `scripts` 目录时复制过去一次，重新安装或者更新还会清空它。用户配置目录不随重装和更新清空；已有 `scripts` 目录时，客户端每次启动只把弹幕插件 `scripts/uosc_danmaku` 整个换成新版（这个目录里的改动会丢），其它文件不动，新版附带的配置和插件也不会自动更新进来。
 
 ### 2. 能否支持 PotPlayer？
 
@@ -148,7 +150,7 @@ pnpm run build:linux
 
 ### 5. 打开弹幕视频掉帧
 
-打开弹幕时，默认开启 FPS 平滑滤镜，比较吃性能。不需要时，可以在安装目录的 `third_party\fntv-mpv\portable_config\script-opts\uosc_danmaku.conf` 里关闭相关配置。
+打开弹幕时，默认开启 FPS 平滑滤镜，比较吃性能。不需要时，可以在用户 MPV 配置目录（托盘菜单“设置” > “打开MPV用户配置目录”）的 `script-opts\uosc_danmaku.conf` 里关闭相关配置。
 
 ### 6. 视频播放卡慢，双显卡，调用时发现使用核显
 
@@ -173,11 +175,7 @@ pnpm run build:linux
 
 1. 快捷键
 
-```text
-部分快捷键兼容 PotPlayer
-查看安装目录下
-third_party\fntv-mpv\portable_config\input.conf
-```
+   部分快捷键兼容 PotPlayer，见用户 MPV 配置目录（托盘菜单“设置” > “打开MPV用户配置目录”）下的 `input.conf`。
 
 2. MPV 配置由以下仓库单独管理：
    [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
