@@ -3,7 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
 const { EventEmitter } = require('node:events');
-const { createQuittingApp, requestQuit } = require('./fakeQuitApp.cjs');
+const { createQuittingApp, requestQuit, startQuitCoordinator } = require('./fakeQuitApp.cjs');
 const axios = require('axios');
 
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/JayYa/fntv-electron/releases/latest';
@@ -12,7 +12,7 @@ const LATEST_RELEASE_PAGE = 'https://github.com/JayYa/fntv-electron/releases/lat
 // 替换 electron-updater 的 autoUpdater。只记录公开方法的调用和收到的 feed；
 // 下载由测试推进：progress(percent)、finishDownload()、failDownload(error)，出错时和真实的一样先发 error 事件再 reject。
 class FakeAutoUpdater extends EventEmitter {
-    constructor() {
+    constructor({ app, events }) {
         super();
         this.autoDownload = true;
         this.autoInstallOnAppQuit = true;
@@ -23,9 +23,9 @@ class FakeAutoUpdater extends EventEmitter {
         this.checkResult = { isUpdateAvailable: true, updateInfo: { version: '2.7.0' } };
         this.pendingDownload = null;
         this.installError = null;
-        // setupUpdateChecker 填上：客户端的 app 和测试共用的事件记录
-        this.app = null;
-        this.events = [];
+        // 客户端的 app 和测试共用的事件记录
+        this.app = app;
+        this.events = events;
     }
 
     setFeedURL(options) { this.feeds.push(options); }
@@ -118,7 +118,7 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         },
         safeStorage: {},
     };
-    const updater = Object.assign(new FakeAutoUpdater(), { app: electronMock.app, events });
+    const updater = new FakeAutoUpdater({ app: electronMock.app, events });
 
     const originalLoad = Module._load;
     Module._load = function(request, parent, isMain) {
@@ -154,18 +154,6 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
     return { checker: getInstance(), app: electronMock.app, events, dialogs, opened, requests, updater, logText };
 }
 
-// 像主进程入口那样启动退出协调（src/main/main.ts）。setupUpdateChecker 之后调用，拿到同一份模块；
-// Proxy 和托盘换成往 events 里记事件的假收尾：关 Proxy 隔一轮才关完
-function startQuitCoordinator(events) {
-    require('../../dest/modules/quit/quitCoordinator.js').initQuitCoordinator({
-        async closeProxy() {
-            events.push('proxy closing');
-            await new Promise((resolve) => setImmediate(resolve));
-            events.push('proxy closed');
-        },
-        onQuit() { events.push('tray destroyed'); },
-    });
-}
 
 function release(tagName, assetNames = []) {
     return {

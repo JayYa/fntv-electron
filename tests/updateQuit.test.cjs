@@ -9,17 +9,12 @@ const {
     release,
     simulateHost,
 } = require('./helpers/updateChecker.cjs');
+const { deferred, startPlaying } = require('./helpers/fakeQuitApp.cjs');
 
 // 应用内更新的两种安装方式和退出收尾（src/modules/quit/quitCoordinator.ts）怎么配合。
 // events 按发生顺序记下：MPV 停止、进度回传完成、关 Proxy、开始安装、销毁托盘、进程退出。
 
 const WIN_ASSETS = ['FNMedia_2.7.0_win_x64.exe', 'FNMedia_2.7.0_win_x64.exe.blockmap', 'latest.yml'];
-
-function deferred() {
-    let resolve;
-    const promise = new Promise((res) => { resolve = res; });
-    return { promise, resolve };
-}
 
 // 新版本提示点「下载并安装」，下载完成框点 choice，其它弹框点取消按钮
 function setup(t, choice) {
@@ -35,17 +30,6 @@ function setup(t, choice) {
     startQuitCoordinator(env.events);
     const playback = require('../dest/modules/playback/playbackState.js');
     return { ...env, playback };
-}
-
-// 模拟媒体播放插件：开始一次播放，stop() 时 MPV 退出，退出的进度回传由 report 决定
-function startPlaying({ playback, events }, report = Promise.resolve()) {
-    const session = playback.beginPlayback();
-    session.attach({
-        stop() {
-            events.push('mpv stopped');
-            session.ended(report.then(() => events.push('progress reported')));
-        },
-    });
 }
 
 // 手动检查、下载完成、在下载完成框做出选择，等选择生效
@@ -64,7 +48,7 @@ test('install on quit stops playback and waits for the progress report, closes t
     const env = setup(t, '退出时安装');
     await downloadAndChoose(env, installOnQuitChosen(env));
     const report = deferred();
-    startPlaying(env, report.promise);
+    startPlaying(env.playback, env.events, report.promise);
 
     assert.equal(requestQuit(env.app).defaultPrevented, true);
     await settle();
@@ -105,16 +89,15 @@ test('when the install on quit fails the client shows the failure and still quit
 test('restart and install now is not held back, and still closes the Proxy and destroys the tray', async (t) => {
     const env = setup(t, '立即重启安装');
     const report = deferred();
-    startPlaying(env, report.promise);
+    startPlaying(env.playback, env.events, report.promise);
 
     await downloadAndChoose(env, () => env.events.includes('mpv stopped'));
     report.resolve();
     await waitFor(() => env.app.exited);
-    await settle();
 
-    // 安装前自己停了播放；安装发起的退出放行，关 Proxy 不等它关完
-    assert.deepEqual(env.events, [
-        'mpv stopped', 'progress reported', 'install started', 'proxy closing', 'tray destroyed', 'exited', 'proxy closed',
+    // 安装前自己停了播放；安装发起的退出放行（不等 Proxy 关完），只关一次 Proxy
+    assert.deepEqual(env.events.filter((event) => event !== 'proxy closed'), [
+        'mpv stopped', 'progress reported', 'install started', 'proxy closing', 'tray destroyed', 'exited',
     ]);
     assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: true }]);
 });

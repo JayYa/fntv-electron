@@ -9,7 +9,7 @@ import { stopPlaybackAndWait } from '../playback/playbackState';
  *   1. 停止播放，等这次退出的进度回传完成（stopPlaybackAndWait 自带超时）；
  *   2. 关闭 Proxy，等它关完；
  *   3. 用户选了「退出时安装」就交给应用内更新安装（它发起退出），否则重新发起退出。
- * 第 3 步之后的退出直接放行，这时才调用 onQuit（销毁托盘等），收尾期间托盘图标还在。
+ * 第 3 步之后的退出直接放行，这时才调用 onQuitReleased（销毁托盘等），收尾期间托盘图标还在。
  * 「立即重启安装」引发的退出（quitForInstall）也直接放行：拦下会让安装作废。
  * 每一步失败都记日志后继续，客户端不会卡在退不出去。
  */
@@ -18,7 +18,7 @@ export interface QuitSteps {
     /** 第 2 步：关闭 Proxy，返回的 Promise 完成才算关完 */
     closeProxy(): Promise<void>;
     /** 退出放行时同步调用：标记正在退出、销毁托盘 */
-    onQuit(): void;
+    onQuitReleased(): void;
 }
 
 /** 「退出时安装」，由应用内更新提供 */
@@ -71,13 +71,13 @@ function closeProxyOnce(current: QuitSteps): Promise<void> {
     return proxyClosing;
 }
 
-// 这次退出要不要安装。只在这里决定，别的退出条件（比如关机时放弃安装）加在这里
-function installOnQuitPending(): boolean {
+// 这次退出要安装时返回安装方，不安装时返回 null。只在这里决定，别的退出条件（比如关机时放弃安装）加在这里
+function installerForThisQuit(): InstallOnQuit | null {
     try {
-        return installer?.pending() ?? false;
+        return installer?.pending() ? installer : null;
     } catch (error) {
         log.error('读取退出时安装状态失败，按不安装退出:', error);
-        return false;
+        return null;
     }
 }
 
@@ -89,9 +89,10 @@ async function cleanUpAndQuit(current: QuitSteps): Promise<void> {
     // 收尾期间「立即重启安装」已经接手退出
     if (state !== 'cleaningUp') return;
     state = 'releasing';
-    if (installOnQuitPending()) {
+    const installing = installerForThisQuit();
+    if (installing) {
         try {
-            installer!.install();
+            installing.install();
             return;
         } catch (error) {
             log.error('退出时安装失败，直接退出:', error);
@@ -106,9 +107,9 @@ function release(current: QuitSteps): void {
     notifyQuitStarted();
     void closeProxyOnce(current);
     try {
-        current.onQuit();
+        current.onQuitReleased();
     } catch (error) {
-        log.error('退出收尾「销毁托盘」失败，继续退出:', error);
+        log.error('退出放行时的收尾失败，继续退出:', error);
     }
 }
 

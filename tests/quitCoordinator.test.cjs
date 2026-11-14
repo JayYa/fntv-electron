@@ -4,30 +4,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
-const { createQuittingApp, requestQuit } = require('./helpers/fakeQuitApp.cjs');
+const { settle, waitFor } = require('./helpers/updateChecker.cjs');
+const { createQuittingApp, deferred, requestQuit, startPlaying, startQuitCoordinator } = require('./helpers/fakeQuitApp.cjs');
 
-const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
-
-async function waitFor(condition, timeoutMs = 2000) {
-    const deadline = Date.now() + timeoutMs;
-    while (!condition()) {
-        if (Date.now() > deadline) throw new Error(`等待超时（${timeoutMs}ms）：${condition}`);
-        await nextTurn();
-    }
-}
-
-// 断言某事没有发生时用：给已排队的回调足够的机会跑完
-async function settle() {
-    for (let i = 0; i < 20; i += 1) await nextTurn();
-}
-
-function deferred() {
-    let resolve;
-    let reject;
-    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
-    return { promise, resolve, reject };
-}
-
+// 退出协调（src/modules/quit/quitCoordinator.ts）的普通退出。events 按发生顺序记下：
+// MPV 停止、进度回传完成、关 Proxy、销毁托盘、进程退出。
 // 加载退出协调模块，Proxy 和托盘换成记录事件的假收尾，播放状态用真的模块
 function setup(t, { closeProxy } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-quit-'));
@@ -48,34 +29,14 @@ function setup(t, { closeProxy } = {}) {
 
     const playback = require('../dest/modules/playback/playbackState.js');
     const quit = require('../dest/modules/quit/quitCoordinator.js');
-    quit.initQuitCoordinator({
-        closeProxy: closeProxy ?? (async () => {
-            events.push('proxy closing');
-            await nextTurn();
-            events.push('proxy closed');
-        }),
-        onQuit() { events.push('tray destroyed'); },
-    });
+    startQuitCoordinator(events, { closeProxy });
     return { app, events, playback, quit };
-}
-
-// 模拟媒体播放插件：开始一次播放，stop() 时 MPV 退出，退出的进度回传由 report 决定
-function startPlaying({ playback, events }, report = Promise.resolve()) {
-    const session = playback.beginPlayback();
-    const player = {
-        stop() {
-            events.push('mpv stopped');
-            session.ended(report.then(() => events.push('progress reported')));
-        },
-    };
-    assert.equal(session.attach(player), true);
-    return player;
 }
 
 test('a quit while playing waits for the progress report, then closes the Proxy, then quits', async (t) => {
     const env = setup(t);
     const report = deferred();
-    startPlaying(env, report.promise);
+    startPlaying(env.playback, env.events, report.promise);
 
     assert.equal(requestQuit(env.app).defaultPrevented, true);
     await settle();
@@ -99,7 +60,7 @@ test('a quit still goes ahead 5 seconds after stopping when the progress report 
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const env = setup(t);
     t.mock.method(require('../dest/modules/logger/index.js'), 'warn', () => {});
-    startPlaying(env, new Promise(() => {}));
+    startPlaying(env.playback, env.events, new Promise(() => {}));
 
     requestQuit(env.app);
     t.mock.timers.tick(4999);
@@ -114,7 +75,7 @@ test('a quit still goes ahead 5 seconds after stopping when the progress report 
 test('quitting again during the cleanup is held back and does not repeat the cleanup', async (t) => {
     const env = setup(t);
     const report = deferred();
-    startPlaying(env, report.promise);
+    startPlaying(env.playback, env.events, report.promise);
 
     requestQuit(env.app);
     await settle();
@@ -143,7 +104,7 @@ test('a failing cleanup step is logged and the remaining steps still run until t
 
 test('quit-started listeners hear about the quit before playback is stopped', async (t) => {
     const env = setup(t);
-    startPlaying(env);
+    startPlaying(env.playback, env.events);
     env.quit.onQuitStarted(() => env.events.push('quit started'));
     const unsubscribe = env.quit.onQuitStarted(() => env.events.push('unsubscribed listener'));
     unsubscribe();

@@ -226,7 +226,7 @@ function showMacNotification(): void {
 // 退出收尾：先停播放、等进度回传，再关 Proxy，最后才销毁托盘（src/modules/quit/quitCoordinator.ts）
 initQuitCoordinator({
     closeProxy: shutdownProxyProcess,
-    onQuit() {
+    onQuitReleased() {
         // 主窗口的 close 看到它就不再拦下改为隐藏
         (app as any).isQuiting = true;
         destroyTray();
