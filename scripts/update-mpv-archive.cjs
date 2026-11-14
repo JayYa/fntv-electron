@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // 把构建固定的 MPV 归档换成 JayYa/fntv-mpv-config 的另一个 Release。
 // 定时 workflow（update-mpv-archive.yml）和手工升级都用它，改的地方只有一份：
-//   .github/workflows/build.yml 的 MPV_CONFIG_TAG、MPV_CONFIG_ASSET、MPV_CONFIG_SHA256；
+//   mpv-archive.json 的 tag、asset、sha256（build.yml 从这里读）；
 //   README.md 准备步骤里的 tag 和资产名；docs/external-runtime.md 里的 tag。
+// 不改 .github/workflows 下的文件：GITHUB_TOKEN 推不了改 workflow 的提交。
 // 资产名和 sha256 只取 Release API 给的（资产名不按 tag 推算，sha256 用资产的 digest），不下载归档。
 // 三处是否一致由 tests/mpvArchiveCache.test.cjs 把关。
 //
 // 用法：
-//   update-mpv-archive.cjs              取最新正式 Release，tag 比 build.yml 固定的新才改
+//   update-mpv-archive.cjs              取最新正式 Release，tag 比 mpv-archive.json 固定的新才改
 //   update-mpv-archive.cjs --tag <tag>  取指定 tag 的 Release，不比较新旧（也用于回滚）
 // 设了 GH_TOKEN 或 GITHUB_TOKEN 时带上它调 API。设了 GITHUB_OUTPUT 时写 updated、previous-tag、
 // tag、asset、sha256，updated 为 false 时其余只有 previous-tag。
@@ -15,35 +16,24 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const BUILD_YML = '.github/workflows/build.yml';
+const PIN_JSON = 'mpv-archive.json';
 const README = 'README.md';
 const RUNTIME_DOC = 'docs/external-runtime.md';
 const TAG_PATTERN = /^fntv-mpv-v(\d{8}_\d{6})$/;
-// 资产名会进 build.yml 的 env 和下载地址，只收这些字符。
+// 资产名会进构建的环境变量和下载地址，只收这些字符（build.yml 的 Read pinned MPV archive 也这样查）。
 const ASSET_PATTERN = /^[A-Za-z0-9._-]+\.zip$/;
 
 function read(root, file) {
     return fs.readFileSync(path.join(root, file), 'utf8');
 }
 
-function envLine(name) {
-    return new RegExp(`^(\\s+${name}:[ \\t]*)(\\S+)[ \\t]*$`, 'm');
-}
-
-// build.yml build job 的 env 是唯一来源。
+// mpv-archive.json 是唯一来源：{ repo, tag, asset, sha256 }。
 function readPinnedArchive(root = ROOT) {
-    const text = read(root, BUILD_YML);
-    const value = name => {
-        const match = text.match(envLine(name));
-        if (!match) throw new Error(`${BUILD_YML} 里找不到 ${name}`);
-        return match[2];
-    };
-    return {
-        repo: value('MPV_CONFIG_REPO'),
-        tag: value('MPV_CONFIG_TAG'),
-        asset: value('MPV_CONFIG_ASSET'),
-        sha256: value('MPV_CONFIG_SHA256'),
-    };
+    const pinned = JSON.parse(read(root, PIN_JSON));
+    for (const key of ['repo', 'tag', 'asset', 'sha256']) {
+        if (typeof pinned[key] !== 'string' || !pinned[key]) throw new Error(`${PIN_JSON} 缺少 ${key}`);
+    }
+    return pinned;
 }
 
 function tagTime(tag) {
@@ -80,14 +70,11 @@ function replaceAll(text, from, to, file, what) {
 // 先算好三个文件的新内容，全部成功才写，不会只改一半。
 function pinArchive(root, next) {
     const current = readPinnedArchive(root);
-    let build = read(root, BUILD_YML);
-    for (const [name, value] of [['MPV_CONFIG_TAG', next.tag], ['MPV_CONFIG_ASSET', next.asset], ['MPV_CONFIG_SHA256', next.sha256]]) {
-        build = build.replace(envLine(name), (_, prefix) => `${prefix}${value}`);
-    }
+    const pinned = `${JSON.stringify({ repo: current.repo, tag: next.tag, asset: next.asset, sha256: next.sha256 }, null, 4)}\n`;
     let readme = replaceAll(read(root, README), current.tag, next.tag, README, ' tag');
     readme = replaceAll(readme, current.asset, next.asset, README, '资产名');
     const runtimeDoc = replaceAll(read(root, RUNTIME_DOC), current.tag, next.tag, RUNTIME_DOC, ' tag');
-    fs.writeFileSync(path.join(root, BUILD_YML), build);
+    fs.writeFileSync(path.join(root, PIN_JSON), pinned);
     fs.writeFileSync(path.join(root, README), readme);
     fs.writeFileSync(path.join(root, RUNTIME_DOC), runtimeDoc);
 }

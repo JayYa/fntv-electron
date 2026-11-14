@@ -1,12 +1,12 @@
 name: Update MPV archive
 
-# 每天查一次 JayYa/fntv-mpv-config 的最新正式 Release，tag 比 build.yml 固定的新就开 PR 升级 MPV 归档。
+# 每天查一次 JayYa/fntv-mpv-config 的最新正式 Release，tag 比 mpv-archive.json 固定的新就开 PR 升级 MPV 归档。
 # 改哪几处由 scripts/update-mpv-archive.cjs 决定，手工升级也用它（docs/external-runtime.md）。
 # 手动触发时可以填 tag，换成指定的 Release，不比较新旧（也用于回滚）。
 #
 # PR 用 GITHUB_TOKEN 开，和 release-please 的 Release PR 一样：PR 上的 CI、Smoke Test、PR Title 先是
 # action_required，维护者在 PR 上点 “Approve workflows to run” 后才跑。不用 PAT 或 GitHub App，
-# 仓库不需要新增密钥。PR 改了 build.yml，Smoke Test 会用新归档构建并跑 5 个目标。
+# 仓库不需要新增密钥。PR 改了 mpv-archive.json，Smoke Test 会用新归档构建并跑 5 个目标。
 # 每次推送都要重新批准，所以已开的 PR 固定的就是这个归档时不再推送。
 on:
   schedule:
@@ -69,7 +69,7 @@ jobs:
           ASSET: ${{ steps.pin.outputs.asset }}
           SHA256: ${{ steps.pin.outputs.sha256 }}
         run: |
-          files=(.github/workflows/build.yml README.md docs/external-runtime.md)
+          files=(mpv-archive.json README.md docs/external-runtime.md)
           number=$(gh pr list --repo "$REPO" --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
           if [ -n "$number" ] && git fetch --quiet origin "$BRANCH" && git diff --quiet FETCH_HEAD -- "${files[@]}"; then
             echo "PR #$number 已固定 $TAG，不再推送"
@@ -85,7 +85,7 @@ jobs:
             echo "- 归档：\`$PREVIOUS_TAG\` → [\`$TAG\`](https://github.com/JayYa/fntv-mpv-config/releases/tag/$TAG)"
             echo "- 资产：\`$ASSET\`（取自 Release API）"
             echo "- sha256：\`$SHA256\`（Release API 给出的资产 digest）"
-            echo "- 改动：\`.github/workflows/build.yml\` 的 env、\`README.md\` 的准备步骤、\`docs/external-runtime.md\` 的 tag"
+            echo "- 改动：\`mpv-archive.json\`、\`README.md\` 的准备步骤、\`docs/external-runtime.md\` 的 tag"
             echo
             echo "合并前："
             echo

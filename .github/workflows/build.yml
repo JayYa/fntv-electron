@@ -27,13 +27,6 @@ jobs:
     name: Build on ${{ inputs.os }}
     runs-on: ${{ inputs.os }}
     timeout-minutes: 45
-    env:
-      # 构建依赖的 MPV 归档，固定 tag 和 sha256。缓存 key 也用这里的 sha256。
-      MPV_CONFIG_REPO: JayYa/fntv-mpv-config
-      MPV_CONFIG_TAG: fntv-mpv-v20261110_224319
-      MPV_CONFIG_ASSET: mpv-package-20261110_144311.zip
-      MPV_CONFIG_SHA256: 271213fd33699098eacd07ff4178b2f365958aa2fe53773b8e206fd06eee925c
-
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -77,6 +70,22 @@ jobs:
 
       # 压缩包按 sha256 缓存，换版本时 key 跟着变。Release 下载偶尔返回 5xx，命中缓存就不用下载。
       # restore 和 save 分开：下载校验通过就保存，后面的构建失败也不丢缓存。
+      # 构建依赖的 MPV 归档固定在仓库根目录的 mpv-archive.json（tag、资产名、sha256），这里转成 MPV_CONFIG_*
+      # 环境变量给后面的缓存和下载步骤用，缓存 key 也用其中的 sha256。不写在本文件的 env 里：GITHUB_TOKEN 推不了
+      # 改 .github/workflows 的提交，update-mpv-archive.yml 就开不了升级 PR。
+      - name: Read pinned MPV archive
+        shell: bash
+        run: |
+          node -e '
+            const archive = require("./mpv-archive.json");
+            if (!/^[0-9a-f]{64}$/.test(archive.sha256 ?? "")) throw new Error("mpv-archive.json: sha256 is not 64 hex digits");
+            const values = { REPO: archive.repo, TAG: archive.tag, ASSET: archive.asset, SHA256: archive.sha256 };
+            for (const [name, value] of Object.entries(values)) {
+              if (!/^[A-Za-z0-9._\/-]+$/.test(value ?? "")) throw new Error(`mpv-archive.json: invalid ${name}`);
+              console.log(`MPV_CONFIG_${name}=${value}`);
+            }
+          ' >> "$GITHUB_ENV"
+
       - name: Restore MPV archive cache
         id: mpv-archive-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -34,7 +34,7 @@
 
 ## 在 CI 上跑
 
-`smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建，再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、改了 `tests/smoke/`、这三个 workflow、`package.json` 或 `scripts/install-smoke-deps.cjs` 的 PR。发版时的门禁见 `docs/adr/0003-release-gate.md`。
+`smoke-test.yml` 调用可复用的 `build-and-smoke.yml`：先用 `build.yml` 构建，再下载构建 artifact 跑测试，截图和日志上传为 `smoke-<目标>`，保留 14 天，失败时也上传。触发条件：手动触发（可选平台）、改了 `tests/smoke/`、这三个 workflow、`package.json`、`scripts/install-smoke-deps.cjs` 或 `mpv-archive.json` 的 PR。发版时的门禁见 `docs/adr/0003-release-gate.md`。
 
 冒烟测试 job 不跑 `pnpm install`：`scripts/install-smoke-deps.cjs` 按 `pnpm-lock.yaml` 的版本和 integrity 只装 `playwright-core`（它没有依赖），测试用 `npm run test:smoke` 运行。这里新 require 一个 npm 包时，要加进脚本的 `SMOKE_PACKAGES`，否则 `tests/smokeDeps.test.cjs` 失败；新包在锁文件里有依赖时脚本报错，要改装法。
 
