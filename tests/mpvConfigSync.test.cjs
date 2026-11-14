@@ -17,8 +17,8 @@ const V1 = {
     'danmaku-history.json': '{"show_danmaku":true}',
 };
 
-function sync(archive, user, platform = 'win32', fileOps) {
-    return synchronizeMpvConfig({ ...archive, mpvConfigDir: user, platform, fileOps });
+function sync(archive, user, platform = 'win32') {
+    return synchronizeMpvConfig({ ...archive, mpvConfigDir: user, platform });
 }
 
 function actionsOf(result) {

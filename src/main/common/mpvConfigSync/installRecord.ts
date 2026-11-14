@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import type { ManifestFileRole } from './manifest';
-import { nodeFileOps, resolveRelative, Staging } from './stagedWrites';
+import { resolveRelative, Staging } from './stagedWrites';
 
 // 安装记录：用户配置目录下的 fntv/installed.json，只在同步全部完成后写。
 // 换目标目录时自然换一份记录（#219 用户故事 27）。
@@ -68,7 +68,7 @@ export function acknowledgeConflicts(mpvConfigDir: string, conflicts: Acknowledg
         ...record.acknowledgedConflicts.filter(entry => !paths.has(entry.path)),
         ...conflicts.map(({ path: file, sha256 }) => ({ path: file, sha256 })),
     ];
-    const staging = new Staging(mpvConfigDir, nodeFileOps);
+    const staging = new Staging(mpvConfigDir);
     try {
         writeInstallRecord(staging, mpvConfigDir, { ...record, acknowledgedConflicts });
     } finally {

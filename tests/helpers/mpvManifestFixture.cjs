@@ -77,20 +77,6 @@ function readRecord(userDir) {
     return JSON.parse(fs.readFileSync(path.join(userDir, 'fntv', 'installed.json'), 'utf8'));
 }
 
-// 第 failAt 次写操作抛错的文件操作；calls 记录总次数，用来枚举每一个失败点。
-function failingFileOps(realOps, failAt) {
-    const counter = { calls: 0 };
-    const ops = {};
-    for (const [name, fn] of Object.entries(realOps)) {
-        ops[name] = (...args) => {
-            counter.calls += 1;
-            if (counter.calls === failAt) throw new Error(`injected failure at write ${failAt} (${name})`);
-            return fn(...args);
-        };
-    }
-    return { ops, counter };
-}
-
 module.exports = {
     sha256,
     writeArchive,
@@ -98,5 +84,4 @@ module.exports = {
     readTree,
     readRecord,
     tempRoot,
-    failingFileOps,
 };

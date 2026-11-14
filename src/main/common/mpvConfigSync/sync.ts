@@ -9,7 +9,7 @@ import {
     writeInstallRecord,
 } from './installRecord';
 import { type FntvManifest, type ManifestFile, type ManifestProblem, readManifest } from './manifest';
-import { cleanupLeftoverStaging, nodeFileOps, PENDING_UPDATE_SUFFIX, resolveRelative, sha256File, Staging, type SyncFileOps } from './stagedWrites';
+import { cleanupLeftoverStaging, PENDING_UPDATE_SUFFIX, removePath, resolveRelative, sha256File, Staging } from './stagedWrites';
 
 // 按清单把便携配置同步到用户配置（规则见 docs/external-runtime.md“用户配置同步”和 spec #219）。
 
@@ -66,8 +66,6 @@ export interface MpvConfigSyncInput {
     manifestPath: string;
     mpvConfigDir: string;
     platform: NodeJS.Platform;
-    /** 只在测试里替换。 */
-    fileOps?: SyncFileOps;
 }
 
 // realpath 消掉 `..`、尾部分隔符、符号链接，Windows 上还统一大小写。不存在的目录不可能是已存在的来源。
@@ -85,10 +83,9 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
     if (isSameDirectory(portableConfigDir, mpvConfigDir)) {
         return { status: 'skipped', reason: 'same-directory', detail: mpvConfigDir };
     }
-    const ops = input.fileOps ?? nodeFileOps;
     // 读清单之前清理：清单缺失或版本不认识时不同步，但上次中途退出时移开的插件目录要放回去。
     try {
-        cleanupLeftoverStaging(mpvConfigDir, ops);
+        cleanupLeftoverStaging(mpvConfigDir);
     } catch (error) {
         return { status: 'failed', error: asError(error), files: [] };
     }
@@ -97,7 +94,7 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
         return { status: 'skipped', reason: read.reason, detail: read.detail };
     }
 
-    const run = new SyncRun(input, read.manifest, ops);
+    const run = new SyncRun(input, read.manifest);
     try {
         return run.execute();
     } catch (error) {
@@ -151,7 +148,6 @@ class SyncRun {
     constructor(
         private readonly input: MpvConfigSyncInput,
         private readonly manifest: FntvManifest,
-        private readonly ops: SyncFileOps,
     ) {
         for (const entry of manifest.obsolete) this.obsoleteHashes.set(entry.path, entry.knownHashes);
     }
@@ -161,9 +157,9 @@ class SyncRun {
     }
 
     execute(): MpvConfigSyncResult {
-        this.ops.mkdir(this.mpvConfigDir);
+        fs.mkdirSync(this.mpvConfigDir, { recursive: true });
         this.record = readInstallRecord(this.mpvConfigDir);
-        this.staging = new Staging(this.mpvConfigDir, this.ops);
+        this.staging = new Staging(this.mpvConfigDir);
 
         const managedDirFiles = new Set<string>();
         for (const dir of this.manifest.managedDirs) {
@@ -315,7 +311,7 @@ class SyncRun {
             if (this.recorded(relative)?.role === 'config') {
                 this.entries.push({ path: relative, action: 'kept', reason: 'config dropped from archive' });
             } else if (this.removable(relative, current)) {
-                this.ops.remove(target);
+                removePath(target);
                 this.entries.push({ path: relative, action: 'removed' });
             } else {
                 this.entries.push({ path: relative, action: 'kept', reason: 'modified, dropped from archive' });

@@ -1,184 +1,88 @@
-// 按清单同步用户配置：中途失败、中途退出（断电）之后下次启动补完，结果和一次跑完相同。
+// 同步中途失败：用真实的文件系统条件让写入失败，失败后插件目录不半新半旧、安装记录不变、不留暂存目录，
+// 条件消失后下次启动补完，结果和一次跑完相同。中途退出（断电）见 mpvConfigSyncResume.test.cjs。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { synchronizeMpvConfig } = require('../dest/main/common/mpvConfigSync/sync.js');
-const { nodeFileOps } = require('../dest/main/common/mpvConfigSync/stagedWrites.js');
-const { writeArchive, writeTree, readTree, tempRoot, failingFileOps } = require('./helpers/mpvManifestFixture.cjs');
+const { readTree, tempRoot } = require('./helpers/mpvManifestFixture.cjs');
+const {
+    MANAGED_DIRS, RECORD, prepare, syncV2, referenceRun, subtree, assertWholeManagedDirs, hasStaging,
+} = require('./helpers/mpvUpgradeScenario.cjs');
 
-const V1 = {
-    'mpv.conf': 'include="~~/fntv/defaults.conf"\n',
-    'fntv/defaults.conf': 'volume=100\n',
-    'input.conf': 'SPACE cycle pause\n',
-    'script-opts/uosc.conf': 'controls=default\n',
-    'scripts/uosc/main.lua': 'uosc 5.0',
-    'scripts/uosc/lib/a.lua': 'uosc a 5.0',
-    'scripts/uosc_danmaku/main.lua': 'VERSION = "2.0.0"',
-    'scripts/uosc_danmaku/api.lua': 'api 2.0.0',
-    'scripts/legacy.lua': 'legacy',
-    'danmaku-history.json': '{}',
-};
-const { 'scripts/legacy.lua': _legacy, ...V1_WITHOUT_LEGACY } = V1;
-const V2 = {
-    ...V1_WITHOUT_LEGACY,
-    'fntv/defaults.conf': 'volume=110\n',
-    'input.conf': 'SPACE cycle pause\nENTER cycle fullscreen\n',
-    'script-opts/uosc.conf': 'controls=v2\n',
-    'scripts/uosc/main.lua': 'uosc 5.1',
-    'scripts/uosc/lib/a.lua': 'uosc a 5.1',
-    'scripts/uosc_danmaku/main.lua': 'VERSION = "2.1.0"',
-    'scripts/uosc_danmaku/api.lua': 'api 2.1.0',
-    'scripts/smart_skip/main.lua': 'smart_skip 1',
-};
-const MANAGED_DIRS = ['scripts/uosc', 'scripts/uosc_danmaku', 'scripts/smart_skip'];
+const isWindows = process.platform === 'win32';
+// POSIX 上 root 不受目录权限限制，只读目录拦不住写入。
+const posixRoot = !isWindows && process.getuid() === 0;
 
-// 已有用户：v1 装过（有记录），改了 input.conf，在弹幕插件目录放了自己的文件，现在升级到 v2。
-// 每个场景一个独立目录，归档名相同，安装记录才能和参照逐字节比较。场景从同一份模板复制，省掉每次装 v1。
-function prepare(root, name) {
-    const template = path.join(root, 'template');
-    if (!fs.existsSync(template)) {
-        const v1 = writeArchive(template, 'v1', { files: V1 });
-        const user = path.join(template, 'user');
-        synchronizeMpvConfig({ ...v1, mpvConfigDir: user, platform: 'win32' });
-        writeTree(user, {
-            'input.conf': 'mine\n',
-            'scripts/uosc_danmaku/danmaku/cache.xml': '<cached/>',
-            'script-opts/smart_skip.conf': 'learned=1\n',
-            'danmaku-history.json': '{"history":{"a":1}}',
-        });
-        writeArchive(template, 'v2', { files: V2 });
+// Windows：目录里有打开的文件时不能 rename 这个目录，在弹幕插件目录打开一个文件（uosc 已换完才轮到它）。
+// POSIX：打开的文件不影响 rename，把 scripts 设为只读，第一个插件目录就移不开。
+function blockPluginDirectoryMove(user) {
+    if (isWindows) {
+        const fd = fs.openSync(path.join(user, 'scripts', 'uosc_danmaku', 'api.lua'), 'r');
+        return () => fs.closeSync(fd);
     }
-    const dir = path.join(root, name);
-    fs.cpSync(template, dir, { recursive: true });
-    const v2 = {
-        portableConfigDir: path.join(dir, 'v2', 'portable_config'),
-        manifestPath: path.join(dir, 'v2', 'fntv-manifest.json'),
-    };
-    return { user: path.join(dir, 'user'), v2 };
+    const scripts = path.join(user, 'scripts');
+    fs.chmodSync(scripts, 0o555);
+    return () => fs.chmodSync(scripts, 0o755);
 }
 
-function syncV2(v2, user, fileOps) {
-    return synchronizeMpvConfig({ ...v2, mpvConfigDir: user, platform: 'win32', fileOps });
+// Windows：rename 不能覆盖只读文件。POSIX：只读文件可以被 rename 覆盖，把所在目录设为只读。
+function blockConfigReplace(user) {
+    const target = isWindows ? path.join(user, 'script-opts', 'uosc.conf') : path.join(user, 'script-opts');
+    fs.chmodSync(target, isWindows ? 0o444 : 0o555);
+    return () => fs.chmodSync(target, isWindows ? 0o644 : 0o755);
 }
 
-function subtree(tree, dir) {
-    return Object.fromEntries(Object.entries(tree).filter(([file]) => file.startsWith(`${dir}/`)));
+function assertFailedCleanly(failed, user, reference) {
+    assert.equal(failed.status, 'failed');
+    const tree = readTree(user);
+    assertWholeManagedDirs(tree, reference, 'after failure');
+    assert.equal(tree[RECORD], reference.before[RECORD], 'install record rewritten by a failed sync');
+    assert.equal(tree['input.conf'], 'mine\n');
+    assert.equal(tree['scripts/uosc_danmaku/danmaku/cache.xml'], '<cached/>');
+    assert.equal(hasStaging(user), false);
+    return tree;
 }
 
-function referenceRun(root) {
-    const { user, v2 } = prepare(root, 'reference');
-    const before = readTree(user);
-    const { ops, counter } = failingFileOps(nodeFileOps, 0);
-    const result = syncV2(v2, user, ops);
-    assert.equal(result.status, 'synced');
-    return { before, after: readTree(user), conflicts: result.conflicts, writes: counter.calls };
+function assertRetryFinishes(v2, user, reference) {
+    const retried = syncV2(v2, user);
+    assert.equal(retried.status, 'synced');
+    assert.deepEqual(retried.conflicts, reference.conflicts);
+    assert.deepEqual(readTree(user), reference.after);
 }
 
-// 托管目录要么整体是旧版，要么整体是新版，不会半新半旧。
-function assertWholeManagedDirs(tree, reference, label) {
-    for (const dir of MANAGED_DIRS) {
-        const actual = subtree(tree, dir);
-        const candidates = [subtree(reference.before, dir), subtree(reference.after, dir)];
-        assert.ok(candidates.some(candidate => isDeepEqual(actual, candidate)),
-            `${label}: ${dir} is half old, half new: ${JSON.stringify(actual)}`);
-    }
-}
-
-function isDeepEqual(a, b) {
+test('a plugin directory that cannot be moved aside fails the sync without breaking any plugin directory', { skip: posixRoot && 'root ignores directory permissions' }, (t) => {
+    const root = tempRoot(t, 'fail-dir');
+    const reference = referenceRun(root);
+    const { user, v2 } = prepare(root, 'fail-dir');
+    const release = blockPluginDirectoryMove(user);
+    let failed;
     try {
-        assert.deepEqual(a, b);
-        return true;
-    } catch {
-        return false;
+        failed = syncV2(v2, user);
+    } finally {
+        release();
     }
-}
 
-test('a sync that fails at any write leaves whole plugin directories and the next start finishes the job', (t) => {
-    const root = tempRoot(t, 'fail');
-    const reference = referenceRun(root);
-    assert.ok(reference.writes > 10, `expected many writes, got ${reference.writes}`);
-
-    for (let failAt = 1; failAt <= reference.writes; failAt += 1) {
-        const { user, v2 } = prepare(root, `fail-${failAt}`);
-        const { ops } = failingFileOps(nodeFileOps, failAt);
-
-        const failed = syncV2(v2, user, ops);
-
-        // 最后一次写操作是删掉本次的暂存目录：同步已完成，残留的暂存目录由下次启动清理。
-        if (failAt === reference.writes) {
-            assert.equal(failed.status, 'synced', `write ${failAt}`);
-            assert.ok(fs.readdirSync(user).some(name => name.startsWith('.fntv-sync-')));
-            assert.equal(syncV2(v2, user).status, 'synced');
-            assert.deepEqual(readTree(user), reference.after);
-            continue;
-        }
-        assert.equal(failed.status, 'failed', `write ${failAt}`);
-        assert.match(failed.error.message, /injected failure/);
-        const afterFailure = readTree(user);
-        assertWholeManagedDirs(afterFailure, reference, `after failure at write ${failAt}`);
-        assert.equal(afterFailure['fntv/installed.json'], reference.before['fntv/installed.json'], `record rewritten at write ${failAt}`);
-        assert.equal(afterFailure['input.conf'], 'mine\n');
-
-        const retried = syncV2(v2, user);
-
-        assert.equal(retried.status, 'synced', `retry after write ${failAt}`);
-        assert.deepEqual(retried.conflicts, reference.conflicts, `conflicts after write ${failAt}`);
-        assert.deepEqual(readTree(user), reference.after, `tree after retrying write ${failAt}`);
-    }
+    assertFailedCleanly(failed, user, reference);
+    assertRetryFinishes(v2, user, reference);
 });
 
-// 第 killAt 次写入之前把磁盘状态原样复制一份，就是进程在这一刻被杀掉时留下的样子。返回复制出的用户配置。
-function killedAt(root, killAt) {
-    const { user, v2 } = prepare(root, `kill-${killAt}`);
-    const frozen = path.join(root, `frozen-${killAt}`);
-    const freezing = Object.fromEntries(Object.entries(nodeFileOps).map(([name, fn]) => [name, (...args) => {
-        freezing.calls = (freezing.calls ?? 0) + 1;
-        if (freezing.calls === killAt) {
-            fs.cpSync(user, frozen, { recursive: true });
-            throw new Error('killed');
-        }
-        return fn(...args);
-    }]));
-    syncV2(v2, user, freezing);
-    return { frozen, v2 };
-}
-
-test('a sync killed at any write (power cut) is completed by the next start', (t) => {
-    const root = tempRoot(t, 'kill');
+test('a config file that cannot be replaced fails the sync after the plugin directories were replaced', { skip: posixRoot && 'root ignores directory permissions' }, (t) => {
+    const root = tempRoot(t, 'fail-config');
     const reference = referenceRun(root);
-
-    for (let killAt = 1; killAt <= reference.writes; killAt += 1) {
-        const { frozen, v2 } = killedAt(root, killAt);
-
-        const resumed = syncV2(v2, frozen);
-
-        assert.equal(resumed.status, 'synced', `resume after kill at write ${killAt}`);
-        assert.deepEqual(resumed.conflicts, reference.conflicts, `conflicts after kill at write ${killAt}`);
-        assert.deepEqual(readTree(frozen), reference.after, `tree after kill at write ${killAt}`);
+    const { user, v2 } = prepare(root, 'fail-config');
+    const release = blockConfigReplace(user);
+    let failed;
+    try {
+        failed = syncV2(v2, user);
+    } finally {
+        release();
     }
-});
 
-test('a start without a usable manifest still puts back plugin directories a killed sync left moved away', (t) => {
-    const root = tempRoot(t, 'kill-no-manifest');
-    const reference = referenceRun(root);
-
-    for (let killAt = 1; killAt <= reference.writes; killAt += 1) {
-        const { frozen, v2 } = killedAt(root, killAt);
-        fs.rmSync(v2.manifestPath);
-
-        const skipped = syncV2(v2, frozen);
-
-        assert.equal(skipped.reason, 'manifest-missing', `kill at write ${killAt}`);
-        const tree = readTree(frozen);
-        for (const dir of MANAGED_DIRS) {
-            const actual = subtree(tree, dir);
-            const expected = [subtree(reference.before, dir), subtree(reference.after, dir)];
-            assert.ok(expected.some(candidate => isDeepEqual(actual, candidate)),
-                `kill at write ${killAt}: ${dir} is ${JSON.stringify(actual)}`);
-        }
-        assert.equal(fs.readdirSync(frozen).some(name => name.startsWith('.fntv-sync-')), false, `staging left after kill at write ${killAt}`);
-    }
+    const tree = assertFailedCleanly(failed, user, reference);
+    // 托管目录先于单个文件同步：失败时它们已整体是新版，下次启动不再动。
+    for (const dir of MANAGED_DIRS) assert.deepEqual(subtree(tree, dir), subtree(reference.after, dir), dir);
+    assert.equal(tree['script-opts/uosc.conf'], reference.before['script-opts/uosc.conf']);
+    assertRetryFinishes(v2, user, reference);
 });
 
 test('a portable config that does not match its manifest fails without touching the plugin directory', (t) => {
@@ -192,5 +96,5 @@ test('a portable config that does not match its manifest fails without touching 
     assert.equal(result.status, 'failed');
     assert.match(result.error.message, /Hash mismatch/);
     assert.deepEqual(subtree(readTree(user), 'scripts/uosc_danmaku'), subtree(before, 'scripts/uosc_danmaku'));
-    assert.equal(fs.readdirSync(user).some(name => name.startsWith('.fntv-sync-')), false);
+    assert.equal(hasStaging(user), false);
 });
