@@ -60,7 +60,7 @@ export function beginPlayback(): PlaybackSession {
     return {
         start(player: StoppablePlayer, play: () => Promise<boolean>): Promise<boolean> {
             if (state.stopRequested || state.hasEnded) {
-                log.info('启动播放期间已请求停止，不再开始播放');
+                log.info(`启动播放期间已请求停止或播放已结束，不再开始播放（stopRequested=${state.stopRequested}，hasEnded=${state.hasEnded}）`);
                 return Promise.resolve(false);
             }
             state.player = player;
