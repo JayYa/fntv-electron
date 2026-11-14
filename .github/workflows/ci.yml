@@ -71,6 +71,37 @@ jobs:
             pnpm run check --no-file-size
           fi
 
+      # 未打包启动检查：pnpm run check 已编译到 dest/，用 node_modules 里的 Electron 启动仓库，跑安装包冒烟测试的
+      # 同一套断言（scripts/smoke-unpackaged.cjs）。smoke-test.yml 的路径过滤不含 src/**，只改源码的 PR 靠这一步
+      # 发现启动不了。Linux 没有显示器，用 xvfb；没有中文字体时截图里的中文是方框。Windows、macOS 的 runner 有图形会话。
+      - name: Install Linux display and CJK fonts
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb fonts-noto-cjk
+
+      - name: Launch unpackaged app
+        shell: bash
+        timeout-minutes: 4
+        env:
+          FNTV_SMOKE_ARTIFACTS: smoke-artifacts/unpackaged
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a --server-args="-screen 0 1920x1080x24" node scripts/smoke-unpackaged.cjs
+          else
+            node scripts/smoke-unpackaged.cjs
+          fi
+
+      # 截图、主进程输出（main-process.log）、app.log（logs/）和 proxy.log，只在失败时上传。
+      - name: Upload unpackaged launch artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unpackaged-${{ runner.os }}
+          path: smoke-artifacts/unpackaged
+          if-no-files-found: warn
+          retention-days: 14
+
   # 分支保护只要求这一个 job，以后调整矩阵、增减 job 不用改 ruleset。needs 列出所有必需的 job，
   # 任何一个失败或取消就失败。always() 让它在前面失败时也运行，否则会被跳过，跳过在分支保护里算通过。
   check:

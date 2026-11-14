@@ -1,12 +1,16 @@
 'use strict';
 
-// 安装包冒烟测试：按用户的方式装好或打开安装包，用 Playwright 启动客户端，只观察窗口、
-// 页面、进程和日志，不引入任何源码。运行方式见同目录的 README.md。
+// 冒烟测试：用 Playwright 启动客户端，只观察窗口、页面、进程和日志，不引入任何源码。运行方式见同目录的 README.md。
+// 两种模式共用这一套断言：
+// - 安装包：按用户的方式装好或打开安装包再启动，发版门禁（build-and-smoke.yml）。
+// - 未打包：设 FNTV_SMOKE_APP_DIR 时用 Electron 可执行文件启动编译好的应用目录（electron <目录>），
+//   ci.yml 三平台在 pnpm run check 之后跑（scripts/smoke-unpackaged.cjs）。只对安装包成立的断言跳过，原因写在各条里。
 //
 // 环境变量：
 //   FNTV_SMOKE_TARGET        目标平台，如 linux-x64，默认取当前机器（targets.cjs）
 //   FNTV_SMOKE_INSTALLER_DIR 安装包所在目录，默认 release/
-//   FNTV_SMOKE_EXECUTABLE    跳过安装，直接启动这个可执行文件（本地调试用）
+//   FNTV_SMOKE_EXECUTABLE    跳过安装，直接启动这个可执行文件；未打包模式下是 node_modules 里的 Electron
+//   FNTV_SMOKE_APP_DIR       未打包模式：传给可执行文件的应用目录（package.json 的 main 指向 dest/main/main.js）
 //   FNTV_SMOKE_ARTIFACTS     截图和日志的输出目录，默认 smoke-artifacts/<目标>
 //   FNTV_SMOKE_ALLOW_INSTALL 设为 1 时，本机已装同一 appId 的客户端也照样安装（targets.cjs）
 
@@ -18,12 +22,18 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
-const { resolveTarget, findInstaller } = require('./targets.cjs');
+const { resolveTarget } = require('./targets.cjs');
+const { resolveLaunch } = require('./launch.cjs');
 
 const root = path.resolve(__dirname, '..', '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const target = resolveTarget(process.env.FNTV_SMOKE_TARGET || `${process.platform}-${process.arch}`);
+const appDir = process.env.FNTV_SMOKE_APP_DIR ? path.resolve(process.env.FNTV_SMOKE_APP_DIR) : null;
+// 未打包时不检查 Electron 默认 userData 下的日志（见那条断言），Windows 也用 --user-data-dir 隔离到临时目录，
+// 不碰 CI 机器的真实用户目录：不把 CI 传给 targets.cjs 的 windowsIsolation。
+const target = resolveTarget(process.env.FNTV_SMOKE_TARGET || `${process.platform}-${process.arch}`, appDir ? {} : process.env);
 const artifactsDir = path.resolve(process.env.FNTV_SMOKE_ARTIFACTS || path.join(root, 'smoke-artifacts', target.id));
+// 只对安装包成立的断言在未打包模式下跳过时的说明。
+const PACKAGED_ONLY = '只对安装包成立';
 
 // Electron 在主进程未捕获异常时打到 stderr 的文字，以及 Node 未处理 Promise 拒绝的警告。
 const UNCAUGHT_PATTERN = /Uncaught Exception|A JavaScript error occurred in the main process|UnhandledPromiseRejection/;
@@ -89,10 +99,12 @@ function requestPlayVideo(port) {
     });
 }
 
-describe(`installer smoke test (${target.id})`, () => {
+describe(`${appDir ? 'unpackaged' : 'installer'} smoke test (${target.id})`, () => {
     let home;
     let isolation;
     let installation;
+    // 客户端写 app.log 的目录：安装包是 ~/.fntv/logs，未打包是 <应用目录>/log。
+    let logDir;
     let app;
     let child;
     let page;
@@ -112,9 +124,8 @@ describe(`installer smoke test (${target.id})`, () => {
             const existing = [isolation.userDataDir, isolation.electronUserDataDir].filter(dir => fs.existsSync(dir));
             assert.deepEqual(existing, [], fail('启动前检查', `这些目录应当不存在：${existing.join(', ')}`));
         }
-        installation = process.env.FNTV_SMOKE_EXECUTABLE
-            ? { executablePath: path.resolve(process.env.FNTV_SMOKE_EXECUTABLE), uninstall() {} }
-            : target.install(findInstaller(target, path.resolve(process.env.FNTV_SMOKE_INSTALLER_DIR || path.join(root, 'release'))));
+        installation = resolveLaunch({ target, appDir, root });
+        logDir = installation.logDir || isolation.logDir;
 
         const outputFile = fs.createWriteStream(path.join(artifactsDir, 'main-process.log'));
         try {
@@ -122,13 +133,13 @@ describe(`installer smoke test (${target.id})`, () => {
                 executablePath: installation.executablePath,
                 // 工作目录放在临时目录，像从桌面图标启动一样，不依赖仓库目录。
                 cwd: home,
-                env: { ...process.env, ...target.environment(home) },
-                args: isolation.args,
+                env: { ...process.env, ...target.environment(home), ...installation.env },
+                args: [...isolation.args, ...(installation.args || [])],
                 timeout: 60000,
             });
         } catch (error) {
             throw new Error(fail('启动客户端', `${error.message}
-主进程可能停在错误弹窗上，原因看 logs/app.log`));
+主进程可能停在错误弹窗上，原因看 ${path.join(logDir, 'app.log')}`));
         }
         launchedAt = Date.now();
         child = app.process();
@@ -167,8 +178,8 @@ ${mainOutput.slice(-4000)}`));
             await Promise.race([app.close(), delay(15000)]).catch(() => {});
             killProcessTree(child);
         }
-        if (isolation) {
-            const logsDir = isolation.logDir;
+        if (logDir) {
+            const logsDir = logDir;
             if (fs.existsSync(logsDir)) {
                 fs.cpSync(logsDir, path.join(artifactsDir, 'logs'), { recursive: true });
                 const appLog = path.join(logsDir, 'app.log');
@@ -198,6 +209,10 @@ ${mainOutput.slice(-4000)}`));
     });
 
     it('runs the client natively as a process of the target architecture', async t => {
+        if (appDir) {
+            t.skip(`${PACKAGED_ONLY}：未打包时启动的是 node_modules 里宿主架构的 Electron，和安装包的目标架构无关`);
+            return;
+        }
         // 目标 id 的后半段是架构（targets.cjs）。
         const expected = target.id.split('-').pop();
         const actual = await app.evaluate(() => process.arch);
@@ -229,7 +244,7 @@ ${mainOutput.slice(-4000)}`));
     });
 
     it('starts a Proxy that answers HTTP', async t => {
-        const appLog = path.join(isolation.logDir, 'app.log');
+        const appLog = path.join(logDir, 'app.log');
         const result = await poll(async () => {
             const port = readProxyPort(appLog);
             if (!port) return { done: false, detail: 'app.log 里还没有“Proxy 已就绪，端口 N”' };
@@ -241,7 +256,11 @@ ${mainOutput.slice(-4000)}`));
         t.diagnostic(`proxy port=${proxyPort}`);
     });
 
-    it('writes app.log under ~/.fntv/logs', async () => {
+    it('writes app.log under ~/.fntv/logs', async t => {
+        if (appDir) {
+            t.skip(`${PACKAGED_ONLY}：未打包时日志器写到 <应用目录>/log（src/modules/logger/logger.ts），不进 ~/.fntv`);
+            return;
+        }
         const appLog = path.join(isolation.logDir, 'app.log');
         const result = await poll(async () => ({ done: fs.existsSync(appLog) }), 10000);
         assert.ok(result.done, fail('日志位置检查', `10 秒内 ${appLog} 没有出现`));
@@ -250,6 +269,10 @@ ${mainOutput.slice(-4000)}`));
     it('leaves no logs directory under the Electron default userData', t => {
         // 日志器曾在 config.ts 改 userData 之前取目录，日志落在 Electron 默认的 userData 下（#87）。
         // 本地 Windows 带 --user-data-dir，两个目录重合，这条在 CI 上检查（targets.cjs 的 windowsIsolation）。
+        if (appDir) {
+            t.skip(`${PACKAGED_ONLY}：未打包时日志不在 userData 下，查不出日志器取目录过早（#87）`);
+            return;
+        }
         if (!isolation.electronUserDataDir) {
             t.skip('Electron 默认 userData 和 ~/.fntv 是同一个目录，这里分不出来，在 CI 上检查');
             return;
@@ -261,7 +284,7 @@ ${mainOutput.slice(-4000)}`));
     it('loads the main window icon from the packaged file', async () => {
         // 主进程创建主窗口前把图标路径写进 app.log（src/main/common/mainwin.ts）。Linux 和 macOS 上
         // nativeImage 读不了 ICO，曾经一直用 icon.ico，窗口没有图标（#74）。
-        const appLog = path.join(isolation.logDir, 'app.log');
+        const appLog = path.join(logDir, 'app.log');
         const result = await poll(async () => {
             const text = fs.existsSync(appLog) ? fs.readFileSync(appLog, 'utf8') : '';
             const match = /主窗口图标: (.+?)\r?$/m.exec(text);
