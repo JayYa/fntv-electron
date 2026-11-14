@@ -79,7 +79,7 @@ jobs:
           ref: ${{ inputs.ref }}
 
       # 不装 pnpm，也不用 setup-node 的依赖缓存：下面只装 playwright-core 一个包，几 MB，直接下载比恢复缓存快，
-      # 而按架构分的 pnpm 缓存 cache-warm.yml 填不全（darwin-x64 在 macos-26-intel 上会存一份 main 上没有的）。
+      # 而按架构分的 pnpm 缓存 main 上填不全（darwin-x64 在 macos-26-intel 上会存一份 main 上没有的）。
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
