@@ -7,7 +7,7 @@
 应用内更新从最新正式 Release 下载 `latest.yml`（Windows）、`latest-linux.yml`（Linux x64）和 `latest-linux-arm64.yml`（Linux arm64），按里面的文件名和 sha512 下载、校验安装包。Release 转为正式时缺其中一个，那个平台的客户端就查不到更新或更新失败，所以 `publish` 在 5 个安装包之外再核对这 3 个文件，缺一个就不发布。
 
 - 元数据由 electron-builder 按 `package.json` 的 `build.publish`（generic，地址是本仓库的 `releases/latest/download/`）生成；构建用 `--publish never`，只生成不上传。
-- 元数据和安装包在同一次构建里生成，一起放进 `<platform>-build` artifact，发布的就是这一份，sha512 和冒烟测试过的安装包对得上。不要在 `publish` 里重新生成元数据，也不要另外构建。
+- `build.yml` 打包之后、上传 artifact 之前运行 `scripts/check-update-metadata.cjs`，核对 `latest.yml`（Windows）、`latest-linux.yml` 和 `latest-linux-arm64.yml`（Linux）里的文件名、size 和 sha512 与安装包一致，不一致就让构建失败。核对过的元数据和安装包一起放进 `<platform>-build` artifact，冒烟测试和发布用的都是这一份。不要在 `publish` 里重新生成或重新核对元数据，也不要另外构建。
 - Linux x64 和 arm64 分两次构建写到同一个 `release` 目录，文件名不同，互不覆盖。
 - macOS 的包没有 Developer ID 签名，不做应用内更新，继续手动更新，`latest-mac.yml` 不核对，上不上传都不影响门禁。
 
