@@ -32,7 +32,7 @@
 - 升级归档：先在 `JayYa/fntv-mpv-config` 发布新 Release。`update-mpv-archive.yml` 每天查一次它的最新正式 Release，tag 比 `mpv-archive.json` 固定的新时开 PR（分支 `automation/mpv-archive`，标题 `fix(deps): 附带的 MPV 和插件更新到 <tag>`）；不想等就在 Actions 里手动触发它，可填 tag 换成指定的 Release（也用于回滚）。这个 PR 由 `GITHUB_TOKEN` 开，检查显示 action_required，维护者在 PR 上点 “Approve workflows to run” 后 CI 和 Smoke Test 才跑。
 - 改哪几处只由 `scripts/update-mpv-archive.cjs` 决定，手工升级也运行它：`node scripts/update-mpv-archive.cjs`（最新 Release，比固定的新才改）或 `node scripts/update-mpv-archive.cjs --tag <tag>`，设了 `GH_TOKEN` 时带上它调 API。它从 Release API 取资产名（不按 tag 推算）和资产的 sha256 digest，不下载归档，改 `mpv-archive.json` 里的 tag、资产名和 sha256，`README.md` 准备步骤里的 tag 和资产名，以及本页上面那条 tag。Release 必须恰好有一个 `.zip` 资产且有 digest，否则报错、什么都不改。三处不一致时 `tests/mpvArchiveCache.test.cjs` 失败，脚本和 workflow 由 `tests/mpvArchiveUpdate.test.cjs` 检查。
 - 归档根目录带清单 `fntv-manifest.json`（从 `fntv-mpv-v20261114_235035` 起）。`build.yml` 在编译之后、打包之前运行 `Check MPV archive manifest`（`scripts/check-mpv-manifest.cjs`）：清单读不出、`formatVersion` 不在 `SUPPORTED_MANIFEST_FORMAT_VERSIONS` 里、`archiveVersion` 不是 `mpv-archive.json` 固定的 tag，或 `provides` 不满足 `MPV_REQUIRED_CAPABILITIES` 时构建失败。它复用编译后的 `readManifest` 和 `unmetCapabilities`。`pnpm run check` 不下载归档，只用临时夹具测这个脚本（`tests/mpvArchiveManifest.test.cjs`）；对真实归档的检查在构建里，升级归档的 PR 改了 `mpv-archive.json`，会触发 Smoke Test 构建。
-- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe` 和清单。macOS 和 Linux 只打包 `portable_config` 和清单 `fntv-manifest.json`（`package.json` 的 `extraFiles`，两处），清单仍在便携配置的上一级，`resolveManifestPath` 找得到。三个平台都带清单由 `tests/mpvArchiveManifest.test.cjs` 检查，安装包冒烟测试检查启动日志里有“MPV 配置已按清单 <tag> 同步”。
+- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe` 和清单。macOS 和 Linux 只打包 `portable_config` 和清单 `fntv-manifest.json`（`package.json` 的 `extraFiles`，两处），清单仍在便携配置的上一级，`resolveManifestPath` 找得到。三个平台都带清单由 `tests/standards.test.cjs` 检查，安装包冒烟测试检查启动日志里有“MPV 配置已按清单 <tag> 同步”。
 
 ## 用户配置同步
 
@@ -146,7 +146,7 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 用户配置同步：删除归档删掉的文件、托管目录保留用户文件、整体跳过、macOS/Linux 的 `mpv.conf` 例外 | `tests/mpvConfigSyncRules.test.cjs` |
 | 用户配置同步：任一次写入失败或被杀后下次启动补完、便携配置和清单不符 | `tests/mpvConfigSyncFailure.test.cjs` |
 | 便携配置和清单的位置、附带 MPV 同目录、同步日志 | `tests/mpvConfigMigration.test.cjs` |
-| 构建期清单断言、三个平台的包都带清单 | `tests/mpvArchiveManifest.test.cjs` |
+| 构建期清单断言、三个平台的包都带清单 | `tests/mpvArchiveManifest.test.cjs`、`tests/standards.test.cjs` |
 | 用户配置目录、运行哪个 MPV | `tests/platform.test.cjs` |
 | 托盘显示 mpv 路径、打开用户配置目录 | `tests/trayMpvMenu.test.cjs` |
 | 默认播放方式 | `tests/playbackPreference.test.cjs` |
