@@ -1,5 +1,24 @@
 # 更新日志
 
+## [3.3.0](https://github.com/JayYa/fntv-electron/compare/v3.2.0...v3.3.0) (2026-11-14)
+
+
+### 新功能
+
+* **ci:** 合并到 main 后也跑一遍 lint、knip 和三平台测试 ([#211](https://github.com/JayYa/fntv-electron/issues/211)) ([c930d8c](https://github.com/JayYa/fntv-electron/commit/c930d8c75a41d616d1b89372f198af210e117dca))
+* **ci:** 打包后核对更新元数据的文件名、size 和 sha512，不一致让构建失败 ([#208](https://github.com/JayYa/fntv-electron/issues/208)) ([8023a34](https://github.com/JayYa/fntv-electron/commit/8023a3419c62f755a9f1cab909224d0ddcf8dab8))
+* **ci:** 文件大小检查加 80% 预警，并在 PR 的 CI 里检查改动的文件 ([#204](https://github.com/JayYa/fntv-electron/issues/204)) ([fe7ee76](https://github.com/JayYa/fntv-electron/commit/fe7ee76a5374e7659fb2deb4486c057bb5823f99))
+* **updater:** 下载加速默认中转地址改为 gh-proxy.com，旧默认值读配置时迁移 ([#206](https://github.com/JayYa/fntv-electron/issues/206)) ([24e3ba3](https://github.com/JayYa/fntv-electron/commit/24e3ba3d5fbc096138d8d5704cb1753cc4638f2f))
+
+
+### 问题修复
+
+* **deps:** update all non-major dependencies ([#199](https://github.com/JayYa/fntv-electron/issues/199)) ([8904c9e](https://github.com/JayYa/fntv-electron/commit/8904c9ec543a2b592f2a3fe794e352799e3373ea))
+* **tray:** 退出时安装期间托盘图标不再被提前销毁 ([#187](https://github.com/JayYa/fntv-electron/issues/187)) ([a7e3a69](https://github.com/JayYa/fntv-electron/commit/a7e3a6935fa9342744ee56fdacb23399dce5d342))
+* **updater:** 安装前等进度回传最多 5 秒，回传不返回时照常安装 ([#202](https://github.com/JayYa/fntv-electron/issues/202)) ([f9e8ff7](https://github.com/JayYa/fntv-electron/commit/f9e8ff7bc00ee6c5af54c1a3313fa1dfdc41645a))
+* **updater:** 系统关机、重启或注销时放弃「退出时安装」，下次检查到更新时再装 ([#210](https://github.com/JayYa/fntv-electron/issues/210)) ([ba513d4](https://github.com/JayYa/fntv-electron/commit/ba513d4d11dc5d7b7c66ba686fce67c461d119ea))
+* 退出客户端时先等这次播放的进度回传完成（最多 5 秒），再关闭播放服务 ([#209](https://github.com/JayYa/fntv-electron/issues/209)) ([a9cd25e](https://github.com/JayYa/fntv-electron/commit/a9cd25e20841e82c7724d04f807eed58308a1c10))
+
 ## [3.2.0](https://github.com/JayYa/fntv-electron/compare/v3.1.0...v3.2.0) (2026-11-12)
 
 
