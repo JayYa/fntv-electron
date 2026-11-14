@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
+import { getCurrentMpvPlayer, getMpvConfigDir, mpvCapabilityTrayItems } from '../handlers/plugins/mpvConfig';
 import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } from './mpvConfigSync/pendingUpdates';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
@@ -151,6 +151,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             click: () => (mpvConfigDir ? openMpvConfigDir(mainWindow, mpvConfigDir) : undefined),
         },
         ...pendingMpvUpdatesItems(mainWindow, mpvConfigDir),
+        ...mpvCapabilityTrayItems(),
     ];
 
     return submenu;

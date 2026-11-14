@@ -4,6 +4,11 @@ import * as os from 'os';
 import * as fnConfig from '../../../modules/fn_config/config';
 import * as logger from '../../../modules/logger';
 import { resolveBundledMpvPath, resolvePortableConfigDir } from '../../common/mpvConfigHelpers';
+import {
+    checkMpvCapabilities,
+    type MpvCapabilityCheckInput,
+    mpvCapabilityErrorMessage,
+} from '../../common/mpvConfigSync/capabilities';
 import { acknowledgeConflicts } from '../../common/mpvConfigSync/installRecord';
 import { mpvConfigSyncLogLines } from '../../common/mpvConfigSync/log';
 import { type MergePrompt, mergePrompt, mergePromptText } from '../../common/mpvConfigSync/mergePrompt';
@@ -47,14 +52,31 @@ function getPortableConfigDir(): string {
     });
 }
 
+// 启动时的能力检查结果；检查本身出错时也当作不满足。只在启动时算一次，托盘每次重建菜单都读它。
+let capabilitiesSatisfied = true;
+
+// 不满足时托盘“设置”子菜单里的一条状态，满足时没有。原因写在日志里。
+export function mpvCapabilityTrayItems(): Electron.MenuItemConstructorOptions[] {
+    if (capabilitiesSatisfied) return [];
+    return [{ label: 'MPV 插件需要更新，片头片尾跳过等功能可能不可用（详见日志）', enabled: false }];
+}
+
+// 用安装记录（或便携配置的清单）里的 provides 对照客户端的 requires，不满足只记 ERROR，不阻塞启动。
+function checkCapabilities(input: MpvCapabilityCheckInput): void {
+    const status = checkMpvCapabilities(input);
+    capabilitiesSatisfied = status.satisfied;
+    if (!status.satisfied) logger.error(mpvCapabilityErrorMessage(status, input.mpvConfigDir));
+}
+
 // 按归档清单同步用户配置。失败只记日志，不阻塞启动，下次启动重试。
 function initializeMpvConfig(): void {
     try {
         const mpvConfigDir = getMpvConfigDir(fnConfig.getMpvPlayerPath());
         const portableConfigDir = getPortableConfigDir();
+        const manifestPath = resolveManifestPath(portableConfigDir);
         const result = synchronizeMpvConfig({
             portableConfigDir,
-            manifestPath: resolveManifestPath(portableConfigDir),
+            manifestPath,
             mpvConfigDir,
             platform: currentPlatform(),
         });
@@ -62,9 +84,11 @@ function initializeMpvConfig(): void {
             if (line.error) logger[line.level](line.message, line.error);
             else logger[line.level](line.message);
         }
+        checkCapabilities({ syncResult: result, mpvConfigDir, manifestPath });
         const prompt = mergePrompt(result);
         if (prompt.show) showMergePrompt(prompt, mpvConfigDir);
     } catch (error) {
+        capabilitiesSatisfied = false;
         logger.error('初始化MPV配置失败:', error);
     }
 }
