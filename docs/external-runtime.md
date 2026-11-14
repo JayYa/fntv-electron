@@ -1,6 +1,6 @@
 # 外部运行时归属
 
-改打包的 MPV、MPV 插件、用户 MPV 配置同步、默认播放方式或 Proxy 生命周期时读这份文档。决策原因见 [ADR-0001](adr/0001-mpv-bundle-and-runtime-ownership.md) 和 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
+改打包的 MPV、MPV 插件、用户 MPV 配置同步、默认播放方式或 Proxy 生命周期时读这份文档。MPV 归档和用户配置同步之间的约定见 [MPV 归档契约](mpv-archive-contract.md)。决策原因见 [ADR-0001](adr/0001-mpv-bundle-and-runtime-ownership.md)、[ADR-0005](adr/0005-mpv-archive-manifest-sync.md) 和 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
 
 ## 术语
 
@@ -34,7 +34,9 @@
 
 ## 用户配置同步
 
-入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步，规则来自 #219。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvConfig.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
+同步规则、清单格式、归档里客户端依赖的路径和改归档时的检查项见 [MPV 归档契约](mpv-archive-contract.md)，决策见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)。按清单同步已落地（#222）；打包带清单（#221）、待合并更新的提示（#223）和启动时的 `provides` 检查（#224）尚未生效。下面是当前代码的行为。
+
+入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvConfig.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
 
 整体跳过时什么都不改，也不写安装记录：
 
