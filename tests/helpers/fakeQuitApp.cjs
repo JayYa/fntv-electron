@@ -55,13 +55,15 @@ function startQuitCoordinator(events, { closeProxy } = {}) {
  */
 function startPlaying(playback, events, report = Promise.resolve()) {
     const session = playback.beginPlayback();
-    const attached = session.attach({
+    let played = false;
+    void session.start({
         stop() {
             events.push('mpv stopped');
             session.ended(report.then(() => events.push('progress reported')));
         },
-    });
-    assert.equal(attached, true);
+    }, async () => { played = true; return true; });
+    // start 在同一次同步调用里记录播放器并开始播放
+    assert.equal(played, true);
 }
 
 function deferred() {
