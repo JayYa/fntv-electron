@@ -1,13 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
 const {
     setupUpdateChecker,
     waitFor,
     release,
     simulateHost,
+    runAsAppImage,
+    tempDir,
 } = require('./helpers/updateChecker.cjs');
 
 const APPIMAGE_NAME = 'FNMedia_2.7.0_linux_x86_64.AppImage';
@@ -19,32 +19,6 @@ function clickFirstButton() {
     return (options) => (options.title === '发现新版本' ? 0 : options.cancelId ?? 0);
 }
 
-// 模拟以 AppImage 运行：APPIMAGE 指向 dir 里的 AppImage；appImageDir 为 undefined 时模拟解包后运行
-function runAsAppImage(t, appImageDir) {
-    const original = process.env.APPIMAGE;
-    if (appImageDir === undefined) {
-        delete process.env.APPIMAGE;
-    } else {
-        // 客户端按 Linux 路径取目录，Windows 主机上也用正斜杠拼，fs 照样认
-        process.env.APPIMAGE = `${appImageDir.split(path.sep).join('/')}/FNMedia_2.6.2_linux_x86_64.AppImage`;
-    }
-    t.after(() => {
-        if (original === undefined) {
-            delete process.env.APPIMAGE;
-        } else {
-            process.env.APPIMAGE = original;
-        }
-    });
-}
-
-function tempDir(t) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-appimage-'));
-    t.after(() => {
-        fs.chmodSync(dir, 0o755);
-        fs.rmSync(dir, { recursive: true, force: true });
-    });
-    return dir;
-}
 
 function setupLinux(t, options = {}) {
     simulateHost(t, 'linux', 'x64');

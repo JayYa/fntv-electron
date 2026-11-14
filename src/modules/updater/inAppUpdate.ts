@@ -2,7 +2,7 @@ import { app, dialog, shell } from 'electron';
 import { autoUpdater, ProgressInfo } from 'electron-updater';
 import log from '../logger';
 import { isPlaying, stopPlaybackAndWait } from '../playback/playbackState';
-import { provideInstallOnQuit, quitForInstall } from '../quit/quitCoordinator';
+import { provideInstallOnQuit, quitForInstall, type ShutdownSignal } from '../quit/quitCoordinator';
 
 /**
  * 应用内更新：更新检查发现新版本、用户点「下载并安装」后，由 electron-updater 下载、校验 sha512 并安装。
@@ -162,6 +162,7 @@ export class InAppUpdate implements DownloadProgress {
             provideInstallOnQuit({
                 pending: () => this.phase === 'awaitingQuit',
                 install: () => this.installOnQuit(),
+                abandonForShutdown: (signal) => this.abandonInstallOnQuit(signal),
             });
         }
     }
@@ -182,6 +183,18 @@ export class InAppUpdate implements DownloadProgress {
         autoUpdater.autoInstallOnAppQuit = false;
         // 静默安装，装完不重新打开客户端：用户要的是退出
         autoUpdater.quitAndInstall(true, false);
+    }
+
+    /**
+     * 系统关机、重启或注销时放弃「退出时安装」（维护者决定不在关机时尽力安装，#192）。
+     * 回到「已下载、未选安装方式」，下次点「下载并安装」时 electron-updater 复用已下载的安装包。
+     * 安装已经开始（quitAndInstall 已调用）或没选「退出时安装」时什么都不做。
+     */
+    private abandonInstallOnQuit(signal: ShutdownSignal): void {
+        if (this.phase !== 'awaitingQuit') return;
+        autoUpdater.autoInstallOnAppQuit = false;
+        this.phase = 'downloaded';
+        log.info(`应用内更新：收到系统关机、重启或注销信号（${signal}），放弃这次退出时安装，下次检查到更新时再装`);
     }
 
     private bindUpdaterEvents(): void {

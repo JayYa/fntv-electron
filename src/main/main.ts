@@ -11,7 +11,7 @@ import { getMainWindow } from './common/mainwin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
 import { platformBehavior } from '../public/platform';
-import { initQuitCoordinator } from '../modules/quit/quitCoordinator';
+import { initQuitCoordinator, listenForSystemShutdown } from '../modules/quit/quitCoordinator';
 
 // 禁用输入法自动切换
 app.commandLine.appendSwitch('--lang', 'en-US');
@@ -69,6 +69,9 @@ if (!gotTheLock) {
 
             // 创建主窗口
             mainWindow = getMainWindow();
+
+            // 系统关机、重启或注销时放弃「退出时安装」（src/modules/quit/quitCoordinator.ts）
+            listenForSystemShutdown(mainWindow);
 
             // 注册所有插件
             registerAllPlugins();

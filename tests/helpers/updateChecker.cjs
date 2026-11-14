@@ -117,6 +117,8 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
             openExternal(url) { opened.push(url); },
         },
         safeStorage: {},
+        // Linux 和 macOS 关机时发 shutdown（测试里用 emit 模拟；macOS 没有应用内更新）
+        powerMonitor: new EventEmitter(),
     };
     const updater = new FakeAutoUpdater({ app: electronMock.app, events });
 
@@ -151,7 +153,10 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
     const logFile = isPackaged ? path.join(paths.userData, 'logs', 'app.log') : path.join(testRoot, 'log', 'app.log');
     const logText = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
 
-    return { checker: getInstance(), app: electronMock.app, events, dialogs, opened, requests, updater, logText };
+    return {
+        checker: getInstance(), app: electronMock.app, powerMonitor: electronMock.powerMonitor,
+        events, dialogs, opened, requests, updater, logText,
+    };
 }
 
 
@@ -197,7 +202,37 @@ function simulateHost(t, platform, arch) {
     });
 }
 
+// 模拟以 AppImage 运行：APPIMAGE 指向 dir 里的 AppImage；appImageDir 为 undefined 时模拟解包后运行
+function runAsAppImage(t, appImageDir) {
+    const original = process.env.APPIMAGE;
+    if (appImageDir === undefined) {
+        delete process.env.APPIMAGE;
+    } else {
+        // 客户端按 Linux 路径取目录，Windows 主机上也用正斜杠拼，fs 照样认
+        process.env.APPIMAGE = `${appImageDir.split(path.sep).join('/')}/FNMedia_2.6.2_linux_x86_64.AppImage`;
+    }
+    t.after(() => {
+        if (original === undefined) {
+            delete process.env.APPIMAGE;
+        } else {
+            process.env.APPIMAGE = original;
+        }
+    });
+}
+
+// 放 AppImage 的临时目录，测试结束时删掉（测试可能把它改成只读，先恢复权限）
+function tempDir(t) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-appimage-'));
+    t.after(() => {
+        fs.chmodSync(dir, 0o755);
+        fs.rmSync(dir, { recursive: true, force: true });
+    });
+    return dir;
+}
+
 module.exports = {
+    runAsAppImage,
+    tempDir,
     LATEST_RELEASE_URL,
     LATEST_RELEASE_PAGE,
     setupUpdateChecker,
