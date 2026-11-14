@@ -199,8 +199,25 @@ jobs:
             ~/Library/Caches/electron/**/electron-v*-darwin-x64.zip
           key: ${{ steps.packaging-cache.outputs.cache-primary-key }}
 
-      # latest*.yml 是应用内更新读的更新元数据（package.json 的 build.publish），记录安装包的文件名和 sha512。
+      # latest*.yml 是应用内更新读的更新元数据（package.json 的 build.publish），记录安装包的文件名、size 和 sha512。
       # Linux 两次构建写到同一个 release 目录，x64 是 latest-linux.yml，arm64 是 latest-linux-arm64.yml，互不覆盖。
+      # 上传前核对元数据和安装包一致，不一致就让构建失败。文件清单和 tests/helpers/updateFeed.cjs 的 UPDATE_METADATA
+      # 一致（tests/releaseGate.test.cjs 运行这一步核对）。macOS 不做应用内更新，latest-mac.yml 不核对（ADR 0003）。
+      - name: Check update metadata
+        if: inputs.platform != 'macos'
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        shell: bash
+        run: |
+          case "$PLATFORM" in
+            windows) node scripts/check-update-metadata.cjs release latest.yml ;;
+            linux) node scripts/check-update-metadata.cjs release latest-linux.yml latest-linux-arm64.yml ;;
+            *)
+              echo "::error::No update metadata to check for platform: $PLATFORM"
+              exit 1
+              ;;
+          esac
+
       - name: Upload build artifacts
         if: inputs.upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

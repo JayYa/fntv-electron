@@ -180,6 +180,41 @@ test('the build artifact carries the update metadata next to the installers', ()
     assert.equal(upload.with['if-no-files-found'], 'error');
 });
 
+const checkUpdateMetadata = step => step.name === 'Check update metadata';
+
+// 在空的 release 目录里运行构建 workflow 的核对步骤，返回它报缺失的元数据文件名，即这个平台要核对的文件。
+function checkedUpdateMetadata(t, platform) {
+    const result = runStep(t, workflow('build.yml').jobs.build, checkUpdateMetadata, {
+        PLATFORM: platform,
+        NODE_PATH: path.join(root, 'node_modules'),
+    }, cwd => {
+        fs.mkdirSync(path.join(cwd, 'scripts'));
+        fs.copyFileSync(path.join(root, 'scripts', 'check-update-metadata.cjs'), path.join(cwd, 'scripts', 'check-update-metadata.cjs'));
+        fs.mkdirSync(path.join(cwd, 'release'));
+    });
+    assert.notEqual(result.status, 0, `${platform}: ${result.stdout}${result.stderr}`);
+    return [...result.stdout.matchAll(/^::error::(\S+): file expected in the output directory, actual missing$/gm)].map(match => match[1]);
+}
+
+// 元数据的 size 和 sha512 由构建时的核对步骤和安装包比对，不一致时构建失败，不会上传成 artifact。
+test('the build checks the update metadata against the installers after packaging and before uploading', () => {
+    const steps = workflow('build.yml').jobs.build.steps;
+    const index = name => steps.findIndex(step => step.name === name);
+    const check = steps.findIndex(checkUpdateMetadata);
+    assert.notEqual(check, -1, 'build.yml has no Check update metadata step');
+    assert.ok(index('Build application') < check, 'the check must run after Build application');
+    assert.ok(check < index('Upload build artifacts'), 'the check must run before Upload build artifacts');
+    // macOS 不做应用内更新，latest-mac.yml 不核对（ADR 0003）。
+    assert.equal(steps[check].if, "inputs.platform != 'macos'");
+    assert.equal(steps[check].env.PLATFORM, '${{ inputs.platform }}');
+});
+
+test('the build checks latest.yml on Windows and both Linux metadata files on Linux', t => {
+    assert.deepEqual(checkedUpdateMetadata(t, 'windows'), ['latest.yml']);
+    assert.deepEqual(checkedUpdateMetadata(t, 'linux'), ['latest-linux.yml', 'latest-linux-arm64.yml']);
+    assert.deepEqual([...checkedUpdateMetadata(t, 'windows'), ...checkedUpdateMetadata(t, 'linux')].sort(), [...UPDATE_METADATA].sort());
+});
+
 // 生成更新元数据需要 publish 配置；--publish never 只是不上传。更新元数据里的 url 是相对文件名，
 // 客户端按 generic 地址拼出最新正式 Release 的下载链接。
 test('electron-builder publishes to the latest release download URL of this repository', () => {
