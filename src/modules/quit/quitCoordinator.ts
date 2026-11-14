@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, powerMonitor, type BrowserWindow } from 'electron';
 import log from '../logger';
 import { stopPlaybackAndWait } from '../playback/playbackState';
 
@@ -27,7 +27,12 @@ export interface InstallOnQuit {
     pending(): boolean;
     /** 开始安装：启动安装程序并重新发起退出；安装失败时提示后自己发起退出 */
     install(): void;
+    /** 系统关机、重启或注销：还没开始装时放弃这次「退出时安装」，之后 pending() 为 false；signal 写进日志 */
+    abandonForShutdown(signal: ShutdownSignal): void;
 }
+
+/** 收到的系统关机信号，见 listenForSystemShutdown */
+export type ShutdownSignal = 'Windows session-end' | 'powerMonitor shutdown';
 
 type State =
     // 没在退出
@@ -43,6 +48,7 @@ let state: State = 'idle';
 let quitStartedNotified = false;
 let proxyClosing: Promise<void> | null = null;
 let released = false;
+let listeningForShutdown = false;
 const startedListeners = new Set<() => void>();
 
 async function runStep(name: string, step: () => unknown): Promise<void> {
@@ -71,7 +77,7 @@ function closeProxyOnce(current: QuitSteps): Promise<void> {
     return proxyClosing;
 }
 
-// 这次退出要安装时返回安装方，不安装时返回 null。只在这里决定，别的退出条件（比如关机时放弃安装）加在这里
+// 这次退出要安装时返回安装方，不安装时返回 null。只在这里决定；关机时放弃安装由 abandonForShutdown 让 pending() 变为 false
 function installerForThisQuit(): InstallOnQuit | null {
     try {
         return installer?.pending() ? installer : null;
@@ -145,6 +151,29 @@ export function onQuitStarted(listener: () => void): () => void {
     return () => {
         startedListeners.delete(listener);
     };
+}
+
+function abandonInstallForShutdown(signal: ShutdownSignal): void {
+    try {
+        installer?.abandonForShutdown(signal);
+    } catch (error) {
+        log.error('系统关机时放弃退出时安装失败:', error);
+    }
+}
+
+/**
+ * 主窗口创建后调用一次，监听系统关机、重启或注销（只在这里监听）：
+ *   - Windows：主窗口的 session-end（WM_ENDSESSION）。这种退出不发 before-quit，退出收尾和安装都不会运行；
+ *   - Linux：powerMonitor 的 shutdown，随后 SIGTERM 按普通退出走收尾（注销只有 SIGTERM，分不出来，照常安装）。
+ *     macOS 关机时也发这个事件，但 macOS 没有应用内更新，收到后什么都不做。
+ * 收到后放弃这次「退出时安装」，之后的退出按普通退出收尾。不调用 preventDefault，不推迟关机。
+ * 要在 app ready 之后调用：那之前不能用 powerMonitor。
+ */
+export function listenForSystemShutdown(mainWindow: Pick<BrowserWindow, 'on'>): void {
+    if (listeningForShutdown) throw new Error('已经在监听系统关机');
+    listeningForShutdown = true;
+    mainWindow.on('session-end', () => abandonInstallForShutdown('Windows session-end'));
+    powerMonitor.on('shutdown', () => abandonInstallForShutdown('powerMonitor shutdown'));
 }
 
 /** 应用内更新提供「退出时安装」，收尾第 3 步问它要不要安装。 */

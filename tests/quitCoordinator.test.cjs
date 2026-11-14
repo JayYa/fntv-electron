@@ -93,7 +93,7 @@ test('a failing cleanup step is logged and the remaining steps still run until t
     const env = setup(t, { closeProxy: () => Promise.reject(new Error('proxy hung')) });
     t.mock.method(require('../dest/modules/logger/index.js'), 'error', () => {});
     const session = env.playback.beginPlayback();
-    session.attach({ stop() { throw new Error('mpv ipc closed'); } });
+    void session.start({ stop() { throw new Error('mpv ipc closed'); } }, async () => true);
     env.quit.onQuitStarted(() => { throw new Error('listener failed'); });
 
     requestQuit(env.app);
