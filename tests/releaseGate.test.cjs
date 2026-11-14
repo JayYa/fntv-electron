@@ -210,9 +210,12 @@ test('the build checks the update metadata against the installers after packagin
 });
 
 test('the build checks latest.yml on Windows and both Linux metadata files on Linux', t => {
-    assert.deepEqual(checkedUpdateMetadata(t, 'windows'), ['latest.yml']);
-    assert.deepEqual(checkedUpdateMetadata(t, 'linux'), ['latest-linux.yml', 'latest-linux-arm64.yml']);
-    assert.deepEqual([...checkedUpdateMetadata(t, 'windows'), ...checkedUpdateMetadata(t, 'linux')].sort(), [...UPDATE_METADATA].sort());
+    const windows = checkedUpdateMetadata(t, 'windows');
+    const linux = checkedUpdateMetadata(t, 'linux');
+    assert.deepEqual(windows, ['latest.yml']);
+    assert.deepEqual(linux, ['latest-linux.yml', 'latest-linux-arm64.yml']);
+    // 两个平台合起来就是应用内更新读的全部元数据，和 release.yml 发布前核对的清单相同。
+    assert.deepEqual([...windows, ...linux].sort(), [...UPDATE_METADATA].sort());
 });
 
 // 生成更新元数据需要 publish 配置；--publish never 只是不上传。更新元数据里的 url 是相对文件名，

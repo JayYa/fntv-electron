@@ -19,9 +19,18 @@ async function sha512Of(file) {
 async function checkMetadata(dir, name) {
     const file = path.join(dir, name);
     if (!fs.existsSync(file)) return { problems: ['file expected in the output directory, actual missing'] };
-    const metadata = yaml.load(fs.readFileSync(file, 'utf8')) ?? {};
+    let metadata;
+    try {
+        metadata = yaml.load(fs.readFileSync(file, 'utf8')) ?? {};
+    } catch (error) {
+        return { problems: [`file expected valid YAML, actual ${error.message.split('\n')[0]}`] };
+    }
     const files = Array.isArray(metadata.files) ? metadata.files : [];
     if (files.length === 0) return { problems: [`files expected at least one entry, actual ${files.length}`] };
+    const invalid = files.findIndex(entry => entry === null || typeof entry !== 'object');
+    if (invalid !== -1) {
+        return { problems: [`files[${invalid}] expected a mapping with url, sha512 and size, actual ${JSON.stringify(files[invalid])}`] };
+    }
 
     const problems = [];
     if (metadata.path !== files[0].url) {
@@ -64,4 +73,7 @@ async function main(args) {
     return failed ? 1 : 0;
 }
 
-main(process.argv.slice(2)).then(code => { process.exitCode = code; });
+main(process.argv.slice(2)).then(code => { process.exitCode = code; }, error => {
+    console.log(`::error::check-update-metadata.cjs failed: ${error.message}`);
+    process.exitCode = 1;
+});

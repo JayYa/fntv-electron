@@ -120,3 +120,31 @@ test('metadata without any files entry fails the check', t => {
     assert.notEqual(result.status, 0);
     assert.deepEqual(errorsOf(result), ['::error::latest.yml: files expected at least one entry, actual 0']);
 });
+
+test('a top-level path that points to a missing installer reports both the mismatch and the missing file', t => {
+    const dir = releaseDir(t, { [INSTALLER]: CONTENT, 'latest.yml': metadataFor(INSTALLER, CONTENT, { path: 'gone.exe' }) });
+    const result = check(dir, 'latest.yml');
+    assert.notEqual(result.status, 0);
+    assert.deepEqual(errorsOf(result), [
+        `::error::latest.yml: path expected ${INSTALLER} (files[0].url), actual gone.exe`,
+        '::error::latest.yml: path expected gone.exe in the output directory, actual missing',
+    ]);
+});
+
+test('metadata that is not valid YAML fails the check with an annotation instead of a stack trace', t => {
+    const dir = releaseDir(t, { 'latest.yml': 'files: [\n' });
+    const result = check(dir, 'latest.yml');
+    assert.equal(result.status, 1);
+    const errors = errorsOf(result);
+    assert.equal(errors.length, 1, result.stdout + result.stderr);
+    assert.match(errors[0], /^::error::latest\.yml: file expected valid YAML, actual /);
+});
+
+test('a files entry that is not a mapping fails the check with an annotation', t => {
+    const metadata = metadataFor(INSTALLER, CONTENT);
+    metadata.files.push(null);
+    const dir = releaseDir(t, { [INSTALLER]: CONTENT, 'latest.yml': metadata });
+    const result = check(dir, 'latest.yml');
+    assert.equal(result.status, 1);
+    assert.deepEqual(errorsOf(result), ['::error::latest.yml: files[1] expected a mapping with url, sha512 and size, actual null']);
+});
