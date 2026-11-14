@@ -46,6 +46,11 @@ export interface PlatformBehavior {
     mpvNotFoundMessage: string;
     /** safeStorage 后端是 basic_text 时拒绝保存凭据。只有 Linux 会落到这个后端。 */
     rejectsBasicTextStorage: boolean;
+    /**
+     * 同步时，没有安装记录、内容也不在历史哈希里的 `mpv.conf` 是用户自己的配置，不写 `.fntv-new`、不算冲突。
+     * macOS 和 Linux 的用户配置就是用户日常用系统 MPV 的目录（#219 用户故事 15）。
+     */
+    treatsUnknownMpvConfAsUserOwned: boolean;
 }
 
 export function platformBehavior(platform: NodeJS.Platform = currentPlatform()): PlatformBehavior {
@@ -71,6 +76,7 @@ export function platformBehavior(platform: NodeJS.Platform = currentPlatform()):
             ? 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv'
             : 'Linux平台未找到mpv播放器，请安装mpv播放器后重试',
         rejectsBasicTextStorage: platform === 'linux',
+        treatsUnknownMpvConfAsUserOwned: !isWindows,
     };
 }
 

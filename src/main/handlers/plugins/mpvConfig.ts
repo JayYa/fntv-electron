@@ -3,16 +3,15 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as fnConfig from '../../../modules/fn_config/config';
 import * as logger from '../../../modules/logger';
-import {
-    resolveBundledMpvPath,
-    resolvePortableConfigDir,
-    synchronizeMpvConfig,
-} from '../../common/mpvConfigHelpers';
+import { resolveBundledMpvPath, resolvePortableConfigDir } from '../../common/mpvConfigHelpers';
+import { mpvConfigSyncLogLines } from '../../common/mpvConfigSync/log';
+import { resolveManifestPath } from '../../common/mpvConfigSync/manifest';
+import { synchronizeMpvConfig } from '../../common/mpvConfigSync/sync';
 import { currentPlatform, mpvPlayer, MpvPlayer, mpvUserConfigDir } from '../../../public/platform';
 
 /**
  * MPV配置文件管理插件
- * 初始化用户 MPV 配置，并同步由应用托管的插件代码。
+ * 启动时按 MPV 归档清单把便携配置同步到用户配置（src/main/common/mpvConfigSync）。
  */
 
 // 获取用户MPV配置目录。附带 MPV 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
@@ -46,21 +45,21 @@ function getPortableConfigDir(): string {
     });
 }
 
-// 检查并复制配置文件
+// 按归档清单同步用户配置。失败只记日志，不阻塞启动，下次启动重试。
 function initializeMpvConfig(): void {
     try {
         const mpvConfigDir = getMpvConfigDir(fnConfig.getMpvPlayerPath());
         const portableConfigDir = getPortableConfigDir();
-        const result = synchronizeMpvConfig(portableConfigDir, mpvConfigDir);
-        if (result === 'initialized') {
-            logger.info(`MPV配置初始化完成: ${mpvConfigDir}`);
-        } else if (result === 'same-directory') {
-            // 自选 mpv 就是附带的 mpv：它读的就是来源目录，同步会把来源自己删掉。
-            logger.info(`MPV配置目录就是便携配置，跳过同步: ${mpvConfigDir}`);
-        } else {
-            logger.info('MPV托管插件已同步: uosc_danmaku');
+        const result = synchronizeMpvConfig({
+            portableConfigDir,
+            manifestPath: resolveManifestPath(portableConfigDir),
+            mpvConfigDir,
+            platform: currentPlatform(),
+        });
+        for (const line of mpvConfigSyncLogLines(result, mpvConfigDir)) {
+            if (line.error) logger[line.level](line.message, line.error);
+            else logger[line.level](line.message);
         }
-
     } catch (error) {
         logger.error('初始化MPV配置失败:', error);
     }

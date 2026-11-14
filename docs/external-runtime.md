@@ -34,19 +34,37 @@
 
 ## 用户配置同步
 
-入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigHelpers.ts`）。是否“首次”只看用户配置里有没有 `scripts` 目录。
+入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步，规则来自 #219。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvConfig.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
 
-| 状态 | 行为 | 返回值 |
+整体跳过时什么都不改，也不写安装记录：
+
+| 情况 | 结果 | 日志 |
 | --- | --- | --- |
-| 便携配置目录不存在 | 抛错 | 无 |
-| 用户配置就是便携配置（按 realpath 比较，例如自选 mpv 就是附带的 mpv，#118） | 什么都不动 | `same-directory` |
-| 用户配置没有 `scripts` | 复制便携配置，已存在的文件一律跳过；之后 `scripts/uosc_danmaku/main.lua` 不存在时抛错 | `initialized` |
-| 用户配置已有 `scripts` | 在用户配置根目录的 `.fntv-sync-*` 暂存目录里复制出新的 `uosc_danmaku`，再换掉旧目录，其它文件不动 | `updated` |
-| 已有 `scripts`，但便携配置缺 `scripts/uosc_danmaku` 或其中的 `main.lua` | 抛错，旧插件不动 | 无 |
+| 用户配置就是便携配置（按 realpath 比较，例如自选 mpv 就是附带的 mpv，#118） | `skipped`，`same-directory` | WARN |
+| 清单缺失 | `skipped`，`manifest-missing` | ERROR |
+| `formatVersion` 不在支持的集合里 | `skipped`，`manifest-unsupported` | ERROR |
+| 清单不是合法 JSON、字段形状不对、路径不是便携配置内的相对路径 | `skipped`，`manifest-invalid` | ERROR |
 
-- 只有 `scripts/uosc_danmaku` 由应用托管。
-- `danmaku-history.json`、`script-opts` 和其它脚本归用户所有，同步时逐字节保留。内容为空或损坏也不修复。
-- 同步抛错时 `mpvConfig.ts` 只记录 ERROR 日志，不阻塞启动，也不记“已同步”。
+安装记录是用户配置下的 `fntv/installed.json`：归档版本、每个文件装入的哈希和归属、`provides`、已确认的冲突。只在同步全部完成后写。判断“用户没改过”：有记录时看当前哈希是否等于记录值，没有记录时看是否在该文件的 `knownHashes` 里。
+
+每个文件依次判断，先命中的生效：
+
+| 情况 | 动作（`files[].action`） |
+| --- | --- |
+| 当前内容已等于新版 | `unchanged`，不动。重跑幂等靠这一条 |
+| 文件缺失（任何归属） | `added` |
+| `seed`（`danmaku-history.json`）已存在 | `kept` |
+| 没改过 | `replaced` |
+| `managed`，改过 | `overwrote-modified`，照样覆盖，不备份，记 INFO |
+| `config`，改过，新版等于记录值（上次装入后归档没改它） | `kept` |
+| `config` 是 `mpv.conf`，改过，没有它的记录，平台是 macOS 或 Linux（`platformBehavior().treatsUnknownMpvConfAsUserOwned`） | `kept`，不写 `.fntv-new`、不算冲突，也不记录，下次仍按这一条判断 |
+| `config`，改过 | `wrote-fntv-new`：原文件不动，新版写到 `<文件>.fntv-new`（已有旧的就替换），进 `conflicts`（路径加新版哈希） |
+
+- `managedDirs`（至少 `scripts/uosc`、`scripts/uosc_danmaku`、`scripts/smart_skip`）整目录替换：目录里有文件要变时，在暂存目录复制出完整的新目录，带上旧目录里清单没列出的文件（用户自己放进去的文件），再 rename 换掉，失败时放回旧目录。
+- 记录里有、新清单没有的文件（以及清单 `obsolete` 列出的文件）：哈希等于记录值才删（`removed`）；没有记录时按 `obsolete` 的 `knownHashes` 判断；改过的保留（`kept`）。记录里归属是 `config` 的一律保留。不在记录也不在 `obsolete` 里的文件不碰，例如 smart_skip 运行时写的 `script-opts/smart_skip.conf`。
+- 所有新内容（含 `.fntv-new` 和安装记录）先写进用户配置根目录的 `.fntv-sync-*`，校验哈希、fsync，再 rename 到位。暂存目录放在根目录，mpv 不会把它当脚本加载。哈希不符说明便携配置和清单不一致，同步失败。
+- 每次同步先清理残留的 `.fntv-sync-*`。上次停在“旧目录已移开、新目录还没到位”时（目录替换前写了 `target.json`），先把旧目录放回去，再正常同步。
+- 同步失败（`failed`）：已到位的文件保留，不写新记录，记 ERROR，不阻塞启动；下次启动重跑，已到位的文件命中 `unchanged`，结果和一次跑完相同。
 - 不要改回先删目标再复制：目标和来源是同一目录时，这样会把附带的插件删光（#118）。
 
 ## 默认播放方式
@@ -107,7 +125,10 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 
 | 行为 | 测试 |
 | --- | --- |
-| 用户配置同步 | `tests/mpvConfigMigration.test.cjs` |
+| 用户配置同步：全新安装、已有用户有无记录、用户改过文件、冲突和已确认冲突 | `tests/mpvConfigSync.test.cjs` |
+| 用户配置同步：删除归档删掉的文件、托管目录保留用户文件、整体跳过、macOS/Linux 的 `mpv.conf` 例外 | `tests/mpvConfigSyncRules.test.cjs` |
+| 用户配置同步：任一次写入失败或被杀后下次启动补完、便携配置和清单不符 | `tests/mpvConfigSyncFailure.test.cjs` |
+| 便携配置和清单的位置、附带 MPV 同目录、同步日志 | `tests/mpvConfigMigration.test.cjs` |
 | 用户配置目录、运行哪个 MPV | `tests/platform.test.cjs` |
 | 托盘显示 mpv 路径、打开用户配置目录 | `tests/trayMpvMenu.test.cjs` |
 | 默认播放方式 | `tests/playbackPreference.test.cjs` |
