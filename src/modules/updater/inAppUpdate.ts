@@ -2,6 +2,7 @@ import { app, dialog, shell } from 'electron';
 import { autoUpdater, ProgressInfo } from 'electron-updater';
 import log from '../logger';
 import { isPlaying, stopPlaybackAndWait } from '../playback/playbackState';
+import { provideInstallOnQuit, quitForInstall } from '../quit/quitCoordinator';
 
 /**
  * 应用内更新：更新检查发现新版本、用户点「下载并安装」后，由 electron-updater 下载、校验 sha512 并安装。
@@ -43,7 +44,7 @@ function errorMessage(error: any): unknown {
 }
 
 /**
- * 安装前先停止 MPV，并等这次退出的进度回传完成：Windows 上附带的 MPV 在安装目录里，
+ * 「立即重启安装」前先停止 MPV，并等这次退出的进度回传完成（「退出时安装」由退出协调先停）：Windows 上附带的 MPV 在安装目录里，
  * mpv.exe 运行时安装程序覆盖不了它。回传失败由媒体播放插件记日志，不阻止安装；
  * 回传或 MPV 退出迟迟不来时，stopPlaybackAndWait 等到它的超时就返回，之后照常安装。
  */
@@ -63,7 +64,6 @@ export class InAppUpdate implements DownloadProgress {
     private currentPercent: number | null = null;
     private listeners: ProgressListener[] = [];
     private updaterEventsBound = false;
-    private quitHandlerBound = false;
 
     constructor(private readonly options: InAppUpdateOptions) {}
 
@@ -149,37 +149,39 @@ export class InAppUpdate implements DownloadProgress {
             // 那条路径不先停 MPV，所以关掉；失败后用户可以重新检查再选
             autoUpdater.autoInstallOnAppQuit = false;
             await stopPlaybackBeforeInstall();
-            // 静默安装（不显示向导，沿用原安装目录），装完重新启动客户端
-            autoUpdater.quitAndInstall(true, true);
+            // 静默安装（不显示向导，沿用原安装目录），装完重新启动客户端。
+            // 安装程序启动失败时 electron-updater 同步发 error 事件（阶段回到 downloaded），不退出
+            quitForInstall(() => {
+                autoUpdater.quitAndInstall(true, true);
+                return this.isInstalling();
+            });
         } else {
             log.info('应用内更新：退出时安装');
             autoUpdater.autoInstallOnAppQuit = true;
             this.phase = 'awaitingQuit';
-            if (!this.quitHandlerBound) {
-                this.quitHandlerBound = true;
-                // 排在其它 before-quit 处理前面：拦下退出时，主进程的退出收尾（关 Proxy 等）看到 defaultPrevented 先不做，
-                // 免得 MPV 停止前 Proxy 先没了
-                app.prependListener('before-quit', event => this.installBeforeQuit(event));
-            }
+            provideInstallOnQuit({
+                pending: () => this.phase === 'awaitingQuit',
+                install: () => this.installOnQuit(),
+            });
         }
     }
 
+    private isInstalling(): boolean {
+        return this.phase === 'installing';
+    }
+
     /**
-     * 「退出时安装」生效：先拦下这次退出，停止 MPV、等进度回传完成，再由 quitAndInstall 安装并重新发起退出。
-     * electron-updater 自己的退出时安装挂在 quit 事件上，那时 MPV 可能还开着，所以这里抢在它前面装；
+     * 「退出时安装」生效：退出协调已经停了 MPV、等完进度回传、关了 Proxy，这里由 quitAndInstall 安装并重新发起退出。
+     * electron-updater 自己的退出时安装挂在 quit 事件上，那时 MPV 可能还开着，所以抢在它前面装；
      * quitAndInstall 之后 electron-updater 看到安装已经开始，就不会在 quit 时再装一次。
      */
-    private installBeforeQuit(event: Electron.Event): void {
-        if (this.phase !== 'awaitingQuit') return;
-        event.preventDefault();
+    private installOnQuit(): void {
         this.phase = 'installingOnQuit';
         log.info('应用内更新：客户端退出，开始安装');
-        void stopPlaybackBeforeInstall().then(() => {
-            // 安装失败时由 error 事件弹框后退出，electron-updater 不必在 quit 时再试一次
-            autoUpdater.autoInstallOnAppQuit = false;
-            // 静默安装，装完不重新打开客户端：用户要的是退出
-            autoUpdater.quitAndInstall(true, false);
-        });
+        // 安装失败时由 error 事件弹框后退出，electron-updater 不必在 quit 时再试一次
+        autoUpdater.autoInstallOnAppQuit = false;
+        // 静默安装，装完不重新打开客户端：用户要的是退出
+        autoUpdater.quitAndInstall(true, false);
     }
 
     private bindUpdaterEvents(): void {

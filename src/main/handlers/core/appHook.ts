@@ -6,16 +6,15 @@ import * as log from '../../../modules/logger';
  */
 
 // 没有 windowAllClosed：window-all-closed 只在 src/main/main.ts 监听一处（#76）。
-type HookType = 'beforeQuit' | 'ready' | 'activate';
+// 没有 beforeQuit：退出时要做的事向退出协调注册（src/modules/quit/quitCoordinator.ts）。
+type HookType = 'ready' | 'activate';
 
 interface Hooks {
-    beforeQuit: Array<(...args: any[]) => void>;
     ready: Array<(...args: any[]) => void>;
     activate: Array<(...args: any[]) => void>;
 }
 
 const hooks: Hooks = {
-    beforeQuit: [],
     ready: [],
     activate: []
 };
@@ -53,11 +52,6 @@ function runAppHooks(type: HookType, ...args: any[]): void {
  * 初始化应用钩子
  */
 function initAppHooks(): void {
-    // 钩子拿到 before-quit 的事件对象，退出被拦下时（event.defaultPrevented）可以先不收尾
-    app.on('before-quit', (event) => {
-        runAppHooks('beforeQuit', event);
-    });
-    
     app.on('ready', () => {
         runAppHooks('ready');
     });

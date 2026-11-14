@@ -11,6 +11,7 @@ import { getMainWindow } from './common/mainwin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
 import { platformBehavior } from '../public/platform';
+import { initQuitCoordinator } from '../modules/quit/quitCoordinator';
 
 // 禁用输入法自动切换
 app.commandLine.appendSwitch('--lang', 'en-US');
@@ -222,23 +223,14 @@ function showMacNotification(): void {
     }
 }
 
-// 应用退出事件处理
-app.on('before-quit', async (event) => {
-    // 应用内更新「退出时安装」会先拦下退出，停止 MPV、等进度回传后再重新退出；
-    // 这次先不收尾，免得 MPV 停止前 Proxy 先被关掉（src/modules/updater/inAppUpdate.ts）
-    if (event.defaultPrevented) return;
-    (app as any).isQuiting = true;
-
-    // 结束 Proxy 子进程
-    log.info('应用退出前关闭proxy进程');
-    try {
-        await shutdownProxyProcess();
-    } catch (error) {
-        log.error('关闭proxy进程出错:', error);
-    }
-
-    // 销毁托盘图标
-    destroyTray();
+// 退出收尾：先停播放、等进度回传，再关 Proxy，最后才销毁托盘（src/modules/quit/quitCoordinator.ts）
+initQuitCoordinator({
+    closeProxy: shutdownProxyProcess,
+    onQuit() {
+        // 主窗口的 close 看到它就不再拦下改为隐藏
+        (app as any).isQuiting = true;
+        destroyTray();
+    },
 });
 
 // 唯一的 window-all-closed 监听（#76）。不在退出途中时，主窗口的 close 被拦下改为隐藏，这个事件很少发生；

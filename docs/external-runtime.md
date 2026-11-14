@@ -91,7 +91,7 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 启动后 10 秒内没有回报就绪，或就绪前退出 | 弹窗说明，退出应用 |
 | 就绪前请求播放 | 创建播放会话直接失败（“Proxy 未运行”），不等待；崩溃后重启期间也一样 |
 | 运行中意外退出 | 隔 3 秒重启，最多 5 次，仍然失败就弹窗并退出应用；重启后连续运行 60 秒，次数清零 |
-| 客户端退出 | 结束 Proxy 子进程；客户端崩溃时 Electron 也会结束它，不留下占端口的进程 |
+| 客户端退出 | 先停止播放、等退出的进度回传（最多 5 秒），再结束 Proxy 子进程并等它退出（`src/modules/quit/quitCoordinator.ts`）；「立即重启安装」引发的退出不等。客户端崩溃时 Electron 也会结束它，不留下占端口的进程 |
 | `userData` 下有旧版留下的 `proxy-secret` | 启动时删除（`src/main/common/legacyProxySecret.ts`） |
 
 ## 播放会话
@@ -115,5 +115,6 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 播放地址不暴露登录凭据 | `tests/proxySession.test.cjs` |
 | Proxy 取流和片头片尾接口 | `tests/proxyService*.test.cjs` |
 | Proxy 在打包产物里启动（端口从 `app.log` 读）、客户端退出后端口关闭 | `tests/smoke/installer.smoke.cjs` |
+| 退出时先停播放、等进度回传，再关 Proxy | `tests/quitCoordinator.test.cjs`、`tests/updateQuit.test.cjs` |
 
 构建（`build.yml`）不覆盖上游插件这一条没有自动化测试，改工作流时用 `grep -n -i danmaku .github/workflows/build.yml .github/workflows/release.yml` 确认没有结果。

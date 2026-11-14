@@ -4,7 +4,8 @@ const {
     setupUpdateChecker,
     settle,
     waitFor,
-    quitApp,
+    requestQuit,
+    startQuitCoordinator,
     release,
     simulateHost,
 } = require('./helpers/updateChecker.cjs');
@@ -90,17 +91,18 @@ test('a held dialog is not shown again after a manual check already showed it', 
     assert.equal(dialogs.length, 1);
 });
 
-test('quitting before playback ends drops the held dialog without errors', async (t) => {
-    const { app, checker, dialogs, playback } = setup(t);
-    const { session } = startPlaying(playback);
+test('quitting while MPV is playing drops the held dialog, even though the quit stops playback', async (t) => {
+    const { app, checker, dialogs, events, playback } = setup(t);
+    startQuitCoordinator(events);
+    const { player } = startPlaying(playback);
 
     await checker.autoCheckForUpdates();
-    const event = quitApp(app);
-    session.ended();
+    requestQuit(app);
+    await waitFor(() => app.exited);
     await settle();
 
+    assert.equal(player.stops, 1);
     assert.deepEqual(dialogs, []);
-    assert.equal(event.defaultPrevented, false);
 });
 
 // 新版本提示点「下载并安装」，下载完成框点 choice
@@ -119,10 +121,6 @@ async function downloadAndChoose(env, chosen) {
     env.updater.finishDownload();
     await waitFor(chosen);
 }
-
-// 下载完成框弹出前 autoInstallOnAppQuit 已关掉，选了「退出时安装」才再打开
-const installOnQuitChosen = (env) => () =>
-    env.dialogs.some((d) => d.title === '新版本已下载') && env.updater.autoInstallOnAppQuit === true;
 
 test('restart and install now stops playback and waits for the progress report before installing', async (t) => {
     const env = setupDownload(t, '立即重启安装');
@@ -165,64 +163,6 @@ test('restart and install now installs right away when nothing is playing', asyn
     await downloadAndChoose(env, () => env.updater.installs.length === 1);
 
     assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: true }]);
-});
-
-test('install on quit holds the quit, stops playback and waits for the progress report, then installs', async (t) => {
-    const env = setupDownload(t, '退出时安装');
-    const report = deferred();
-    const { player } = startPlaying(env.playback, report.promise);
-
-    await startDownload(env);
-    await downloadAndChoose(env, installOnQuitChosen(env));
-    const firstQuit = quitApp(env.app);
-    // 断言回传完成前没有安装，没有可等的条件
-    await settle();
-
-    assert.equal(firstQuit.defaultPrevented, true);
-    assert.equal(player.stops, 1);
-    assert.deepEqual(env.updater.installs, []);
-
-    report.resolve();
-    await waitFor(() => env.updater.installs.length === 1);
-    // 不再自动重启客户端，和 electron-updater 自己退出时安装的参数一样
-    assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: false }]);
-    // quitAndInstall 发起的退出照常进行
-    assert.equal(quitApp(env.app).defaultPrevented, false);
-});
-
-test('install on quit installs on quit when nothing is playing', async (t) => {
-    const env = setupDownload(t, '退出时安装');
-
-    await startDownload(env);
-    await downloadAndChoose(env, installOnQuitChosen(env));
-    assert.deepEqual(env.updater.installs, []);
-
-    quitApp(env.app);
-    await waitFor(() => env.updater.installs.length === 1);
-
-    assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: false }]);
-});
-
-test('a client that quits without choosing install on quit quits right away', async (t) => {
-    const env = setupDownload(t, '稍后提醒');
-
-    await startDownload(env);
-
-    assert.equal(quitApp(env.app).defaultPrevented, false);
-});
-
-test('when the install on quit fails the client still quits', async (t) => {
-    const env = setupDownload(t, '退出时安装');
-
-    await startDownload(env);
-    await downloadAndChoose(env, installOnQuitChosen(env));
-    quitApp(env.app);
-    await waitFor(() => env.updater.installs.length === 1);
-    env.updater.emit('error', new Error('spawn EACCES'));
-    await waitFor(() => env.app.quits === 1);
-
-    assert.match(env.dialogs.at(-1).detail, /spawn EACCES/);
-    assert.equal(quitApp(env.app).defaultPrevented, false);
 });
 
 test('a failed progress report does not block the install', async (t) => {
