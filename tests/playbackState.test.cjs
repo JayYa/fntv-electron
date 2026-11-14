@@ -95,11 +95,36 @@ test('stopping without a playback returns immediately', async () => {
     assert.equal(stopped.settled, true);
 });
 
+test('starting a playback plays within the same call and returns what play returns', async () => {
+    const session = beginPlayback();
+    const calls = [];
+    const started = session.start({ stop: () => {} }, () => {
+        calls.push('play');
+        return Promise.resolve(true);
+    });
+    calls.push('start returned');
+
+    assert.deepEqual(calls, ['play', 'start returned']);
+    assert.equal(await started, true);
+    session.ended();
+});
+
+test('a stop after starting stops the player that was started', async () => {
+    const session = beginPlayback();
+    const stops = [];
+    void session.start({ stop: () => { stops.push('stop'); session.ended(); } }, () => new Promise(() => {}));
+
+    await stopPlaybackAndWait();
+
+    assert.deepEqual(stops, ['stop']);
+    assert.equal(isPlaying(), false);
+});
+
 test('stopping a playback stops the player and waits for the exit progress report', async () => {
     const session = beginPlayback();
     const report = deferred();
     const player = { stop: () => session.ended(report.promise) };
-    assert.equal(session.attach(player), true);
+    assert.equal(await session.start(player, () => Promise.resolve(true)), true);
 
     const stopped = trackSettled(stopPlaybackAndWait());
     assert.equal(isPlaying(), false);
@@ -129,14 +154,32 @@ test('stopping while playback is still starting cancels the start', async () => 
     const session = beginPlayback();
 
     const stopped = trackSettled(stopPlaybackAndWait());
-    const stops = [];
-    assert.equal(session.attach({ stop: () => stops.push('stop') }), false);
+    const calls = [];
+    const started = await session.start({ stop: () => calls.push('stop') }, () => {
+        calls.push('play');
+        return Promise.resolve(true);
+    });
+    assert.equal(started, false);
     session.ended();
     await settle();
 
-    assert.deepEqual(stops, []);
+    assert.deepEqual(calls, []);
     assert.equal(stopped.settled, true);
     assert.equal(isPlaying(), false);
+});
+
+test('starting a playback that has already ended does not play', async () => {
+    const session = beginPlayback();
+    session.ended();
+
+    const calls = [];
+    const started = await session.start({ stop: () => calls.push('stop') }, () => {
+        calls.push('play');
+        return Promise.resolve(true);
+    });
+
+    assert.equal(started, false);
+    assert.deepEqual(calls, []);
 });
 
 // 换成假时钟并记下 warn 日志，不真等超时
@@ -150,7 +193,7 @@ const warnings = (warn) => warn.mock.calls.map((call) => call.arguments.join(' '
 test('stopping gives up waiting after 5 seconds when the exit progress report never finishes', async (t) => {
     const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
-    session.attach({ stop: () => session.ended(new Promise(() => {})) });
+    session.start({ stop: () => session.ended(new Promise(() => {})) }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());
     t.mock.timers.tick(4999);
@@ -170,7 +213,7 @@ test('stopping returns with the exit progress report when it finishes in time, w
     const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
     const report = deferred();
-    session.attach({ stop: () => session.ended(report.promise) });
+    session.start({ stop: () => session.ended(report.promise) }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());
     t.mock.timers.tick(1000);
@@ -183,11 +226,11 @@ test('stopping returns with the exit progress report when it finishes in time, w
     assert.deepEqual(warnings(warn), []);
 });
 
-test('stopping gives up after 5 seconds when the attached player never reports its exit', async (t) => {
+test('stopping gives up after 5 seconds when the started player never reports its exit', async (t) => {
     const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
     // MPV 实例还没建好时 stop() 不发退出事件（#190）
-    session.attach({ stop: () => {} });
+    session.start({ stop: () => {} }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());
     t.mock.timers.tick(5000);
@@ -206,7 +249,7 @@ test('a progress report that finishes after the stop timed out still notifies su
     t.after(onPlaybackEnded(() => notified.push('ended')));
     const session = beginPlayback();
     const report = deferred();
-    session.attach({ stop: () => session.ended(report.promise) });
+    session.start({ stop: () => session.ended(report.promise) }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());
     t.mock.timers.tick(5000);
