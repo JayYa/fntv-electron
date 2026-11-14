@@ -25,7 +25,7 @@
 
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
 - Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/build.yml` 的 `Download third-party dependencies` 步骤。
-- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261110_224319`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
+- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261114_223600`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
 - tag、资产名和 sha256 写在仓库根目录的 `mpv-archive.json`，`build.yml` 的 `Read pinned MPV archive` 步骤把它转成 `MPV_CONFIG_*` 环境变量并校验格式。不写在 `build.yml` 里：`GITHUB_TOKEN` 推不了改 `.github/workflows` 的提交，自动升级的 PR 会被拒（2026-11-14 第一次运行就是这样失败的）。压缩包缓存在 `$RUNNER_TEMP/mpv-archive`，key 含 sha256，换版本时自动失效。缓存用 `actions/cache/restore` 和 `actions/cache/save` 分开写，下载并校验通过后立即保存，后面的构建失败也不丢；命中时不保存，缓存出错不让构建失败。命中缓存也校验 sha256，不通过就重新下载。以上缓存约定由 `tests/mpvArchiveCache.test.cjs` 检查。未命中时 `curl` 对所有错误重试 5 次，每次隔 10 秒，最多 5 分钟，避免 Release 下载偶发的 5xx 让构建失败。
 - electron-builder 打包时下载的另一个架构的 Electron zip 和打包工具不缓存（2026-11-14 删掉，不命中只多 10 到 14 秒），下载出 5xx 或网络错误时 `Build application` 整体重跑，共 3 次。宿主架构的 Electron zip 由 `install-dependencies` 的 `electron-<os>-<arch>-<版本>` 缓存恢复，存在 `@electron/get` 的默认目录（Linux `~/.cache/electron`，macOS `~/Library/Caches/electron`，Windows `%LOCALAPPDATA%\electron\Cache`），它不读 `ELECTRON_CACHE`。
 - 升级归档：先在 `JayYa/fntv-mpv-config` 发布新 Release。`update-mpv-archive.yml` 每天查一次它的最新正式 Release，tag 比 `mpv-archive.json` 固定的新时开 PR（分支 `automation/mpv-archive`，标题 `fix(deps): 附带的 MPV 和插件更新到 <tag>`）；不想等就在 Actions 里手动触发它，可填 tag 换成指定的 Release（也用于回滚）。这个 PR 由 `GITHUB_TOKEN` 开，检查显示 action_required，维护者在 PR 上点 “Approve workflows to run” 后 CI 和 Smoke Test 才跑。
