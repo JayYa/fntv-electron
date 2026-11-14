@@ -129,7 +129,7 @@ test('ci.yml also runs on pushes to main, and the file size check only on pull r
     assert.equal(ci.jobs.test.if, undefined);
 });
 
-test('a new push to a PR cancels its older CI run without touching other workflows', () => {
+test('a new CI run cancels the older one on the same PR or on main without touching other workflows', () => {
     const { concurrency } = workflow('ci.yml');
     assert.equal(concurrency.group, 'ci-${{ github.ref }}');
     assert.equal(concurrency['cancel-in-progress'], true);
