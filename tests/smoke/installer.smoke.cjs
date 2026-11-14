@@ -245,7 +245,7 @@ ${mainOutput.slice(-4000)}`));
 
     it('synchronizes the MPV user config by the packaged manifest', async t => {
         // 启动时按便携配置上一级的 fntv-manifest.json 同步用户配置（src/main/handlers/plugins/mpvConfig.ts），
-        // 成功时日志有“MPV配置已按清单 <tag> 同步”；清单没打进包时是“MPV归档清单缺失”的 ERROR（#221）。
+        // 成功时日志有“MPV 配置已按清单 <tag> 同步”；清单没打进包时是“MPV 归档清单缺失”的 ERROR（#221）。
         // 隔离的用户目录里没有安装记录，按全新安装同步。
         if (appDir && !fs.existsSync(path.join(appDir, 'third_party', 'fntv-mpv', 'fntv-manifest.json'))) {
             t.skip('未打包且仓库里没有解压 MPV 归档（ci.yml 不下载它），安装包上检查');
@@ -253,14 +253,14 @@ ${mainOutput.slice(-4000)}`));
         }
         const { tag } = JSON.parse(fs.readFileSync(path.join(root, 'mpv-archive.json'), 'utf8'));
         const appLog = path.join(logDir, 'app.log');
-        const synced = `MPV配置已按清单 ${tag} 同步`;
+        const synced = `MPV 配置已按清单 ${tag} 同步`;
         const result = await poll(async () => {
             const text = readText(appLog);
             return { done: text.includes(synced) || text.includes('跳过同步'), text };
         }, 10000);
-        const related = result.text.split(/\r?\n/).filter(line => /MPV配置|MPV归档|MPV插件/.test(line)).join('\n');
+        const related = result.text.split(/\r?\n/).filter(line => /MPV (配置|归档|插件)/.test(line)).join('\n');
         assert.ok(result.text.includes(synced), fail('MPV 配置同步检查', `${appLog} 里没有“${synced}”：\n${related}`));
-        assert.doesNotMatch(result.text, /MPV插件不满足客户端要求的能力/, fail('MPV 能力检查', related));
+        assert.doesNotMatch(result.text, /MPV 插件不满足客户端要求的能力/, fail('MPV 能力检查', related));
     });
 
     it('keeps a single window-all-closed listener', async () => {

@@ -17,11 +17,11 @@ import { synchronizeMpvConfig } from '../../common/mpvConfigSync/sync';
 import { currentPlatform, mpvPlayer, MpvPlayer, mpvUserConfigDir } from '../../../public/platform';
 
 /**
- * MPV配置文件管理插件
+ * MPV 配置文件管理插件
  * 启动时按 MPV 归档清单把便携配置同步到用户配置（src/main/common/mpvConfigSync）。
  */
 
-// 获取用户MPV配置目录。附带 MPV 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
+// 获取用户MPV 配置目录。附带 MPV 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
 // userMpvPath 是自选 MPV；附带 MPV 不传，它旁边的 portable_config 会被 --config-dir 盖过。
 export function getMpvConfigDir(userMpvPath?: string): string {
     return mpvUserConfigDir(
@@ -89,7 +89,7 @@ function initializeMpvConfig(): void {
         if (prompt.show) showMergePrompt(prompt, mpvConfigDir);
     } catch (error) {
         capabilitiesSatisfied = false;
-        logger.error('初始化MPV配置失败:', error);
+        logger.error('初始化 MPV 配置失败:', error);
     }
 }
 
@@ -97,16 +97,16 @@ function initializeMpvConfig(): void {
 function showMergePrompt(prompt: MergePrompt, mpvConfigDir: string): void {
     const text = mergePromptText(prompt);
     const files = prompt.conflicts.map(entry => entry.path).join(', ');
-    logger.info(`MPV配置有待合并的更新，弹出提示${prompt.migration ? '（首次迁移）' : ''}: ${files}`);
+    logger.info(`MPV 配置有待合并的更新，弹出提示${prompt.migration ? '（首次迁移）' : ''}: ${files}`);
     dialog.showMessageBox({ type: 'info', ...text, buttons: ['打开配置目录', '知道了'], defaultId: 1, cancelId: 1 })
         .then(async ({ response }) => {
             acknowledgeConflicts(mpvConfigDir, prompt.conflicts);
-            logger.info(`MPV配置待合并更新提示已关闭，记为已确认: ${files}`);
+            logger.info(`MPV 配置待合并更新提示已关闭，记为已确认: ${files}`);
             if (response !== 0) return;
             const error = await shell.openPath(mpvConfigDir);
-            if (error) logger.error(`打开MPV用户配置目录失败: ${error}`, mpvConfigDir);
+            if (error) logger.error(`打开 MPV 用户配置目录失败: ${error}`, mpvConfigDir);
         })
-        .catch(error => logger.error('MPV配置待合并更新提示失败:', error));
+        .catch(error => logger.error('MPV 配置待合并更新提示失败:', error));
 }
 
 // 插件初始化函数

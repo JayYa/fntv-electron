@@ -18,8 +18,8 @@
 
 托盘“设置”子菜单：
 
-- `设置MPV播放器路径 (<路径>)` 总是显示上面算出的路径，找不到时显示 `(未找到)`。
-- `打开MPV用户配置目录 (<路径>)` 显示按当前设置算出的用户配置目录，也就是下次播放时 MPV 读的目录。改了 MPV 播放器路径后它立刻变化，但要重启客户端才会同步到新目录。目录不存在时只弹提示，不创建：空目录会让下次同步按首次初始化处理。`shell.openPath` 失败时弹错误框并记 ERROR 日志。
+- `设置 MPV 播放器路径 (<路径>)` 总是显示上面算出的路径，找不到时显示 `(未找到)`。
+- `打开 MPV 用户配置目录 (<路径>)` 显示按当前设置算出的用户配置目录，也就是下次播放时 MPV 读的目录。改了 MPV 播放器路径后它立刻变化，但要重启客户端才会同步到新目录。目录不存在时只弹提示，不创建：空目录会让下次同步按首次初始化处理。`shell.openPath` 失败时弹错误框并记 ERROR 日志。
 - `MPV 配置有 N 个待合并的更新` 只在上面这个目录里有 `*.fntv-new`（不算 `.fntv-sync-*` 里的）时显示，点击打开目录。托盘递归监视这个目录（`src/main/common/mpvConfigSync/pendingUpdates.ts`），`.fntv-new` 增删后约 200 毫秒重建菜单，删完这一项就消失。
 
 ## MPV 归档
@@ -32,7 +32,7 @@
 - 升级归档：先在 `JayYa/fntv-mpv-config` 发布新 Release。`update-mpv-archive.yml` 每天查一次它的最新正式 Release，tag 比 `mpv-archive.json` 固定的新时开 PR（分支 `automation/mpv-archive`，标题 `fix(deps): 附带的 MPV 和插件更新到 <tag>`）；不想等就在 Actions 里手动触发它，可填 tag 换成指定的 Release（也用于回滚）。这个 PR 由 `GITHUB_TOKEN` 开，检查显示 action_required，维护者在 PR 上点 “Approve workflows to run” 后 CI 和 Smoke Test 才跑。
 - 改哪几处只由 `scripts/update-mpv-archive.cjs` 决定，手工升级也运行它：`node scripts/update-mpv-archive.cjs`（最新 Release，比固定的新才改）或 `node scripts/update-mpv-archive.cjs --tag <tag>`，设了 `GH_TOKEN` 时带上它调 API。它从 Release API 取资产名（不按 tag 推算）和资产的 sha256 digest，不下载归档，改 `mpv-archive.json` 里的 tag、资产名和 sha256，`README.md` 准备步骤里的 tag 和资产名，以及本页上面那条 tag。Release 必须恰好有一个 `.zip` 资产且有 digest，否则报错、什么都不改。三处不一致时 `tests/mpvArchiveCache.test.cjs` 失败，脚本和 workflow 由 `tests/mpvArchiveUpdate.test.cjs` 检查。
 - 归档根目录带清单 `fntv-manifest.json`（从 `fntv-mpv-v20261114_235035` 起）。`build.yml` 在编译之后、打包之前运行 `Check MPV archive manifest`（`scripts/check-mpv-manifest.cjs`）：清单读不出、`formatVersion` 不在 `SUPPORTED_MANIFEST_FORMAT_VERSIONS` 里、`archiveVersion` 不是 `mpv-archive.json` 固定的 tag，或 `provides` 不满足 `MPV_REQUIRED_CAPABILITIES` 时构建失败。它复用编译后的 `readManifest` 和 `unmetCapabilities`。`pnpm run check` 不下载归档，只用临时夹具测这个脚本（`tests/mpvArchiveManifest.test.cjs`）；对真实归档的检查在构建里，升级归档的 PR 改了 `mpv-archive.json`，会触发 Smoke Test 构建。
-- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe` 和清单。macOS 和 Linux 只打包 `portable_config` 和清单 `fntv-manifest.json`（`package.json` 的 `extraFiles`，两处），清单仍在便携配置的上一级，`resolveManifestPath` 找得到。三个平台都带清单由 `tests/mpvArchiveManifest.test.cjs` 检查，安装包冒烟测试检查启动日志里有“MPV配置已按清单 <tag> 同步”。
+- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe` 和清单。macOS 和 Linux 只打包 `portable_config` 和清单 `fntv-manifest.json`（`package.json` 的 `extraFiles`，两处），清单仍在便携配置的上一级，`resolveManifestPath` 找得到。三个平台都带清单由 `tests/mpvArchiveManifest.test.cjs` 检查，安装包冒烟测试检查启动日志里有“MPV 配置已按清单 <tag> 同步”。
 
 ## 用户配置同步
 
