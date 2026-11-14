@@ -6,6 +6,12 @@ After changing code, run `pnpm run check`. It runs the file size check (files ch
 
 Branch protection requires the `Check` job of `ci.yml` and the PR title check `Conventional Commits`. `Check` fails when any job it needs fails or is cancelled, so adding a job to `ci.yml` means adding it to the `needs` of `Check`, not to the ruleset.
 
+## PR titles and release
+
+PRs are squash-merged and the PR title becomes the commit on `main`; release-please turns `feat`, `fix` and `perf` titles into a version bump and a user-visible CHANGELOG entry. Changes to CI, the build and tests don't go into a release: title them `ci:`, `build:`, `test:` or `chore:` (hidden in `release-please-config.json`), never `feat`/`fix`/`perf`. `scripts/check-commit-message.cjs` (commit-msg hook and `pr-title.yml`) rejects `feat`, `fix` and `perf` with the scope `ci`, `build`, `test` or `tests`; it can't catch an unscoped `feat:` for a CI change, so pick the type by what users get. `fix(deps)` stays allowed: Renovate uses it for runtime dependencies, which ship in the installer.
+
+If a CI change was already merged with a release type, add a `BEGIN_COMMIT_OVERRIDE` / `END_COMMIT_OVERRIDE` block with the corrected title to the end of the merged PR's description, then re-run the latest `release.yml` push run on `main`. release-please doesn't close a Release PR that it no longer needs: close it and remove its `autorelease: pending` label.
+
 ## CI failures
 
 Gather evidence before changing anything:

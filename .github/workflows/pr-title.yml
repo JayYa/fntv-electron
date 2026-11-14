@@ -2,6 +2,7 @@ name: PR Title
 
 # 仓库只允许 squash 合并，标题取 PR 标题、正文留空，进入 main 的只有 PR 标题，release-please 据此生成
 # CHANGELOG。PR 里的提交不进 main，CI 不检查，本地 commit-msg hook 仍会检查。edited 让改标题后重新检查。
+# 脚本还拒绝 feat/fix/perf 搭配 ci、build、test、tests 这类 scope：CI、构建、测试的改动不进 release。
 # 不按目标分支过滤，理由同 ci.yml。
 on:
   pull_request:
