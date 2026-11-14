@@ -135,7 +135,7 @@ jobs:
       # 打包工具大多还能用，缺的再下载。PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
       # 打包工具存到 ELECTRON_BUILDER_CACHE，由 Build application 显式指定。Electron zip 由 @electron/get
       # 存到它的默认目录（不读 ELECTRON_CACHE，路径是 <默认目录>/<子目录>/<zip>）。宿主架构的 zip（Linux x64、
-      # macOS arm64、Windows x64）已由 install-dependencies 的 electron-<os> 缓存恢复，这里只存另一个架构的
+      # macOS arm64、Windows x64）已由 install-dependencies 的 electron-<os>-<arch> 缓存恢复，这里只存另一个架构的
       # zip（Linux arm64、macOS x64），不写排除规则：actions/cache 匹配到目录时整个打包，排除不了目录里的文件。
       # 匹配不到的路径会被忽略。runner 换架构时要跟着改，否则那个 zip 每次重新下载。
       - name: Restore packaging download cache

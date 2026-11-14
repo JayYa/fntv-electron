@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { action, assertRestoreAndSave, posixPath, runStep, workflow } = require('./helpers/workflowSteps.cjs');
+const { action, posixPath, runStep, workflow } = require('./helpers/workflowSteps.cjs');
 
 // Electron 二进制由安装依赖之后的单独步骤带缓存和重试下载（2026-11-09，PR #140、#139 的 504）。
 // electron 42 起没有 postinstall，二进制在第一次 require('electron') 时按需下载，只试一次；
@@ -18,9 +18,8 @@ function installSteps() {
         install,
         pnpm: install.steps.find(step => step.name === 'Install dependencies'),
         keys: install.steps.find(step => step.id === 'keys'),
-        restore: install.steps.find(step => step.id === 'electron-cache'),
+        cache: install.steps.find(step => step.id === 'electron-cache'),
         download: install.steps.find(step => step.name === 'Download Electron binary'),
-        save: install.steps.find(step => step.name === 'Save Electron download cache'),
     };
 }
 
@@ -52,7 +51,7 @@ test('ci.yml and build.yml install dependencies through the shared action', () =
     // 两份各写一遍时，build.yml 漏改过一次（#143 只改了 ci.yml），Renovate PR #139 的构建因此失败。
     const ci = workflow('ci.yml').jobs.test.steps;
     const build = workflow('build.yml').jobs.build.steps;
-    for (const [name, steps, before] of [['ci.yml', ci, 'Run Node tests'], ['build.yml', build, 'Build application']]) {
+    for (const [name, steps, before] of [['ci.yml', ci, 'Run checks'], ['build.yml', build, 'Build application']]) {
         const install = steps.filter(step => step.uses === INSTALL);
         assert.equal(install.length, 1, `${name} must install through ${INSTALL}`);
         assert.ok(install[0]['timeout-minutes'] > 0, `${name}: install has no timeout`);
@@ -101,14 +100,17 @@ test('the install action downloads Electron after installing dependencies', () =
     assert.ok(install.steps.every(step => step['timeout-minutes'] === undefined));
 });
 
-test('the Electron download is cached per Electron version', () => {
-    const { install, keys, restore, download, save } = installSteps();
-    assertRestoreAndSave(install, restore, save, download);
-    assert.ok(install.steps.indexOf(keys) < install.steps.indexOf(restore));
-    assert.ok(install.steps.indexOf(restore) < install.steps.indexOf(download), 'Electron cache must be restored before the download');
+// 单步 actions/cache，job 结束时由 post 步骤保存（2026-11-14）。key 带架构，见 tests/buildDownloads.test.cjs。
+test('the Electron download is cached per Electron version and runner architecture', () => {
+    const { install, keys, cache, download } = installSteps();
+    assert.match(cache.uses, /^actions\/cache@[0-9a-f]{40}$/);
+    assert.equal(cache['continue-on-error'], true);
+    assert.ok(!install.steps.some(step => /^actions\/cache\/(restore|save)@/.test(step.uses ?? '')), 'use one actions/cache step');
+    assert.ok(install.steps.indexOf(keys) < install.steps.indexOf(cache));
+    assert.ok(install.steps.indexOf(cache) < install.steps.indexOf(download), 'Electron cache must be restored before the download');
     assert.equal(keys.run, 'node scripts/ci-download-cache.cjs keys');
-    assert.equal(restore.with.key, '${{ steps.keys.outputs.electron-key }}');
-    const paths = restore.with.path.trim().split('\n');
+    assert.equal(cache.with.key, '${{ steps.keys.outputs.electron-key }}');
+    const paths = cache.with.path.trim().split('\n');
     for (const dir of ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache']) {
         assert.ok(paths.includes(dir), `${dir} is not cached`);
     }

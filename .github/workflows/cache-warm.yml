@@ -56,9 +56,10 @@ jobs:
           REF: ${{ github.ref }}
         run: |
           include=''
-          for entry in Linux:linux:ubuntu-latest Windows:windows:windows-latest macOS:macos:macos-latest; do
-            IFS=: read -r runner_os platform os <<< "$entry"
-            keys="$(GITHUB_OUTPUT= RUNNER_OS="$runner_os" node scripts/ci-download-cache.cjs keys | grep -E '^(electron|packaging)-key=' | cut -d= -f2-)"
+          # runner.os:runner.arch:平台:runner 镜像。架构要和镜像一致，Electron 缓存的 key 带架构（scripts/ci-download-cache.cjs）。
+          for entry in Linux:X64:linux:ubuntu-latest Windows:X64:windows:windows-latest macOS:ARM64:macos:macos-latest; do
+            IFS=: read -r runner_os runner_arch platform os <<< "$entry"
+            keys="$(GITHUB_OUTPUT= RUNNER_OS="$runner_os" RUNNER_ARCH="$runner_arch" node scripts/ci-download-cache.cjs keys | grep -E '^(electron|packaging)-key=' | cut -d= -f2-)"
             # 没取到 key 时不能当成缓存都在。
             if [ "$(echo "$keys" | grep -c .)" -ne 2 ]; then echo "Expected 2 cache keys for $runner_os, got: $keys"; exit 1; fi
             missing=0
@@ -112,8 +113,10 @@ jobs:
         run: |
           caches="$(gh api --paginate -X GET "repos/$REPO/actions/caches" -f ref="$REF" -f per_page=100 \
             --jq '.actions_caches[] | "\(.id)\t\(.key)"')"
-          for runner_os in Linux Windows macOS; do
-            stale="$(printf '%s\n' "$caches" | RUNNER_OS="$runner_os" node scripts/ci-download-cache.cjs stale)"
+          # 架构和 missing 的 runner 镜像一致。
+          for runner in Linux:X64 Windows:X64 macOS:ARM64; do
+            IFS=: read -r runner_os runner_arch <<< "$runner"
+            stale="$(printf '%s\n' "$caches" | RUNNER_OS="$runner_os" RUNNER_ARCH="$runner_arch" node scripts/ci-download-cache.cjs stale)"
             while IFS="$(printf '\t')" read -r id key; do
               [ -n "$id" ] || continue
               echo "Deleting $key ($id)"

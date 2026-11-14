@@ -56,7 +56,7 @@ test('cache-warm.yml builds on main without uploading, only where caches are mis
 
 test('cache-warm.yml warms only the platforms missing a cache on main', t => {
     // Linux 两个缓存都有，Windows 缺 packaging，macOS 都缺。
-    const present = ['electron-Linux-38.8.6', PACKAGING_KEY, 'electron-Windows-38.8.6'];
+    const present = ['electron-Linux-X64-38.8.6', PACKAGING_KEY, 'electron-Windows-X64-38.8.6'];
     const GH = `case " $* " in\n${present.map(key => `  *" key=${key} "*) echo 1 ;;`).join('\n')}\n  *) echo 0 ;;\nesac`;
     const { result, calls } = runWithGh(t, workflow('cache-warm.yml').jobs.missing, step => step.id === 'missing', { GH, REF: 'refs/heads/main' });
     assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -72,18 +72,22 @@ test('a cache is stale only once the current key of the same kind and platform i
     const dir = tempDir(t, 'fntv-stale-caches-');
     writeProject(dir);
     const caches = [
-        { id: 1, key: 'electron-Linux-38.8.6' },
-        { id: 2, key: 'electron-Linux-38.0.0' },
+        { id: 1, key: 'electron-Linux-X64-38.8.6' },
+        { id: 2, key: 'electron-Linux-X64-38.0.0' },
         { id: 3, key: 'packaging-Linux-electron-38.8.6-electron-builder-26.18.0-app-builder-lib-26.18.0' },
         { id: 4, key: 'packaging-v2-Linux-electron-38.0.0-electron-builder-26.18.0-app-builder-lib-26.18.0' },
-        { id: 5, key: 'electron-Windows-38.0.0' },
+        { id: 5, key: 'electron-Windows-X64-38.0.0' },
         { id: 6, key: 'mpv-archive-Linux-783cc16d' },
+        // key 加架构之前的格式也算旧的；同一平台另一个架构的不算。
+        { id: 8, key: 'electron-Linux-38.8.6' },
+        { id: 9, key: 'electron-Linux-ARM64-38.0.0' },
     ];
+    const linux = { os: 'Linux', arch: 'X64' };
     // 新打包 key 还没存：打包缓存一条都不删，旧的还要经 restore-keys 用。
-    assert.deepEqual(downloads.staleCaches('Linux', caches, dir).map(cache => cache.id), [2]);
+    assert.deepEqual(downloads.staleCaches(linux, caches, dir).map(cache => cache.id), [2, 8]);
     const withPackaging = [...caches, { id: 7, key: PACKAGING_KEY }];
-    assert.deepEqual(downloads.staleCaches('Linux', withPackaging, dir).map(cache => cache.id), [2, 3, 4]);
-    assert.deepEqual(downloads.staleCaches('Windows', withPackaging, dir), []);
+    assert.deepEqual(downloads.staleCaches(linux, withPackaging, dir).map(cache => cache.id), [2, 3, 4, 8]);
+    assert.deepEqual(downloads.staleCaches({ os: 'Windows', arch: 'X64' }, withPackaging, dir), []);
 });
 
 test('cache-warm.yml deletes superseded caches after warming, even when nothing was built', () => {
@@ -94,7 +98,7 @@ test('cache-warm.yml deletes superseded caches after warming, even when nothing 
 });
 
 test('the prune step deletes the stale caches it lists on main', t => {
-    const list = ['11\telectron-Linux-38.0.0', '12\telectron-Linux-38.8.6', `13\t${PACKAGING_KEY}`,
+    const list = ['11\telectron-Linux-38.0.0', '12\telectron-Linux-X64-38.8.6', `13\t${PACKAGING_KEY}`,
         '14\tpackaging-Linux-electron-38.8.6-x', '15\tpackaging-macOS-electron-38.8.6-x', ''].join('\n');
     const { result, calls } = runWithGh(t, workflow('cache-warm.yml').jobs.prune, step => step.id === 'prune', { REF: 'refs/heads/main' }, list);
     assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -124,8 +128,10 @@ test('ci.yml also runs on pushes to main, and the file size check only on pull r
     assert.deepEqual(ci.on.push, { branches: ['main'] });
     // 不按 branches 过滤，堆叠 PR 也要跑（CODING_STANDARDS.md）。
     assert.equal(ci.on.pull_request, null);
-    // push 上没有 PR 的 base 提交，大小检查只看 PR 改动的文件。
-    assert.equal(ci.jobs['file-size'].if, "github.event_name == 'pull_request'");
+    // push 上没有 PR 的 base 提交，大小检查只看 PR 改动的文件；它在 test job 的 Run checks 里按事件开关，
+    // 运行结果见 tests/standards.test.cjs 的 CI checks the size of files a pull request changes。
+    const run = ci.jobs.test.steps.find(step => step.name === 'Run checks');
+    assert.match(run.env.FILE_SIZE, /github\.event_name == 'pull_request'/);
     assert.equal(ci.jobs.test.if, undefined);
 });
 

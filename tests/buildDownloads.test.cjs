@@ -12,7 +12,8 @@ const downloads = require('../scripts/ci-download-cache.cjs');
 
 const root = path.resolve(__dirname, '..');
 const CACHE_DIRS = ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache'];
-// 打包缓存只存非宿主架构的 Electron zip，宿主架构的已在 install-dependencies 的 electron-<os> 缓存里（2026-11-10）。
+// 打包缓存只存非宿主架构的 Electron zip，宿主架构的已在 install-dependencies 的 electron-<os>-<arch> 缓存里（2026-11-10）。
+const LINUX = { os: 'Linux', arch: 'X64' };
 const PACKAGING_ZIPS = ['~/.cache/electron/**/electron-v*-linux-arm64.zip', '~/Library/Caches/electron/**/electron-v*-darwin-x64.zip'];
 
 test('the packaging cache key follows the packaging tool versions, not the lockfile', () => {
@@ -33,32 +34,37 @@ test('the packaging cache key follows the packaging tool versions, not the lockf
     const paths = restore.with.path.trim().split('\n');
     assert.ok(paths.includes(build.env.ELECTRON_BUILDER_CACHE), 'ELECTRON_BUILDER_CACHE is not cached');
     assert.deepEqual(paths.slice(1), PACKAGING_ZIPS);
-    // 列出目录时 actions/cache 把整个目录打包，宿主架构的 zip 会和 electron-<os> 缓存重复一份。
+    // 列出目录时 actions/cache 把整个目录打包，宿主架构的 zip 会和 electron-<os>-<arch> 缓存重复一份。
     for (const dir of CACHE_DIRS) assert.ok(!paths.includes(dir), `${dir} is cached as a whole directory`);
 });
 
 test('cache keys come from the pinned versions and ignore other lockfile changes', t => {
     const dir = tempDir(t, 'fntv-cache-keys-');
     writeProject(dir);
-    const keys = downloads.cacheKeys('Linux', dir);
-    assert.equal(keys['electron-key'], 'electron-Linux-38.8.6');
+    const keys = downloads.cacheKeys(LINUX, dir);
+    assert.equal(keys['electron-key'], 'electron-Linux-X64-38.8.6');
     assert.equal(keys['packaging-key'], 'packaging-v2-Linux-electron-38.8.6-electron-builder-26.18.0-app-builder-lib-26.18.0');
     assert.ok(keys['packaging-key'].startsWith(keys['packaging-electron-prefix']));
     assert.ok(keys['packaging-electron-prefix'].startsWith(keys['packaging-prefix']));
     writeProject(dir, { lock: '  app-builder-lib@26.18.0(dmg-builder@26.18.0):\n  esbuild@0.99.0:\n' });
-    assert.deepEqual(downloads.cacheKeys('Linux', dir), keys);
-    assert.equal(downloads.cacheKeys('macOS', dir)['electron-key'], 'electron-macOS-38.8.6');
+    assert.deepEqual(downloads.cacheKeys(LINUX, dir), keys);
+    assert.equal(downloads.cacheKeys({ os: 'macOS', arch: 'ARM64' }, dir)['electron-key'], 'electron-macOS-ARM64-38.8.6');
+    // Electron zip 只对一种架构有用，key 带架构；打包缓存存的是另一个架构的 zip，只按平台区分。
+    const arm = downloads.cacheKeys({ os: 'Linux', arch: 'ARM64' }, dir);
+    assert.equal(arm['electron-key'], 'electron-Linux-ARM64-38.8.6');
+    assert.equal(arm['packaging-key'], keys['packaging-key']);
 });
 
 test('cache keys refuse version ranges and ambiguous app-builder-lib versions', t => {
     const dir = tempDir(t, 'fntv-cache-keys-');
     writeProject(dir, { electron: '^38.8.6' });
-    assert.throws(() => downloads.cacheKeys('Linux', dir), /electron must be pinned/);
+    assert.throws(() => downloads.cacheKeys(LINUX, dir), /electron must be pinned/);
     writeProject(dir, { lock: '  app-builder-lib@26.18.0:\n  app-builder-lib@26.17.0:\n' });
-    assert.throws(() => downloads.cacheKeys('Linux', dir), /one app-builder-lib version/);
+    assert.throws(() => downloads.cacheKeys(LINUX, dir), /one app-builder-lib version/);
     assert.throws(() => downloads.cacheKeys(undefined, dir), /RUNNER_OS/);
+    assert.throws(() => downloads.cacheKeys({ os: 'Linux' }, dir), /RUNNER_ARCH/);
     // 仓库自己的 package.json 和锁文件要能算出 key（Renovate 的 rangeStrategy 是 pin）。
-    assert.match(downloads.cacheKeys('Linux', root)['packaging-key'], /^packaging-v2-Linux-electron-\d/);
+    assert.match(downloads.cacheKeys(LINUX, root)['packaging-key'], /^packaging-v2-Linux-electron-\d/);
 });
 
 test('preparing the packaging cache seeds checksums and drops other Electron versions', t => {
