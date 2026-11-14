@@ -17,13 +17,13 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const http = require('node:http');
-const { execFileSync, spawnSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { _electron: electron } = require('playwright-core');
 const { resolveTarget } = require('./targets.cjs');
 const { resolveLaunch } = require('./launch.cjs');
+const { delay, killProcessTree, poll, readProxyPort, readText, requestPlayVideo, waitProxyStopped } = require('./probes.cjs');
 
 const root = path.resolve(__dirname, '..', '..');
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -39,64 +39,8 @@ const PACKAGED_ONLY = '只对安装包成立';
 const UNCAUGHT_PATTERN = /Uncaught Exception|A JavaScript error occurred in the main process|UnhandledPromiseRejection/;
 // Proxy 的日志经 IPC 由主进程写进 app.log，每行带这个标记（src/main/common/proxy.ts）。
 const PROXY_LOG_MARK = '[Proxy]';
-// Proxy 端口由系统分配，主进程在它就绪时把实际端口写进 app.log（src/main/common/proxy.ts）。
-const PROXY_READY_PATTERN = /Proxy 已就绪，端口 (\d+)/g;
-
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
 function fail(step, detail) {
     return `${step}失败：${detail}\n截图和日志：${artifactsDir}`;
-}
-
-async function poll(check, timeoutMs, intervalMs = 250) {
-    const deadline = Date.now() + timeoutMs;
-    let last;
-    while (Date.now() < deadline) {
-        last = await check();
-        if (last.done) return last;
-        await delay(intervalMs);
-    }
-    return last;
-}
-
-// 客户端退出后 Proxy 应随之退出，端口不再响应。
-function waitProxyStopped(port, timeoutMs) {
-    return poll(async () => {
-        const response = await requestPlayVideo(port);
-        return { done: Boolean(response.error), detail: JSON.stringify(response) };
-    }, timeoutMs);
-}
-
-function readText(file) {
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
-}
-
-// app.log 里最后一次“Proxy 已就绪”报告的端口，还没有时返回 undefined。
-function readProxyPort(appLog) {
-    const matches = [...readText(appLog).matchAll(PROXY_READY_PATTERN)];
-    return matches.length ? Number(matches[matches.length - 1][1]) : undefined;
-}
-
-// Windows 上 kill 只结束客户端主进程，Proxy 子进程会留下来锁住安装目录、占着端口，要结束整个进程树。
-function killProcessTree(child) {
-    if (process.platform === 'win32') {
-        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    } else {
-        child.kill('SIGKILL');
-    }
-}
-
-// 不带 session 的 playvideo：Proxy 在线时返回 400，不碰 NAS。只要有 HTTP 响应就说明 Proxy 在监听。
-function requestPlayVideo(port) {
-    return new Promise(resolve => {
-        const request = http.get({ host: '127.0.0.1', port, path: '/api/v1/playvideo/smoke', timeout: 1000 }, response => {
-            const chunks = [];
-            response.on('data', chunk => chunks.push(chunk));
-            response.on('end', () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
-        });
-        request.on('timeout', () => request.destroy(new Error('timeout')));
-        request.on('error', error => resolve({ error: error.code || error.message }));
-    });
 }
 
 describe(`${appDir ? 'unpackaged' : 'installer'} smoke test (${target.id})`, () => {
@@ -297,6 +241,26 @@ ${mainOutput.slice(-4000)}`));
         }, result.iconPath);
         assert.equal(icon.empty, false, fail('主窗口图标检查', `${result.iconPath} 加载后是空图像`));
         console.log(`::notice::smoke ${target.id} window icon: ${result.iconPath} ${icon.size.width}x${icon.size.height}`);
+    });
+
+    it('synchronizes the MPV user config by the packaged manifest', async t => {
+        // 启动时按便携配置上一级的 fntv-manifest.json 同步用户配置（src/main/handlers/plugins/mpvConfig.ts），
+        // 成功时日志有“MPV配置已按清单 <tag> 同步”；清单没打进包时是“MPV归档清单缺失”的 ERROR（#221）。
+        // 隔离的用户目录里没有安装记录，按全新安装同步。
+        if (appDir && !fs.existsSync(path.join(appDir, 'third_party', 'fntv-mpv', 'fntv-manifest.json'))) {
+            t.skip('未打包且仓库里没有解压 MPV 归档（ci.yml 不下载它），安装包上检查');
+            return;
+        }
+        const { tag } = JSON.parse(fs.readFileSync(path.join(root, 'mpv-archive.json'), 'utf8'));
+        const appLog = path.join(logDir, 'app.log');
+        const synced = `MPV配置已按清单 ${tag} 同步`;
+        const result = await poll(async () => {
+            const text = readText(appLog);
+            return { done: text.includes(synced) || text.includes('跳过同步'), text };
+        }, 10000);
+        const related = result.text.split(/\r?\n/).filter(line => /MPV配置|MPV归档|MPV插件/.test(line)).join('\n');
+        assert.ok(result.text.includes(synced), fail('MPV 配置同步检查', `${appLog} 里没有“${synced}”：\n${related}`));
+        assert.doesNotMatch(result.text, /MPV插件不满足客户端要求的能力/, fail('MPV 能力检查', related));
     });
 
     it('keeps a single window-all-closed listener', async () => {

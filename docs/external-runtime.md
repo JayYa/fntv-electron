@@ -26,16 +26,17 @@
 
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
 - Electron 构建只下载这一个归档，不再从上游插件分支覆盖文件。下载逻辑在 `.github/workflows/build.yml` 的 `Download third-party dependencies` 步骤。
-- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261110_224319`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
+- 该步骤固定下载 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261114_235035`，并校验 sha256。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
 - tag、资产名和 sha256 写在仓库根目录的 `mpv-archive.json`，`build.yml` 的 `Read pinned MPV archive` 步骤把它转成 `MPV_CONFIG_*` 环境变量并校验格式。不写在 `build.yml` 里：`GITHUB_TOKEN` 推不了改 `.github/workflows` 的提交，自动升级的 PR 会被拒（2026-11-14 第一次运行就是这样失败的）。压缩包缓存在 `$RUNNER_TEMP/mpv-archive`，key 含 sha256，换版本时自动失效。缓存用 `actions/cache/restore` 和 `actions/cache/save` 分开写，下载并校验通过后立即保存，后面的构建失败也不丢；命中时不保存，缓存出错不让构建失败。命中缓存也校验 sha256，不通过就重新下载。以上缓存约定由 `tests/mpvArchiveCache.test.cjs` 检查。未命中时 `curl` 对所有错误重试 5 次，每次隔 10 秒，最多 5 分钟，避免 Release 下载偶发的 5xx 让构建失败。
 - electron-builder 打包时下载的另一个架构的 Electron zip 和打包工具不缓存（2026-11-14 删掉，不命中只多 10 到 14 秒），下载出 5xx 或网络错误时 `Build application` 整体重跑，共 3 次。宿主架构的 Electron zip 由 `install-dependencies` 的 `electron-<os>-<arch>-<版本>` 缓存恢复，存在 `@electron/get` 的默认目录（Linux `~/.cache/electron`，macOS `~/Library/Caches/electron`，Windows `%LOCALAPPDATA%\electron\Cache`），它不读 `ELECTRON_CACHE`。
 - 升级归档：先在 `JayYa/fntv-mpv-config` 发布新 Release。`update-mpv-archive.yml` 每天查一次它的最新正式 Release，tag 比 `mpv-archive.json` 固定的新时开 PR（分支 `automation/mpv-archive`，标题 `fix(deps): 附带的 MPV 和插件更新到 <tag>`）；不想等就在 Actions 里手动触发它，可填 tag 换成指定的 Release（也用于回滚）。这个 PR 由 `GITHUB_TOKEN` 开，检查显示 action_required，维护者在 PR 上点 “Approve workflows to run” 后 CI 和 Smoke Test 才跑。
 - 改哪几处只由 `scripts/update-mpv-archive.cjs` 决定，手工升级也运行它：`node scripts/update-mpv-archive.cjs`（最新 Release，比固定的新才改）或 `node scripts/update-mpv-archive.cjs --tag <tag>`，设了 `GH_TOKEN` 时带上它调 API。它从 Release API 取资产名（不按 tag 推算）和资产的 sha256 digest，不下载归档，改 `mpv-archive.json` 里的 tag、资产名和 sha256，`README.md` 准备步骤里的 tag 和资产名，以及本页上面那条 tag。Release 必须恰好有一个 `.zip` 资产且有 digest，否则报错、什么都不改。三处不一致时 `tests/mpvArchiveCache.test.cjs` 失败，脚本和 workflow 由 `tests/mpvArchiveUpdate.test.cjs` 检查。
-- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
+- 归档根目录带清单 `fntv-manifest.json`（从 `fntv-mpv-v20261114_235035` 起）。`build.yml` 在编译之后、打包之前运行 `Check MPV archive manifest`（`scripts/check-mpv-manifest.cjs`）：清单读不出、`formatVersion` 不在 `SUPPORTED_MANIFEST_FORMAT_VERSIONS` 里、`archiveVersion` 不是 `mpv-archive.json` 固定的 tag，或 `provides` 不满足 `MPV_REQUIRED_CAPABILITIES` 时构建失败。它复用编译后的 `readManifest` 和 `unmetCapabilities`。`pnpm run check` 不下载归档，只用临时夹具测这个脚本（`tests/mpvArchiveManifest.test.cjs`）；对真实归档的检查在构建里，升级归档的 PR 改了 `mpv-archive.json`，会触发 Smoke Test 构建。
+- Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe` 和清单。macOS 和 Linux 只打包 `portable_config` 和清单 `fntv-manifest.json`（`package.json` 的 `extraFiles`，两处），清单仍在便携配置的上一级，`resolveManifestPath` 找得到。三个平台都带清单由 `tests/mpvArchiveManifest.test.cjs` 检查，安装包冒烟测试检查启动日志里有“MPV配置已按清单 <tag> 同步”。
 
 ## 用户配置同步
 
-同步规则、清单格式、归档里客户端依赖的路径和改归档时的检查项见 [MPV 归档契约](mpv-archive-contract.md)，决策见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)。按清单同步（#222）、待合并更新的提示（#223）和启动时的 `provides` 检查（#224）已落地；打包带清单（#221）尚未生效。下面是当前代码的行为。
+同步规则、清单格式、归档里客户端依赖的路径和改归档时的检查项见 [MPV 归档契约](mpv-archive-contract.md)，决策见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)。按清单同步（#222）、待合并更新的提示（#223）、启动时的 `provides` 检查（#224）和打包带清单、构建期清单断言（#221）都已落地。下面是当前代码的行为。
 
 入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvConfig.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
 
@@ -145,6 +146,7 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 | 用户配置同步：删除归档删掉的文件、托管目录保留用户文件、整体跳过、macOS/Linux 的 `mpv.conf` 例外 | `tests/mpvConfigSyncRules.test.cjs` |
 | 用户配置同步：任一次写入失败或被杀后下次启动补完、便携配置和清单不符 | `tests/mpvConfigSyncFailure.test.cjs` |
 | 便携配置和清单的位置、附带 MPV 同目录、同步日志 | `tests/mpvConfigMigration.test.cjs` |
+| 构建期清单断言、三个平台的包都带清单 | `tests/mpvArchiveManifest.test.cjs` |
 | 用户配置目录、运行哪个 MPV | `tests/platform.test.cjs` |
 | 托盘显示 mpv 路径、打开用户配置目录 | `tests/trayMpvMenu.test.cjs` |
 | 默认播放方式 | `tests/playbackPreference.test.cjs` |

@@ -2,7 +2,7 @@
 
 改 `JayYa/fntv-mpv-config` 产出的 MPV 归档，或改客户端的用户配置同步时读这份文档。它写客户端依赖归档的什么、同步按什么规则改用户配置、哪些东西不能动。决策原因见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)，需求见 spec #219。
 
-> **尚未生效**：下面的清单和同步规则由 #221–#224 和 fntv-mpv-config#3–#5 落地。在那之前客户端仍按 [external-runtime.md 的“用户配置同步”](external-runtime.md#用户配置同步) 工作：只替换 `scripts/uosc_danmaku`，其它文件不动。每张票落地时，把本页对应部分的说明和 external-runtime.md 一起改掉。
+第一个带清单的归档是 `fntv-mpv-v20261114_235035`（fntv-mpv-config#5）。客户端当前的实现见 [external-runtime.md 的“用户配置同步”](external-runtime.md#用户配置同步)。
 
 术语以 [GLOSSARY.md](../GLOSSARY.md) 为准：MPV 归档、便携配置、用户配置、托管文件、用户可改文件、种子文件、清单、历史哈希、能力、安装记录、待合并更新。
 
@@ -12,11 +12,11 @@
 
 | 路径 | 谁用 | 说明 |
 | --- | --- | --- |
-| `fntv-manifest.json` | 同步、构建期断言、启动时能力检查 | 清单，格式见下文。macOS/Linux 的安装包只带便携配置，打包配置（`package.json` 的 `extraFiles`，两处）要把它一起带上（#221） |
+| `fntv-manifest.json` | 同步、构建期断言、启动时能力检查 | 清单，格式见下文。macOS/Linux 的安装包只带便携配置和它（`package.json` 的 `extraFiles`，两处），位置不变 |
 | `portable_config/` | 同步 | 便携配置，同步的来源（`resolvePortableConfigDir`） |
 | `mpv.exe` | Windows 播放 | 附带 MPV，只在 Windows 安装包里 |
 | `portable_config/mpv.conf` | MPV | 薄文件，见“`mpv.conf` 分层” |
-| `portable_config/fntv/defaults.conf` | MPV | 默认值，由 `mpv.conf` include |
+| `portable_config/fntv/defaults.conf` | MPV | 默认值，写在 `[fntv-defaults]` 段里，由 `mpv.conf` include 后用 `profile=fntv-defaults` 应用 |
 | `portable_config/scripts/uosc_danmaku/main.lua` | 同步 | 弹幕插件入口，现有同步缺它时抛错 |
 | `portable_config/scripts/smart_skip/` | MPV 播放时 | 片头片尾跳过，依赖下文的能力 `smart-skip.origin-from-play-url` |
 | `portable_config/danmaku-history.json` | 弹幕插件 | 弹幕历史的种子。fntv-mpv-config 打包时把 `custom_config/<组件>/` 下的文件铺到便携配置根下，所以它在根目录 |
@@ -122,22 +122,23 @@ macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.confi
 
 `input.conf` 和 `script-opts` 不分层：mpv 和 `mp.options` 都只读一个文件，没有 include。只有 `mpv.conf` 分层：
 
-- `fntv/defaults.conf` 是托管文件，放全部默认值。改默认值只改它。
-- `mpv.conf` 是用户可改文件，首个有效行是 `include="~~/fntv/defaults.conf"`，其余只有注释，说明“自己的设置写在这行后面”。用户的设置写在后面，覆盖默认值。没改过 `mpv.conf` 的用户以后不会再有冲突。
+- `fntv/defaults.conf` 是托管文件，全部默认值写在它的 `[fntv-defaults]` 段里，段外没有设置。改默认值只改它。
+- `mpv.conf` 是用户可改文件，前两个有效行依次是 `include="~~/fntv/defaults.conf"` 和 `profile=fntv-defaults`，其余只有注释，说明“自己的设置写在这两行后面”。用户的设置写在后面，覆盖默认值。没改过 `mpv.conf` 的用户以后不会再有冲突。客户端写给老用户的 `mpv.conf.fntv-new` 就是归档里的这个文件，格式相同。
 
 规则：
 
 - include 路径必须带 `~~/` 前缀。
-- include 必须在第一个 `[profile]` 段之前。
-- 契约测试检查这两条。
+- include 必须在第一个 `[profile]` 段之前，紧跟一行 `profile=fntv-defaults`。
+- `defaults.conf` 的设置都在 `[fntv-defaults]` 段里。
+- fntv-mpv-config 的契约测试检查这几条。
 
-依据（mpv master `bb4823e`）：
+依据（`include` 的读法来自 mpv master `bb4823e`；生效顺序是 fntv-mpv-config#7 在附带 MPV `v0.42.0-5-g55d3feb45` 上实测的）：
 
-- 配置文件逐行解析（`options/parse_configfile.c`）。`include` 是特殊选项，解析到它时立即读入目标文件：`options/m_config_frontend.c` 的 include 分支调 `player/main.c` 的 `cfg_include`。同名普通选项后写的生效，所以 include 行之后的设置覆盖默认值。
+- 配置文件逐行解析（`options/parse_configfile.c`），顶层的选项先存进 default profile，读完整个文件才按顺序应用。`include` 是特殊选项，应用到它时才读目标文件（`options/m_config_frontend.c` 的 include 分支调 `player/main.c` 的 `cfg_include`），目标文件的顶层选项追加到 default profile 末尾，排在外层文件所有行之后。所以默认值如果写在 `defaults.conf` 顶层，会反过来覆盖 `mpv.conf` 里用户的设置。
+- 默认值放进 `[fntv-defaults]` 段，`mpv.conf` 在 include 后用 `profile=fntv-defaults` 应用：这一行应用时默认值立即生效，后面用户的设置再覆盖它们。实测日志（`mpv.conf` 末尾加 `osd-duration=5000`，`defaults.conf` 里是 2000）：先 `Applying profile 'fntv-defaults'...`、`osd-duration = 2000`，再 `osd-duration = 5000`，生效值 5000。
 - 路径经 `mp_get_user_path` 展开：`~~/` 是 MPV 配置目录；不带前缀的相对路径按进程当前目录算，换个工作目录启动就找不到。
-- 被 include 的文件不存在时不报错（`m_config_parse_config_file` 返回 0），所以 `defaults.conf` 缺失时 MPV 会静默地以内置默认值运行。嵌套最多 8 层。
+- 被 include 的文件不存在时不报错（`m_config_parse_config_file` 返回 0），这时 mpv 只记一条 `Unknown profile 'fntv-defaults'` 警告，以内置默认值照常启动。嵌套最多 8 层。
 - 写在 `[profile]` 段里的 include 只在应用这个 profile 时读。
-- mpv 手册只写了命令行 `--include` 在默认配置之后读；“行内展开、后写覆盖”是从源码推断的，fntv-mpv-config#5 用附带 MPV 加 `--log-file` 实测一次。
 
 ## 能力（`provides` 和 `requires`）
 
@@ -147,7 +148,7 @@ macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.confi
 | --- | --- | --- | --- |
 | `smart-skip.origin-from-play-url` | 1 | smart_skip 从播放地址取 scheme、主机和端口，请求 Proxy 的 `GET /api/v1/skipinfo/:itemGuid?session=…` 和 `POST /api/v1/skipinfo?session=…`；Proxy 的端口每次启动都可能不同 | `fntv-mpv-v20261110_224319`（#167） |
 
-- 构建期：测试读固定归档的清单，`formatVersion` 不认识或 `provides` 不满足 `requires` 时失败（#221）。
+- 构建期：`build.yml` 的 `Check MPV archive manifest`（`scripts/check-mpv-manifest.cjs`）读解压后的固定归档的清单，清单读不出、`formatVersion` 不认识、`archiveVersion` 不是 `mpv-archive.json` 固定的 tag，或 `provides` 不满足 `requires` 时构建失败（#221）。
 - 启动时：用安装记录里的 `provides` 检查用户配置里实际装上的版本；不满足（同步失败、清单缺失）时记 ERROR、托盘显示状态，不阻塞启动。`same-directory` 没有安装记录，直接读归档的清单（#224）。
 - 插件和客户端之间的约定变了：不兼容时升这个能力的版本，新约定用新名字时加一项，同时改客户端的 `requires`。
 
@@ -165,7 +166,7 @@ macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.confi
 - 新文件归到正确的 `role`；新插件目录加进 `managedDirs`。
 - 删掉的托管文件移进 `obsolete`，带上全部历史哈希。
 - 历史哈希只增不减。
-- `mpv.conf` 首个有效行仍是 `~~/` 前缀的 include，在任何 profile 段之前；默认值改在 `fntv/defaults.conf`。
+- `mpv.conf` 前两个有效行仍是 `~~/` 前缀的 include 和 `profile=fntv-defaults`，在任何 profile 段之前；默认值改在 `fntv/defaults.conf` 的 `[fntv-defaults]` 段里。
 - 没有带 `fntv/installed.json`、`*.fntv-new`、`.fntv-sync-*`、`script-opts/smart_skip.conf`。
 - 插件和客户端之间的约定变了时，改 `provides`。
 - 改了同步规则的含义时升 `formatVersion`，并且先发支持它的客户端。
@@ -174,4 +175,4 @@ macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.confi
 在 fntv-electron：
 
 - 用 `scripts/update-mpv-archive.cjs` 或 “Update MPV archive” workflow 固定新归档，不手改（见 [external-runtime.md 的“MPV 归档”](external-runtime.md#mpv-归档)）。
-- 构建期清单断言通过：`formatVersion` 认识，`provides` 满足 `requires`。
+- 构建期清单断言通过：`formatVersion` 认识，`archiveVersion` 等于固定的 tag，`provides` 满足 `requires`。升级 PR 改了 `mpv-archive.json`，会触发 Smoke Test 构建并跑这个断言；`ci.yml` 不下载归档，不跑它。
