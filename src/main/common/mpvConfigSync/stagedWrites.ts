@@ -140,13 +140,13 @@ export class Staging {
         try {
             this.ops.rename(fresh, destination);
         } catch (error) {
-            if (hadPrevious) fs.renameSync(previous, destination);
+            if (hadPrevious) this.ops.rename(previous, destination);
             throw error;
         }
         this.ops.remove(swapDir);
     }
 
     dispose(): void {
-        fs.rmSync(this.dir, { recursive: true, force: true });
+        this.ops.remove(this.dir);
     }
 }

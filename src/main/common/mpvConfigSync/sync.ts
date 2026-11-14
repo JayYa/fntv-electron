@@ -90,7 +90,7 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
     try {
         cleanupLeftoverStaging(mpvConfigDir, ops);
     } catch (error) {
-        return { status: 'failed', error: error instanceof Error ? error : new Error(String(error)), files: [] };
+        return { status: 'failed', error: asError(error), files: [] };
     }
     const read = readManifest(manifestPath);
     if (!read.ok) {
@@ -101,10 +101,18 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
     try {
         return run.execute();
     } catch (error) {
-        return { status: 'failed', error: error instanceof Error ? error : new Error(String(error)), files: run.entries };
+        return { status: 'failed', error: asError(error), files: run.entries };
     } finally {
-        run.dispose();
+        try {
+            run.dispose();
+        } catch {
+            // 删不掉本次的暂存目录不影响结果：下次启动先清理残留的暂存目录。
+        }
     }
+}
+
+function asError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
 }
 
 function toFsPath(root: string, relative: string): string {

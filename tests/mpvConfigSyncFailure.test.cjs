@@ -105,6 +105,14 @@ test('a sync that fails at any write leaves whole plugin directories and the nex
 
         const failed = syncV2(v2, user, ops);
 
+        // 最后一次写操作是删掉本次的暂存目录：同步已完成，残留的暂存目录由下次启动清理。
+        if (failAt === reference.writes) {
+            assert.equal(failed.status, 'synced', `write ${failAt}`);
+            assert.ok(fs.readdirSync(user).some(name => name.startsWith('.fntv-sync-')));
+            assert.equal(syncV2(v2, user).status, 'synced');
+            assert.deepEqual(readTree(user), reference.after);
+            continue;
+        }
         assert.equal(failed.status, 'failed', `write ${failAt}`);
         assert.match(failed.error.message, /injected failure/);
         const afterFailure = readTree(user);
