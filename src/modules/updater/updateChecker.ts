@@ -16,6 +16,7 @@ import {
 import { formatReleaseNotes } from './releaseNotes';
 import { DownloadProgress, InAppUpdate } from './inAppUpdate';
 import { isPlaying, onPlaybackEnded } from '../playback/playbackState';
+import { onQuitStarted } from '../quit/quitCoordinator';
 import { currentArch, currentPlatform, inAppUpdateAvailability } from '../../public/platform';
 
 // 尝试获取semver模块
@@ -425,14 +426,14 @@ export class UpdateChecker {
             log.info('播放已结束，显示推迟的更新提示');
             this.showUpdateDialog(updateInfo).catch(error => log.error('显示推迟的更新提示失败:', error));
         });
-        const dropOnQuit = () => {
+        // 退出时停止播放也会让播放结束，所以要在停止播放之前作废
+        const stopWaitingForQuit = onQuitStarted(() => {
             log.info('客户端退出，不再显示推迟的更新提示');
             this.cancelDeferredUpdateDialog();
-        };
-        app.once('before-quit', dropOnQuit);
+        });
         this.cancelDeferredUpdateDialog = () => {
             stopWaitingForPlayback();
-            app.removeListener('before-quit', dropOnQuit);
+            stopWaitingForQuit();
             this.cancelDeferredUpdateDialog = () => {};
         };
     }

@@ -3,6 +3,7 @@ const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
 const { EventEmitter } = require('node:events');
+const { createQuittingApp, requestQuit, startQuitCoordinator } = require('./fakeQuitApp.cjs');
 const axios = require('axios');
 
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/JayYa/fntv-electron/releases/latest';
@@ -11,7 +12,7 @@ const LATEST_RELEASE_PAGE = 'https://github.com/JayYa/fntv-electron/releases/lat
 // 替换 electron-updater 的 autoUpdater。只记录公开方法的调用和收到的 feed；
 // 下载由测试推进：progress(percent)、finishDownload()、failDownload(error)，出错时和真实的一样先发 error 事件再 reject。
 class FakeAutoUpdater extends EventEmitter {
-    constructor() {
+    constructor({ app, events }) {
         super();
         this.autoDownload = true;
         this.autoInstallOnAppQuit = true;
@@ -21,6 +22,10 @@ class FakeAutoUpdater extends EventEmitter {
         this.installs = [];
         this.checkResult = { isUpdateAvailable: true, updateInfo: { version: '2.7.0' } };
         this.pendingDownload = null;
+        this.installError = null;
+        // 客户端的 app 和测试共用的事件记录
+        this.app = app;
+        this.events = events;
     }
 
     setFeedURL(options) { this.feeds.push(options); }
@@ -44,7 +49,17 @@ class FakeAutoUpdater extends EventEmitter {
         this.pendingDownload.reject(error);
     }
 
-    quitAndInstall(isSilent, isForceRunAfter) { this.installs.push({ isSilent, isForceRunAfter }); }
+    // 和 electron-updater 的 BaseUpdater 一样：安装程序启动成功就在下一轮 app.quit()；
+    // 启动前就失败（installError）时同步发 error 事件，不退出
+    quitAndInstall(isSilent, isForceRunAfter) {
+        this.installs.push({ isSilent, isForceRunAfter });
+        this.events.push('install started');
+        if (this.installError) {
+            this.emit('error', this.installError);
+            return;
+        }
+        setImmediate(() => this.app.quit());
+    }
 }
 
 const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
@@ -80,12 +95,11 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
 
     const dialogs = [];
     const opened = [];
-    // app 是 EventEmitter，测试用 quitApp(app) 模拟客户端退出
+    const events = [];
+    // app.quit() 像 Electron 那样发 before-quit（tests/helpers/fakeQuitApp.cjs），测试用 requestQuit(app) 模拟用户退出
     const electronMock = {
-        app: Object.assign(new EventEmitter(), {
+        app: createQuittingApp(events, {
             isPackaged,
-            quits: 0,
-            quit() { this.quits += 1; },
             // 未打包时日志写在 getAppPath()/log
             getAppPath() { return testRoot; },
             getVersion() { return version; },
@@ -104,7 +118,7 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         },
         safeStorage: {},
     };
-    const updater = new FakeAutoUpdater();
+    const updater = new FakeAutoUpdater({ app: electronMock.app, events });
 
     const originalLoad = Module._load;
     Module._load = function(request, parent, isMain) {
@@ -137,18 +151,9 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
     const logFile = isPackaged ? path.join(paths.userData, 'logs', 'app.log') : path.join(testRoot, 'log', 'app.log');
     const logText = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
 
-    return { checker: getInstance(), app: electronMock.app, dialogs, opened, requests, updater, logText };
+    return { checker: getInstance(), app: electronMock.app, events, dialogs, opened, requests, updater, logText };
 }
 
-// 模拟客户端退出：和 Electron 一样发 before-quit，返回事件，看有没有被拦下
-function quitApp(app) {
-    const event = {
-        defaultPrevented: false,
-        preventDefault() { this.defaultPrevented = true; },
-    };
-    app.emit('before-quit', event);
-    return event;
-}
 
 function release(tagName, assetNames = []) {
     return {
@@ -198,7 +203,8 @@ module.exports = {
     setupUpdateChecker,
     settle,
     waitFor,
-    quitApp,
+    requestQuit,
+    startQuitCoordinator,
     release,
     httpError,
     networkError,

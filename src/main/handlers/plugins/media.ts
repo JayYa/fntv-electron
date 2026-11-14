@@ -3,7 +3,6 @@ import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
 import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
-import { registerAppHook } from '../core/appHook';
 import * as log from '../../../modules/logger';
 import { ItemListRequest } from '../../../modules/fn_api/core/types';
 import { isTrusted } from '../../../modules/cert_trust';
@@ -454,18 +453,9 @@ function processSingleMedia(info: fn.PlayInfo): ply.PlayItem {
     };
 }
 
-// 应用退出前清理播放器
-function handleBeforeQuit(): void {
-    if (playbackState.isPlaying()) {
-        log.info('应用退出前关闭播放器');
-        void playbackState.stopPlaybackAndWait();
-    }
-}
-
-// 注册媒体播放处理器
+// 注册媒体播放处理器。退出时停止播放、等进度回传由退出协调做（src/modules/quit/quitCoordinator.ts）
 function init(): void {
     registerHandler('play-movie', handlePlayMovie);
-    registerAppHook('beforeQuit', handleBeforeQuit);
 }
 
 export {

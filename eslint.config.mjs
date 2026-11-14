@@ -81,6 +81,22 @@ const NO_MODULE_EXPORTS = {
     message: '用 ES export，不要写 module.exports =。'
 };
 
+// 退出收尾的先后顺序只由退出协调模块决定，before-quit 只在它那里监听；其它模块向它注册（src/modules/quit/quitCoordinator.ts）。
+// 拦截的写法见 tests/eslintQuitRules.test.cjs。事件名先存进变量的写法拦不住，留给审查。
+const QUIT_COORDINATOR_FILE = 'src/modules/quit/quitCoordinator.ts';
+const NO_BEFORE_QUIT_LISTENER = {
+    selector: [
+        'CallExpression',
+        ":matches([callee.object.name='app'], [callee.object.property.name='app'])",
+        '[callee.property.name=/^(on|once|addListener|prependListener|prependOnceListener)$/]',
+        ":matches([arguments.0.value='before-quit'], [arguments.0.quasis.0.value.cooked='before-quit'])",
+    ].join(''),
+    message: `before-quit 只在 ${QUIT_COORDINATOR_FILE} 监听。退出时要做的事向退出协调注册（initQuitCoordinator、onQuitStarted、provideInstallOnQuit），不要自己监听。`
+};
+
+// src 下除 platform.ts 外共用的 no-restricted-syntax；退出协调模块只额外放开 before-quit
+const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
+
 // fn_api/core 由主进程和 Proxy 共用，Proxy 服务运行在 utilityProcess 里，两者都不能加载 electron。
 // logger、cert_trust 和 fn_api 的主进程层会间接加载 electron，所以只允许引用 Node 内置模块、npm 包和 core 本身。
 const NO_ELECTRON = {
@@ -109,9 +125,16 @@ export default [
             // 平台判断散在各处时，macOS 和 Linux 分支只能在对应系统上验证。集中到 platform.ts，
             // 由接收平台参数的纯函数决定，在 Windows 上也能测三条分支（tests/platform.test.cjs）。
             // 各种写法的拦截见 tests/eslintPlatformRules.test.cjs。
-            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX],
+            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER],
             // safeStorage 同步方法的拦截见 tests/eslintSafeStorageRules.test.cjs。
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES]
+        }
+    },
+    {
+        // 唯一监听 before-quit 的地方。
+        files: [QUIT_COORDINATOR_FILE],
+        rules: {
+            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX]
         }
     },
     {
@@ -136,7 +159,7 @@ export default [
         // 唯一读取当前平台的地方。
         files: ['src/public/platform.ts'],
         rules: {
-            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS],
+            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, NO_BEFORE_QUIT_LISTENER],
             'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES]
         }
     },
