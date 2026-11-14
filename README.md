@@ -59,10 +59,12 @@ sudo find "/Applications/飞牛影视.app" -exec xattr -d com.apple.quarantine {
 
 macOS 和 Linux 的安装包不带 MPV 播放器，只带 MPV 插件和配置。客户端每次启动会把它们同步到 `~/.config/mpv`（设了 `XDG_CONFIG_HOME` 时是 `$XDG_CONFIG_HOME/mpv`，设了 `MPV_HOME` 时是它本身，和 MPV 读取配置的目录一致），不用自己装插件：
 
-- `~/.config/mpv/scripts` 不存在时，复制全部插件和配置，已有的同名文件（例如你自己的 `mpv.conf`、`input.conf`）保留不覆盖。
-- `~/.config/mpv/scripts` 已存在时，只更新弹幕插件 `scripts/uosc_danmaku`，其它文件不动。之前用过 MPV、已经有 `scripts` 目录的话，`uosc`、`smart_skip` 等其它插件不会自动补上，需要从 [fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config/releases) 的归档里把 `portable_config` 下缺的文件手动复制过去。
+- 插件、字体、着色器和默认值 `fntv/defaults.conf` 由客户端管理，每次启动换成新版，改了也会被覆盖。插件目录里你自己放的其它文件保留。
+- `mpv.conf`、`input.conf` 和 `script-opts` 下的配置：缺的补上；你没改过的换成新版；你改过的不动，新版写在旁边的 `<文件名>.fntv-new`，客户端提示一次，托盘“设置”里会显示待合并的数量。合并完删掉 `.fntv-new` 即可。
+- 弹幕历史 `danmaku-history.json` 只在缺失时复制，不会被覆盖。
+- macOS 和 Linux 上，如果 `mpv.conf` 是你自己原有的（不是客户端装的），客户端不动它，也不提示合并。想用客户端的默认值，在它开头加上 `include="~~/fntv/defaults.conf"` 和 `profile=fntv-defaults` 两行。
 
-Windows 的安装包附带 MPV，但它不读安装目录里的配置：客户端启动它时用 `--config-dir` 指向用户 MPV 配置目录 `%APPDATA%\mpv`（设了 `MPV_HOME` 时是它本身）。安装目录里的 `third_party\fntv-mpv\portable_config` 只是同步的来源，同步规则和上面一样：`%APPDATA%\mpv\scripts` 不存在时复制全部插件和配置，已存在时只更新 `scripts/uosc_danmaku`。在托盘菜单的“设置”里点“打开 MPV 用户配置目录”，打开的就是 MPV 实际读取的目录（三个平台都有这一项）。
+Windows 的安装包附带 MPV，但它不读安装目录里的配置：客户端启动它时用 `--config-dir` 指向用户 MPV 配置目录 `%APPDATA%\mpv`（设了 `MPV_HOME` 时是它本身）。安装目录里的 `third_party\fntv-mpv\portable_config` 只是同步的来源，同步规则和上面一样（`mpv.conf` 的例外只在 macOS 和 Linux 上有）。在托盘菜单的“设置”里点“打开 MPV 用户配置目录”，打开的就是 MPV 实际读取的目录（三个平台都有这一项）。
 
 发现新版本时，Windows 和 Linux（以 AppImage 运行时）可以在客户端内下载并安装；macOS 仍然打开下载链接，需要自己下载安装。更新默认直连 GitHub；GitHub 下载慢时，可以在托盘菜单的“设置”里打开“应用更新下载加速”，应用内更新和下载链接都会经第三方 `gh-proxy.com` 中转，加速地址可在登录页右上角的“通用设置”里修改。
 
@@ -132,9 +134,9 @@ pnpm run build:linux
 1. 自动方法
    克隆 fntv-mpv 仓库，自己改一下相关配置：[fntv-mpv-config](https://github.com/JayYa/fntv-mpv-config)
 2. 手动方法
-   在托盘菜单的“设置”里点“打开 MPV 用户配置目录”（Windows 通常是 `%APPDATA%\mpv`，macOS 和 Linux 通常是 `~/.config/mpv`），在这里改配置和插件。其中 `mpv.conf` 是播放器配置，`input.conf` 是快捷键配置，`script-opts` 下是各插件的选项。
+   在托盘菜单的“设置”里点“打开 MPV 用户配置目录”（Windows 通常是 `%APPDATA%\mpv`，macOS 和 Linux 通常是 `~/.config/mpv`），在这里改配置。`mpv.conf` 是播放器配置，你的设置写在 `profile=fntv-defaults` 那行后面，会盖过客户端的默认值；`input.conf` 是快捷键配置，`script-opts` 下是各插件的选项。
 
-不要改安装目录 `third_party\fntv-mpv\portable_config` 里的文件：MPV 不读它，它只在用户配置目录还没有 `scripts` 目录时复制过去一次，重新安装或者更新还会清空它。用户配置目录不随重装和更新清空；已有 `scripts` 目录时，客户端每次启动只把弹幕插件 `scripts/uosc_danmaku` 整个换成新版（这个目录里的改动会丢），其它文件不动，新版附带的配置和插件也不会自动更新进来。
+不要改安装目录 `third_party\fntv-mpv\portable_config` 里的文件：MPV 不读它，它只是同步的来源，重新安装或者更新还会清空它。用户配置目录里，插件、字体、着色器和 `fntv/defaults.conf` 每次启动都会被换成新版，改了会丢；配置文件你改过的不会被覆盖，新版会写成 `.fntv-new` 等你合并（同步规则见上文“下载安装包”）。
 
 ### 2. 能否支持 PotPlayer？
 
