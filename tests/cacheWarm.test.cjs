@@ -113,13 +113,23 @@ test('the deps job sets up pnpm and Node.js exactly like ci.yml, so the cache ke
         assert.deepEqual({ uses: mine.uses, with: mine.with }, { uses: theirs.uses, with: theirs.with }, name);
     }
     assert.ok(deps.steps.some(step => step.run === 'pnpm install --frozen-lockfile'));
-    // 只装依赖不跑测试，测试由 PR 上的 ci.yml 跑。
+    // 只装依赖不跑测试，测试由 ci.yml 跑。
     assert.ok(!deps.steps.some(step => step.run === 'pnpm test'));
-    // 不给 ci.yml 加 push: main：每次合并都要跑三平台测试，且预热不了打包缓存。
-    assert.deepEqual(Object.keys(workflow('ci.yml').on), ['pull_request']);
 });
 
-test('a new push to a PR cancels its older CI run without touching other workflows', () => {
+// PR #207 和 #209 各自的 CI 都通过，合在一起后 main 上 7 项测试失败，到 #210 才发现（2026-11-14）。
+test('ci.yml also runs on pushes to main, and the file size check only on pull requests', () => {
+    const ci = workflow('ci.yml');
+    assert.deepEqual(Object.keys(ci.on).sort(), ['pull_request', 'push']);
+    assert.deepEqual(ci.on.push, { branches: ['main'] });
+    // 不按 branches 过滤，堆叠 PR 也要跑（CODING_STANDARDS.md）。
+    assert.equal(ci.on.pull_request, null);
+    // push 上没有 PR 的 base 提交，大小检查只看 PR 改动的文件。
+    assert.equal(ci.jobs['file-size'].if, "github.event_name == 'pull_request'");
+    assert.equal(ci.jobs.test.if, undefined);
+});
+
+test('a new CI run cancels the older one on the same PR or on main without touching other workflows', () => {
     const { concurrency } = workflow('ci.yml');
     assert.equal(concurrency.group, 'ci-${{ github.ref }}');
     assert.equal(concurrency['cancel-in-progress'], true);
