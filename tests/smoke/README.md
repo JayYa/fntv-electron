@@ -4,6 +4,18 @@
 
 目标 id 是 `<process.platform>-<process.arch>`，如 `linux-x64`、`darwin-arm64`、`win32-x64`，默认取当前机器，用 `FNTV_SMOKE_TARGET` 指定。
 
+## 未打包模式
+
+同一个脚本也用来检查未打包的应用：`scripts/smoke-unpackaged.cjs` 设 `FNTV_SMOKE_APP_DIR` 为仓库根目录，用 `node_modules` 里的 Electron 启动编译好的 `dest/`（`electron .`）。`ci.yml` 三个平台在 `pnpm run check` 之后跑（`Launch unpackaged app`，Linux 用 `xvfb-run` 并装 `fonts-noto-cjk`），失败时上传 `unpackaged-<runner.os>`。本地 `pnpm run test:smoke:unpackaged`，先编译，输出在 `smoke-artifacts/unpackaged-<目标>/`。
+
+和安装包模式的差别（启动方式在 `launch.cjs`，跳过的断言在 `installer.smoke.cjs`）：
+
+- 跳过三条只对安装包成立的断言：进程架构（用的是宿主架构的 Electron）、`app.log` 在 `~/.fntv/logs`、Electron 默认 userData 下没有 `logs/`（未打包时日志写到仓库下的 `log/`，`src/modules/logger/logger.ts`）。
+- 启动前清空仓库下的 `log/`，日志不随 HOME 隔离。
+- `HTTPS_PROXY`、`HTTP_PROXY` 指向 `127.0.0.1:9`，`NO_PROXY` 放行本机：启动 3 秒后的更新检查用 axios 访问 GitHub，这样请求立即失败、只记日志，不受网络波动影响。
+- Linux 加 `--no-sandbox`：`node_modules` 里的 `chrome-sandbox` 不是 setuid root，Ubuntu 24.04 又限制非特权用户命名空间。
+- Windows 不论是否在 CI 上都用 `--user-data-dir` 隔离到临时目录，不碰 runner 的真实用户目录。
+
 ## 用户数据隔离
 
 - Linux 和 macOS 改 `HOME` 和 `XDG_*`，macOS 另加 `CFFIXED_USER_HOME`，Electron 默认 userData 也随之落在临时目录。

@@ -14,6 +14,7 @@
         "prepare": "git config core.hooksPath .githooks",
         "test": "pnpm run compile && node --test --test-timeout=30000 tests/*.test.cjs",
         "test:smoke": "node --test --test-reporter=spec --test-timeout=300000 tests/smoke/installer.smoke.cjs",
+        "test:smoke:unpackaged": "pnpm run compile && node scripts/smoke-unpackaged.cjs",
         "watch": "node scripts/build-preload.cjs --watch",
         "clean": "rimraf dest",
         "build:win": "pnpm run compile && electron-builder --win --publish never",
