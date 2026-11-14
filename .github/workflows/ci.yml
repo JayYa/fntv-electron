@@ -14,7 +14,7 @@ permissions:
 
 # 同一个 ref 有新运行时取消还在跑的旧运行，以最后一次的结果为准。github.ref 在 pull_request 上是
 # refs/pull/<编号>/merge，每个 PR 一组；在 push 上是 refs/heads/main，连续合并时只看最新一次合并。
-# 组名带 ci- 前缀，不和其它 workflow 的组（smoke-test-、cache-warm-）相撞。
+# 组名带 ci- 前缀，不和其它 workflow 的组（smoke-test-、release-）相撞。
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

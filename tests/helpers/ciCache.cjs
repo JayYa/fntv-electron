@@ -4,7 +4,7 @@ const path = require('node:path');
 
 const { posixPath } = require('./workflowSteps.cjs');
 
-// tests/buildDownloads.test.cjs 和 tests/cacheWarm.test.cjs 共用：临时项目、桩命令和调用记录。
+// tests/buildDownloads.test.cjs、tests/ciWorkflow.test.cjs 和 tests/checkCommand.test.cjs 共用：临时项目、桩命令和调用记录。
 
 function tempDir(t, prefix) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));

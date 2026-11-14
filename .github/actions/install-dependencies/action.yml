@@ -8,15 +8,6 @@ outputs:
   electron-version:
     description: Electron version from package.json
     value: ${{ steps.keys.outputs.electron-version }}
-  packaging-key:
-    description: build.yml 打包下载缓存的 key
-    value: ${{ steps.keys.outputs.packaging-key }}
-  packaging-electron-prefix:
-    description: 打包缓存 restore-keys 的第一级前缀，同一 Electron 版本
-    value: ${{ steps.keys.outputs.packaging-electron-prefix }}
-  packaging-prefix:
-    description: 打包缓存 restore-keys 的第二级前缀，同一平台
-    value: ${{ steps.keys.outputs.packaging-prefix }}
 
 runs:
   using: composite
@@ -27,7 +18,7 @@ runs:
       run: pnpm install --frozen-lockfile
       shell: bash
 
-    # key 只取 package.json 和锁文件里的版本号（scripts/ci-download-cache.cjs），cache-warm.yml 用同一个脚本。
+    # key 只取 package.json 里的 Electron 版本和 runner 架构（scripts/ci-download-cache.cjs）。
     - name: Resolve download cache keys
       id: keys
       run: node scripts/ci-download-cache.cjs keys
@@ -37,10 +28,11 @@ runs:
     # tests/accessCodeSession.test.cjs 在 Node 里 require('electron')，所以在测试和打包之前由下面的步骤预先下载。
     # Electron zip 由 @electron/get 存到默认目录（env-paths('electron').cache，不读 ELECTRON_CACHE），
     # 三个平台的默认目录都列上，不存在的会被忽略。
-    # PR 能读到 main 上的缓存，main 上的缓存由 cache-warm.yml 填充。
+    # PR 能读到 main 上的缓存，main 上的缓存由 ci.yml 在 push 到 main 时存。7 天没被读过的缓存被 GitHub 清掉后，
+    # 下一次 push 到 main 再存，期间的 PR 重新下载（有重试）。
     # 单步 actions/cache：未命中时由 job 结束后的 post 步骤保存，job 失败时不保存，下次运行再下载。
-    # 保存的是 job 结束时目录里的全部内容：build.yml 打包时下载的另一个架构的 zip 也会被存进来。同一个 key
-    # 只存第一次，main 上通常是 ci.yml（约 2 分钟）先于 cache-warm.yml 的打包（4 分钟以上）存好。
+    # 保存的是 job 结束时目录里的全部内容：在 build.yml 里第一次存时，打包下载的另一个架构的 zip 也会被存进来。
+    # 同一个 key 只存第一次，main 上只有发版时才打包，通常 ci.yml 先存好。
     # key 带 runner.arch（scripts/ci-download-cache.cjs），zip 只对一种架构有用，runner 换架构时不会恢复出用不上的 zip。
     - name: Cache Electron download
       id: electron-cache

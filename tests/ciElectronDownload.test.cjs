@@ -114,9 +114,8 @@ test('the Electron download is cached per Electron version and runner architectu
     for (const dir of ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache']) {
         assert.ok(paths.includes(dir), `${dir} is not cached`);
     }
-    for (const output of ['packaging-key', 'packaging-electron-prefix', 'packaging-prefix']) {
-        assert.equal(install.outputs[output].value, `\${{ steps.keys.outputs.${output} }}`);
-    }
+    // 打包下载缓存已删（2026-11-14），action 不再输出它的 key。
+    assert.deepEqual(Object.keys(install.outputs), ['electron-version']);
 });
 
 test('every run step of the install action names its shell', () => {
