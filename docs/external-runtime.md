@@ -20,6 +20,7 @@
 
 - `设置MPV播放器路径 (<路径>)` 总是显示上面算出的路径，找不到时显示 `(未找到)`。
 - `打开MPV用户配置目录 (<路径>)` 显示按当前设置算出的用户配置目录，也就是下次播放时 MPV 读的目录。改了 MPV 播放器路径后它立刻变化，但要重启客户端才会同步到新目录。目录不存在时只弹提示，不创建：空目录会让下次同步按首次初始化处理。`shell.openPath` 失败时弹错误框并记 ERROR 日志。
+- `MPV 配置有 N 个待合并的更新` 只在上面这个目录里有 `*.fntv-new`（不算 `.fntv-sync-*` 里的）时显示，点击打开目录。托盘递归监视这个目录（`src/main/common/mpvConfigSync/pendingUpdates.ts`），`.fntv-new` 增删后约 200 毫秒重建菜单，删完这一项就消失。
 
 ## MPV 归档
 
@@ -34,7 +35,7 @@
 
 ## 用户配置同步
 
-同步规则、清单格式、归档里客户端依赖的路径和改归档时的检查项见 [MPV 归档契约](mpv-archive-contract.md)，决策见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)。按清单同步已落地（#222）；打包带清单（#221）、待合并更新的提示（#223）和启动时的 `provides` 检查（#224）尚未生效。下面是当前代码的行为。
+同步规则、清单格式、归档里客户端依赖的路径和改归档时的检查项见 [MPV 归档契约](mpv-archive-contract.md)，决策见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)。按清单同步（#222）和待合并更新的提示（#223）已落地；打包带清单（#221）和启动时的 `provides` 检查（#224）尚未生效。下面是当前代码的行为。
 
 入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvConfig.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
 
@@ -58,7 +59,7 @@
 | `seed`（`danmaku-history.json`）已存在 | `kept` |
 | 没改过 | `replaced` |
 | `managed`，改过 | `overwrote-modified`，照样覆盖，不备份，记 INFO |
-| `config`，改过，新版等于记录值（上次装入后归档没改它） | `kept` |
+| `config`，改过，新版等于记录值（上次装入后归档没改它） | `kept`；上次写的 `.fntv-new` 还在（内容等于新版）时仍进 `conflicts` |
 | `config` 是 `mpv.conf`，改过，没有它的记录，平台是 macOS 或 Linux（`platformBehavior().treatsUnknownMpvConfAsUserOwned`） | `kept`，不写 `.fntv-new`、不算冲突，也不记录，下次仍按这一条判断 |
 | `config`，改过 | `wrote-fntv-new`：原文件不动，新版写到 `<文件>.fntv-new`（已有旧的就替换），进 `conflicts`（路径加新版哈希） |
 
@@ -68,6 +69,8 @@
 - 每次同步先清理残留的 `.fntv-sync-*`。上次停在“旧目录已移开、新目录还没到位”时（目录替换前写了 `target.json`），先把旧目录放回去，再正常同步。
 - 同步失败（`failed`）：已到位的文件保留，不写新记录，记 ERROR，不阻塞启动；下次启动重跑，已到位的文件命中 `unchanged`，结果和一次跑完相同。
 - 不要改回先删目标再复制：目标和来源是同一目录时，这样会把附带的插件删光（#118）。
+
+待合并更新的提示（#223）：`mergePrompt`（`mergePrompt.ts`）从同步结果的 `conflicts` 里去掉安装记录 `acknowledgedConflicts` 中路径和新版哈希都相同的项，剩下的不为空就由 `mpvConfig.ts` 弹一次非模态对话框（不挂在主窗口上，不等它关闭），列出 `.fntv-new`，按钮“打开配置目录”“知道了”。任何方式关闭都调 `acknowledgeConflicts`（`installRecord.ts`）把这批冲突写进安装记录，同一路径的旧确认被替换；没关就退出，下次同步因为 `.fntv-new` 还在照样报这条冲突，再弹。新归档给同一文件写了不同的 `.fntv-new` 时哈希变了，算新冲突。同步前没有安装记录（`hadInstallRecord` 为 `false`）时用一次性迁移的文案。
 
 ## 默认播放方式
 

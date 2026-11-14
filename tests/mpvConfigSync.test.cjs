@@ -106,7 +106,8 @@ test('a second sync of the same archive changes nothing on disk and reports ever
 
     assert.equal(result.hadInstallRecord, true);
     assert.deepEqual(readTree(user), before);
-    assert.deepEqual(result.conflicts, []);
+    // .fntv-new 还在，冲突照样报出来；是否提示由已确认的冲突决定（mergePrompt）。
+    assert.deepEqual(result.conflicts, [{ path: 'input.conf', sha256: sha256(V1['input.conf']) }]);
     assert.equal(actionsOf(result)['input.conf'], 'kept');
     assert.ok(result.files.filter(e => e.path !== 'input.conf' && e.path !== 'danmaku-history.json')
         .every(e => e.action === 'unchanged'));
@@ -173,6 +174,22 @@ test('a newer archive replaces a stale .fntv-new and reports the new hash as a c
 
     assert.deepEqual(result.conflicts, [{ path: 'input.conf', sha256: sha256(V2['input.conf']) }]);
     assert.equal(readTree(user)['input.conf.fntv-new'], V2['input.conf']);
+});
+
+test('a pending .fntv-new stays a conflict on later syncs until the user deletes it', (t) => {
+    const root = tempRoot(t, 'pending');
+    const user = path.join(root, 'user');
+    const archive = writeArchive(root, 'v1', { files: V1 });
+    writeTree(user, { 'input.conf': 'mine\n' });
+    sync(archive, user);
+
+    assert.deepEqual(sync(archive, user).conflicts, [{ path: 'input.conf', sha256: sha256(V1['input.conf']) }]);
+
+    fs.rmSync(path.join(user, 'input.conf.fntv-new'));
+    const resolved = sync(archive, user);
+    assert.deepEqual(resolved.conflicts, []);
+    assert.equal(readTree(user)['input.conf'], 'mine\n');
+    assert.equal(readTree(user)['input.conf.fntv-new'], undefined);
 });
 
 test('a config that matches no historical hash is treated as modified when there is no record', (t) => {

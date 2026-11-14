@@ -5,8 +5,8 @@ import {
     type AcknowledgedConflict,
     type InstallRecord,
     type InstalledFile,
-    installRecordFile,
     readInstallRecord,
+    writeInstallRecord,
 } from './installRecord';
 import { type FntvManifest, type ManifestFile, type ManifestProblem, readManifest } from './manifest';
 import { cleanupLeftoverStaging, nodeFileOps, sha256File, Staging, type SyncFileOps } from './stagedWrites';
@@ -36,7 +36,10 @@ export interface MpvFileSyncEntry {
     reason?: string;
 }
 
-/** 本次写了 `.fntv-new` 的文件。sha256 是新版（`.fntv-new` 内容）的哈希，确认冲突时连同路径记下。 */
+/**
+ * 待合并的冲突：本次写了 `.fntv-new`，或上次写的 `.fntv-new` 还在。sha256 是新版（`.fntv-new` 内容）的哈希，
+ * 确认冲突时连同路径记下。
+ */
 export interface MpvConfigConflict {
     path: string;
     sha256: string;
@@ -210,8 +213,11 @@ class SyncRun {
             return add(unmodified ? 'replaced' : 'overwrote-modified');
         }
         // config，用户改过。
+        const newFile = `${target}.fntv-new`;
         if (this.recorded(file.path)?.sha256 === file.sha256) {
             remember();
+            // 上次写的 .fntv-new 还在：仍是待合并的冲突，提示没关掉就退出时下次启动再弹（#223）。
+            if (sha256File(newFile) === file.sha256) this.conflicts.push({ path: file.path, sha256: file.sha256 });
             return add('kept', 'modified, archive version unchanged since last sync');
         }
         if (file.path === 'mpv.conf' && !this.recorded(file.path)
@@ -219,7 +225,6 @@ class SyncRun {
             // 不记录：下次仍按“没有记录”判断，系统 MPV 用户的 mpv.conf 一直归用户。
             return add('kept', 'user-owned mpv.conf without install record');
         }
-        const newFile = `${target}.fntv-new`;
         if (sha256File(newFile) !== file.sha256) this.install(file, newFile);
         this.conflicts.push({ path: file.path, sha256: file.sha256 });
         remember();
@@ -307,7 +312,6 @@ class SyncRun {
             provides: this.manifest.provides,
             acknowledgedConflicts: this.record?.acknowledgedConflicts ?? [],
         };
-        const staging = this.staging as Staging;
-        staging.place(staging.stageText(`${JSON.stringify(record, null, 2)}\n`), installRecordFile(this.user));
+        writeInstallRecord(this.staging as Staging, this.user, record);
     }
 }

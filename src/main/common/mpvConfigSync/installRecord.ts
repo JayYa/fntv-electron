@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ManifestFileRole } from './manifest';
+import { nodeFileOps, Staging } from './stagedWrites';
 
 // 安装记录：用户配置目录下的 fntv/installed.json，只在同步全部完成后写。
 // 换目标目录时自然换一份记录（#219 用户故事 27）。
@@ -49,4 +50,29 @@ export function readInstallRecord(mpvConfigDir: string): InstallRecord | undefin
         provides: typeof record.provides === 'object' && record.provides !== null ? record.provides : {},
         acknowledgedConflicts: Array.isArray(record.acknowledgedConflicts) ? record.acknowledgedConflicts : [],
     };
+}
+
+/** 经暂存目录写入：写完整个文件、fsync 后 rename 到位，中途退出不会留下半个记录。 */
+export function writeInstallRecord(staging: Staging, mpvConfigDir: string, record: InstallRecord): void {
+    staging.place(staging.stageText(`${JSON.stringify(record, null, 2)}\n`), installRecordFile(mpvConfigDir));
+}
+
+/**
+ * 用户关掉待合并更新的提示后，把这批冲突（路径加新版哈希）记为已确认，同一路径的旧确认被替换。
+ * 没有记录时什么都不写，下次启动同步完成后再提示。
+ */
+export function acknowledgeConflicts(mpvConfigDir: string, conflicts: AcknowledgedConflict[]): void {
+    const record = readInstallRecord(mpvConfigDir);
+    if (!record) return;
+    const paths = new Set(conflicts.map(entry => entry.path));
+    const acknowledgedConflicts = [
+        ...record.acknowledgedConflicts.filter(entry => !paths.has(entry.path)),
+        ...conflicts.map(({ path: file, sha256 }) => ({ path: file, sha256 })),
+    ];
+    const staging = new Staging(mpvConfigDir, nodeFileOps);
+    try {
+        writeInstallRecord(staging, mpvConfigDir, { ...record, acknowledgedConflicts });
+    } finally {
+        staging.dispose();
+    }
 }

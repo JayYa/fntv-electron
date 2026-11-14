@@ -1,10 +1,12 @@
-import { app } from 'electron';
+import { app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as fnConfig from '../../../modules/fn_config/config';
 import * as logger from '../../../modules/logger';
 import { resolveBundledMpvPath, resolvePortableConfigDir } from '../../common/mpvConfigHelpers';
+import { acknowledgeConflicts } from '../../common/mpvConfigSync/installRecord';
 import { mpvConfigSyncLogLines } from '../../common/mpvConfigSync/log';
+import { type MergePrompt, mergePrompt, mergePromptText } from '../../common/mpvConfigSync/mergePrompt';
 import { resolveManifestPath } from '../../common/mpvConfigSync/manifest';
 import { synchronizeMpvConfig } from '../../common/mpvConfigSync/sync';
 import { currentPlatform, mpvPlayer, MpvPlayer, mpvUserConfigDir } from '../../../public/platform';
@@ -60,9 +62,27 @@ function initializeMpvConfig(): void {
             if (line.error) logger[line.level](line.message, line.error);
             else logger[line.level](line.message);
         }
+        const prompt = mergePrompt(result);
+        if (prompt.show) showMergePrompt(prompt, mpvConfigDir);
     } catch (error) {
         logger.error('初始化MPV配置失败:', error);
     }
+}
+
+// 非模态（不挂在主窗口上），不等它关闭。关闭（任一按钮或右上角）即记为已确认；没关就退出，下次启动再弹。
+function showMergePrompt(prompt: MergePrompt, mpvConfigDir: string): void {
+    const text = mergePromptText(prompt);
+    const files = prompt.conflicts.map(entry => entry.path).join(', ');
+    logger.info(`MPV配置有待合并的更新，弹出提示${prompt.migration ? '（首次迁移）' : ''}: ${files}`);
+    dialog.showMessageBox({ type: 'info', ...text, buttons: ['打开配置目录', '知道了'], defaultId: 1, cancelId: 1 })
+        .then(async ({ response }) => {
+            acknowledgeConflicts(mpvConfigDir, prompt.conflicts);
+            logger.info(`MPV配置待合并更新提示已关闭，记为已确认: ${files}`);
+            if (response !== 0) return;
+            const error = await shell.openPath(mpvConfigDir);
+            if (error) logger.error(`打开MPV用户配置目录失败: ${error}`, mpvConfigDir);
+        })
+        .catch(error => logger.error('MPV配置待合并更新提示失败:', error));
 }
 
 // 插件初始化函数
