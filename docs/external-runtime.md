@@ -49,7 +49,7 @@
 | `formatVersion` 不在支持的集合里 | `skipped`，`manifest-unsupported` | ERROR |
 | 清单不是合法 JSON、字段形状不对、路径不是便携配置内的相对路径 | `skipped`，`manifest-invalid` | ERROR |
 
-安装记录是用户配置下的 `fntv/installed.json`：归档版本、每个文件装入的哈希和归属、`provides`、已确认的冲突。只在同步全部完成后写。判断“用户没改过”：有记录时看当前哈希是否等于记录值，没有记录时看是否在该文件的 `knownHashes` 里。
+安装记录是用户配置下的 `fntv/installed.json`：归档版本、每个文件装入的哈希和归属、`provides`、已确认的冲突。只在同步全部完成后写。判断“用户没改过”按单个文件：记录里有这个文件时看当前哈希是否等于记录值，没有时看是否在该文件的 `knownHashes` 里。
 
 每个文件依次判断，先命中的生效：
 
@@ -67,21 +67,21 @@
 - `managedDirs`（至少 `scripts/uosc`、`scripts/uosc_danmaku`、`scripts/smart_skip`）整目录替换：目录里有文件要变时，在暂存目录复制出完整的新目录，带上旧目录里清单没列出的文件（用户自己放进去的文件），再 rename 换掉，失败时放回旧目录。
 - 记录里有、新清单没有的文件（以及清单 `obsolete` 列出的文件）：哈希等于记录值才删（`removed`）；没有记录时按 `obsolete` 的 `knownHashes` 判断；改过的保留（`kept`）。记录里归属是 `config` 的一律保留。不在记录也不在 `obsolete` 里的文件不碰，例如 smart_skip 运行时写的 `script-opts/smart_skip.conf`。
 - 所有新内容（含 `.fntv-new` 和安装记录）先写进用户配置根目录的 `.fntv-sync-*`，校验哈希、fsync，再 rename 到位。暂存目录放在根目录，mpv 不会把它当脚本加载。哈希不符说明便携配置和清单不一致，同步失败。
-- 每次同步先清理残留的 `.fntv-sync-*`。上次停在“旧目录已移开、新目录还没到位”时（目录替换前写了 `target.json`），先把旧目录放回去，再正常同步。
+- 每次启动在读清单之前清理残留的 `.fntv-sync-*`，清单缺失或版本不认识也照样清理；用户配置就是便携配置（`same-directory`）时不碰。上次停在“旧目录已移开、新目录还没到位”时（目录替换前写了 `target.json`），先把旧目录放回去，再正常同步。
 - 同步失败（`failed`）：已到位的文件保留，不写新记录，记 ERROR，不阻塞启动；下次启动重跑，已到位的文件命中 `unchanged`，结果和一次跑完相同。
 - 不要改回先删目标再复制：目标和来源是同一目录时，这样会把附带的插件删光（#118）。
 
 ### 待合并更新的提示
 
-`mergePrompt`（`mergePrompt.ts`）从同步结果的 `conflicts` 里去掉安装记录 `acknowledgedConflicts` 中路径和新版哈希都相同的项，剩下的不为空就由 `mpvConfig.ts` 弹一次非模态对话框（不挂在主窗口上，不等它关闭），列出 `.fntv-new`，按钮“打开配置目录”“知道了”。任何方式关闭都调 `acknowledgeConflicts`（`installRecord.ts`）把这批冲突写进安装记录，同一路径的旧确认被替换；没关就退出，下次同步因为 `.fntv-new` 还在照样报这条冲突，再弹。新归档给同一文件写了不同的 `.fntv-new` 时哈希变了，算新冲突。同步前没有安装记录（`hadInstallRecord` 为 `false`）时用一次性迁移的文案。
+`mergePrompt`（`mergePrompt.ts`）从同步结果的 `conflicts` 里去掉安装记录 `acknowledgedConflicts` 中路径和新版哈希都相同的项，剩下的不为空就由 `showMergePrompt`（`src/main/common/mpvConfigNotices.ts`）弹一次非模态对话框（不挂在主窗口上，不等它关闭），列出 `.fntv-new`，按钮“打开配置目录”“知道了”。任何方式关闭都调 `acknowledgeConflicts`（`installRecord.ts`）把这批冲突写进安装记录，同一路径的旧确认被替换；没关就退出，下次同步因为 `.fntv-new` 还在照样报这条冲突，再弹。新归档给同一文件写了不同的 `.fntv-new` 时哈希变了，算新冲突。同步前没有安装记录（`hadInstallRecord` 为 `false`）时用一次性迁移的文案。
 
 ### 能力检查
 
-同步之后 `mpvConfig.ts` 调 `checkMpvCapabilities`（`src/main/common/mpvConfigSync/capabilities.ts`），把用户配置里实际装上的 `provides` 和客户端的 `requires`（同一文件的 `MPV_REQUIRED_CAPABILITIES`，构建期断言 #221 也用它和 `unmetCapabilities`）比较：
+同步之后 `mpvConfig.ts` 调 `checkMpvCapabilities`（`src/main/common/mpvConfigSync/capabilities.ts`），把用户配置里实际装上的 `provides` 和客户端的 `requires`（同一文件的 `MPV_REQUIRED_CAPABILITIES`，构建期断言 #221 也用 `unmetCapabilities` 和 `describeUnmetCapability`）比较：
 
 - 平时读用户配置的安装记录。本次同步失败时旧记录仍有效；没有记录（同步从没成功过）一律不满足。
 - 同步结果是 `same-directory` 时没有安装记录，读归档清单；清单读不到也算不满足。
-- 不满足时记 ERROR，列出每个缺的能力、要求的版本和当前版本；托盘“设置”子菜单末尾显示一条不可点的状态（`mpvCapabilityTrayItems`），不阻塞启动。只在启动时检查一次。
+- 不满足时记 ERROR，列出每个缺的能力、要求的版本和当前版本；托盘“设置”子菜单末尾显示一条不可点的状态（`mpvConfigNotices.ts` 的 `mpvCapabilityTrayItems`），不阻塞启动。只在启动时检查一次。
 - 日志脱敏会遮掉 `url` 后面的一段，能力名 `smart-skip.origin-from-play-url` 后面紧跟 ASCII 逗号才不被遮。
 
 ## 默认播放方式

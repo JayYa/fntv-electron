@@ -4,7 +4,7 @@
 
 ## 运行时升级范围
 
-> 已被 [ADR-0005](0005-mpv-archive-manifest-sync.md) 取代：MPV 归档带清单，用户配置按清单里每个文件的归属同步，规则见 [MPV 归档契约](../mpv-archive-contract.md)。新规则由 #221–#224 落地，在那之前客户端仍按下面的范围工作。下面是原来的决定。
+> 已被 [ADR-0005](0005-mpv-archive-manifest-sync.md) 取代：MPV 归档带清单，用户配置按清单里每个文件的归属同步，规则见 [MPV 归档契约](../mpv-archive-contract.md)。新规则已由 #221–#224 落地生效，客户端不再按下面的范围工作。下面是原来的决定。
 
 已安装用户升级时，只有 `scripts/uosc_danmaku` 由应用整体替换。`danmaku-history.json`、`script-opts` 和其它脚本归用户所有。全新安装时复制一次完整配置，随包的历史种子只保留默认可见性标记，不分发媒体匹配记录。
 

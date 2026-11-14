@@ -17,7 +17,7 @@
 | `mpv.exe` | Windows 播放 | 附带 MPV，只在 Windows 安装包里 |
 | `portable_config/mpv.conf` | MPV | 薄文件，见“`mpv.conf` 分层” |
 | `portable_config/fntv/defaults.conf` | MPV | 默认值，写在 `[fntv-defaults]` 段里，由 `mpv.conf` include 后用 `profile=fntv-defaults` 应用 |
-| `portable_config/scripts/uosc_danmaku/main.lua` | 同步 | 弹幕插件入口，现有同步缺它时抛错 |
+| `portable_config/scripts/uosc_danmaku/main.lua` | MPV | 弹幕插件入口。同步不单独检查它，按清单把 `scripts/uosc_danmaku` 整目录托管 |
 | `portable_config/scripts/smart_skip/` | MPV 播放时 | 片头片尾跳过，依赖下文的能力 `smart-skip.origin-from-play-url` |
 | `portable_config/danmaku-history.json` | 弹幕插件 | 弹幕历史的种子。fntv-mpv-config 打包时把 `custom_config/<组件>/` 下的文件铺到便携配置根下，所以它在根目录 |
 
@@ -71,7 +71,7 @@ interface FntvManifest {
 | `config`（用户可改文件） | `mpv.conf`、`input.conf`、`script-opts/*.conf` | 缺失则补；没改过则换新；改过则原文件不动，新版写成 `<文件>.fntv-new`；改过、但新版和上次装入的一样，什么都不做 |
 | `seed`（种子文件） | `danmaku-history.json` | 只在缺失时复制 |
 
-“没改过”的判断：有安装记录时，当前哈希等于记录里这个文件装入的哈希；没有安装记录时，当前哈希在这个文件的 `knownHashes` 里。
+“没改过”按单个文件判断：安装记录里有这个文件的记录值时，当前哈希等于记录值；没有（没有安装记录，或记录里没有这个文件）时，当前哈希在这个文件的 `knownHashes` 里。
 
 所有规则之前先判断“当前内容已等于新版”：等于就不动。这保证同步中途失败或退出后，下次启动重跑能补完，已到位的文件不再动。
 
@@ -91,7 +91,7 @@ uosc_danmaku 的 `check-update` 自更新会改写它自己的插件目录，下
 
 ### `mpv.conf` 在 macOS/Linux 上的例外
 
-macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.config/mpv` 或 `~/.mpv`），那里的 `mpv.conf` 可能是用户自己写的。没有安装记录、当前 `mpv.conf` 又不在 `knownHashes` 里时，当成用户自己的配置：不写 `.fntv-new`，不进冲突列表；`fntv/defaults.conf` 照装。有安装记录后和 Windows 一样。
+macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.config/mpv` 或 `~/.mpv`），那里的 `mpv.conf` 可能是用户自己写的。这条例外按单个文件判断：安装记录里没有 `mpv.conf` 的记录值、当前 `mpv.conf` 又不在 `knownHashes` 里时，当成用户自己的配置：不写 `.fntv-new`，不进冲突列表，也不记进安装记录；`fntv/defaults.conf` 照装。因为不记录，以后有了安装记录也照样按这一条判断，永远不对它提示合并（维护者 2026-11-15 的决定，见 #219）。只有客户端装进来的 `mpv.conf`（有记录值，或曾在 `knownHashes` 里被换新）才按 Windows 的规则处理。
 
 ## 安装记录
 
@@ -106,7 +106,7 @@ macOS/Linux 上的用户配置就是用户日常使用 mpv 的目录（`~/.confi
 
 ## 写入方式和失败
 
-- 新内容先写进用户配置根目录下的 `.fntv-sync-*` 暂存目录，校验哈希、fsync，再 rename 到位。`.fntv-new` 也这样写。启动时先清理残留的暂存目录。
+- 新内容先写进用户配置根目录下的 `.fntv-sync-*` 暂存目录，校验哈希、fsync，再 rename 到位。`.fntv-new` 也这样写。启动时在读清单之前清理残留的暂存目录，中途移开的插件目录先放回原处；清单缺失或版本不认识时也清理。
 - 同步失败：已到位的文件保留，不写安装记录，记 ERROR，不阻塞启动，下次启动重试。
 - 只在客户端启动时同步。改了 MPV 播放器路径要重启客户端才同步到新目录。
 - 同步结果按文件列出动作（换新、写 `.fntv-new`、保留、补缺、删除、跳过），写进日志。
