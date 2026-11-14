@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
+import { getCurrentMpvPlayer, getMpvConfigDir, mpvCapabilityTrayItems } from '../handlers/plugins/mpvConfig';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
@@ -135,7 +135,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             label: `打开MPV用户配置目录 (${mpvConfigDir ?? '无法确定'})`,
             enabled: mpvConfigDir !== undefined,
             click: () => (mpvConfigDir ? openMpvConfigDir(mainWindow, mpvConfigDir) : undefined),
-        }
+        },
+        ...mpvCapabilityTrayItems(),
     ];
 
     return submenu;
