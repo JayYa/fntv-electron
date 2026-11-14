@@ -1,6 +1,6 @@
 # 外部运行时归属
 
-改打包的 MPV、MPV 插件、用户 MPV 配置同步、默认播放方式或 Proxy 生命周期时读这份文档。决策原因见 [ADR-0001](adr/0001-mpv-bundle-and-runtime-ownership.md) 和 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
+改打包的 MPV、MPV 插件、用户 MPV 配置同步、默认播放方式或 Proxy 生命周期时读这份文档。MPV 归档和用户配置同步之间的约定见 [MPV 归档契约](mpv-archive-contract.md)。决策原因见 [ADR-0001](adr/0001-mpv-bundle-and-runtime-ownership.md)、[ADR-0005](adr/0005-mpv-archive-manifest-sync.md) 和 [ADR-0004](adr/0004-proxy-in-typescript-utility-process.md)。
 
 ## 术语
 
@@ -33,6 +33,10 @@
 - Windows 打包整个 `third_party/fntv-mpv`，含 `mpv.exe`。macOS 和 Linux 只打包 `portable_config`（`package.json` 的 `extraFiles`）。
 
 ## 用户配置同步
+
+同步规则、清单格式、归档里客户端依赖的路径和改归档时的检查项见 [MPV 归档契约](mpv-archive-contract.md)，决策见 [ADR-0005](adr/0005-mpv-archive-manifest-sync.md)。
+
+契约里按清单同步的新规则由 #221–#224 落地，在那之前**尚未生效**。下面是当前代码的行为，每张票落地时随之改成指向契约的对应部分。
 
 入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigHelpers.ts`）。是否“首次”只看用户配置里有没有 `scripts` 目录。
 
