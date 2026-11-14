@@ -1,14 +1,20 @@
 name: CI
 
-# 不按目标分支过滤：堆叠 PR 的 base 不是 main，也要跑。
+# pull_request 不按目标分支过滤：堆叠 PR 的 base 不是 main，也要跑。
+# push 到 main 时再跑一遍：几个 PR 各自通过、合在一起才出错的情况只有在 main 上才看得到
+#（#207 和 #209 合并后 main 上 7 项测试失败，到 #210 才发现）。
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
-# 同一 PR 有新推送时取消还在跑的旧运行，以最后一次推送的结果为准。github.ref 在 pull_request 上是
-# refs/pull/<编号>/merge，每个 PR 一组；组名带 ci- 前缀，不和其它 workflow 的组（smoke-test-、cache-warm-）相撞。
+# 同一个 ref 有新运行时取消还在跑的旧运行，以最后一次的结果为准。github.ref 在 pull_request 上是
+# refs/pull/<编号>/merge，每个 PR 一组；在 push 上是 refs/heads/main，连续合并时只看最新一次合并。
+# 组名带 ci- 前缀，不和其它 workflow 的组（smoke-test-、cache-warm-）相撞。
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -16,8 +22,10 @@ concurrency:
 jobs:
   # 和 pre-commit 钩子同一个脚本，拦住用 --no-verify 绕过钩子的提交。只看这个 PR 相对 base 改动的文件，
   # 读 PR head 的内容；fetch-depth: 0 才拿得到 base 提交和合并基点。脚本只用 git 和 Node 自带模块，不装依赖。
+  # push 上没有 PR 的 base 提交，不跑；合并进 main 的改动在 PR 上已经检查过。
   file-size:
     name: Check file size
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
