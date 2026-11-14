@@ -19,4 +19,5 @@ docs/*
 !docs/agents/
 !docs/adr/
 !docs/external-runtime.md
+!docs/mpv-archive-contract.md
 smoke-artifacts

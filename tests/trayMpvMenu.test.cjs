@@ -57,7 +57,10 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
     useFakeElectron(t, electronMock, { platform });
     const originalMpvHome = process.env.MPV_HOME;
     process.env.MPV_HOME = mpvHome;
+    let trayModule;
     t.after(() => {
+        // 先停掉托盘对用户配置目录的监视，再删目录。
+        trayModule?.destroyTray();
         if (originalMpvHome === undefined) delete process.env.MPV_HOME;
         else process.env.MPV_HOME = originalMpvHome;
         fs.rmSync(testRoot, { recursive: true, force: true });
@@ -88,16 +91,19 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
         openDialogResults,
         config: () => require('../dest/modules/fn_config/config.js'),
         async createTray() {
-            await require('../dest/main/common/tray.js').createTray({});
+            trayModule = require('../dest/main/common/tray.js');
+            await trayModule.createTray({});
         },
+        settingsItems,
+        menuCount: () => menus.length,
         item,
         clickAndWaitForMenu,
         logText: () => fs.readFileSync(path.join(testRoot, 'log', 'app.log'), 'utf8'),
     };
 }
 
-const PLAYER_ITEM = '设置MPV播放器路径';
-const CONFIG_ITEM = '打开MPV用户配置目录';
+const PLAYER_ITEM = '设置 MPV 播放器路径';
+const CONFIG_ITEM = '打开 MPV 用户配置目录';
 
 test('the tray shows the user-chosen MPV path', async (t) => {
     const tray = setupTray(t);
@@ -130,7 +136,7 @@ test('choosing and clearing the MPV path updates the path shown in the tray', as
     await tray.clickAndWaitForMenu(PLAYER_ITEM);
     assert.equal(tray.item(PLAYER_ITEM).label, `${PLAYER_ITEM} (E:\\tools\\mpv\\mpv.exe)`);
 
-    await tray.clickAndWaitForMenu('清空MPV播放器路径');
+    await tray.clickAndWaitForMenu('清空 MPV 播放器路径');
     assert.equal(tray.item(PLAYER_ITEM).label, bundledLabel);
 });
 
@@ -166,7 +172,7 @@ test('a failure to open the MPV config folder shows the reason and is logged', a
     assert.equal(tray.errorBoxes.length, 1);
     assert.ok(tray.errorBoxes[0].content.includes('Access is denied.'));
     assert.ok(tray.errorBoxes[0].content.includes(tray.mpvHome));
-    assert.match(tray.logText(), /ERROR.*打开MPV用户配置目录失败.*Access is denied\./);
+    assert.match(tray.logText(), /ERROR.*打开 MPV 用户配置目录失败.*Access is denied\./);
 });
 
 test('when the MPV config folder cannot be determined the tray still opens and says so', async (t) => {
@@ -176,5 +182,47 @@ test('when the MPV config folder cannot be determined the tray still opens and s
     const configItem = tray.item(CONFIG_ITEM);
     assert.equal(configItem.label, `${CONFIG_ITEM} (无法确定)`);
     assert.equal(configItem.enabled, false);
-    assert.match(tray.logText(), /获取MPV用户配置目录失败.*Failed to get 'appData' path/);
+    assert.match(tray.logText(), /获取 MPV 用户配置目录失败.*Failed to get 'appData' path/);
+});
+
+const PENDING_ITEM = 'MPV 配置有';
+const pendingItem = (tray) => tray.settingsItems().find((entry) => entry.label?.startsWith(PENDING_ITEM));
+
+// 托盘监视用户配置目录，.fntv-new 删掉后自己重建菜单；等到菜单里没有这一项为止。
+async function waitForPendingItemToGo(tray) {
+    for (let i = 0; i < 100 && pendingItem(tray); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+}
+
+test('the tray shows how many MPV config updates are pending and opens the config folder on click', async (t) => {
+    const tray = setupTray(t);
+    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf'), 'mine');
+    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf.fntv-new'), 'new');
+    fs.mkdirSync(path.join(tray.mpvHome, 'script-opts'));
+    fs.writeFileSync(path.join(tray.mpvHome, 'script-opts', 'uosc.conf.fntv-new'), 'new');
+    await tray.createTray();
+
+    const item = pendingItem(tray);
+    assert.equal(item?.label, 'MPV 配置有 2 个待合并的更新');
+    await item.click();
+    assert.deepEqual(tray.openedPaths, [tray.mpvHome]);
+});
+
+test('the pending-updates item disappears once the .fntv-new files are deleted', async (t) => {
+    const tray = setupTray(t);
+    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf.fntv-new'), 'new');
+    await tray.createTray();
+    assert.equal(pendingItem(tray)?.label, 'MPV 配置有 1 个待合并的更新');
+
+    fs.rmSync(path.join(tray.mpvHome, 'input.conf.fntv-new'));
+    await waitForPendingItemToGo(tray);
+    assert.equal(pendingItem(tray), undefined);
+});
+
+test('the tray shows no pending-updates item without .fntv-new files', async (t) => {
+    const tray = setupTray(t);
+    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf'), 'mine');
+    await tray.createTray();
+    assert.equal(pendingItem(tray), undefined);
 });

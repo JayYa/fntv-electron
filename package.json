@@ -113,6 +113,10 @@
                     "filter": [
                         "**/*"
                     ]
+                },
+                {
+                    "from": "third_party/fntv-mpv/fntv-manifest.json",
+                    "to": "third_party/fntv-mpv/fntv-manifest.json"
                 }
             ]
         },
@@ -162,6 +166,10 @@
                     "filter": [
                         "**/*"
                     ]
+                },
+                {
+                    "from": "third_party/fntv-mpv/fntv-manifest.json",
+                    "to": "third_party/fntv-mpv/fntv-manifest.json"
                 }
             ]
         },

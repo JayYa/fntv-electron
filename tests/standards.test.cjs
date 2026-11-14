@@ -211,6 +211,42 @@ test('workflow steps and jobs named in the standards documents exist', () => {
     }
 });
 
+// electron-builder 的 extraFiles 把仓库里的 from 复制到安装目录的 to。这里只认本仓库用的两种写法：
+// 单个文件（没有 filter），或目录加 filter ["**/*"]。返回源文件在安装目录里的相对路径，没带上时返回 undefined。
+function packagedPath(extraFiles, source) {
+    for (const { from, to, filter } of extraFiles) {
+        if (from === source && filter === undefined) return to;
+        const inside = path.posix.relative(from, source);
+        if (!inside.startsWith('..') && JSON.stringify(filter) === '["**/*"]') return path.posix.join(to, inside);
+    }
+    return undefined;
+}
+
+// 清单在便携配置的上一级（resolveManifestPath），同步和启动时的能力检查都从那里读（#221）。
+test('every platform packages the MPV archive manifest next to the portable config', () => {
+    const { build } = JSON.parse(read('package.json'));
+    const portable = 'third_party/fntv-mpv/portable_config';
+    const manifest = 'third_party/fntv-mpv/fntv-manifest.json';
+    for (const platform of ['win', 'mac', 'linux']) {
+        const extraFiles = build[platform].extraFiles;
+        assert.equal(packagedPath(extraFiles, `${portable}/mpv.conf`), `${portable}/mpv.conf`, `${platform} packages the portable config`);
+        assert.equal(packagedPath(extraFiles, manifest), manifest, `${platform} packages the manifest`);
+    }
+});
+
+test('build.yml checks the pinned MPV archive manifest after compiling and before packaging', () => {
+    const { workflow } = require('./helpers/workflowSteps.cjs');
+    const { steps } = workflow('build.yml').jobs.build;
+    const index = name => steps.findIndex(step => step.name === name);
+    const check = steps[index('Check MPV archive manifest')];
+    assert.ok(check, 'build.yml has no Check MPV archive manifest step');
+    assert.equal(check.run.trim(), 'node scripts/check-mpv-manifest.cjs');
+    assert.equal(check['continue-on-error'], undefined, 'the manifest check must fail the build');
+    assert.ok(index('Download third-party dependencies') < index('Check MPV archive manifest'));
+    assert.ok(index('Compile TypeScript') < index('Check MPV archive manifest'), 'the check requires the compiled sync module');
+    assert.ok(index('Check MPV archive manifest') < index('Build application'));
+});
+
 // CI 经 pnpm run check 跑 knip、文件大小检查等，见 tests/checkCommand.test.cjs。
 
 // Proxy 改用 TypeScript 后（ADR-0004），构建和 CI 只要 Node 和 pnpm。

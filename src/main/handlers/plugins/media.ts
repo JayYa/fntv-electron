@@ -27,7 +27,7 @@ import * as playbackState from '../../../modules/playback/playbackState';
 function getPlayerOrNotify(): MpvPlayer | undefined {
     const player = getCurrentMpvPlayer();
     if (player) {
-        log.info(`MPV播放器路径: ${player.path}`);
+        log.info(`MPV 播放器路径: ${player.path}`);
         return player;
     }
     const message = platformBehavior().mpvNotFoundMessage;

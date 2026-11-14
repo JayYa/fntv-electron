@@ -145,6 +145,11 @@ jobs:
         run: pnpm run compile
         timeout-minutes: 5
 
+      # 固定归档的清单要能被这一版客户端使用：formatVersion 认识、archiveVersion 是固定的 tag、
+      # provides 满足客户端的 requires（docs/mpv-archive-contract.md“能力”一节）。复用编译后的同步模块，所以在编译之后。
+      - name: Check MPV archive manifest
+        run: node scripts/check-mpv-manifest.cjs
+
       # electron-builder 自己对每个下载只重试 3 次，间隔 2 到 6 秒，次数和间隔都不能配置。
       # 日志里有 5xx 或网络错误时整个打包命令再跑，共 3 次，间隔 30、60 秒；其它错误直接失败。
       # 前一次已下载的文件留在 electron-builder 的缓存目录里，重跑时不再下载。

@@ -2,6 +2,8 @@ import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'elec
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
+import { mpvCapabilityTrayItems } from './mpvConfigNotices';
+import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } from './mpvConfigSync/pendingUpdates';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
@@ -16,8 +18,8 @@ async function openMpvConfigDir(mainWindow: BrowserWindow | null, dir: string): 
     if (!fs.existsSync(dir)) {
         const options: Electron.MessageBoxOptions = {
             type: 'info',
-            title: 'MPV用户配置目录',
-            message: 'MPV用户配置目录尚不存在',
+            title: 'MPV 用户配置目录',
+            message: 'MPV 用户配置目录尚不存在',
             detail: `${dir}\n\n客户端启动时会把默认配置同步到这里。`,
         };
         await (mainWindow ? dialog.showMessageBox(mainWindow, options) : dialog.showMessageBox(options));
@@ -25,9 +27,22 @@ async function openMpvConfigDir(mainWindow: BrowserWindow | null, dir: string): 
     }
     const error = await shell.openPath(dir);
     if (error) {
-        log.error(`打开MPV用户配置目录失败: ${error}`, dir);
-        dialog.showErrorBox('打开MPV用户配置目录失败', `${error}\n\n${dir}`);
+        log.error(`打开 MPV 用户配置目录失败: ${error}`, dir);
+        dialog.showErrorBox('打开 MPV 用户配置目录失败', `${error}\n\n${dir}`);
     }
+}
+
+// 用户配置里还有 .fntv-new 时显示个数，点击打开目录；删掉后（监视目录）菜单重建，这一项消失。
+function pendingMpvUpdatesItems(mainWindow: BrowserWindow | null, mpvConfigDir: string | undefined): Electron.MenuItemConstructorOptions[] {
+    watchPendingUpdates(mpvConfigDir, () => {
+        updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
+    });
+    const pending = mpvConfigDir ? countPendingUpdates(mpvConfigDir) : 0;
+    if (!mpvConfigDir || pending === 0) return [];
+    return [{
+        label: `MPV 配置有 ${pending} 个待合并的更新`,
+        click: () => openMpvConfigDir(mainWindow, mpvConfigDir),
+    }];
 }
 
 /**
@@ -45,7 +60,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     try {
         mpvConfigDir = getMpvConfigDir(currentMpvPath);
     } catch (error) {
-        log.error('获取MPV用户配置目录失败', error);
+        log.error('获取 MPV 用户配置目录失败', error);
     }
 
     const submenu: Electron.MenuItemConstructorOptions[] = [
@@ -94,11 +109,11 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'separator'
         },
         {
-            label: `设置MPV播放器路径 (${playerPath ?? '未找到'})`,
+            label: `设置 MPV 播放器路径 (${playerPath ?? '未找到'})`,
             click: async () => {
                 if (mainWindow) {
                     const result = await dialog.showOpenDialog(mainWindow, {
-                        title: '选择MPV播放器',
+                        title: '选择 MPV 播放器',
                         // Electron 43 起不传 defaultPath 时总是从“下载”目录开始，系统不再记住上次的目录。
                         defaultPath: currentMpvPath ? path.dirname(currentMpvPath) : undefined,
                         properties: ['openFile'],
@@ -111,7 +126,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
                     if (!result.canceled && result.filePaths.length > 0) {
                         const selectedPath = result.filePaths[0];
                         fnConfig.setMpvPlayerPath(selectedPath);
-                        log.info(`MPV播放器路径已设置为: ${selectedPath}`);
+                        log.info(`MPV 播放器路径已设置为: ${selectedPath}`);
 
                         // 更新托盘菜单以显示新路径
                         updateTrayMenu();
@@ -120,11 +135,11 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             }
         },
         {
-            label: '清空MPV播放器路径',
+            label: '清空 MPV 播放器路径',
             enabled: !!currentMpvPath, // 只有当有设置路径时才启用
             click: () => {
                 fnConfig.setMpvPlayerPath(''); // 清空配置中的路径
-                log.info('MPV播放器路径已清空，将使用自动检测');
+                log.info('MPV 播放器路径已清空，将使用自动检测');
 
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
@@ -132,10 +147,12 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
         },
         {
             // 按当前设置算出的目录，是下次播放时 MPV 读的目录；改了自选 MPV 后要重启客户端才会同步到这里。
-            label: `打开MPV用户配置目录 (${mpvConfigDir ?? '无法确定'})`,
+            label: `打开 MPV 用户配置目录 (${mpvConfigDir ?? '无法确定'})`,
             enabled: mpvConfigDir !== undefined,
             click: () => (mpvConfigDir ? openMpvConfigDir(mainWindow, mpvConfigDir) : undefined),
-        }
+        },
+        ...pendingMpvUpdatesItems(mainWindow, mpvConfigDir),
+        ...mpvCapabilityTrayItems(),
     ];
 
     return submenu;
@@ -366,6 +383,7 @@ export function showTrayNotification(): void {
  * 销毁托盘
  */
 export function destroyTray(): void {
+    stopWatchingPendingUpdates();
     if (tray) {
         tray.destroy();
         tray = null;
