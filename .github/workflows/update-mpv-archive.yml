@@ -1,0 +1,105 @@
+name: Update MPV archive
+
+# 每天查一次 JayYa/fntv-mpv-config 的最新正式 Release，tag 比 build.yml 固定的新就开 PR 升级 MPV 归档。
+# 改哪几处由 scripts/update-mpv-archive.cjs 决定，手工升级也用它（docs/external-runtime.md）。
+# 手动触发时可以填 tag，换成指定的 Release，不比较新旧（也用于回滚）。
+#
+# PR 用 GITHUB_TOKEN 开，和 release-please 的 Release PR 一样：PR 上的 CI、Smoke Test、PR Title 先是
+# action_required，维护者在 PR 上点 “Approve workflows to run” 后才跑。不用 PAT 或 GitHub App，
+# 仓库不需要新增密钥。PR 改了 build.yml，Smoke Test 会用新归档构建并跑 5 个目标。
+# 每次推送都要重新批准，所以已开的 PR 固定的就是这个归档时不再推送。
+on:
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag of JayYa/fntv-mpv-config; empty means the latest release, only if newer
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-mpv-archive
+  cancel-in-progress: false
+
+jobs:
+  update:
+    # PR 的 base 是 main，只从 main 运行：在其它分支上手动触发会把那个分支的改动带进 PR。
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BRANCH: automation/mpv-archive
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26.13.0'
+
+      # tag 经 env 传入，不直接拼进脚本。
+      - name: Pin the MPV archive
+        id: pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -n "$TAG" ]; then
+            node scripts/update-mpv-archive.cjs --tag "$TAG"
+          else
+            node scripts/update-mpv-archive.cjs
+          fi
+
+      - name: Open or update the pull request
+        if: steps.pin.outputs.updated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PREVIOUS_TAG: ${{ steps.pin.outputs.previous-tag }}
+          TAG: ${{ steps.pin.outputs.tag }}
+          ASSET: ${{ steps.pin.outputs.asset }}
+          SHA256: ${{ steps.pin.outputs.sha256 }}
+        run: |
+          files=(.github/workflows/build.yml README.md docs/external-runtime.md)
+          number=$(gh pr list --repo "$REPO" --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ] && git fetch --quiet origin "$BRANCH" && git diff --quiet FETCH_HEAD -- "${files[@]}"; then
+            echo "PR #$number 已固定 $TAG，不再推送"
+            exit 0
+          fi
+
+          # 打进安装包的运行时依赖，和 Renovate 一样用 fix(deps)，会进用户可见的更新日志。
+          title="fix(deps): 附带的 MPV 和插件更新到 $TAG"
+          body="$RUNNER_TEMP/mpv-archive-pr.md"
+          {
+            echo "由 \`update-mpv-archive.yml\` 运行 \`scripts/update-mpv-archive.cjs\` 生成。"
+            echo
+            echo "- 归档：\`$PREVIOUS_TAG\` → [\`$TAG\`](https://github.com/JayYa/fntv-mpv-config/releases/tag/$TAG)"
+            echo "- 资产：\`$ASSET\`（取自 Release API）"
+            echo "- sha256：\`$SHA256\`（Release API 给出的资产 digest）"
+            echo "- 改动：\`.github/workflows/build.yml\` 的 env、\`README.md\` 的准备步骤、\`docs/external-runtime.md\` 的 tag"
+            echo
+            echo "合并前："
+            echo
+            echo "1. 这个 PR 由 GITHUB_TOKEN 开，检查显示 action_required。在 PR 上点 “Approve workflows to run”，CI 和 Smoke Test（用新归档构建 5 个目标）才会运行。"
+            echo "2. 对照 Release 正文看组件版本变化。"
+          } > "$body"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --quiet -C "$BRANCH"
+          git commit --quiet -m "$title" -- "${files[@]}"
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --repo "$REPO" --title "$title" --body-file "$body"
+          else
+            gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "$title" --body-file "$body"
+          fi
