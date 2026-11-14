@@ -15,22 +15,13 @@ export function resolveRelative(root: string, relative: string): string {
     return path.join(root, ...relative.split('/'));
 }
 
-/** 同步对用户配置的全部写操作。默认是 node:fs；测试注入在第 N 次写入时抛错的实现。 */
-export interface SyncFileOps {
-    mkdir(dir: string): void;
-    copyFile(source: string, destination: string): void;
-    writeFile(file: string, data: string): void;
-    rename(from: string, to: string): void;
-    remove(target: string): void;
+export function removePath(target: string): void {
+    fs.rmSync(target, { recursive: true, force: true });
 }
 
-export const nodeFileOps: SyncFileOps = {
-    mkdir: dir => fs.mkdirSync(dir, { recursive: true }),
-    copyFile: (source, destination) => fs.copyFileSync(source, destination),
-    writeFile: (file, data) => fs.writeFileSync(file, data),
-    rename: (from, to) => fs.renameSync(from, to),
-    remove: target => fs.rmSync(target, { recursive: true, force: true }),
-};
+function mkdirp(dir: string): void {
+    fs.mkdirSync(dir, { recursive: true });
+}
 
 const SWAP_MARKER = 'target.json';
 
@@ -56,19 +47,25 @@ function fsyncFile(file: string): void {
  * 清理上次中途退出留下的暂存目录。目录替换停在“旧目录已移开、新目录还没到位”时，先把旧目录放回去，
  * 托管目录里用户自己的文件不丢；这次同步再按正常流程换新。
  */
-export function cleanupLeftoverStaging(mpvConfigDir: string, ops: SyncFileOps): void {
+export function cleanupLeftoverStaging(mpvConfigDir: string): void {
     if (!fs.existsSync(mpvConfigDir)) return;
     for (const entry of fs.readdirSync(mpvConfigDir, { withFileTypes: true })) {
-        if (!entry.isDirectory() || !entry.name.startsWith(STAGING_PREFIX)) continue;
-        const staging = path.join(mpvConfigDir, entry.name);
-        for (const swap of fs.readdirSync(staging, { withFileTypes: true })) {
-            if (swap.isDirectory()) restoreInterruptedSwap(mpvConfigDir, path.join(staging, swap.name), ops);
+        if (entry.isDirectory() && entry.name.startsWith(STAGING_PREFIX)) {
+            abandonStaging(mpvConfigDir, path.join(mpvConfigDir, entry.name));
         }
-        ops.remove(staging);
     }
 }
 
-function restoreInterruptedSwap(mpvConfigDir: string, swapDir: string, ops: SyncFileOps): void {
+// 放回停在半路的目录替换，再删掉暂存目录。下次启动清理残留和本次同步失败后收尾走同一条路。
+function abandonStaging(mpvConfigDir: string, staging: string): void {
+    if (!fs.existsSync(staging)) return;
+    for (const swap of fs.readdirSync(staging, { withFileTypes: true })) {
+        if (swap.isDirectory()) restoreInterruptedSwap(mpvConfigDir, path.join(staging, swap.name));
+    }
+    removePath(staging);
+}
+
+function restoreInterruptedSwap(mpvConfigDir: string, swapDir: string): void {
     let relative: unknown;
     try {
         relative = JSON.parse(fs.readFileSync(path.join(swapDir, SWAP_MARKER), 'utf8'));
@@ -79,8 +76,8 @@ function restoreInterruptedSwap(mpvConfigDir: string, swapDir: string, ops: Sync
     const destination = resolveRelative(mpvConfigDir, relative);
     const previous = path.join(swapDir, 'old');
     if (fs.existsSync(previous) && !fs.existsSync(destination)) {
-        ops.mkdir(path.dirname(destination));
-        ops.rename(previous, destination);
+        mkdirp(path.dirname(destination));
+        fs.renameSync(previous, destination);
     }
 }
 
@@ -88,9 +85,9 @@ export class Staging {
     readonly dir: string;
     private counter = 0;
 
-    constructor(private readonly mpvConfigDir: string, private readonly ops: SyncFileOps) {
+    constructor(private readonly mpvConfigDir: string) {
         this.dir = path.join(mpvConfigDir, STAGING_PREFIX + crypto.randomBytes(6).toString('hex'));
-        ops.mkdir(this.dir);
+        mkdirp(this.dir);
     }
 
     private nextPath(): string {
@@ -100,8 +97,8 @@ export class Staging {
 
     /** 把来源复制进暂存并校验哈希、fsync；哈希不对说明便携配置和清单不一致，抛错。 */
     stageCopy(source: string, expectedSha256: string, destination: string = this.nextPath()): string {
-        this.ops.mkdir(path.dirname(destination));
-        this.ops.copyFile(source, destination);
+        mkdirp(path.dirname(destination));
+        fs.copyFileSync(source, destination);
         const actual = sha256File(destination);
         if (actual !== expectedSha256) {
             throw new Error(`Hash mismatch for ${source}: expected ${expectedSha256}, got ${actual ?? 'missing file'}`);
@@ -112,49 +109,46 @@ export class Staging {
 
     /** 复制用户自己的文件（托管目录里清单没列出的），不校验哈希。 */
     stageCarry(source: string, destination: string): void {
-        this.ops.mkdir(path.dirname(destination));
-        this.ops.copyFile(source, destination);
+        mkdirp(path.dirname(destination));
+        fs.copyFileSync(source, destination);
         fsyncFile(destination);
     }
 
     stageText(text: string): string {
         const file = this.nextPath();
-        this.ops.writeFile(file, text);
+        fs.writeFileSync(file, text);
         fsyncFile(file);
         return file;
     }
 
     place(staged: string, target: string): void {
-        this.ops.mkdir(path.dirname(target));
-        this.ops.rename(staged, target);
+        mkdirp(path.dirname(target));
+        fs.renameSync(staged, target);
     }
 
-    /** 新目录建在 `<暂存>/<n>/new`，交给 build 填满，再整目录换掉 relative 指向的目录，失败时放回旧目录。 */
+    /**
+     * 新目录建在 `<暂存>/<n>/new`，交给 build 填满，再整目录换掉 relative 指向的目录。
+     * 移开旧目录后失败时，dispose 按 `target.json` 把旧目录放回去，和下次启动清理残留时一样。
+     */
     replaceDirectory(relative: string, build: (newDir: string) => void): void {
         const swapDir = this.nextPath();
         const fresh = path.join(swapDir, 'new');
-        const previous = path.join(swapDir, 'old');
         const destination = resolveRelative(this.mpvConfigDir, relative);
-        this.ops.mkdir(fresh);
+        mkdirp(fresh);
         build(fresh);
-        this.ops.writeFile(path.join(swapDir, SWAP_MARKER), JSON.stringify(relative));
+        fs.writeFileSync(path.join(swapDir, SWAP_MARKER), JSON.stringify(relative));
         fsyncFile(path.join(swapDir, SWAP_MARKER));
-        const hadPrevious = fs.existsSync(destination);
-        if (hadPrevious) {
-            this.ops.rename(destination, previous);
+        if (fs.existsSync(destination)) {
+            fs.renameSync(destination, path.join(swapDir, 'old'));
         } else {
-            this.ops.mkdir(path.dirname(destination));
+            mkdirp(path.dirname(destination));
         }
-        try {
-            this.ops.rename(fresh, destination);
-        } catch (error) {
-            if (hadPrevious) this.ops.rename(previous, destination);
-            throw error;
-        }
-        this.ops.remove(swapDir);
+        fs.renameSync(fresh, destination);
+        removePath(swapDir);
     }
 
+    /** 放回停在半路的目录替换，删掉暂存目录。 */
     dispose(): void {
-        this.ops.remove(this.dir);
+        abandonStaging(this.mpvConfigDir, this.dir);
     }
 }
