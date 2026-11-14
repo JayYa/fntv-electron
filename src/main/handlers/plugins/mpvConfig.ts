@@ -1,24 +1,25 @@
-import { app, dialog, shell } from 'electron';
+import { app } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as fnConfig from '../../../modules/fn_config/config';
 import * as logger from '../../../modules/logger';
 import { resolveBundledMpvPath, resolvePortableConfigDir } from '../../common/mpvConfigHelpers';
+import { setMpvCapabilitiesSatisfied, showMergePrompt } from '../../common/mpvConfigNotices';
 import {
     checkMpvCapabilities,
     type MpvCapabilityCheckInput,
     mpvCapabilityErrorMessage,
 } from '../../common/mpvConfigSync/capabilities';
-import { acknowledgeConflicts } from '../../common/mpvConfigSync/installRecord';
 import { mpvConfigSyncLogLines } from '../../common/mpvConfigSync/log';
-import { type MergePrompt, mergePrompt, mergePromptText } from '../../common/mpvConfigSync/mergePrompt';
+import { mergePrompt } from '../../common/mpvConfigSync/mergePrompt';
 import { resolveManifestPath } from '../../common/mpvConfigSync/manifest';
 import { synchronizeMpvConfig } from '../../common/mpvConfigSync/sync';
 import { currentPlatform, mpvPlayer, MpvPlayer, mpvUserConfigDir } from '../../../public/platform';
 
 /**
  * MPV 配置文件管理插件
- * 启动时按 MPV 归档清单把便携配置同步到用户配置（src/main/common/mpvConfigSync）。
+ * 启动时按 MPV 归档清单把便携配置同步到用户配置（src/main/common/mpvConfigSync），
+ * 再检查插件能力、决定要不要提示待合并更新；托盘状态和对话框在 src/main/common/mpvConfigNotices.ts。
  */
 
 // 获取用户MPV 配置目录。附带 MPV 用 --config-dir 指向这里，同步也写这里，两者一致（media.ts）。
@@ -52,19 +53,10 @@ function getPortableConfigDir(): string {
     });
 }
 
-// 启动时的能力检查结果；检查本身出错时也当作不满足。只在启动时算一次，托盘每次重建菜单都读它。
-let capabilitiesSatisfied = true;
-
-// 不满足时托盘“设置”子菜单里的一条状态，满足时没有。原因写在日志里。
-export function mpvCapabilityTrayItems(): Electron.MenuItemConstructorOptions[] {
-    if (capabilitiesSatisfied) return [];
-    return [{ label: 'MPV 插件需要更新，片头片尾跳过等功能可能不可用（详见日志）', enabled: false }];
-}
-
-// 用安装记录（或便携配置的清单）里的 provides 对照客户端的 requires，不满足只记 ERROR，不阻塞启动。
+// 用安装记录（或便携配置的清单）里的 provides 对照客户端的 requires，不满足记 ERROR、托盘显示状态，不阻塞启动。
 function checkCapabilities(input: MpvCapabilityCheckInput): void {
     const status = checkMpvCapabilities(input);
-    capabilitiesSatisfied = status.satisfied;
+    setMpvCapabilitiesSatisfied(status.satisfied);
     if (!status.satisfied) logger.error(mpvCapabilityErrorMessage(status, input.mpvConfigDir));
 }
 
@@ -88,25 +80,9 @@ function initializeMpvConfig(): void {
         const prompt = mergePrompt(result);
         if (prompt.show) showMergePrompt(prompt, mpvConfigDir);
     } catch (error) {
-        capabilitiesSatisfied = false;
+        setMpvCapabilitiesSatisfied(false);
         logger.error('初始化 MPV 配置失败:', error);
     }
-}
-
-// 非模态（不挂在主窗口上），不等它关闭。关闭（任一按钮或右上角）即记为已确认；没关就退出，下次启动再弹。
-function showMergePrompt(prompt: MergePrompt, mpvConfigDir: string): void {
-    const text = mergePromptText(prompt);
-    const files = prompt.conflicts.map(entry => entry.path).join(', ');
-    logger.info(`MPV 配置有待合并的更新，弹出提示${prompt.migration ? '（首次迁移）' : ''}: ${files}`);
-    dialog.showMessageBox({ type: 'info', ...text, buttons: ['打开配置目录', '知道了'], defaultId: 1, cancelId: 1 })
-        .then(async ({ response }) => {
-            acknowledgeConflicts(mpvConfigDir, prompt.conflicts);
-            logger.info(`MPV 配置待合并更新提示已关闭，记为已确认: ${files}`);
-            if (response !== 0) return;
-            const error = await shell.openPath(mpvConfigDir);
-            if (error) logger.error(`打开 MPV 用户配置目录失败: ${error}`, mpvConfigDir);
-        })
-        .catch(error => logger.error('MPV 配置待合并更新提示失败:', error));
 }
 
 // 插件初始化函数

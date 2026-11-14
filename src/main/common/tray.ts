@@ -1,7 +1,8 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCurrentMpvPlayer, getMpvConfigDir, mpvCapabilityTrayItems } from '../handlers/plugins/mpvConfig';
+import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
+import { mpvCapabilityTrayItems } from './mpvConfigNotices';
 import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } from './mpvConfigSync/pendingUpdates';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
