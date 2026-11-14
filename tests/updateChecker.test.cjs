@@ -199,13 +199,28 @@ test('download link goes straight to GitHub when the proxy was never configured'
 test('download link keeps the proxy a user explicitly turned on', async (t) => {
     simulateHost(t, 'win32', 'x64');
     const { checker } = setupUpdateChecker(t, {
-        config: { downloadProxyEnabled: true, downloadProxy: 'https://ghfast.top' },
+        config: { downloadProxyEnabled: true, downloadProxy: 'https://relay.example.test' },
         respond: () => release('v2.7.0', PUBLISHED_ASSETS),
     });
 
     const { downloadUrl } = await checker.checkForUpdates();
 
-    assert.equal(downloadUrl, 'https://ghfast.top/https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe');
+    assert.equal(downloadUrl, 'https://relay.example.test/https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe');
+});
+
+test('download link goes through the built-in relay when the app download proxy is on and no address was saved', async (t) => {
+    simulateHost(t, 'win32', 'x64');
+    const { checker } = setupUpdateChecker(t, {
+        config: { downloadProxyEnabled: true },
+        respond: () => release('v2.7.0', PUBLISHED_ASSETS),
+    });
+    const { DEFAULT_DOWNLOAD_PROXY_URL } = require('../dest/modules/fn_config/config.js');
+
+    const { downloadUrl } = await checker.checkForUpdates();
+
+    const original = 'https://github.com/JayYa/fntv-electron/releases/download/v2.7.0/FNMedia_2.7.0_win_x64.exe';
+    assert.equal(downloadUrl, `${DEFAULT_DOWNLOAD_PROXY_URL}${original}`);
+    assert.doesNotMatch(downloadUrl.replaceAll('://', ''), /\/\//);
 });
 
 test('update dialog shows release-please notes as plain text', async (t) => {
