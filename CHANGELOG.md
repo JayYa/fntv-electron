@@ -1,5 +1,12 @@
 # 更新日志
 
+## [3.4.0](https://github.com/JayYa/fntv-electron/compare/v3.3.0...v3.4.0) (2026-11-14)
+
+
+### 新功能
+
+* **ci:** 新增 pnpm run check 作为统一验证入口，加 Check 汇总 job ([#213](https://github.com/JayYa/fntv-electron/issues/213)) ([17ffa22](https://github.com/JayYa/fntv-electron/commit/17ffa22319a0da426da606c0a1a474f68d85cd60))
+
 ## [3.3.0](https://github.com/JayYa/fntv-electron/compare/v3.2.0...v3.3.0) (2026-11-14)
 
 
