@@ -120,29 +120,56 @@ test('a sync that fails at any write leaves whole plugin directories and the nex
     }
 });
 
+// 第 killAt 次写入之前把磁盘状态原样复制一份，就是进程在这一刻被杀掉时留下的样子。返回复制出的用户配置。
+function killedAt(root, killAt) {
+    const { user, v2 } = prepare(root, `kill-${killAt}`);
+    const frozen = path.join(root, `frozen-${killAt}`);
+    const freezing = Object.fromEntries(Object.entries(nodeFileOps).map(([name, fn]) => [name, (...args) => {
+        freezing.calls = (freezing.calls ?? 0) + 1;
+        if (freezing.calls === killAt) {
+            fs.cpSync(user, frozen, { recursive: true });
+            throw new Error('killed');
+        }
+        return fn(...args);
+    }]));
+    syncV2(v2, user, freezing);
+    return { frozen, v2 };
+}
+
 test('a sync killed at any write (power cut) is completed by the next start', (t) => {
     const root = tempRoot(t, 'kill');
     const reference = referenceRun(root);
 
     for (let killAt = 1; killAt <= reference.writes; killAt += 1) {
-        const { user, v2 } = prepare(root, `kill-${killAt}`);
-        const frozen = path.join(root, `frozen-${killAt}`);
-        // 第 killAt 次写入之前把磁盘状态原样复制一份，就是进程在这一刻被杀掉时留下的样子。
-        const freezing = Object.fromEntries(Object.entries(nodeFileOps).map(([name, fn]) => [name, (...args) => {
-            freezing.calls = (freezing.calls ?? 0) + 1;
-            if (freezing.calls === killAt) {
-                fs.cpSync(user, frozen, { recursive: true });
-                throw new Error('killed');
-            }
-            return fn(...args);
-        }]));
-        syncV2(v2, user, freezing);
+        const { frozen, v2 } = killedAt(root, killAt);
 
         const resumed = syncV2(v2, frozen);
 
         assert.equal(resumed.status, 'synced', `resume after kill at write ${killAt}`);
         assert.deepEqual(resumed.conflicts, reference.conflicts, `conflicts after kill at write ${killAt}`);
         assert.deepEqual(readTree(frozen), reference.after, `tree after kill at write ${killAt}`);
+    }
+});
+
+test('a start without a usable manifest still puts back plugin directories a killed sync left moved away', (t) => {
+    const root = tempRoot(t, 'kill-no-manifest');
+    const reference = referenceRun(root);
+
+    for (let killAt = 1; killAt <= reference.writes; killAt += 1) {
+        const { frozen, v2 } = killedAt(root, killAt);
+        fs.rmSync(v2.manifestPath);
+
+        const skipped = syncV2(v2, frozen);
+
+        assert.equal(skipped.reason, 'manifest-missing', `kill at write ${killAt}`);
+        const tree = readTree(frozen);
+        for (const dir of MANAGED_DIRS) {
+            const actual = subtree(tree, dir);
+            const expected = [subtree(reference.before, dir), subtree(reference.after, dir)];
+            assert.ok(expected.some(candidate => isDeepEqual(actual, candidate)),
+                `kill at write ${killAt}: ${dir} is ${JSON.stringify(actual)}`);
+        }
+        assert.equal(fs.readdirSync(frozen).some(name => name.startsWith('.fntv-sync-')), false, `staging left after kill at write ${killAt}`);
     }
 });
 

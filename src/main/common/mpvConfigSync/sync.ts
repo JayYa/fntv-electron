@@ -81,15 +81,22 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
     if (!fs.existsSync(portableConfigDir)) {
         return { status: 'failed', error: new Error(`Portable config directory not found: ${portableConfigDir}`), files: [] };
     }
+    // 用户配置就是便携配置时，同步从没往这里写过，没有要清理的暂存目录。
     if (isSameDirectory(portableConfigDir, mpvConfigDir)) {
         return { status: 'skipped', reason: 'same-directory', detail: mpvConfigDir };
+    }
+    const ops = input.fileOps ?? nodeFileOps;
+    // 读清单之前清理：清单缺失或版本不认识时不同步，但上次中途退出时移开的插件目录要放回去。
+    try {
+        cleanupLeftoverStaging(mpvConfigDir, ops);
+    } catch (error) {
+        return { status: 'failed', error: error instanceof Error ? error : new Error(String(error)), files: [] };
     }
     const read = readManifest(manifestPath);
     if (!read.ok) {
         return { status: 'skipped', reason: read.reason, detail: read.detail };
     }
 
-    const ops = input.fileOps ?? nodeFileOps;
     const run = new SyncRun(input, read.manifest, ops);
     try {
         return run.execute();
@@ -136,7 +143,6 @@ class SyncRun {
     }
 
     execute(): MpvConfigSyncResult {
-        cleanupLeftoverStaging(this.user, this.ops);
         this.ops.mkdir(this.user);
         this.record = readInstallRecord(this.user);
         this.staging = new Staging(this.user, this.ops);
