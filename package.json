@@ -3,7 +3,7 @@
     "version": "3.3.0",
     "description": "A fntv app built with Electron",
     "main": "dest/main/main.js",
-    "packageManager": "pnpm@12.18.0",
+    "packageManager": "pnpm@12.20.0",
     "scripts": {
         "start": "pnpm run clean && tsc && pnpm run build:preload && electron .",
         "compile": "pnpm run clean && tsc && pnpm run build:preload",
@@ -37,7 +37,7 @@
     },
     "devDependencies": {
         "@types/node": "24.19.2",
-        "electron": "45.3.0",
+        "electron": "45.3.1",
         "electron-builder": "26.18.0",
         "esbuild": "0.28.2",
         "eslint": "10.14.0",

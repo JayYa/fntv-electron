@@ -43,7 +43,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '26.13.0'
+          node-version: '26.13.1'
           cache: pnpm
 
       # .npmrc 指向国内镜像，只给本地开发用。Windows 默认 shell 是 PowerShell，rm -f 要用 bash。

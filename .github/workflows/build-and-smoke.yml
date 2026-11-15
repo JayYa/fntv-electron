@@ -83,7 +83,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '26.13.0'
+          node-version: '26.13.1'
           package-manager-cache: false
 
       # 测试只用 playwright-core 启动已打包的客户端，不需要 Electron 自带的二进制，也不下载浏览器。
