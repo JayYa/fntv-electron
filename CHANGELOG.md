@@ -1,5 +1,17 @@
 # 更新日志
 
+## [3.4.0](https://github.com/JayYa/fntv-electron/compare/v3.3.0...v3.4.0) (2026-11-15)
+
+
+### 新功能
+
+* MPV 用户配置按归档清单同步 ([#227](https://github.com/JayYa/fntv-electron/issues/227)) ([450b0e8](https://github.com/JayYa/fntv-electron/commit/450b0e8db88bd0d47560e106eb5fe342dfaf7c7a))
+
+
+### 问题修复
+
+* **deps:** 附带的 MPV 和插件更新到 fntv-mpv-v20261115_160458 ([#231](https://github.com/JayYa/fntv-electron/issues/231)) ([0c378d8](https://github.com/JayYa/fntv-electron/commit/0c378d8af1386977d4defc432e156a14e6063d57))
+
 ## [3.3.0](https://github.com/JayYa/fntv-electron/compare/v3.2.0...v3.3.0) (2026-11-14)
 
 
