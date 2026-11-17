@@ -6,7 +6,9 @@
   ],
   "rangeStrategy": "pin",
   "minimumReleaseAge": "3 days",
-  "dependencyDashboardAutoclose": true,
+  "dependencyDashboard": {
+    "autoclose": true
+  },
   "lockFileMaintenance": { "enabled": false },
   "packageRules": [
     {
