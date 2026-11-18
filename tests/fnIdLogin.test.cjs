@@ -68,6 +68,11 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
             setPath(name, value) { paths[name] = value; },
         },
         BrowserWindow: FakeBrowserWindow,
+        // 主窗口按屏幕布局恢复上次的大小和位置（src/main/common/windowState.ts）。
+        screen: (() => {
+            const display = { workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
+            return { getAllDisplays: () => [display], getPrimaryDisplay: () => display };
+        })(),
         dialog: {},
         net: {
             request(options) {

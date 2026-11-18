@@ -5,17 +5,14 @@ import { restoreCookies } from '../../modules/fn_config/cookie';
 import { BrowserWindow, dialog } from 'electron';
 import { AccessCodeVerificationError, establishAccessCodeSession } from './accessCodeSession';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
+import { shouldStartMaximized } from './mainwin';
 
 /**
- * 设置窗口为半屏
+ * 取消最大化，回到最大化之前的大小和位置
  * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
  */
-export function setHalfScreen(mainWindow: BrowserWindow): void {
-    if (!mainWindow) return;
-
-    mainWindow.setSize(1200, 800);
-    mainWindow.center();
-    mainWindow.unmaximize();
+export function unmaximizeWindow(mainWindow: BrowserWindow): void {
+    if (mainWindow) mainWindow.unmaximize();
 }
 
 /**
@@ -31,15 +28,14 @@ export function setFullScreen(mainWindow: BrowserWindow): void {
  * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
  */
 export function setupFullScreenToggle(mainWindow: BrowserWindow): void {
-    let isFullScreen = false;
     mainWindow.webContents.on('before-input-event', (event, input) => {
         if (input.type === 'keyDown' && input.key === 'F11') {
-            if (isFullScreen) {
-                setHalfScreen(mainWindow);
+            // 按窗口当前状态切换：启动时可能已经是最大化，最大化按钮也会改变状态。
+            if (mainWindow.isMaximized()) {
+                unmaximizeWindow(mainWindow);
             } else {
                 setFullScreen(mainWindow);
             }
-            isFullScreen = !isFullScreen;
             event.preventDefault();
         }
     });
@@ -71,7 +67,11 @@ export function setupInputMethodDisable(mainWindow: BrowserWindow): void {
  * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
  */
 export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
-    mainWindow.once('ready-to-show', () => mainWindow.show());
+    mainWindow.once('ready-to-show', () => {
+        // 上次退出时是最大化的就最大化显示；还原时回到上次保存的大小和位置。
+        if (shouldStartMaximized()) mainWindow.maximize();
+        mainWindow.show();
+    });
 }
 
 /**

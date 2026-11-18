@@ -1,5 +1,5 @@
 import { getMainWindow } from '../../common/mainwin';
-import { setHalfScreen, setFullScreen } from '../../common/winctrl';
+import { unmaximizeWindow, setFullScreen } from '../../common/winctrl';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 
@@ -20,7 +20,7 @@ function handleMaximize(): void {
     log.info('窗口控制: 最大化或还原');
     const mainWindow = getMainWindow();
     if (mainWindow) {
-        mainWindow.isMaximized() ? setHalfScreen(mainWindow) : setFullScreen(mainWindow);
+        mainWindow.isMaximized() ? unmaximizeWindow(mainWindow) : setFullScreen(mainWindow);
     }
 }
 
