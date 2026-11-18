@@ -5,17 +5,10 @@ import { restoreCookies } from '../../modules/fn_config/cookie';
 import { BrowserWindow, dialog } from 'electron';
 import { AccessCodeVerificationError, establishAccessCodeSession } from './accessCodeSession';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
+import { shouldStartMaximized } from './mainwin';
 
-/**
- * 设置窗口为半屏
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
-export function setHalfScreen(mainWindow: BrowserWindow): void {
-    if (!mainWindow) return;
-
-    mainWindow.setSize(1200, 800);
-    mainWindow.center();
-    mainWindow.unmaximize();
+export function unmaximizeWindow(mainWindow: BrowserWindow): void {
+    if (mainWindow) mainWindow.unmaximize();
 }
 
 /**
@@ -31,15 +24,13 @@ export function setFullScreen(mainWindow: BrowserWindow): void {
  * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
  */
 export function setupFullScreenToggle(mainWindow: BrowserWindow): void {
-    let isFullScreen = false;
     mainWindow.webContents.on('before-input-event', (event, input) => {
         if (input.type === 'keyDown' && input.key === 'F11') {
-            if (isFullScreen) {
-                setHalfScreen(mainWindow);
+            if (mainWindow.isMaximized()) {
+                unmaximizeWindow(mainWindow);
             } else {
                 setFullScreen(mainWindow);
             }
-            isFullScreen = !isFullScreen;
             event.preventDefault();
         }
     });
@@ -71,7 +62,10 @@ export function setupInputMethodDisable(mainWindow: BrowserWindow): void {
  * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
  */
 export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
-    mainWindow.once('ready-to-show', () => mainWindow.show());
+    mainWindow.once('ready-to-show', () => {
+        if (shouldStartMaximized()) mainWindow.maximize();
+        mainWindow.show();
+    });
 }
 
 /**
