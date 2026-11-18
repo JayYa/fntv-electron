@@ -7,10 +7,6 @@ import { AccessCodeVerificationError, establishAccessCodeSession } from './acces
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
 import { shouldStartMaximized } from './mainwin';
 
-/**
- * 取消最大化，回到最大化之前的大小和位置
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
 export function unmaximizeWindow(mainWindow: BrowserWindow): void {
     if (mainWindow) mainWindow.unmaximize();
 }
@@ -30,7 +26,6 @@ export function setFullScreen(mainWindow: BrowserWindow): void {
 export function setupFullScreenToggle(mainWindow: BrowserWindow): void {
     mainWindow.webContents.on('before-input-event', (event, input) => {
         if (input.type === 'keyDown' && input.key === 'F11') {
-            // 按窗口当前状态切换：启动时可能已经是最大化，最大化按钮也会改变状态。
             if (mainWindow.isMaximized()) {
                 unmaximizeWindow(mainWindow);
             } else {
@@ -68,7 +63,6 @@ export function setupInputMethodDisable(mainWindow: BrowserWindow): void {
  */
 export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
     mainWindow.once('ready-to-show', () => {
-        // 上次退出时是最大化的就最大化显示；还原时回到上次保存的大小和位置。
         if (shouldStartMaximized()) mainWindow.maximize();
         mainWindow.show();
     });

@@ -7,10 +7,9 @@ export interface Rect {
     height: number;
 }
 
-/** 各块屏幕的可用区域（Electron `Display.workArea`），primary 是主屏的。 */
 export interface DisplayLayout {
     workAreas: Rect[];
-    primary: Rect;
+    primaryWorkArea: Rect;
 }
 
 export interface WindowPlacement {
@@ -42,7 +41,6 @@ function parseSaved(value: unknown): WindowPlacement | null {
     return { bounds: { x, y, width, height } as Rect, maximized };
 }
 
-// 文件缺失或损坏都只是回到默认窗口，不提示用户。
 function readSaved(filePath: string): WindowPlacement | null {
     try {
         return parseSaved(JSON.parse(fs.readFileSync(filePath, 'utf8')));
@@ -57,8 +55,7 @@ function overlapArea(a: Rect, b: Rect): number {
     return width > 0 && height > 0 ? width * height : 0;
 }
 
-/** 与窗口重叠最多的屏幕；窗口完全不在任何屏幕上时返回 null。 */
-function displayOf(bounds: Rect, workAreas: Rect[]): Rect | null {
+function mostOverlappingWorkArea(bounds: Rect, workAreas: Rect[]): Rect | null {
     let best: Rect | null = null;
     let bestArea = 0;
     for (const area of workAreas) {
@@ -71,20 +68,15 @@ function displayOf(bounds: Rect, workAreas: Rect[]): Rect | null {
     return best;
 }
 
-/**
- * 读出上次保存的窗口状态，按当前的屏幕布局调整成可以直接交给 BrowserWindow 的位置和大小。
- * 没有可用的保存状态，或保存的位置已经不在任何屏幕上时，用默认大小在主屏居中。
- */
 export function loadWindowPlacement(filePath: string, displays: DisplayLayout): WindowPlacement {
     const saved = readSaved(filePath);
-    const area = saved && displayOf(saved.bounds, displays.workAreas);
-    if (saved && area) return { bounds: fitInto(saved.bounds, area), maximized: saved.maximized };
-    const bounds = fitInto(centeredIn(displays.primary, DEFAULT_SIZE), displays.primary);
+    const area = saved && mostOverlappingWorkArea(saved.bounds, displays.workAreas);
+    if (saved && area) return { bounds: shrinkToFit(saved.bounds, area), maximized: saved.maximized };
+    const bounds = shrinkToFit(centeredIn(displays.primaryWorkArea, DEFAULT_SIZE), displays.primaryWorkArea);
     return { bounds, maximized: saved?.maximized ?? false };
 }
 
-/** 比可用区域宽或高的窗口缩到可用区域大小，并在这个方向上贴齐可用区域。 */
-function fitInto(bounds: Rect, area: Rect): Rect {
+function shrinkToFit(bounds: Rect, area: Rect): Rect {
     const fitted = { ...bounds };
     if (fitted.width > area.width) {
         fitted.width = area.width;

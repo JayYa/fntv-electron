@@ -16,7 +16,7 @@ function stateFile(t) {
 }
 
 test('first launch opens the default size centered on the primary display', (t) => {
-    const placement = loadWindowPlacement(stateFile(t), { workAreas: [primary], primary });
+    const placement = loadWindowPlacement(stateFile(t), { workAreas: [primary], primaryWorkArea: primary });
 
     assert.deepEqual(placement, {
         bounds: { x: 260, y: 120, width: 1400, height: 800 },
@@ -30,14 +30,14 @@ test('the saved size, position and maximized state come back on the next launch'
 
     saveWindowPlacement(file, saved);
 
-    assert.deepEqual(loadWindowPlacement(file, { workAreas: [primary, secondary], primary }), saved);
+    assert.deepEqual(loadWindowPlacement(file, { workAreas: [primary, secondary], primaryWorkArea: primary }), saved);
 });
 
 test('a window saved on a display that is gone opens at the default size on the primary display', (t) => {
     const file = stateFile(t);
     saveWindowPlacement(file, { bounds: { x: 2100, y: 80, width: 1600, height: 900 }, maximized: true });
 
-    assert.deepEqual(loadWindowPlacement(file, { workAreas: [primary], primary }), {
+    assert.deepEqual(loadWindowPlacement(file, { workAreas: [primary], primaryWorkArea: primary }), {
         bounds: { x: 260, y: 120, width: 1400, height: 800 },
         maximized: true,
     });
@@ -48,7 +48,7 @@ test('a window larger than its display shrinks to fit that display', (t) => {
     const laptop = { x: 0, y: 0, width: 1366, height: 728 };
     saveWindowPlacement(file, { bounds: { x: 100, y: 50, width: 2400, height: 1300 }, maximized: false });
 
-    assert.deepEqual(loadWindowPlacement(file, { workAreas: [laptop], primary: laptop }), {
+    assert.deepEqual(loadWindowPlacement(file, { workAreas: [laptop], primaryWorkArea: laptop }), {
         bounds: laptop,
         maximized: false,
     });
@@ -57,7 +57,7 @@ test('a window larger than its display shrinks to fit that display', (t) => {
 test('the default window shrinks to fit a primary display smaller than it', (t) => {
     const small = { x: 0, y: 0, width: 1280, height: 680 };
 
-    assert.deepEqual(loadWindowPlacement(stateFile(t), { workAreas: [small], primary: small }), {
+    assert.deepEqual(loadWindowPlacement(stateFile(t), { workAreas: [small], primaryWorkArea: small }), {
         bounds: small,
         maximized: false,
     });
@@ -74,7 +74,7 @@ for (const [name, content] of [
         const file = stateFile(t);
         fs.writeFileSync(file, content);
 
-        assert.deepEqual(loadWindowPlacement(file, { workAreas: [primary], primary }), {
+        assert.deepEqual(loadWindowPlacement(file, { workAreas: [primary], primaryWorkArea: primary }), {
             bounds: { x: 260, y: 120, width: 1400, height: 800 },
             maximized: false,
         });

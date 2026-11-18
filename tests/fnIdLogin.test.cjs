@@ -12,6 +12,11 @@ const ACCESS_CODE = 'plain-access-code';
 const NAS = 'https://nas.example.com:5667';
 const EVIL = 'https://nas.example.com.evil.com:5667';
 
+function fakeSingleDisplayScreen() {
+    const display = { workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
+    return { getAllDisplays: () => [display], getPrimaryDisplay: () => display };
+}
+
 function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token', domain: 'nas.example.com' }] } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-fnid-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
@@ -68,11 +73,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
             setPath(name, value) { paths[name] = value; },
         },
         BrowserWindow: FakeBrowserWindow,
-        // 主窗口按屏幕布局恢复上次的大小和位置（src/main/common/windowState.ts）。
-        screen: (() => {
-            const display = { workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
-            return { getAllDisplays: () => [display], getPrimaryDisplay: () => display };
-        })(),
+        screen: fakeSingleDisplayScreen(),
         dialog: {},
         net: {
             request(options) {
