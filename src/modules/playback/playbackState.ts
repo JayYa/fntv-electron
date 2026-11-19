@@ -25,8 +25,9 @@ export interface PlaybackRun {
     /**
      * 播放结束（MPV 退出），或启动失败。调用后立即不再算在播放；
      * report 是这次退出的进度回传，它完成后才算结束完成。重复调用只有第一次生效。
+     * 返回的 Promise 在结束完成时兑现，不会 reject。
      */
-    ended(report?: Promise<unknown>): void;
+    ended(report?: Promise<unknown>): Promise<void>;
 }
 
 interface RunState {
@@ -66,9 +67,9 @@ export function beginPlayback(): PlaybackRun {
             state.player = player;
             return play();
         },
-        ended(report?: Promise<unknown>): void {
+        ended(report?: Promise<unknown>): Promise<void> {
             if (state.hasEnded) {
-                return;
+                return state.done;
             }
             state.hasEnded = true;
             state.player = null;
@@ -80,6 +81,7 @@ export function beginPlayback(): PlaybackRun {
                 current = null;
                 endedListeners.forEach((listener) => listener());
             });
+            return state.done;
         },
     };
 }

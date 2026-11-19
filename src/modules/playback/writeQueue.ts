@@ -8,14 +8,12 @@ import log from '../logger';
  */
 export type WriteKind = 'progress' | 'final' | 'other';
 
-/** 一次播放里要按顺序执行的一次写入。 */
 export interface WriteTask {
     itemGuid: string;
     kind: WriteKind;
     write(): Promise<unknown>;
 }
 
-// 新来的 task 是否取代还在排队的 queued
 function replaces(task: WriteTask, queued: WriteTask): boolean {
     if (queued.kind !== 'progress') return false;
     return task.kind === 'progress' || (task.kind === 'final' && task.itemGuid === queued.itemGuid);

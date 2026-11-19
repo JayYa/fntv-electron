@@ -8,17 +8,14 @@ export enum EventType {
     ITEM_END = 'item_end',
 }
 
-// 播放列表里的一个播放项
 export interface PlayItem {
     itemGuid: string;
     title: string;
     tvTitle: string;
     seasonNumber: number;
     episodeNumber: number;
-    // 播放进度（秒）。播放期间随进度更新
     ts: number;
     duration: number;
-    // 交给 MPV 的播放地址；MPV 原样报回它，播放器凭它认出当前播放项
     playLink: string;
 }
 
@@ -41,13 +38,11 @@ export type PlayErrorData = {
     message: string;
 }
 
-// 播放器事件数据类型。每次事件都是一份新的快照，播放器之后不会再改它
 export type EventData = PlayStatusData | PlayExitData | PlayErrorData;
 
 // 事件处理器类型
 export type EventHandler = (type: EventType, data: EventData) => void;
 
-// 播放器配置。续播位置和字幕属于业务，由调用方提供，播放器只照做
 export type Config = {
     playerPath: string;
     debug?: boolean;
@@ -60,7 +55,6 @@ export type Config = {
     loadSubtitles: (itemGuid: string) => Promise<string[]>;
 }
 
-// 播放器：现在只有 MPV 一个实现，测试里用替身
 export interface Player {
     /** 按顺序播放 items，从第 pos 项开始；MPV 启动并加载播放列表后返回 true。 */
     playList(items: PlayItem[], pos: number): Promise<boolean>;
