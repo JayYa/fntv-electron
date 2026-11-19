@@ -2,6 +2,7 @@ import { BrowserWindow, Session } from 'electron';
 import { ApiService } from '../../../modules/fn_api/api';
 import { request, HttpMethod } from '../../../modules/fn_api/request';
 import * as log from '../../../modules/logger';
+import type { GrantedBaseUrl } from '../../common/currentLogin';
 
 /**
  * handleFnIdLogin 和消息处理共用的东西。oauthWindow 和 authRequested 两边都会读写当前值，
@@ -11,8 +12,8 @@ export interface FnIdOauthFlow {
     readonly oauthWindow: BrowserWindow | null;
     authRequested: boolean;
     oauthSession: Session;
-    establishTargetSession(targetBaseUrl: string): Promise<string>;
-    completeLogin(token: string, targetBaseUrl: string): Promise<void>;
+    establishTargetSession(targetBaseUrl: string): Promise<GrantedBaseUrl>;
+    completeLogin(token: string, target: GrantedBaseUrl): Promise<void>;
     adoptOauthBaseUrl(reportedUrl: string, pageOrigin: string): string;
     reject(reason: unknown): void;
 }
@@ -133,7 +134,8 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
 
                     try {
                         // 使用 baseUrl 创建 API 实例并换取 token
-                        baseUrl = await establishTargetSession(baseUrl);
+                        const target = await establishTargetSession(baseUrl);
+                        baseUrl = target.baseUrl;
                         const fnapi = new ApiService(baseUrl);
                         const authResponse = await fnapi.auth(code);
 
@@ -150,7 +152,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                         const token = authResponse.data.token;
                         log.info('[FN ID] 获取 token 成功');
 
-                        await completeLogin(token, baseUrl);
+                        await completeLogin(token, target);
                     } catch (err) {
                         flow.authRequested = false;
                         log.error('[FN ID] Token 交换失败:', err);

@@ -8,7 +8,7 @@ import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
-import { establishCurrentLogin, type IssuedToken } from '../../common/currentLogin';
+import { establishNewLogin, type IssuedToken } from '../../common/currentLogin';
 
 /**
  * 用户认证插件
@@ -187,11 +187,13 @@ async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<v
     }
 
     const accessCode = loginData.accessCode?.trim() || '';
-    const result = await establishCurrentLogin(getMainWindow, {
-        baseUrl: loginData.useHttps ? `https://${loginData.domain}` : `http://${loginData.domain}`,
-        accessCode,
+    const result = await establishNewLogin(getMainWindow, {
+        access: {
+            baseUrl: loginData.useHttps ? `https://${loginData.domain}` : `http://${loginData.domain}`,
+            accessCode,
+        },
         account: loginData.username,
-        credential: { issueToken: (baseUrl) => requestToken(baseUrl, loginData) },
+        token: (baseUrl) => requestToken(baseUrl, loginData),
         history: {
             domain: loginData.domain,
             account: loginData.username,

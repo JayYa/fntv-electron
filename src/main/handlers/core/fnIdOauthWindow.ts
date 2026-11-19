@@ -2,7 +2,7 @@ import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
-import { accessCodeLoginError, establishCurrentLogin, establishAccessGrant, type LoginError } from '../../common/currentLogin';
+import { establishNewLogin, GrantedBaseUrl, LoginFailedError, verifyAccess } from '../../common/currentLogin';
 import { resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
@@ -14,7 +14,6 @@ import {
     resolveFnIdOauthTrust,
     resolveFnIdWindowOpen,
 } from './fnIdTrust';
-import { AccessCodeVerificationError } from '../../common/accessCodeSession';
 import { createFnIdMessageHandler } from './fnIdOauthMessages';
 import { getAccessCodeInjectionScript, getInjectionScript, getLoginAutofillScript } from './fnIdScripts';
 
@@ -24,12 +23,6 @@ interface LoginData {
     password: string;
     accessCode?: string;
     useHttps?: boolean;
-}
-
-class LoginFailedError extends Error {
-    constructor(readonly loginError: LoginError) {
-        super(loginError.message);
-    }
 }
 
 /**
@@ -104,8 +97,8 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             return { action: 'deny' };
         });
 
-        function establishTargetSession(targetBaseUrl: string): Promise<string> {
-            return establishAccessGrant(targetBaseUrl, accessCode);
+        function establishTargetSession(targetBaseUrl: string): Promise<GrantedBaseUrl> {
+            return verifyAccess(targetBaseUrl, accessCode);
         }
 
         // 为 FN Connect 域名设置 mode=relay Cookie
@@ -168,16 +161,15 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                 reject(new Error('FN ID 登录超时（120秒）'));
             }, 120000);
 
-            async function completeLogin(token: string, targetBaseUrl: string): Promise<void> {
+            async function completeLogin(token: string, target: GrantedBaseUrl): Promise<void> {
                 if (loginCompleted) return;
                 loginCompleted = true;
 
                 try {
-                    const result = await establishCurrentLogin(getMainWindow, {
-                        baseUrl: targetBaseUrl,
-                        accessCode,
+                    const result = await establishNewLogin(getMainWindow, {
+                        access: target,
                         account: loginData.username,
-                        credential: { issueToken: async () => ({ token }) },
+                        token,
                         history: {
                             domain: fnId,
                             account: loginData.username,
@@ -186,7 +178,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                             useHttps: true,
                         },
                     });
-                    if (!result.ok) throw new LoginFailedError(result.error);
+                    if (!result.ok) throw new LoginFailedError(result.reason, result.error);
                     log.info('[FN ID] 登录成功，跳转到主页面');
 
                     clearTimeout(timeout);
@@ -223,18 +215,19 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                         return;
                     }
 
-                    const targetBaseUrl = await establishTargetSession(
+                    const target = await establishTargetSession(
                         resolveFnConnectBaseUrl(currentUrl, fnConnectUrl),
                     );
+                    const targetBaseUrl = target.baseUrl;
                     const verification = await new ApiService(targetBaseUrl, tokenCookie.value).getUserInfo(5000, 0);
                     if (!verification?.success) {
                         log.info('[FN ID] 当前 Cookie 不是可用的媒体 token，继续 OAuth 流程');
                         return;
                     }
 
-                    log.info(`[FN ID] 检测到有效登录 Cookie，使用当前连接完成登录: ${targetBaseUrl}`);
+                    log.info('[FN ID] 检测到有效登录 Cookie，使用当前连接完成登录');
                     authRequested = true;
-                    await completeLogin(tokenCookie.value, targetBaseUrl);
+                    await completeLogin(tokenCookie.value, target);
                 } finally {
                     cookieCheckInProgress = false;
                 }
@@ -323,18 +316,16 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
         }
 
     } catch (error: any) {
-        const isAccessCodeError = error instanceof AccessCodeVerificationError;
-        log.error('[FN ID] 登录失败:', isAccessCodeError ? error.reason : error);
+        const isLoginError = error instanceof LoginFailedError;
+        log.error('[FN ID] 登录失败:', isLoginError ? error.reason : error);
 
         // 关闭 OAuth 窗口
         if (oauthWindow && !oauthWindow.isDestroyed()) {
             oauthWindow.close();
         }
 
-        if (error instanceof LoginFailedError) {
+        if (isLoginError) {
             event.reply('login-error', error.loginError);
-        } else if (isAccessCodeError) {
-            event.reply('login-error', accessCodeLoginError(error));
         } else {
             event.reply('login-error', {
                 title: 'FN ID 登录失败',
