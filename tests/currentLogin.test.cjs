@@ -14,7 +14,6 @@ const ok = (data) => ({ status: 200, headers: { 'content-type': 'application/jso
 const rejected = (msg) => ({ status: 200, headers: { 'content-type': 'application/json' }, data: { code: 1, msg } });
 const certificateError = () => Object.assign(new Error('self-signed certificate'), { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' });
 
-// 用假 ipcMain 跑真实的 auth.init()；飞牛影视服务是假的 axios，Cookie 写进假的 persist:fntv 会话。
 function setup(t, {
     loginResponses = [],
     userInfo = ok({ username: 'alice' }),
@@ -67,7 +66,6 @@ function setup(t, {
             },
         },
         net: {
-            // 访问码网关：按 accessCodeStatus 回一个状态码
             request() {
                 if (accessCodeStatus === null) throw new Error('no access code, the gateway is not asked');
                 const request = new EventEmitter();

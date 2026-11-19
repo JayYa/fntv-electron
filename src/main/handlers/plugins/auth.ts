@@ -105,7 +105,6 @@ function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }: Histo
 
 const loginFailed = (message: string): IssuedToken => ({ error: { title: '登录失败', message } });
 
-/** 用账号密码向飞牛影视服务换 token；证书不受信任时问用户，信任后重试一次。 */
 async function requestToken(
     baseUrl: string,
     loginData: LoginData,
@@ -120,7 +119,7 @@ async function requestToken(
             return loginFailed('没有有效的登录信息，无法恢复 cookies');
         }
         log.info('登录成功，已获取 token');
-        return { token, baseUrl: response.moveUrl || undefined };
+        return { token, movedTo: response.moveUrl || undefined };
     }
 
     if (response?.certificateError) {
@@ -153,7 +152,6 @@ async function requestToken(
         : msg || '登录时发生未知错误，请稍后重试。');
 }
 
-// 用户登录处理
 async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<void> {
     log.info('收到登录请求:', {
         useHttps: loginData?.useHttps,

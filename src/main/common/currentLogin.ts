@@ -1,8 +1,3 @@
-/**
- * 建立当前登录（current login）：密码登录、FN ID 登录和启动时恢复都经过这里。
- * 取 token 的方式各不相同，由调用方提供；访问码验证、地址确定、恢复 Cookie、保存和进入网页端的顺序只在这里。
- */
-
 import * as fnConfig from '../../modules/fn_config/config';
 import { restoreCookies } from '../../modules/fn_config/cookie';
 import * as log from '../../modules/logger';
@@ -15,18 +10,13 @@ export interface LoginError {
     message: string;
 }
 
-export type IssuedToken = { token: string; baseUrl?: string } | { error: LoginError };
+export type IssuedToken = { token: string; movedTo?: string } | { error: LoginError };
 
 export interface LoginRequest {
     baseUrl: string;
     accessCode: string;
     account: string;
-    /**
-     * savedToken：启动时从配置读出，先向飞牛影视服务校验，没变就不重新保存。
-     * issueToken：这次登录取得，拿到确定后的地址；返回的 baseUrl 替换当前地址（login 接口的 moveUrl）。
-     */
     credential: { savedToken: string } | { issueToken(baseUrl: string): Promise<IssuedToken> };
-    /** 成功后写进登录历史；启动时不写。 */
     history?: fnConfig.AddHistoryParams;
 }
 
@@ -34,7 +24,6 @@ export type LoginFailureReason =
     | 'access-code-rejected'
     | 'access-code-unreachable'
     | 'token-not-issued'
-    // 启动时保存的 token 失效也算在这里：restoreCookies 不区分两者
     | 'session-not-restored'
     | 'secure-storage'
     | 'unexpected';
@@ -46,8 +35,7 @@ interface LoginWindow {
     loadFile(filePath: string): Promise<void> | void;
 }
 
-/** 验证访问码（没有访问码时只清掉上次的访问授权），返回验证后的地址：origin 取验证结果，路径保留原地址的。 */
-export async function verifyAccessCode(baseUrl: string, accessCode: string): Promise<string> {
+export async function establishAccessGrant(baseUrl: string, accessCode: string): Promise<string> {
     const session = await establishAccessCodeSession(baseUrl, accessCode);
     return applyVerifiedOriginToFnConnectBaseUrl(baseUrl, session.baseUrl);
 }
@@ -60,7 +48,6 @@ export function showLoginPage(window: LoginWindow): void {
 
 const fail = (reason: LoginFailureReason, error: LoginError): LoginResult => ({ ok: false, reason, error });
 
-/** 访问码验证失败时给登录页看的错误；FN ID 登录在 OAuth 流程中途验证失败时也用它。 */
 export function accessCodeLoginError(error: AccessCodeVerificationError): LoginError {
     return error.reason === 'rejected'
         ? { title: '访问码错误', message: '访问码错误，请检查后重试。' }
@@ -74,24 +61,18 @@ function unexpectedFailure(error: unknown): LoginResult {
         : fail('unexpected', { title: '连接失败', message: '无法连接到服务器，请检查域名是否正确或网络连接是否正常。' });
 }
 
-/**
- * 建立当前登录，成功后主窗口进入网页端。
- * Cookie 恢复成功之后才保存当前登录和登录历史，失败时什么都不落盘。
- * window 只在成功时取。失败不导航：登录页留在原处显示 error，启动时由调用方回到登录页。
- */
-export async function establishCurrentLogin(window: () => LoginWindow, request: LoginRequest): Promise<LoginResult> {
+export async function establishCurrentLogin(windowForWebUi: () => LoginWindow, request: LoginRequest): Promise<LoginResult> {
     const { credential } = request;
     const isNewLogin = 'issueToken' in credential;
     try {
-        let baseUrl = await verifyAccessCode(request.baseUrl, request.accessCode);
+        let baseUrl = await establishAccessGrant(request.baseUrl, request.accessCode);
 
         let token: string;
         if (isNewLogin) {
             const issued = await credential.issueToken(baseUrl);
             if ('error' in issued) return fail('token-not-issued', issued.error);
             token = issued.token;
-            // 换到的地址不再验证访问码；origin 变了时访问授权可能对不上新地址
-            baseUrl = issued.baseUrl || baseUrl;
+            baseUrl = issued.movedTo || baseUrl;
         } else {
             token = credential.savedToken;
         }
@@ -114,7 +95,7 @@ export async function establishCurrentLogin(window: () => LoginWindow, request: 
         }
 
         log.info('已建立当前登录，进入网页端, domain:', baseUrl);
-        void Promise.resolve(window().loadURL(`${baseUrl}/v`)).catch((error: unknown) => {
+        void Promise.resolve(windowForWebUi().loadURL(`${baseUrl}/v`)).catch((error: unknown) => {
             log.error('加载网页端失败:', error);
         });
         return { ok: true };

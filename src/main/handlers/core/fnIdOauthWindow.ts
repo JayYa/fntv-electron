@@ -2,7 +2,7 @@ import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
-import { accessCodeLoginError, establishCurrentLogin, verifyAccessCode, type LoginError } from '../../common/currentLogin';
+import { accessCodeLoginError, establishCurrentLogin, establishAccessGrant, type LoginError } from '../../common/currentLogin';
 import { resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
@@ -26,7 +26,6 @@ interface LoginData {
     useHttps?: boolean;
 }
 
-// 建立当前登录失败，带着要给登录页看的错误离开 OAuth 流程
 class LoginFailedError extends Error {
     constructor(readonly loginError: LoginError) {
         super(loginError.message);
@@ -106,7 +105,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
         });
 
         function establishTargetSession(targetBaseUrl: string): Promise<string> {
-            return verifyAccessCode(targetBaseUrl, accessCode);
+            return establishAccessGrant(targetBaseUrl, accessCode);
         }
 
         // 为 FN Connect 域名设置 mode=relay Cookie
