@@ -362,7 +362,6 @@ test('ending the current login clears the token, the access grant and the cookie
     window.loadFile = (file) => {
         stateWhenShown ??= {
             loginPage: isLoginPage(file),
-            // 读磁盘上的文件，不走 readConfig：后者排在凭据队列里，总会等清 token 做完。
             token: JSON.parse(fs.readFileSync(world.configFile(), 'utf8')).token,
             grant: world.accessGrant().getAccessCookieHeader(NAS),
             clearedStorages: [...world.clearedStorages],

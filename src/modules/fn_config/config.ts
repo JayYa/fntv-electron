@@ -224,11 +224,11 @@ function serializeCredentialTask<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * 读出带明文凭据的配置。forWrite 见 prepareCredentials：给了就同时准备好写入。
+ * 读出带明文凭据的配置。给了 write 就同时准备好写入，newCredentials 是这次要新写入的凭据。
  * 加解密都完成后才重新读文件，所以期间同步写入的设置项不会丢。文件不存在或损坏时 config 为 null。
  */
-async function decodeCurrentConfig(forWrite?: (string | undefined)[]): Promise<{ config: Config | null; prepared: PreparedCredentials; needsMigration: boolean }> {
-    const prepared = await prepareCredentials(credentialFields(readConfigFile() ?? {}), forWrite);
+async function decodeCurrentConfig(write?: { newCredentials: (string | undefined)[] }): Promise<{ config: Config | null; prepared: PreparedCredentials; needsMigration: boolean }> {
+    const prepared = await prepareCredentials(credentialFields(readConfigFile() ?? {}), write?.newCredentials);
     const stored = readConfigFile();
     if (!stored) return { config: null, prepared, needsMigration: false };
     return { ...decodeConfig(stored, prepared), prepared };
@@ -238,7 +238,7 @@ async function decodeCurrentConfig(forWrite?: (string | undefined)[]): Promise<{
 async function loadConfig(): Promise<Config | null> {
     const read = await decodeCurrentConfig();
     if (!read.config || !read.needsMigration) return read.config;
-    const { config, prepared, needsMigration } = await decodeCurrentConfig([]);
+    const { config, prepared, needsMigration } = await decodeCurrentConfig({ newCredentials: [] });
     if (config && needsMigration && prepared.encryptionAvailable) {
         try {
             writeConfig(config, prepared);
@@ -268,7 +268,7 @@ function applySave(config: Config, { account, domain, token, accessCode, useHttp
 // 保存配置（账号、域名、token、HTTPS设置）
 export function saveConfig(params: SaveConfigParams): Promise<void> {
     return serializeCredentialTask(async () => {
-        const { config, prepared } = await decodeCurrentConfig([params.token, params.accessCode]);
+        const { config, prepared } = await decodeCurrentConfig({ newCredentials: [params.token, params.accessCode] });
         const updated: Config = config || {};
         applySave(updated, params);
         writeConfig(updated, prepared);
@@ -277,10 +277,9 @@ export function saveConfig(params: SaveConfigParams): Promise<void> {
 
 // 退出登录：清空 token，保留账号、域名和 HTTPS 设置。读和写在同一个凭据操作里，
 // 之后排队的登录保存不会被覆盖。没有可清的内容时不写文件，返回 false。
-// 访问码和登录历史里的密码要原样写回，所以按写入准备。
 export function clearSavedToken(): Promise<boolean> {
     return serializeCredentialTask(async () => {
-        const { config, prepared } = await decodeCurrentConfig([]);
+        const { config, prepared } = await decodeCurrentConfig({ newCredentials: [] });
         if (!config || !(config.token || config.domain)) return false;
         applySave(config, {
             account: config.account || '',
@@ -305,7 +304,7 @@ function findEvictionIndex(history: HistoryItem[]): number {
 // 添加历史记录（域名、账号、加密密码、HTTPS设置）
 export function addHistory({ domain, account, password, accessCode, useHttps }: AddHistoryParams): Promise<void> {
     return serializeCredentialTask(async () => {
-        const { config: current, prepared } = await decodeCurrentConfig([password, accessCode]);
+        const { config: current, prepared } = await decodeCurrentConfig({ newCredentials: [password, accessCode] });
         const config: Config = current || {};
         config.history = config.history || [];
         // 移除重复项

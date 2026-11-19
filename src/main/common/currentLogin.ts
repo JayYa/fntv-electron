@@ -1,10 +1,10 @@
 import { session } from 'electron';
-import { clearAccessGrants } from '../../modules/fn_api/accessGrant';
+import { clearAccessGrants, getAccessCookieHeader } from '../../modules/fn_api/accessGrant';
 import * as fnConfig from '../../modules/fn_config/config';
 import { restoreCookies } from '../../modules/fn_config/cookie';
 import * as log from '../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
-import { AccessCodeVerificationError, establishAccessCodeSession } from './accessCodeSession';
+import { AccessCodeVerificationError, establishAccessCodeSession, type AccessCodeSessionResult } from './accessCodeSession';
 import { LOGIN_PAGE_PATH } from './loginPage';
 
 export interface LoginError {
@@ -36,9 +36,6 @@ interface LoginWindow {
     loadFile(filePath: string): Promise<void> | void;
 }
 
-// 每次验证访问码和结束当前登录都会清空访问授权，代数随之加一。
-let grantGeneration = 0;
-
 function accessCodeFailure(error: AccessCodeVerificationError): LoginFailedError {
     return error.reason === 'rejected'
         ? new LoginFailedError('access-code-rejected', { title: '访问码错误', message: '访问码错误，请检查后重试。' })
@@ -56,14 +53,13 @@ export class GrantedBaseUrl {
     private constructor(
         readonly baseUrl: string,
         readonly accessCode: string,
-        private readonly generation: number,
+        private readonly grant: AccessCodeSessionResult,
     ) {}
 
     static async verify(baseUrl: string, accessCode: string): Promise<GrantedBaseUrl> {
-        const generation = ++grantGeneration;
         try {
-            const session = await establishAccessCodeSession(baseUrl, accessCode);
-            return new GrantedBaseUrl(applyVerifiedOriginToFnConnectBaseUrl(baseUrl, session.baseUrl), accessCode, generation);
+            const grant = await establishAccessCodeSession(baseUrl, accessCode);
+            return new GrantedBaseUrl(applyVerifiedOriginToFnConnectBaseUrl(baseUrl, grant.baseUrl), accessCode, grant);
         } catch (error) {
             if (!(error instanceof AccessCodeVerificationError)) throw error;
             log.warn('访问码验证失败:', error.reason);
@@ -71,9 +67,10 @@ export class GrantedBaseUrl {
         }
     }
 
-    /** 之后又有验证或结束当前登录清空过授权时，重新验证一次。 */
+    /** 访问授权已被之后的验证或结束当前登录清掉时，重新验证一次。 */
     current(): Promise<GrantedBaseUrl> {
-        return this.generation === grantGeneration
+        const { baseUrl, cookie } = this.grant;
+        return getAccessCookieHeader(baseUrl) === cookie
             ? Promise.resolve(this)
             : GrantedBaseUrl.verify(this.baseUrl, this.accessCode);
     }
@@ -181,7 +178,6 @@ const END_LOGIN_TIMEOUT_MS = 5000;
 /** 清空 token、访问授权和会话 Cookie，再显示登录页；清理最多等 5 秒，失败只记日志。 */
 export async function endCurrentLogin(window: LoginWindow): Promise<void> {
     log.info('结束当前登录，清空 token、访问授权和 Cookie');
-    grantGeneration++;
     clearAccessGrants();
     const clearing = Promise.all([
         fnConfig.clearSavedToken().then(

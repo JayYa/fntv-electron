@@ -4,9 +4,6 @@ import { getMainWindow } from '../../common/mainwin';
 import { getInstance as getInterceptor } from '../core/interceptor';
 import * as log from '../../../modules/logger';
 
-/**
- * 网页端要去它自己的登录页或登出时，取消这个请求，结束当前登录，改为显示客户端的登录页。
- */
 function handleLeaveRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
     log.info('网页端请求登录页或登出，结束当前登录');
     callback({ cancel: true });
