@@ -1,11 +1,24 @@
 import log from '../logger';
 
-/** 一次写入飞牛影视服务的操作：一次进度回传，或离开播放项时的收尾（最终进度、已观看）。 */
+/**
+ * 写入的种类：
+ * - progress：播放中的进度回传。积压时只保留最新的一条
+ * - final：离开播放项时的收尾，写它的最终播放进度（和已观看）。取代同一播放项还在排队的进度回传
+ * - other：不写播放进度的操作，例如 MPV 异常退出后刷新网页端。只排在前面的写入之后，不取代任何写入
+ */
+export type WriteKind = 'progress' | 'final' | 'other';
+
+/** 一次播放里要按顺序执行的一次写入。 */
 export interface WriteTask {
     itemGuid: string;
-    /** 播放中的进度回传。积压时只保留最新的一条，被后来的写入取代 */
-    progress: boolean;
+    kind: WriteKind;
     write(): Promise<unknown>;
+}
+
+// 新来的 task 是否取代还在排队的 queued
+function replaces(task: WriteTask, queued: WriteTask): boolean {
+    if (queued.kind !== 'progress') return false;
+    return task.kind === 'progress' || (task.kind === 'final' && task.itemGuid === queued.itemGuid);
 }
 
 interface Pending extends WriteTask {
@@ -16,8 +29,8 @@ interface Pending extends WriteTask {
  * 一次播放的写入队列：按到达顺序一条一条写，前一条完成（或失败）才开始下一条，
  * 播放进度就不会被较早发出、较晚完成的请求倒退回去。
  *
- * 排队还没开始的进度回传会被取代：来了新的进度回传，或同一播放项的收尾。
- * 收尾从不被取代。返回的 Promise 在这条写完或被取代时兑现，不会 reject。
+ * 排队还没开始的进度回传会被取代，规则见 WriteKind；只有进度回传会被取代。
+ * 返回的 Promise 在这条写完或被取代时兑现，不会 reject。
  */
 export function createWriteQueue(): (task: WriteTask) => Promise<void> {
     let pending: Pending[] = [];
@@ -39,7 +52,7 @@ export function createWriteQueue(): (task: WriteTask) => Promise<void> {
     }
 
     return (task) => {
-        const replaced = pending.filter(p => p.progress && (task.progress || p.itemGuid === task.itemGuid));
+        const replaced = pending.filter(p => replaces(task, p));
         pending = pending.filter(p => !replaced.includes(p));
         replaced.forEach(p => p.settle());
 

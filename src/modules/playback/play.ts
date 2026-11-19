@@ -274,7 +274,7 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
                     log.info('process itemguid is empty');
                     return;
                 }
-                await enqueue({ itemGuid: progress.itemGuid, progress: true, write: () => reportPlayRecord(fnapi, progress) });
+                await enqueue({ itemGuid: progress.itemGuid, kind: 'progress', write: () => reportPlayRecord(fnapi, progress) });
                 break;
             }
 
@@ -282,7 +282,7 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
                 // 播放器只报告「这一项结束了」，是否算已观看在这里判定
                 const endedItem = { ...(data as PlayStatusData) };
                 log.info('播放项结束:', endedItem);
-                await enqueue({ itemGuid: endedItem.itemGuid, progress: false, write: () => finishPlayItem(fnapi, endedItem) });
+                await enqueue({ itemGuid: endedItem.itemGuid, kind: 'final', write: () => finishPlayItem(fnapi, endedItem) });
                 break;
             }
 
@@ -293,7 +293,9 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
             case EventType.EXIT: {
                 // 播放器同步发出退出事件，这里同步结束这次播放；排在前面的写入和收尾都完成后，播放状态模块再通知订阅者
                 const exit = data as PlayExitData;
-                const report = enqueue({ itemGuid: exit.status.itemGuid, progress: false, write: () => handleExit(deps, fnapi, exit) });
+                // 只有正常退出会写最终播放进度；异常退出不写，排队的进度回传要照常写完
+                const kind = exit.code === 0 ? 'final' : 'other';
+                const report = enqueue({ itemGuid: exit.status.itemGuid, kind, write: () => handleExit(deps, fnapi, exit) });
                 run.ended(report);
                 await report;
                 break;

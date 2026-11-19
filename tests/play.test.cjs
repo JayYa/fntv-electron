@@ -333,6 +333,27 @@ test('the playback run ends only after the writes queued before the exit have fi
     ]);
 });
 
+test('progress still queued when MPV exits abnormally is written before handing over to the caller', async (t) => {
+    const fnMedia = fakeFnMedia();
+    const world = setup(t, { fnMedia });
+    await world.play({ id: 'ep-2' });
+    const first = holdFirstSave(fnMedia);
+
+    const progress = [
+        world.players[0].emit(EventType.PROGRESS, status('ep-2', 1100)),
+        world.players[0].emit(EventType.PROGRESS, status('ep-2', 1200)),
+    ];
+    const exit = world.players[0].emit(EventType.EXIT, { code: 1, status: status('ep-2', 1210) });
+    await settle();
+    assert.equal(world.abnormalExits, 0);
+
+    first.resolve();
+    await Promise.all([...progress, exit]);
+    assert.deepEqual(fnMedia.writes, [['savePlayRecord', 'ep-2', 1100], ['savePlayRecord', 'ep-2', 1200]]);
+    assert.equal(fnMedia.stored['ep-2'], 1200);
+    assert.equal(world.abnormalExits, 1);
+});
+
 test('an abnormal MPV exit hands over to the caller without reporting progress', async (t) => {
     const world = setup(t);
     await world.play({ id: 'ep-2' });
