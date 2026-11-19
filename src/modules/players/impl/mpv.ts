@@ -179,9 +179,7 @@ export class MpvPlayer extends BasePlayer {
      * 够不够格算已观看由业务层判定，播放器层不做任何价值判断。
      *
      * 必须在 `updateCurrentItemStatus` 之前调用：那里会用**新**播放项的信息
-     * 覆盖全局播放状态，之后再读就是下一项的数据了。快照也必须是**拷贝**，
-     * 因为 `getStatus()` 返回的是全局状态对象本身，`updateCurrentItemStatus`
-     * 会就地修改它，否则消费者手里的快照会被改掉。
+     * 覆盖全局播放状态，之后再读就是下一项的数据了。
      *
      * @param nextIndex - 即将切换到的播放列表位置
      */
@@ -199,11 +197,10 @@ export class MpvPlayer extends BasePlayer {
             return;
         }
 
-        const snapshot: PlayStatusData = { ...previous };
         if (this.config.debug) {
-            log.debug('播放项结束:', snapshot);
+            log.debug('播放项结束:', previous);
         }
-        this.emitEvent(EventType.ITEM_END, snapshot);
+        this.emitEvent(EventType.ITEM_END, previous);
     }
 
     /**
@@ -344,6 +341,7 @@ export class MpvPlayer extends BasePlayer {
 
             // 保存到全局的playlist
             this.saveCurrentItemStatus(st);
+            this.updateGlobalStatus(st);
             this.emitEvent(EventType.PROGRESS, st);
         });
     }

@@ -96,9 +96,9 @@ export abstract class BasePlayer {
     // 判断播放器是否正在播放
     abstract isPlaying(): boolean;
 
-    // 获取当前播放状态
+    // 获取当前播放状态的副本。事件数据交出去后会被异步读取，不能和后续的状态更新共用一个对象
     protected getStatus(): PlayStatusData {
-        return this.globalStatus;
+        return { ...this.globalStatus };
     }
 
     // 发送播放事件
@@ -108,7 +108,7 @@ export abstract class BasePlayer {
 
     // 更新全局播放状态
     protected updateGlobalStatus(status: PlayStatusData): void {
-        this.globalStatus = status;
+        this.globalStatus = { ...status };
     }
 
     // 获取fnapi实例
