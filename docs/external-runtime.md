@@ -31,7 +31,7 @@
 
 - MPV 和插件的版本只在 `fntv-mpv-config/package_cfg.json` 固定。
 - Electron 构建只下载这一个归档，不从上游插件分支覆盖文件（`.github/workflows/build.yml` 的 `Download third-party dependencies`）。这一条没有自动化测试，改工作流时用 `grep -n -i danmaku .github/workflows/build.yml .github/workflows/release.yml` 确认没有结果。
-- 当前固定 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261115_160458`。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
+- 当前固定 `JayYa/fntv-mpv-config` 的 tag `fntv-mpv-v20261118_225012`。这个 Release 由 `JayYa/fntv-mpv-config` 自己的 `release` 分支构建，上游 `QiaoKes/fntv-mpv-config` 没有这个 tag。
 - tag、资产名和 sha256 只写在仓库根目录的 `mpv-archive.json`，不写进 `.github/workflows`：`GITHUB_TOKEN` 推不了改 workflow 的提交，自动升级的 PR 会被拒。下载、校验和缓存的约定写在 `build.yml` 的注释里，由 `tests/mpvArchiveCache.test.cjs` 检查。
 - 升级归档：先在 `JayYa/fntv-mpv-config` 发布新 Release。`update-mpv-archive.yml` 每天查一次它的最新正式 Release，tag 比固定的新时开 PR（分支 `automation/mpv-archive`，标题 `fix(deps): 附带的 MPV 和插件更新到 <tag>`）；不想等就在 Actions 里手动触发，可填 tag 换成指定的 Release（也用于回滚）。这个 PR 由 `GITHUB_TOKEN` 开，检查显示 action_required，维护者在 PR 上点 “Approve workflows to run” 后 CI 和 Smoke Test 才跑。
 - 手工升级也运行 `node scripts/update-mpv-archive.cjs`（或加 `--tag <tag>`），不手改：要改哪几处由它决定（用法见脚本开头），包括本页上面那条 tag。
