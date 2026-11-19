@@ -4,8 +4,8 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
 const axios = require('axios');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const NAS = 'https://nas.example:5667';
 const PASSWORD_LOGIN = { domain: 'nas.example:5667', username: 'alice', password: 'secret', useHttps: true };
@@ -15,7 +15,14 @@ const rejected = (msg) => ({ status: 200, headers: { 'content-type': 'applicatio
 const certificateError = () => Object.assign(new Error('self-signed certificate'), { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' });
 
 // 用假 ipcMain 跑真实的 auth.init()；飞牛影视服务是假的 axios，Cookie 写进假的 persist:fntv 会话。
-function setup(t, { loginResponses = [], userInfo = ok({ username: 'alice' }), cookiesFail = false, trustCertificate = false } = {}) {
+function setup(t, {
+    loginResponses = [],
+    userInfo = ok({ username: 'alice' }),
+    cookiesFail = false,
+    trustCertificate = false,
+    accessCodeStatus = null,
+    encryptionAvailable = true,
+} = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-current-login-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
     const listeners = new Map();
@@ -59,7 +66,22 @@ function setup(t, { loginResponses = [], userInfo = ok({ username: 'alice' }), c
                 return { response: trustCertificate ? 0 : 1, checkboxChecked: false };
             },
         },
-        net: { request() { throw new Error('no access code, the gateway is not asked'); } },
+        net: {
+            // 访问码网关：按 accessCodeStatus 回一个状态码
+            request() {
+                if (accessCodeStatus === null) throw new Error('no access code, the gateway is not asked');
+                const request = new EventEmitter();
+                request.setHeader = () => {};
+                request.abort = () => {};
+                request.end = () => setImmediate(() => {
+                    const response = new EventEmitter();
+                    response.statusCode = accessCodeStatus;
+                    request.emit('response', response);
+                    response.emit('end');
+                });
+                return request;
+            },
+        },
         session: {
             fromPartition() {
                 return {
@@ -75,21 +97,14 @@ function setup(t, { loginResponses = [], userInfo = ok({ username: 'alice' }), c
             },
         },
         safeStorage: {
-            async isAsyncEncryptionAvailable() { return true; },
+            async isAsyncEncryptionAvailable() { return encryptionAvailable; },
             getSelectedStorageBackend() { return 'gnome_libsecret'; },
             async encryptStringAsync(value) { return Buffer.from(value, 'utf8'); },
             async decryptStringAsync(value) { return { result: value.toString('utf8'), shouldReEncrypt: false }; },
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
+    useFakeElectron(t, electronMock);
 
     const originalPost = axios.post;
     const originalGet = axios.get;
@@ -104,13 +119,10 @@ function setup(t, { loginResponses = [], userInfo = ok({ username: 'alice' }), c
     t.after(() => {
         axios.post = originalPost;
         axios.get = originalGet;
-        Module._load = originalLoad;
-        clearCompiledModules();
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    clearCompiledModules();
     const config = require('../dest/modules/fn_config/config.js');
     require('../dest/main/handlers/plugins/auth.js').init();
 
@@ -206,6 +218,43 @@ test('when the user does not trust the certificate, password login is cancelled 
     }]);
     assert.equal(world.loginRequests.length, 1);
     await assertNothingSaved(world);
+});
+
+test('a rejected access code stops password login before the login request, and nothing is saved', async (t) => {
+    const world = setup(t, { accessCodeStatus: 403, loginResponses: [ok({ token: 'new-token' })] });
+
+    assert.deepEqual(await world.login({ ...PASSWORD_LOGIN, accessCode: 'wrong-code' }), [{
+        channel: 'login-error',
+        data: { title: '访问码错误', message: '访问码错误，请检查后重试。' },
+    }]);
+    assert.deepEqual(world.loginRequests, []);
+    await assertNothingSaved(world);
+});
+
+test('when FNMedia moves the login to another address, the current login and the web UI use that address', async (t) => {
+    const moved = 'https://nas2.example:5667';
+    const world = setup(t, {
+        loginResponses: [
+            { status: 302, headers: { location: `${moved}/v/api/v1/login` }, data: '' },
+            ok({ token: 'new-token' }),
+        ],
+    });
+
+    assert.deepEqual(await world.login(), []);
+
+    assert.equal((await world.config.readConfig()).domain, moved);
+    assert.deepEqual(world.mainWindow().loaded.urls, [`${moved}/v`]);
+});
+
+test('when secure storage is unavailable, password login says so and saves nothing', async (t) => {
+    const world = setup(t, { loginResponses: [ok({ token: 'new-token' })], encryptionAvailable: false });
+
+    const [reply] = await world.login();
+
+    assert.equal(reply.data.title, '无法安全保存登录信息');
+    assert.match(reply.data.message, /安全存储不可用/);
+    await assertNothingSaved(world);
+    assert.equal(world.mainWindow(), null);
 });
 
 function fakeStartupWindow() {

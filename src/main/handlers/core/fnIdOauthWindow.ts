@@ -2,7 +2,7 @@ import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
-import { establishCurrentLogin, verifyAccessCode, type LoginError } from '../../common/currentLogin';
+import { accessCodeLoginError, establishCurrentLogin, verifyAccessCode, type LoginError } from '../../common/currentLogin';
 import { resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
@@ -334,15 +334,13 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
 
         if (error instanceof LoginFailedError) {
             event.reply('login-error', error.loginError);
-            return;
+        } else if (isAccessCodeError) {
+            event.reply('login-error', accessCodeLoginError(error));
+        } else {
+            event.reply('login-error', {
+                title: 'FN ID 登录失败',
+                message: error.message || '通过 FN ID 登录时发生错误，请检查 FN ID 和网络连接。',
+            });
         }
-        event.reply('login-error', {
-            title: isAccessCodeError && error.reason === 'rejected' ? '访问码错误' : 'FN ID 登录失败',
-            message: isAccessCodeError
-                ? (error.reason === 'rejected'
-                    ? '访问码错误，请检查后重试。'
-                    : '无法连接到访问码验证服务，请检查地址、证书或网络连接。')
-                : error.message || '通过 FN ID 登录时发生错误，请检查 FN ID 和网络连接。'
-        });
     }
 }
