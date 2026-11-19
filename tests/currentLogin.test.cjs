@@ -21,6 +21,7 @@ function setup(t, {
     trustCertificate = false,
     accessCodeStatus = null,
     encryptionAvailable = true,
+    clearStorageHangs = false,
 } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-current-login-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
@@ -28,6 +29,8 @@ function setup(t, {
     const cookies = [];
     const dialogs = [];
     const loginRequests = [];
+    const gatewayRequests = [];
+    const clearedStorages = [];
     let mainWindow = null;
 
     class FakeBrowserWindow extends EventEmitter {
@@ -66,8 +69,9 @@ function setup(t, {
             },
         },
         net: {
-            request() {
+            request({ url }) {
                 if (accessCodeStatus === null) throw new Error('no access code, the gateway is not asked');
+                gatewayRequests.push(url);
                 const request = new EventEmitter();
                 request.setHeader = () => {};
                 request.abort = () => {};
@@ -83,8 +87,13 @@ function setup(t, {
         session: {
             fromPartition() {
                 return {
+                    clearStorageData({ storages }) {
+                        if (clearStorageHangs) return new Promise(() => {});
+                        clearedStorages.push(...storages);
+                        return Promise.resolve();
+                    },
                     cookies: {
-                        get: async () => [],
+                        get: async ({ url }) => (url && accessCodeStatus === 200 ? [{ name: 'gateway', value: 'granted' }] : []),
                         remove: async () => {},
                         async set(cookie) {
                             if (cookiesFail) throw new Error('cookie store unavailable');
@@ -129,7 +138,11 @@ function setup(t, {
         cookies,
         dialogs,
         loginRequests,
+        gatewayRequests,
+        clearedStorages,
         mainWindow: () => mainWindow,
+        currentLogin: () => require('../dest/main/common/currentLogin.js'),
+        accessGrant: () => require('../dest/modules/fn_api/accessGrant.js'),
         loadWinctrl: () => require('../dest/main/common/winctrl.js'),
         async login(loginData = PASSWORD_LOGIN) {
             const replies = [];
@@ -285,4 +298,104 @@ test('startup goes to the login page when FNMedia no longer accepts the saved to
     assert.deepEqual(window.loaded.urls, []);
     assert.equal(path.relative(path.resolve(__dirname, '..'), window.loaded.files[0]), path.join('resource', 'login', 'index.html'));
     assert.deepEqual(world.cookies, []);
+});
+
+const FN_ID_HISTORY = { domain: 'alice-fnid', account: 'alice', password: 'secret', accessCode: 'code', useHttps: true };
+
+test('a login whose access code was already verified saves the current login and history without asking the gateway again', async (t) => {
+    const world = setup(t, { accessCodeStatus: 200 });
+    const currentLogin = world.currentLogin();
+    const window = fakeStartupWindow();
+
+    const granted = await currentLogin.verifyAccess(NAS, 'code');
+    const result = await currentLogin.establishNewLogin(() => window, {
+        access: granted,
+        account: 'alice',
+        token: 'fnid-token',
+        history: FN_ID_HISTORY,
+    });
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(world.gatewayRequests.length, 1);
+    assert.equal(world.accessGrant().getAccessCookieHeader(NAS), 'gateway=granted');
+    const saved = await world.config.readConfig();
+    assert.equal(saved.domain, NAS);
+    assert.equal(saved.token, 'fnid-token');
+    assert.deepEqual((await world.config.getHistory()).map(({ domain }) => domain), ['alice-fnid']);
+    assert.deepEqual(window.loaded.urls, [`${NAS}/v`]);
+});
+
+test('when another verification cleared the access grant in between, the earlier verified address is verified again', async (t) => {
+    const world = setup(t, { accessCodeStatus: 200 });
+    const currentLogin = world.currentLogin();
+    const window = fakeStartupWindow();
+
+    const granted = await currentLogin.verifyAccess(NAS, 'code');
+    await currentLogin.verifyAccess('https://other.example:5667', 'other-code');
+    const result = await currentLogin.establishNewLogin(() => window, {
+        access: granted,
+        account: 'alice',
+        token: 'fnid-token',
+        history: FN_ID_HISTORY,
+    });
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(world.gatewayRequests.length, 3);
+    assert.equal(world.accessGrant().getAccessCookieHeader(NAS), 'gateway=granted');
+    assert.equal(world.accessGrant().getAccessCookieHeader('https://other.example:5667'), '');
+});
+
+const isLoginPage = (file) => path.relative(path.resolve(__dirname, '..'), file) === path.join('resource', 'login', 'index.html');
+
+test('ending the current login clears the token, the access grant and the cookies before showing the login page', async (t) => {
+    const world = setup(t, { accessCodeStatus: 200 });
+    const currentLogin = world.currentLogin();
+    await currentLogin.establishNewLogin(() => fakeStartupWindow(), {
+        access: await currentLogin.verifyAccess(NAS, 'code'),
+        account: 'alice',
+        token: 'fnid-token',
+        history: FN_ID_HISTORY,
+    });
+    const window = fakeStartupWindow();
+    let stateWhenShown = null;
+    window.loadFile = (file) => {
+        stateWhenShown = {
+            loginPage: isLoginPage(file),
+            token: world.config.readConfig().then((config) => config.token),
+            grant: world.accessGrant().getAccessCookieHeader(NAS),
+            clearedStorages: [...world.clearedStorages],
+        };
+    };
+
+    await currentLogin.endCurrentLogin(window);
+
+    assert.deepEqual({ ...stateWhenShown, token: await stateWhenShown.token }, {
+        loginPage: true, token: '', grant: '', clearedStorages: ['cookies'],
+    });
+    assert.equal((await world.config.readConfig()).domain, NAS);
+});
+
+test('ending the current login still shows the login page when clearing the cookies never finishes', async (t) => {
+    const world = setup(t, { clearStorageHangs: true });
+    await seedCurrentLogin(world.config);
+    const window = fakeStartupWindow();
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+
+    const ending = world.currentLogin().endCurrentLogin(window);
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(5000);
+    await ending;
+
+    assert.ok(isLoginPage(window.loaded.files[0]));
+    assert.equal((await world.config.readConfig()).token, '');
+});
+
+test('a rejected access code fails verification with the access code error', async (t) => {
+    const world = setup(t, { accessCodeStatus: 401 });
+
+    await assert.rejects(world.currentLogin().verifyAccess(NAS, 'wrong-code'), {
+        name: 'LoginFailedError',
+        reason: 'access-code-rejected',
+        loginError: { title: '访问码错误', message: '访问码错误，请检查后重试。' },
+    });
 });

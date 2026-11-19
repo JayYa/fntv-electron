@@ -1,95 +1,27 @@
-import { showLoginPage } from '../../common/currentLogin';
 import { OnBeforeRequestListenerDetails } from 'electron';
-import { getInstance as getInterceptor } from '../core/interceptor';
-import { clearSavedToken } from '../../../modules/fn_config/config';
+import { endCurrentLogin } from '../../common/currentLogin';
 import { getMainWindow } from '../../common/mainwin';
-import { session } from 'electron';
+import { getInstance as getInterceptor } from '../core/interceptor';
 import * as log from '../../../modules/logger';
-import { clearAccessGrants } from '../../../modules/fn_api/accessGrant';
 
 /**
- * 登录拦截插件
- * 处理登录和登出请求的拦截
+ * 网页端要去它自己的登录页或登出时，取消这个请求，结束当前登录，改为显示客户端的登录页。
  */
-
-/**
- * 清空登录信息和Cookie
- */
-function clearLoginCookies(): void {
-    log.info('清空登录信息和Cookie');
-
-    // 清空配置中保存的token。凭据操作按调用顺序执行，之后的登录保存不会被这里覆盖。
-    clearSavedToken().then((cleared) => {
-        if (cleared) log.info('已清空配置中的登录token');
-    }).catch(err => {
-        log.error('清空配置中的登录token失败:', err);
-    });
-    clearAccessGrants();
-
-    // 清除会话中的cookie
-    const ses = session.fromPartition('persist:fntv');
-    ses.clearStorageData({
-        storages: ['cookies']
-    }).then(() => {
-        log.info('会话Cookie已清除');
-    }).catch(err => {
-        log.error('清除Cookie失败:', err);
-    });
-}
-
-/**
- * 处理登录请求拦截
- * @param details - 请求详情
- * @param callback - 回调函数
- */
-function handleLoginRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
-    log.info('检测到登录请求，清空登录信息并跳转到登录页面');
-    
-    // 清空配置cookie
-    clearLoginCookies();
-    
-    // 取消请求
+function handleLeaveRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
+    log.info('网页端请求登录页或登出，结束当前登录');
     callback({ cancel: true });
-    
-    // 加载自定义页面
+
     const mainWindow = getMainWindow();
-    if (mainWindow) {
-        showLoginPage(mainWindow);
-    } else {
+    if (!mainWindow) {
         log.error('主窗口未创建，无法跳转到登录页面');
+        return;
     }
+    void endCurrentLogin(mainWindow);
 }
 
-/**
- * 处理登出请求拦截
- * @param details - 请求详情
- * @param callback - 回调函数
- */
-function handleLogoutRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
-    log.info('检测到登出请求，清空登录信息并跳转到登录页面');
-    
-    // 清空配置cookie
-    clearLoginCookies();
-    
-    // 取消请求
-    callback({ cancel: true });
-    
-    // 加载自定义页面
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-        showLoginPage(mainWindow);
-    } else {
-        log.error('主窗口未创建，无法跳转到登录页面');
-    }
-}
-
-/**
- * 初始化登录拦截插件
- */
 function init(): void {
     const interceptorManager = getInterceptor();
 
-    // 注册登录请求拦截器
     interceptorManager.registerBeforeRequest(
         {
             urls: [
@@ -99,11 +31,10 @@ function init(): void {
                 'https://*/v/welcome',
             ]
         },
-        handleLoginRequest,
+        handleLeaveRequest,
         'login-interceptor'
     );
 
-    // 注册登出请求拦截器
     interceptorManager.registerBeforeRequest(
         {
             urls: [
@@ -111,7 +42,7 @@ function init(): void {
                 'https://*/v/api/v1/user/logout'
             ]
         },
-        handleLogoutRequest,
+        handleLeaveRequest,
         'logout-interceptor'
     );
 

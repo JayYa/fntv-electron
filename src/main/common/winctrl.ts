@@ -1,7 +1,7 @@
 import * as log from '../../modules/logger';
 import { readConfig } from '../../modules/fn_config/config';
 import { BrowserWindow, dialog } from 'electron';
-import { establishCurrentLogin, showLoginPage } from './currentLogin';
+import { restoreCurrentLogin, showLoginPage } from './currentLogin';
 import { shouldStartMaximized } from './mainwin';
 
 export function unmaximizeWindow(mainWindow: BrowserWindow): void {
@@ -92,11 +92,11 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
         return;
     }
 
-    const result = await establishCurrentLogin(() => mainWindow, {
+    const result = await restoreCurrentLogin(() => mainWindow, {
         baseUrl: savedConfig.domain,
         accessCode: savedConfig.accessCode || '',
         account: savedConfig.account || '',
-        credential: { savedToken: savedConfig.token },
+        savedToken: savedConfig.token,
     });
     if (!result.ok) {
         log.warn('恢复当前登录失败，跳转到登录页面:', result.reason);

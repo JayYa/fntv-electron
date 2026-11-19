@@ -277,9 +277,10 @@ export function saveConfig(params: SaveConfigParams): Promise<void> {
 
 // 退出登录：清空 token，保留账号、域名和 HTTPS 设置。读和写在同一个凭据操作里，
 // 之后排队的登录保存不会被覆盖。没有可清的内容时不写文件，返回 false。
+// 访问码和登录历史里的密码要原样写回，所以按写入准备。
 export function clearSavedToken(): Promise<boolean> {
     return serializeCredentialTask(async () => {
-        const { config, prepared } = await decodeCurrentConfig();
+        const { config, prepared } = await decodeCurrentConfig([]);
         if (!config || !(config.token || config.domain)) return false;
         applySave(config, {
             account: config.account || '',
