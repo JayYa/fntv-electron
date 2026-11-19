@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NEAR_END_RATIO, isNearEnd } = require('../dest/modules/playback/nearEnd.js');
+const { NEAR_END_RATIO, isNearEnd, resumePosition } = require('../dest/modules/playback/nearEnd.js');
 
 const DURATION = 1000;
 
@@ -23,4 +23,15 @@ test('is false below the near-end threshold', () => {
 test('is true at and above the near-end threshold', () => {
     assert.equal(isNearEnd(DURATION * NEAR_END_RATIO, DURATION), true);
     assert.equal(isNearEnd(DURATION, DURATION), true);
+});
+
+test('resumes from the play record when it is before the near-end threshold', () => {
+    assert.equal(resumePosition({ ts: 600, duration: DURATION }), 600);
+});
+
+test('starts from the beginning without a play record, near end, or with an untrusted duration', () => {
+    assert.equal(resumePosition({ ts: 0, duration: DURATION }), 0);
+    assert.equal(resumePosition({ ts: DURATION * NEAR_END_RATIO, duration: DURATION }), 0);
+    assert.equal(resumePosition({ ts: 600, duration: 0 }), 0);
+    assert.equal(resumePosition({ ts: 600, duration: -1 }), 0);
 });
