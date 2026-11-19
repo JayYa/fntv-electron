@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-const LOGIN_PAGE_PATH = path.join(__dirname, '../../../resource/login/index.html');
+export const LOGIN_PAGE_PATH = path.join(__dirname, '../../../resource/login/index.html');
 
 type FrameEvent = {
     senderFrame?: { url: string } | null;

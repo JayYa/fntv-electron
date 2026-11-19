@@ -1,4 +1,4 @@
-import * as path from 'path';
+import { showLoginPage } from '../../common/currentLogin';
 import { OnBeforeRequestListenerDetails } from 'electron';
 import { getInstance as getInterceptor } from '../core/interceptor';
 import { clearSavedToken } from '../../../modules/fn_config/config';
@@ -54,7 +54,7 @@ function handleLoginRequest(details: OnBeforeRequestListenerDetails, callback: (
     // 加载自定义页面
     const mainWindow = getMainWindow();
     if (mainWindow) {
-        mainWindow.loadFile(path.join(__dirname, '../../../../resource/login/index.html'));
+        showLoginPage(mainWindow);
     } else {
         log.error('主窗口未创建，无法跳转到登录页面');
     }
@@ -77,7 +77,7 @@ function handleLogoutRequest(details: OnBeforeRequestListenerDetails, callback: 
     // 加载自定义页面
     const mainWindow = getMainWindow();
     if (mainWindow) {
-        mainWindow.loadFile(path.join(__dirname, '../../../../resource/login/index.html'));
+        showLoginPage(mainWindow);
     } else {
         log.error('主窗口未创建，无法跳转到登录页面');
     }

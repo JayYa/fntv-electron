@@ -1,10 +1,9 @@
 import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
-import { restoreCookies } from '../../../modules/fn_config/cookie';
-import * as fnConfig from '../../../modules/fn_config/config';
 import * as log from '../../../modules/logger';
-import { applyVerifiedOriginToFnConnectBaseUrl, resolveFnConnectBaseUrl } from './fnConnect';
+import { accessCodeLoginError, establishCurrentLogin, establishAccessGrant, type LoginError } from '../../common/currentLogin';
+import { resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
     describeFnIdPageForLog,
@@ -15,10 +14,7 @@ import {
     resolveFnIdOauthTrust,
     resolveFnIdWindowOpen,
 } from './fnIdTrust';
-import {
-    AccessCodeVerificationError,
-    establishAccessCodeSession,
-} from '../../common/accessCodeSession';
+import { AccessCodeVerificationError } from '../../common/accessCodeSession';
 import { createFnIdMessageHandler } from './fnIdOauthMessages';
 import { getAccessCodeInjectionScript, getInjectionScript, getLoginAutofillScript } from './fnIdScripts';
 
@@ -28,6 +24,12 @@ interface LoginData {
     password: string;
     accessCode?: string;
     useHttps?: boolean;
+}
+
+class LoginFailedError extends Error {
+    constructor(readonly loginError: LoginError) {
+        super(loginError.message);
+    }
 }
 
 /**
@@ -102,10 +104,8 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             return { action: 'deny' };
         });
 
-        async function establishTargetSession(targetBaseUrl: string): Promise<string> {
-            if (!accessCode) return targetBaseUrl;
-            const result = await establishAccessCodeSession(targetBaseUrl, accessCode);
-            return applyVerifiedOriginToFnConnectBaseUrl(targetBaseUrl, result.baseUrl);
+        function establishTargetSession(targetBaseUrl: string): Promise<string> {
+            return establishAccessGrant(targetBaseUrl, accessCode);
         }
 
         // 为 FN Connect 域名设置 mode=relay Cookie
@@ -173,28 +173,21 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                 loginCompleted = true;
 
                 try {
-                    const resolvedTargetBaseUrl = await establishTargetSession(targetBaseUrl);
-                    const restored = await restoreCookies(resolvedTargetBaseUrl, token, true);
-                    if (!restored) throw new Error('无法恢复 FN Connect 登录状态');
-
-                    await fnConfig.saveConfig({
-                        account: loginData.username,
-                        domain: resolvedTargetBaseUrl,
-                        token,
+                    const result = await establishCurrentLogin(getMainWindow, {
+                        baseUrl: targetBaseUrl,
                         accessCode,
-                        useHttps: resolvedTargetBaseUrl.startsWith('https://'),
-                    });
-                    await fnConfig.addHistory({
-                        domain: fnId,
                         account: loginData.username,
-                        password: loginData.password,
-                        accessCode,
-                        useHttps: true,
+                        credential: { issueToken: async () => ({ token }) },
+                        history: {
+                            domain: fnId,
+                            account: loginData.username,
+                            password: loginData.password,
+                            accessCode,
+                            useHttps: true,
+                        },
                     });
-
-                    const mainWindow = getMainWindow();
+                    if (!result.ok) throw new LoginFailedError(result.error);
                     log.info('[FN ID] 登录成功，跳转到主页面');
-                    await mainWindow.loadURL(`${resolvedTargetBaseUrl}/v`);
 
                     clearTimeout(timeout);
                     resolve();
@@ -338,13 +331,15 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             oauthWindow.close();
         }
 
-        event.reply('login-error', {
-            title: isAccessCodeError && error.reason === 'rejected' ? '访问码错误' : 'FN ID 登录失败',
-            message: isAccessCodeError
-                ? (error.reason === 'rejected'
-                    ? '访问码错误，请检查后重试。'
-                    : '无法连接到访问码验证服务，请检查地址、证书或网络连接。')
-                : error.message || '通过 FN ID 登录时发生错误，请检查 FN ID 和网络连接。'
-        });
+        if (error instanceof LoginFailedError) {
+            event.reply('login-error', error.loginError);
+        } else if (isAccessCodeError) {
+            event.reply('login-error', accessCodeLoginError(error));
+        } else {
+            event.reply('login-error', {
+                title: 'FN ID 登录失败',
+                message: error.message || '通过 FN ID 登录时发生错误，请检查 FN ID 和网络连接。',
+            });
+        }
     }
 }
