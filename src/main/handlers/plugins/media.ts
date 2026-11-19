@@ -13,7 +13,7 @@ import { MpvPlayer, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
-import { isNearEnd } from '../../../modules/playback/nearEnd';
+import { isNearEnd, resumePosition } from '../../../modules/playback/nearEnd';
 import { applyRestart } from '../../../modules/playback/restart';
 import { isPlayRequest, PlayRequest } from '../../../modules/playback/playRequest';
 import * as playbackState from '../../../modules/playback/playbackState';
@@ -399,20 +399,15 @@ async function startPlayback({ id, sourceIndex, restart }: PlayRequest, session:
         mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 
-    const playConfig: ply.Config = {
-        fnapi: fnapi,
+    const player = new ply.MpvPlayer({
         playerPath: mpv.path,
-        // headers: {
-        //     Authorization: token,
-        // },
         extraArgs: mpvArgs,
         debug: true,
         onEvent: eventHandler(fnapi, session),
         onVolumeChange: fnConfig.setMpvVolume,
-    };
-
-    // 创建播放器实例
-    const player = ply.PlayerFactory.createPlayer(ply.PlayerType.MPV, playConfig);
+        resumePosition,
+        loadSubtitles: async (guid) => fnapi.downloadSubtitle(await fnapi.getSubtitle(guid)),
+    });
 
     // 开始播放。启动期间已请求停止播放（例如应用内更新要安装）时不打开 MPV，返回 false；契约见 PlaybackSession.start
     return session.start(player, () => player.playList(playList, currentIndex));

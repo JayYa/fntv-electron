@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const Module = require('node:module');
+const { setTimeout: delay } = require('node:timers/promises');
 
 function clearCompiledModules() {
     Object.keys(require.cache)
@@ -17,12 +18,14 @@ class FakeNodeMpv {
     isRunning() { return false; }
 }
 
-// 替身 NodeMpv：正常启动，记下事件监听器，测试用 emit 模拟 MPV 发来的回调
+// 替身 NodeMpv：正常启动，记下事件监听器和收到的调用，测试用 emit 模拟 MPV 发来的回调
 class RunningNodeMpv {
     static last = null;
     constructor() {
         this.handlers = new Map();
-        this.filename = '';
+        this.path = '';
+        this.seeks = [];
+        this.subtitles = [];
         RunningNodeMpv.last = this;
     }
     on(event, handler) { this.handlers.set(event, handler); }
@@ -32,9 +35,12 @@ class RunningNodeMpv {
     jump() { return Promise.resolve(); }
     quit() { return Promise.resolve(); }
     isRunning() { return true; }
+    setProperty() { return Promise.resolve(); }
+    goToPosition(position) { this.seeks.push(position); return Promise.resolve(); }
+    addSubtitles(file) { this.subtitles.push(file); return Promise.resolve(); }
     getDuration() { return Promise.resolve(1500); }
     getPercentPosition() { return Promise.resolve(40); }
-    getFilename() { return Promise.resolve(this.filename); }
+    getFilename() { return Promise.resolve(this.path); }
 }
 
 // 让 require('node-mpv-2') 返回替身，不真启动 MPV；之后加载的播放器模块拿到替身
@@ -60,13 +66,35 @@ const playItem = {
     duration: 100,
 };
 
+const playerConfig = (overrides) => ({
+    playerPath: '',
+    onEvent: () => {},
+    resumePosition: () => 0,
+    loadSubtitles: async () => [],
+    ...overrides,
+});
+
+// 两个播放项的播放列表，播放地址和 Proxy 拼的一样带编码和查询参数
+function twoItems() {
+    return ['item 1', 'item-2'].map((itemGuid) => ({
+        ...playItem,
+        itemGuid,
+        playLink: `http://127.0.0.1:1234/api/v1/playvideo/${encodeURIComponent(itemGuid)}?session=s`,
+        duration: 1500,
+    }));
+}
+
+async function startPlaying(t, ply, items, overrides) {
+    const player = new ply.MpvPlayer(playerConfig(overrides));
+    t.after(() => player.stop());
+    assert.equal(await player.playList(items, 0), true);
+    return { player, mpv: RunningNodeMpv.last };
+}
+
 test('stopping right after playList is called, before it settles, reports the player exit', (t) => {
     const ply = useFakeNodeMpv(t);
     const events = [];
-    const player = ply.PlayerFactory.createPlayer(ply.PlayerType.MPV, {
-        fnapi: {},
-        onEvent: (type) => events.push(type),
-    });
+    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type) => events.push(type) }));
 
     void player.playList([playItem], 0);
     player.stop();
@@ -76,30 +104,18 @@ test('stopping right after playList is called, before it settles, reports the pl
 
 test('event data stays as emitted after the player moves on to the next item', async (t) => {
     const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    const items = ['item-1', 'item-2'].map((itemGuid) => ({
-        ...playItem,
-        itemGuid,
-        playLink: `http://127.0.0.1:1234/api/v1/playvideo/${itemGuid}?session=s`,
-        duration: 1500,
-    }));
+    const items = twoItems();
     const events = [];
-    const player = ply.PlayerFactory.createPlayer(ply.PlayerType.MPV, {
-        fnapi: {},
-        onEvent: (type, data) => events.push({ type, data }),
-    });
-    t.after(() => player.stop());
-
-    assert.equal(await player.playList(items, 0), true);
-    const mpv = RunningNodeMpv.last;
+    const { mpv } = await startPlaying(t, ply, items, { onEvent: (type, data) => events.push({ type, data }) });
     mpv.emit('status', { property: 'playlist-pos', value: 0 });
 
     // 进度回传会先 await 查播放信息，再读事件数据；这期间播放器切到了下一项
-    mpv.filename = items[0].playLink;
+    mpv.path = items[0].playLink;
     await mpv.emit('timeposition', 600);
     mpv.emit('seek', { end: 700 });
     mpv.emit('status', { property: 'playlist-pos', value: 1 });
 
-    const expected = { itemGuid: 'item-1', duration: 1500, percentage: 40 };
+    const expected = { itemGuid: 'item 1', duration: 1500, percentage: 40 };
     assert.deepEqual(
         events.map(({ type, data }) => ({ type, ...data })),
         [
@@ -108,4 +124,59 @@ test('event data stays as emitted after the player moves on to the next item', a
             { type: ply.EventType.ITEM_END, ...expected, ts: 700 },
         ],
     );
+});
+
+test('an item starting seeks to the position the caller gives for it, with its latest progress', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    const items = twoItems();
+    const asked = [];
+    const { mpv } = await startPlaying(t, ply, items, {
+        resumePosition: (item) => {
+            asked.push([item.itemGuid, item.ts]);
+            return item.itemGuid === 'item 1' ? item.ts : 0;
+        },
+    });
+
+    mpv.emit('status', { property: 'path', value: items[0].playLink });
+    mpv.path = items[0].playLink;
+    await mpv.emit('timeposition', 600);
+    // 切到下一项再回来：问到的是这次播放里最新的进度
+    mpv.emit('status', { property: 'path', value: items[1].playLink });
+    mpv.emit('status', { property: 'path', value: items[0].playLink });
+    await delay(50);
+
+    assert.deepEqual(asked, [['item 1', 0], ['item-2', 0], ['item 1', 600]]);
+    assert.deepEqual(mpv.seeks, [600]);
+});
+
+test('subtitles the caller loads for an item are added to MPV', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    const items = twoItems();
+    const { mpv } = await startPlaying(t, ply, items, {
+        loadSubtitles: async (itemGuid) => [`/tmp/${itemGuid}.zh@1.srt`],
+    });
+
+    mpv.emit('status', { property: 'path', value: items[1].playLink });
+    await delay(0);
+
+    assert.deepEqual(mpv.subtitles, ['/tmp/item-2.zh@1.srt']);
+});
+
+test('a path that is not a play item in the playlist is ignored', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    const events = [];
+    const asked = [];
+    const { mpv } = await startPlaying(t, ply, twoItems(), {
+        onEvent: (type) => events.push(type),
+        resumePosition: (item) => { asked.push(item.itemGuid); return 0; },
+        loadSubtitles: async (itemGuid) => { asked.push(itemGuid); return []; },
+    });
+
+    // MPV 先报的是播放列表文件本身
+    mpv.emit('status', { property: 'path', value: 'C:\\Temp\\mpv_playlist_1.m3u8' });
+    mpv.path = 'C:\\Temp\\mpv_playlist_1.m3u8';
+    await mpv.emit('timeposition', 5);
+
+    assert.deepEqual(asked, []);
+    assert.deepEqual(events, []);
 });

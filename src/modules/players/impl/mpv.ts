@@ -2,23 +2,24 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
-    BasePlayer,
     Config,
+    EventData,
     PlayStatusData,
-    PlayerType,
     EventType,
     PlayErrorData,
     PlayExitData,
-    PlayItem // <-- Add PlayItem to the import list
+    PlayItem,
+    Player,
 } from '../types';
-import { PlayerFactory } from '../factory';
-import { isNearEnd } from '../../playback/nearEnd';
 import log from '../../logger';
 import { MpvIpcSocket } from '../../../public/platform';
 import { createPlaybackIpcSocket, removePlaybackIpcSocket } from './mpvIpcSocket';
 import NodeMpv, { TimePosition } from 'node-mpv-2';
 
-export class MpvPlayer extends BasePlayer {
+export class MpvPlayer implements Player {
+    private config: Required<Config>;
+    // 当前播放项的状态。只经 getStatus / updateGlobalStatus 读写，交出去的都是副本
+    private globalStatus: PlayStatusData = { itemGuid: '', ts: 0, duration: 0, percentage: 0 };
     private mpvInstance: NodeMpv | null = null;
     // 这次播放的 IPC 地址，不用 node-mpv-2 的固定默认值
     private ipcSocket: MpvIpcSocket | null = null;
@@ -30,31 +31,33 @@ export class MpvPlayer extends BasePlayer {
     private playlistFilePath: string = '';
 
     constructor(config: Config) {
-        super(config);
+        this.config = {
+            debug: false,
+            extraArgs: [],
+            onVolumeChange: () => undefined,
+            ...config,
+        };
+    }
+
+    // 当前播放状态的副本。事件数据交出去后会被异步读取，不能和后续的状态更新共用一个对象
+    private getStatus(): PlayStatusData {
+        return { ...this.globalStatus };
+    }
+
+    private updateGlobalStatus(status: PlayStatusData): void {
+        this.globalStatus = { ...status };
+    }
+
+    private emitEvent(type: EventType, event: EventData): void {
+        this.config.onEvent(type, event);
     }
 
     /**
      * 播放媒体列表
      */
-    async playList(infos: PlayItem[], pos: number, args?: string[]): Promise<boolean> {
+    async playList(infos: PlayItem[], pos: number): Promise<boolean> {
         try {
-            // 构建 MPV 参数
-            const mpvArgs: string[] = [];
-
-            // 添加请求头
-            const headerArgs: string[] = [];
-            for (const [key, value] of Object.entries(this.config.headers)) {
-                headerArgs.push(`${key}: ${value}`);
-            }
-            if (headerArgs.length > 0) {
-                mpvArgs.push(`--http-header-fields=${headerArgs.join(',')}`);
-            }
-
-            // 添加其他参数
-            mpvArgs.push(
-                ...this.config.extraArgs,
-                ...args || []
-            );
+            const mpvArgs = [...this.config.extraArgs];
 
             this.ipcSocket = createPlaybackIpcSocket();
             const mpvOptions = {
@@ -282,40 +285,30 @@ export class MpvPlayer extends BasePlayer {
 
             // 监听播放路径位置
             if (status.property === 'path' && typeof status.value === 'string') {
-                // 解析url中的itemid
-                const itemGuid = this.getItemIdFromFilename(status.value);
-                if (!itemGuid) {
+                // 先报的是播放列表文件本身，认不出时忽略
+                const currentItem = this.findItem(status.value);
+                if (!currentItem) {
                     if (this.config.debug) {
-                        log.debug('path changed: 无法从路径中解析出 itemGuid:', status.value);
+                        log.debug('path changed: 不是播放列表里的播放项:', status.value);
                     }
                     return;
                 }
 
-                const currentItem = this.playlistItems.find(item => item.itemGuid === itemGuid);
-                if (currentItem) {
-                    const title = this.getTitle(currentItem);
-                    // 设置窗口标题
-                    this.mpvInstance?.setProperty('force-media-title', title).catch(err => {
-                        if (this.config.debug) {
-                            log.debug('设置窗口标题失败:', err);
-                        }
-                    });
-
-                    // 尝试跳转到上次播放位置, 即将到达片尾不跳转
-                    // duration > 0 不可省略：isNearEnd 对 duration <= 0 返回 false，
-                    // 取反后会变成「时长不可靠的源也照样跳转」，与本意相反。
-                    if (currentItem.ts > 0 && currentItem.duration > 0 && !isNearEnd(currentItem.ts, currentItem.duration)) {
-                        // 使用重试机制进行跳转, 这里粗暴了点, 视频没加载没法跳，只能重试
-                        this.seekWithRetry(currentItem.ts, 50000, 10);
+                // 设置窗口标题
+                this.mpvInstance?.setProperty('force-media-title', this.getTitle(currentItem)).catch(err => {
+                    if (this.config.debug) {
+                        log.debug('设置窗口标题失败:', err);
                     }
+                });
+
+                const position = this.config.resumePosition(currentItem);
+                if (position > 0) {
+                    // 使用重试机制进行跳转, 这里粗暴了点, 视频没加载没法跳，只能重试
+                    this.seekWithRetry(position, 50000, 10);
                 }
 
-                const fnapi = this.getFnApi();
-                // 获取并下载字幕
-                fnapi.getSubtitle(itemGuid)
-                    .then(fnapi.downloadSubtitle)
+                this.config.loadSubtitles(currentItem.itemGuid)
                     .then(subPaths => {
-                        // 加载字幕
                         subPaths.forEach(subPath => {
                             const subName = path.basename(subPath).split("@")[0]; // 获取原始字幕名称
                             this.mpvInstance?.addSubtitles(subPath, "select", subName).catch(err => {
@@ -324,7 +317,8 @@ export class MpvPlayer extends BasePlayer {
                                 }
                             });
                         });
-                    });
+                    })
+                    .catch(err => log.warn('获取字幕失败:', err instanceof Error ? err.message : String(err)));
             }
         });
 
@@ -395,15 +389,9 @@ export class MpvPlayer extends BasePlayer {
         }
     }
 
-    /**
-     * 从 filename 中提取 itemId
-     * @param filename 播放的文件名或 URL
-     * @returns 提取的 itemId 或 null
-     */
-    public getItemIdFromFilename(filename: string): string | null {
-        const url = new URL(filename);
-        const itemGuid = url.pathname.split('/').pop();
-        return itemGuid || null;
+    /** MPV 的 path 属性原样报回播放列表里的地址，按它找到对应的播放项。 */
+    private findItem(mpvPath: string): PlayItem | undefined {
+        return this.playlistItems.find(item => item.playLink === mpvPath);
     }
 
     /**
@@ -415,10 +403,10 @@ export class MpvPlayer extends BasePlayer {
                 return;
             }
 
-            const [duration, percentage, filename] = await Promise.all([
+            const [duration, percentage, mpvPath] = await Promise.all([
                 this.mpvInstance.getDuration().catch(() => 0),
                 this.mpvInstance.getPercentPosition().catch(() => 0),
-                this.mpvInstance.getFilename().catch(() => 0)
+                this.mpvInstance.getFilename().catch(() => '')
             ]);
 
             if (duration === 0) {
@@ -426,10 +414,9 @@ export class MpvPlayer extends BasePlayer {
                 return;
             }
 
-            // 从filename获取当前播放的itemGuid
-            const itemGuid = this.getItemIdFromFilename(String(filename));
+            const itemGuid = this.findItem(String(mpvPath))?.itemGuid;
             if (!itemGuid) {
-                log.warn('无法从文件名中解析出 itemGuid:', filename);
+                log.warn('当前播放的不是播放列表里的播放项:', mpvPath);
                 return;
             }
 
@@ -540,6 +527,3 @@ export class MpvPlayer extends BasePlayer {
         return this.mpvInstance !== null && this.mpvInstance.isRunning();
     }
 }
-
-// 注册 MPV 播放器到工厂
-PlayerFactory.registerPlayer(PlayerType.MPV, MpvPlayer);

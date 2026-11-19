@@ -1,5 +1,3 @@
-import * as fn from '../fn_api/api';
-
 // 播放器事件类型枚举
 export enum EventType {
     PROGRESS = 'progress',
@@ -10,15 +8,17 @@ export enum EventType {
     ITEM_END = 'item_end',
 }
 
-// 单个播放源信息(非当前播放只需要传itemGuid)
+// 播放列表里的一个播放项
 export interface PlayItem {
     itemGuid: string;
     title: string;
     tvTitle: string;
     seasonNumber: number;
     episodeNumber: number;
+    // 播放进度（秒）。播放期间随进度更新
     ts: number;
     duration: number;
+    // 交给 MPV 的播放地址；MPV 原样报回它，播放器凭它认出当前播放项
     playLink: string;
 }
 
@@ -41,86 +41,30 @@ export type PlayErrorData = {
     message: string;
 }
 
-// 播放器事件数据类型
+// 播放器事件数据类型。每次事件都是一份新的快照，播放器之后不会再改它
 export type EventData = PlayStatusData | PlayExitData | PlayErrorData;
 
 // 事件处理器类型
 export type EventHandler = (type: EventType, data: EventData) => void;
 
-// 播放器配置接口
+// 播放器配置。续播位置和字幕属于业务，由调用方提供，播放器只照做
 export type Config = {
-    headers?: Record<string, string>;
+    playerPath: string;
     debug?: boolean;
     extraArgs?: string[];
-    playerPath?: string;
-    fnapi: fn.ApiService;
     onEvent: EventHandler;
     onVolumeChange?: (volume: number) => void;
+    /** 播放项开始播放时调用，返回要跳转到的位置（秒），0 表示从头播，不跳转。 */
+    resumePosition: (item: PlayItem) => number;
+    /** 播放项开始播放时调用，返回要加载的字幕文件路径。 */
+    loadSubtitles: (itemGuid: string) => Promise<string[]>;
 }
 
-// 播放器类型枚举
-export enum PlayerType {
-    MPV = 'mpv',
-    // 可以扩展其他播放器类型
-}
-
-// 播放器抽象基类
-export abstract class BasePlayer {
-    protected config: Required<Config>;
-    protected globalStatus: PlayStatusData = {
-        itemGuid: '',
-        ts: 0,
-        duration: 0,
-        percentage: 0,
-    };
-
-    constructor(config: Config) {
-        // 设置默认配置
-        this.config = {
-            headers: config.headers || {},
-            debug: config.debug || false,
-            extraArgs: config.extraArgs || [],
-            playerPath: config.playerPath || '',
-            onEvent: config.onEvent,
-            onVolumeChange: config.onVolumeChange || (() => undefined),
-            fnapi: config.fnapi
-        };
-    }
-
-    // 播放列表
-    abstract playList(infos: PlayItem[], pos: number, args?: string[]): Promise<boolean>;
-
-    // 停止播放
-    abstract stop(): void;
-
-    // 判断播放器是否正在播放
-    abstract isPlaying(): boolean;
-
-    // 获取当前播放状态的副本。事件数据交出去后会被异步读取，不能和后续的状态更新共用一个对象
-    protected getStatus(): PlayStatusData {
-        return { ...this.globalStatus };
-    }
-
-    // 发送播放事件
-    protected emitEvent(type: EventType, event: EventData): void {
-        this.config.onEvent(type, event);
-    }
-
-    // 更新全局播放状态
-    protected updateGlobalStatus(status: PlayStatusData): void {
-        this.globalStatus = { ...status };
-    }
-
-    // 获取fnapi实例
-    protected getFnApi(): fn.ApiService {
-        return this.config.fnapi;
-    }
-}
-
-// 播放器构造函数类型
-export type PlayerConstructor = new (config: Config) => BasePlayer;
-
-// 播放器注册表接口
-export interface PlayerRegistry {
-    [key: string]: PlayerConstructor;
+// 播放器：现在只有 MPV 一个实现，测试里用替身
+export interface Player {
+    /** 按顺序播放 items，从第 pos 项开始；MPV 启动并加载播放列表后返回 true。 */
+    playList(items: PlayItem[], pos: number): Promise<boolean>;
+    /** 停止播放；播放器随即报告 EXIT。 */
+    stop(): void;
+    isPlaying(): boolean;
 }
