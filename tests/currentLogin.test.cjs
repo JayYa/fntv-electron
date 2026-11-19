@@ -140,6 +140,7 @@ function setup(t, {
         loginRequests,
         gatewayRequests,
         clearedStorages,
+        configFile: () => path.join(paths.userData, 'config.json'),
         mainWindow: () => mainWindow,
         currentLogin: () => require('../dest/main/common/currentLogin.js'),
         accessGrant: () => require('../dest/modules/fn_api/accessGrant.js'),
@@ -359,9 +360,10 @@ test('ending the current login clears the token, the access grant and the cookie
     const window = fakeStartupWindow();
     let stateWhenShown = null;
     window.loadFile = (file) => {
-        stateWhenShown = {
+        stateWhenShown ??= {
             loginPage: isLoginPage(file),
-            token: world.config.readConfig().then((config) => config.token),
+            // 读磁盘上的文件，不走 readConfig：后者排在凭据队列里，总会等清 token 做完。
+            token: JSON.parse(fs.readFileSync(world.configFile(), 'utf8')).token,
             grant: world.accessGrant().getAccessCookieHeader(NAS),
             clearedStorages: [...world.clearedStorages],
         };
@@ -369,9 +371,7 @@ test('ending the current login clears the token, the access grant and the cookie
 
     await currentLogin.endCurrentLogin(window);
 
-    assert.deepEqual({ ...stateWhenShown, token: await stateWhenShown.token }, {
-        loginPage: true, token: '', grant: '', clearedStorages: ['cookies'],
-    });
+    assert.deepEqual(stateWhenShown, { loginPage: true, token: '', grant: '', clearedStorages: ['cookies'] });
     assert.equal((await world.config.readConfig()).domain, NAS);
 });
 

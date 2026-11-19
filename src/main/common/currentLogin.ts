@@ -39,30 +39,6 @@ interface LoginWindow {
 // 每次验证访问码和结束当前登录都会清空访问授权，代数随之加一。
 let grantGeneration = 0;
 
-/** 已经通过访问码验证、持有访问授权的 NAS 地址。只能由 verifyAccess 得到。 */
-export class GrantedBaseUrl {
-    private constructor(
-        readonly baseUrl: string,
-        readonly accessCode: string,
-        private readonly generation: number,
-    ) {}
-
-    static async verify(baseUrl: string, accessCode: string): Promise<GrantedBaseUrl> {
-        const generation = ++grantGeneration;
-        const session = await establishAccessCodeSession(baseUrl, accessCode);
-        return new GrantedBaseUrl(applyVerifiedOriginToFnConnectBaseUrl(baseUrl, session.baseUrl), accessCode, generation);
-    }
-
-    /** 之后又有验证或登出清空过授权时，重新验证一次。 */
-    current(): Promise<GrantedBaseUrl> {
-        return this.generation === grantGeneration
-            ? Promise.resolve(this)
-            : GrantedBaseUrl.verify(this.baseUrl, this.accessCode);
-    }
-}
-
-const fail = (reason: LoginFailureReason, error: LoginError): LoginResult => ({ ok: false, reason, error });
-
 function accessCodeFailure(error: AccessCodeVerificationError): LoginFailedError {
     return error.reason === 'rejected'
         ? new LoginFailedError('access-code-rejected', { title: '访问码错误', message: '访问码错误，请检查后重试。' })
@@ -72,16 +48,42 @@ function accessCodeFailure(error: AccessCodeVerificationError): LoginFailedError
         });
 }
 
-/** 验证访问码，失败时抛出 LoginFailedError。 */
-export async function verifyAccess(baseUrl: string, accessCode: string): Promise<GrantedBaseUrl> {
-    try {
-        return await GrantedBaseUrl.verify(baseUrl, accessCode);
-    } catch (error) {
-        if (!(error instanceof AccessCodeVerificationError)) throw error;
-        log.warn('访问码验证失败:', error.reason);
-        throw accessCodeFailure(error);
+/**
+ * 访问码验证通过后的 NAS 地址，只能由 verifyAccess 得到。访问授权本身留在 accessGrant 里；
+ * 这里记着访问码，是为了授权被清空后能重新验证，并在保存当前登录时写入。
+ */
+export class GrantedBaseUrl {
+    private constructor(
+        readonly baseUrl: string,
+        readonly accessCode: string,
+        private readonly generation: number,
+    ) {}
+
+    static async verify(baseUrl: string, accessCode: string): Promise<GrantedBaseUrl> {
+        const generation = ++grantGeneration;
+        try {
+            const session = await establishAccessCodeSession(baseUrl, accessCode);
+            return new GrantedBaseUrl(applyVerifiedOriginToFnConnectBaseUrl(baseUrl, session.baseUrl), accessCode, generation);
+        } catch (error) {
+            if (!(error instanceof AccessCodeVerificationError)) throw error;
+            log.warn('访问码验证失败:', error.reason);
+            throw accessCodeFailure(error);
+        }
+    }
+
+    /** 之后又有验证或结束当前登录清空过授权时，重新验证一次。 */
+    current(): Promise<GrantedBaseUrl> {
+        return this.generation === grantGeneration
+            ? Promise.resolve(this)
+            : GrantedBaseUrl.verify(this.baseUrl, this.accessCode);
     }
 }
+
+/** 验证访问码，失败时抛出 LoginFailedError。 */
+export const verifyAccess = (baseUrl: string, accessCode: string): Promise<GrantedBaseUrl> =>
+    GrantedBaseUrl.verify(baseUrl, accessCode);
+
+const fail = (reason: LoginFailureReason, error: LoginError): LoginResult => ({ ok: false, reason, error });
 
 export function showLoginPage(window: LoginWindow): void {
     void Promise.resolve(window.loadFile(LOGIN_PAGE_PATH)).catch((error: unknown) => {
@@ -96,8 +98,11 @@ function unexpectedFailure(error: unknown): LoginResult {
         : fail('unexpected', { title: '连接失败', message: '无法连接到服务器，请检查域名是否正确或网络连接是否正常。' });
 }
 
+/** 还没验证访问码的地址，或 verifyAccess 已经验证过的地址。 */
+export type LoginAccess = GrantedBaseUrl | { baseUrl: string; accessCode: string };
+
 interface LoginSteps {
-    access: GrantedBaseUrl | { baseUrl: string; accessCode: string };
+    access: LoginAccess;
     account: string;
     token(baseUrl: string): Promise<IssuedToken>;
     isNewLogin: boolean;
@@ -139,18 +144,14 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
         });
         return { ok: true };
     } catch (error) {
-        if (error instanceof AccessCodeVerificationError) return failureOf(accessCodeFailure(error));
-        if (error instanceof LoginFailedError) return failureOf(error);
+        if (error instanceof LoginFailedError) return fail(error.reason, error.loginError);
         log.error('建立当前登录失败:', error);
         return unexpectedFailure(error);
     }
 }
 
-const failureOf = (error: LoginFailedError): LoginResult => fail(error.reason, error.loginError);
-
 export interface NewLogin {
-    /** 还没验证访问码的地址，或 verifyAccess 已经验证过的地址。 */
-    access: GrantedBaseUrl | { baseUrl: string; accessCode: string };
+    access: LoginAccess;
     account: string;
     /** 已经拿到的 token，或用验证后的地址换取 token。 */
     token: string | ((baseUrl: string) => Promise<IssuedToken>);

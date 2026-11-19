@@ -225,7 +225,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                         return;
                     }
 
-                    log.info(`[FN ID] 检测到有效登录 Cookie，使用当前连接完成登录: ${targetBaseUrl}`);
+                    log.info('[FN ID] 检测到有效登录 Cookie，使用当前连接完成登录');
                     authRequested = true;
                     await completeLogin(tokenCookie.value, target);
                 } finally {
