@@ -1,6 +1,6 @@
 # 编码标准
 
-改打包的 MPV、MPV 配置同步、默认播放方式或 Proxy 生命周期时，读 `docs/external-runtime.md`。改访问码流程或登录页的凭据频道时，读 `docs/adr/0002-access-code-gateway-session.md`。
+改附带的 MPV 或 MPV 归档、用户配置同步、默认播放方式、Proxy 或播放会话时，读 `docs/external-runtime.md`。改访问码流程或登录页的凭据频道时，读 `docs/adr/0002-access-code-gateway-session.md`。
 
 ## 稳定标识
 

@@ -74,7 +74,7 @@ const OS_IMPORT_SYNTAX = [
 ];
 
 // 调用处拿 currentPlatform()、currentArch() 和字符串比较或 switch，就是把平台分支写在了 platform.ts 外面。
-// 差异写进 platformBehavior() 或接收平台参数的纯函数，调用处只读结果（CODING_STANDARDS.md「平台差异」）。
+// 差异写进 platformBehavior() 或接收平台参数的纯函数，调用处只读结果（CODING_STANDARDS.md「模块」）。
 // 先存进变量再比较的写法拦不住，留给审查。
 const PLATFORM_FUNCTION = '/^current(Platform|Arch)$/';
 const PLATFORM_BRANCH_MESSAGE = '平台分支写进 src/public/platform.ts 的 platformBehavior() 或接收平台参数的纯函数，调用处只读结果，不要比较 currentPlatform()、currentArch()。';

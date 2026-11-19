@@ -38,7 +38,7 @@ test('ci.yml also runs on pushes to main, and the file size check only on pull r
     const ci = workflow('ci.yml');
     assert.deepEqual(Object.keys(ci.on).sort(), ['pull_request', 'push']);
     assert.deepEqual(ci.on.push, { branches: ['main'] });
-    // 不按 branches 过滤，堆叠 PR 也要跑（CODING_STANDARDS.md）。
+    // 不按 branches 过滤：堆叠 PR 的 base 不是 main，也要跑。
     assert.equal(ci.on.pull_request, null);
     // push 上没有 PR 的 base 提交，大小检查只看 PR 改动的文件；它在 test job 的 Run checks 里按事件开关，
     // 运行结果见 tests/standards.test.cjs 的 CI checks the size of files a pull request changes。
