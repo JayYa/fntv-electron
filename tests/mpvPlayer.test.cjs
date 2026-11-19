@@ -1,14 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const Module = require('node:module');
 const { setTimeout: delay } = require('node:timers/promises');
-
-function clearCompiledModules() {
-    Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-}
+const { useFakeModule } = require('./helpers/fakeElectron.cjs');
 
 // 替身 NodeMpv：start() 一直不返回，模拟 MPV 还在启动；quit() 立即完成
 class FakeNodeMpv {
@@ -44,16 +37,7 @@ class RunningNodeMpv {
 
 // 让 require('node-mpv-2') 返回替身，不真启动 MPV；之后加载的播放器模块拿到替身
 function useFakeNodeMpv(t, NodeMpvClass = FakeNodeMpv) {
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'node-mpv-2') return NodeMpvClass;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    t.after(() => {
-        Module._load = originalLoad;
-        clearCompiledModules();
-    });
-    clearCompiledModules();
+    useFakeModule(t, 'node-mpv-2', NodeMpvClass);
     return require('../dest/modules/players/index.js');
 }
 

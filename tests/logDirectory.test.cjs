@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const LOGGER = path.resolve(__dirname, '../dest/modules/logger/logger.js');
 
@@ -20,19 +20,8 @@ function loadPackagedLogger(t) {
             commandLine: { getSwitchValue: () => '' },
         },
     };
-    const originalLoad = Module._load;
-    Module._load = function load(request, ...rest) {
-        return request === 'electron' ? electron : originalLoad.call(this, request, ...rest);
-    };
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter(id => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach(id => delete require.cache[id]);
-    t.after(() => {
-        Module._load = originalLoad;
-        clearCompiledModules();
-        fs.rmSync(home, { recursive: true, force: true });
-    });
-    clearCompiledModules();
+    useFakeElectron(t, electron);
+    t.after(() => fs.rmSync(home, { recursive: true, force: true }));
     return { home, electronDefault, logger: require(LOGGER).logger };
 }
 

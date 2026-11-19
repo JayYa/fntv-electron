@@ -7,9 +7,13 @@
 //   未提交的改动不在内，暂存区由 pre-commit 钩子检查）。
 //   --base <ref>：换一个对比的 ref。CI 的 PR 上传 HEAD^1（PR 合并提交的第一个父提交就是 base）。
 //   --no-file-size：跳过文件大小检查。CI 只在 Linux 那一格的 PR 上跑它，其它格和 push 到 main 时跳过。
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const DEFAULT_BASE = 'origin/main';
+const LOG_FILE = path.join(__dirname, '..', 'check.log');
+const DETAIL_LINES = 60;
 
 function parseArgs(args) {
     if (args.length === 0) return { base: DEFAULT_BASE };
@@ -31,39 +35,79 @@ function stepsFor({ base }) {
     ];
 }
 
+function stripAnsi(text) {
+    return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
 // Windows 上 pnpm 是 .cmd，要经 shell 才能运行，整条命令拼成一个字符串（它的参数里没有要转义的字符）。
 function runCommand(file, args) {
-    if (file === 'pnpm' && process.platform === 'win32') {
-        return spawnSync([file, ...args].join(' '), { shell: true, stdio: 'inherit' }).status;
-    }
-    return spawnSync(file, args, { stdio: 'inherit' }).status;
+    const viaShell = file === 'pnpm' && process.platform === 'win32';
+    const env = process.stdout.isTTY ? { ...process.env, FORCE_COLOR: '1' } : process.env;
+    const child = viaShell
+        ? spawn([file, ...args].join(' '), { shell: true, env, stdio: ['inherit', 'pipe', 'pipe'] })
+        : spawn(file, args, { env, stdio: ['inherit', 'pipe', 'pipe'] });
+    const chunks = [];
+    child.stdout.on('data', chunk => { process.stdout.write(chunk); chunks.push(chunk); });
+    child.stderr.on('data', chunk => { process.stderr.write(chunk); chunks.push(chunk); });
+    return new Promise(resolve => {
+        child.on('error', error => resolve({ status: 1, output: `${Buffer.concat(chunks)}${error.message}\n` }));
+        child.on('close', status => resolve({ status, output: Buffer.concat(chunks).toString('utf8') }));
+    });
 }
 
 function display(step) {
     return [step.file === process.execPath ? 'node' : step.file, ...step.args].join(' ');
 }
 
-// run(file, args) 返回退出码。返回每步的 { name, result, seconds }，result 是 passed、failed 或 skipped。
-function runSteps(steps, run = runCommand, log = text => process.stdout.write(text)) {
-    return steps.map(step => {
-        if (step.skipped) return { name: step.name, result: 'skipped', seconds: 0, note: step.skipped };
+async function runSteps(steps, run = runCommand, log = text => process.stdout.write(text)) {
+    const results = [];
+    for (const step of steps) {
+        if (step.skipped) {
+            results.push({ name: step.name, result: 'skipped', seconds: 0, note: step.skipped });
+            continue;
+        }
         log(`\n== ${step.name}: ${display(step)}\n`);
         const start = Date.now();
-        const status = run(step.file, step.args);
-        return { name: step.name, result: status === 0 ? 'passed' : 'failed', seconds: (Date.now() - start) / 1000 };
-    });
+        const { status, output } = await run(step.file, step.args);
+        results.push({
+            name: step.name,
+            result: status === 0 ? 'passed' : 'failed',
+            seconds: (Date.now() - start) / 1000,
+            command: display(step),
+            output: stripAnsi(output),
+        });
+    }
+    return results;
+}
+
+function failureDetail({ name, output }) {
+    const lines = output.trimEnd().split(/\r?\n/);
+    const failing = lines.findIndex(line => /^✖ failing tests:/.test(line));
+    const detail = name === 'test' && failing !== -1 ? lines.slice(failing + 1) : lines;
+    const shown = detail.slice(0, DETAIL_LINES);
+    const cut = detail.length - shown.length;
+    return [`-- ${name} 失败：`, ...shown, ...(cut > 0 ? [`…另有 ${cut} 行，见 check.log`] : [])].join('\n');
 }
 
 function summary(results) {
     const width = Math.max(...results.map(({ name }) => name.length));
     const lines = results.map(({ name, result, seconds, note }) =>
         `  ${name.padEnd(width)}  ${result.padEnd(7)}  ${note ?? `${seconds.toFixed(1)}s`}`);
-    const failed = results.filter(({ result }) => result === 'failed').map(({ name }) => name);
-    const verdict = failed.length === 0 ? 'check passed' : `check failed: ${failed.join(', ')}`;
-    return `\n== summary\n${lines.join('\n')}\n${verdict}\n`;
+    const failedResults = results.filter(({ result }) => result === 'failed');
+    const failed = failedResults.map(({ name }) => name);
+    const verdict = failed.length === 0 ? 'check passed' : `check failed: ${failed.join(', ')}（完整输出见 check.log）`;
+    const details = failedResults.map(result => `\n${failureDetail(result)}\n`).join('');
+    return `${details}\n== summary\n${lines.join('\n')}\n${verdict}\n`;
 }
 
-function main(args) {
+function logText(results) {
+    return results
+        .filter(({ result }) => result !== 'skipped')
+        .map(({ name, command, result, output }) => `== ${name}: ${command}（${result}）\n${output}`)
+        .join('\n');
+}
+
+async function main(args) {
     let options;
     try {
         options = parseArgs(args);
@@ -71,11 +115,13 @@ function main(args) {
         process.stderr.write(`${error.message}\n`);
         return 2;
     }
-    const results = runSteps(stepsFor(options));
-    process.stdout.write(summary(results));
+    const results = await runSteps(stepsFor(options));
+    const text = summary(results);
+    fs.writeFileSync(LOG_FILE, `${logText(results)}${text}`);
+    process.stdout.write(text);
     return results.some(({ result }) => result === 'failed') ? 1 : 0;
 }
 
-if (require.main === module) process.exitCode = main(process.argv.slice(2));
+if (require.main === module) main(process.argv.slice(2)).then(code => { process.exitCode = code; });
 
-module.exports = { parseArgs, runSteps, stepsFor, summary };
+module.exports = { logText, parseArgs, runSteps, stepsFor, summary };

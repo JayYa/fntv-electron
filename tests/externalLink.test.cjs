@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { pathToFileURL } = require('node:url');
 const { resolveAllowedExternalUrl } = require('../dest/main/common/externalUrl.js');
 
@@ -31,22 +31,8 @@ function setupHandler(t) {
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-    clearCompiledModules();
-
-    t.after(() => {
-        Module._load = originalLoad;
-        clearCompiledModules();
-        fs.rmSync(testRoot, { recursive: true, force: true });
-    });
+    useFakeElectron(t, electronMock);
+    t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     require('../dest/main/handlers/plugins/externalLink.js').init();
     return { openExternal: handlers.get('open-external'), opened };

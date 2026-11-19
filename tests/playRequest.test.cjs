@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Module = require('node:module');
 const os = require('node:os');
 const { isPlayRequest } = require('../dest/modules/playback/playRequest.js');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 function loadPlayMovieHandler(t) {
     const handlers = new Map();
@@ -13,13 +13,7 @@ function loadPlayMovieHandler(t) {
         safeStorage: {},
         session: {},
     };
-    const originalLoad = Module._load;
-    Module._load = function load(request, ...rest) {
-        return request === 'electron' ? electron : originalLoad.call(this, request, ...rest);
-    };
-    t.after(() => {
-        Module._load = originalLoad;
-    });
+    useFakeElectron(t, electron);
 
     const config = require('../dest/modules/fn_config/config.js');
     const originalRead = config.readConfig;

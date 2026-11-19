@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const CONSTANTS = path.resolve(__dirname, '../dest/public/constants.js');
 
@@ -15,15 +15,7 @@ function userDataPathWith(t, userDataDir) {
             commandLine: { getSwitchValue: name => (name === 'user-data-dir' ? userDataDir : '') },
         },
     };
-    const originalLoad = Module._load;
-    Module._load = function load(request, ...rest) {
-        return request === 'electron' ? electron : originalLoad.call(this, request, ...rest);
-    };
-    t.after(() => {
-        Module._load = originalLoad;
-        delete require.cache[CONSTANTS];
-    });
-    delete require.cache[CONSTANTS];
+    useFakeElectron(t, electron);
     return { home, value: require(CONSTANTS).USER_DATA_PATH };
 }
 

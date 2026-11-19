@@ -4,7 +4,7 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const axios = require('axios');
 
 const PASSWORD = 'plain-password-value';
@@ -97,15 +97,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-    clearCompiledModules();
+    useFakeElectron(t, electronMock);
 
     // 假 NAS：用户信息接口接受任何 token，测试只看发给了谁、发了哪个 token。
     const originalAxiosGet = axios.get;
@@ -130,8 +122,6 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         oauthWindow?.close();
         await finished;
         axios.get = originalAxiosGet;
-        Module._load = originalLoad;
-        clearCompiledModules();
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
