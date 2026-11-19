@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 // 真实报错：Electron 的 BoringSSL 用大写错误名，Node 的 OpenSSL 用小写短语。
 const ELECTRON_ERROR = 'write EPROTO 115584:error:100000f7:SSL routines:OPENSSL_internal:WRONG_VERSION_NUMBER:..\..\third_party\boringssl\src\ssl\tls_record.cc:127:\n';
@@ -53,14 +53,7 @@ function setupLogin(t, onConnection = () => {}) {
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
+    useFakeElectron(t, electronMock);
 
     let connections = 0;
     const server = http.createServer((request, response) => response.end('plain http'));
@@ -72,13 +65,10 @@ function setupLogin(t, onConnection = () => {}) {
     t.after(async () => {
         server.closeAllConnections();
         await new Promise((resolve) => server.close(resolve));
-        Module._load = originalLoad;
-        clearCompiledModules();
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    clearCompiledModules();
     require('../dest/main/handlers/plugins/auth.js').init();
 
     return {

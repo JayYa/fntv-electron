@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const Module = require('node:module');
+const { withoutElectron } = require('./helpers/fakeElectron.cjs');
 const { startProxy, get } = require('./helpers/proxyService.cjs');
 
 test('unknown paths and wrong methods get a JSON 404', async (t) => {
@@ -31,20 +31,8 @@ test('a trailing slash on a known route redirects to the path without it', async
 });
 
 test('the proxy service loads in a plain Node process without requiring electron', (t) => {
-    const requested = [];
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') {
-            requested.push(parent && parent.filename);
-            throw new Error('electron is not available');
-        }
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    t.after(() => { Module._load = originalLoad; });
+    const requested = withoutElectron(t);
     const serviceDir = path.join(__dirname, '..', 'dest', 'modules', 'proxy_service');
-    Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
 
     require(serviceDir);
 

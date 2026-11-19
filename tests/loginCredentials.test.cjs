@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { pathToFileURL } = require('node:url');
 
 const LOGIN_PAGE_URL = pathToFileURL(path.join(__dirname, '..', 'resource', 'login', 'index.html')).href;
@@ -62,22 +62,10 @@ function setupAuth(t) {
         },
     };
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    const clearCompiledModules = () => Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-    t.after(() => {
-        Module._load = originalLoad;
-        clearCompiledModules();
-        fs.rmSync(testRoot, { recursive: true, force: true });
-    });
+    useFakeElectron(t, electronMock);
+    t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    clearCompiledModules();
     const config = require('../dest/modules/fn_config/config.js');
     require('../dest/main/handlers/plugins/auth.js').init();
 

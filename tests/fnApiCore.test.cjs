@@ -4,27 +4,9 @@ const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
-const Module = require('node:module');
+const { withoutElectron } = require('./helpers/fakeElectron.cjs');
 
 const CORE_DIR = path.join(__dirname, '..', 'dest', 'modules', 'fn_api', 'core');
-
-// 拦住 electron：Proxy 在 utilityProcess 里引用这一层，主进程的 electron API 都不可用。
-function withoutElectron(t) {
-    const requested = [];
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') {
-            requested.push(parent && parent.filename);
-            throw new Error('electron is not available');
-        }
-        return originalLoad.call(this, request, parent, isMain);
-    };
-    t.after(() => { Module._load = originalLoad; });
-    Object.keys(require.cache)
-        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-        .forEach((id) => delete require.cache[id]);
-    return requested;
-}
 
 test('the fn_api core layer loads in a plain Node process without requiring electron', (t) => {
     const requested = withoutElectron(t);

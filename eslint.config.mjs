@@ -216,6 +216,18 @@ export default [
         plugins: {
             '@typescript-eslint': tseslint.plugin
         },
-        rules: sharedRules
+        rules: {
+            ...sharedRules,
+            'no-restricted-properties': ['error', {
+                property: '_load',
+                message: '替换 require 的模块用 tests/helpers/fakeElectron.cjs：useFakeElectron、useFakeModule 或 withoutElectron。'
+            }]
+        }
+    },
+    {
+        files: ['tests/helpers/fakeElectron.cjs'],
+        rules: {
+            'no-restricted-properties': 'off'
+        }
     }
 ];

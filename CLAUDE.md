@@ -2,7 +2,7 @@
 
 ## Verification
 
-After changing code, run `pnpm run check`. It runs the file size check (files changed since the merge base with `origin/main`), lint, knip and `pnpm test`, then prints a summary; it fails if any step fails. CI (`ci.yml`) runs the same command on Windows, macOS and Linux. Platform branches for macOS and Linux are verified by that CI matrix: don't assemble other platforms locally, and say in your report which branches are left to CI. Details in `TESTING_STANDARDS.md`.
+After changing code, run `pnpm run check`. It runs the file size check (files changed since the merge base with `origin/main`), lint, knip and `pnpm test`, then prints a summary with the failure details of each failed step; it fails if any step fails. Run it once and read the end of its output (`| tail -80`); the full output of every step is in `check.log`. CI (`ci.yml`) runs the same command on Windows, macOS and Linux. Platform branches for macOS and Linux are verified by that CI matrix: don't assemble other platforms locally, and say in your report which branches are left to CI. Details in `TESTING_STANDARDS.md`.
 
 After `pnpm run check`, each `ci.yml` cell also launches the unpackaged app (`electron .`, step `Launch unpackaged app`) and runs the installer smoke assertions against it, skipping the few that only hold for an installer. On Windows run the same check locally with `pnpm run test:smoke:unpackaged` (compiles first, about 35 seconds, opens a window); output goes to `smoke-artifacts/unpackaged-win32-x64/`. Run it when a change touches startup, the main window, the login page, preload or the Proxy.
 

@@ -33,19 +33,60 @@ test('pnpm run check runs the file size check, lint, knip and the tests in order
     assert.throws(() => check.parseArgs(['--fix']), /用法/);
 });
 
-test('a failed step does not stop the later ones and fails the summary', () => {
+test('a failed step does not stop the later ones and fails the summary', async () => {
     const steps = check.stepsFor({ base: null });
     const ran = [];
-    const results = check.runSteps(steps, (file, args) => {
+    const results = await check.runSteps(steps, async (file, args) => {
         ran.push(args.join(' '));
-        return args.includes('lint') ? 1 : 0;
+        return { status: args.includes('lint') ? 1 : 0, output: '' };
     }, () => {});
     assert.deepEqual(ran, ['run lint', 'run knip', 'test']);
     assert.deepEqual(results.map(({ name, result }) => `${name} ${result}`), ['file-size skipped', 'lint failed', 'knip passed', 'test passed']);
     const text = check.summary(results);
     assert.match(text, /file-size\s+skipped\s+--no-file-size/);
-    assert.match(text, /check failed: lint\n$/);
+    assert.match(text, /check failed: lint（完整输出见 check\.log）\n$/);
     assert.match(check.summary(results.filter(({ result }) => result !== 'failed')), /check passed\n$/);
+});
+
+test('the summary shows why each failed step failed and check.log keeps every step output', async () => {
+    const outputs = {
+        lint: '\x1b[4msrc/a.ts\x1b[24m\n  1:1  error  bad  eqeqeq\n',
+        knip: 'all good\n',
+        test: [
+            '✔ passes (1ms)',
+            '[INFO] noisy log line',
+            '✖ breaks (2ms)',
+            'ℹ tests 2',
+            '✖ failing tests:',
+            '',
+            'test at tests/a.test.cjs:3:1',
+            '✖ breaks (2ms)',
+            '  AssertionError: expected 1 to equal 2',
+            '',
+        ].join('\n'),
+    };
+    const results = await check.runSteps(check.stepsFor({ base: null }), async (file, args) => {
+        const name = args.includes('lint') ? 'lint' : args.includes('knip') ? 'knip' : 'test';
+        return { status: name === 'knip' ? 0 : 1, output: outputs[name] };
+    }, () => {});
+
+    const text = check.summary(results);
+    assert.match(text, /-- lint 失败：\nsrc\/a\.ts\n {2}1:1 {2}error {2}bad {2}eqeqeq\n/);
+    assert.match(text, /-- test 失败：\n\ntest at tests\/a\.test\.cjs:3:1\n✖ breaks \(2ms\)\n {2}AssertionError: expected 1 to equal 2\n/);
+    assert.doesNotMatch(text, /noisy log line|all good|knip 失败/);
+    assert.match(text, /check failed: lint, test/);
+
+    const log = check.logText(results);
+    for (const output of ['all good', 'noisy log line', 'src/a.ts']) assert.ok(log.includes(output), output);
+    assert.match(log, /^== lint: pnpm run lint（failed）$/m);
+});
+
+test('a long failure detail is cut and points to check.log', async () => {
+    const output = Array.from({ length: 100 }, (_, i) => `line ${i}`).join('\n');
+    const [result] = await check.runSteps([{ name: 'lint', file: 'pnpm', args: ['run', 'lint'] }], async () => ({ status: 1, output }), () => {});
+    const text = check.summary([result]);
+    assert.match(text, /line 59\n…另有 40 行，见 check\.log\n/);
+    assert.doesNotMatch(text, /line 60\n/);
 });
 
 // 在临时目录里运行 ci.yml 的 Run checks，pnpm 换成记录参数的桩。

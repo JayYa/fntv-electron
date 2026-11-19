@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const Module = require('node:module');
+const { useFakeElectron, useFakeModule } = require('./fakeElectron.cjs');
 const { EventEmitter } = require('node:events');
 const { createQuittingApp, requestQuit, startQuitCoordinator } = require('./fakeQuitApp.cjs');
 const axios = require('axios');
@@ -122,12 +122,8 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
     };
     const updater = new FakeAutoUpdater({ app: electronMock.app, events });
 
-    const originalLoad = Module._load;
-    Module._load = function(request, parent, isMain) {
-        if (request === 'electron') return electronMock;
-        if (request === 'electron-updater') return { autoUpdater: updater };
-        return originalLoad.call(this, request, parent, isMain);
-    };
+    useFakeElectron(t, electronMock);
+    useFakeModule(t, 'electron-updater', { autoUpdater: updater });
 
     const requests = [];
     const originalGet = axios.get;
@@ -136,16 +132,10 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         return respond(url, requestConfig);
     };
 
-    const compiledModules = Object.keys(require.cache).filter((id) => id.includes(`${path.sep}dest${path.sep}`));
-    compiledModules.forEach((id) => delete require.cache[id]);
     const { getInstance } = require('../../dest/modules/updater/updateChecker.js');
 
     t.after(() => {
-        Module._load = originalLoad;
         axios.get = originalGet;
-        Object.keys(require.cache)
-            .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
-            .forEach((id) => delete require.cache[id]);
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
