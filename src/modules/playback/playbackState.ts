@@ -47,8 +47,14 @@ const STOP_PLAYBACK_TIMEOUT_MS = 5000;
 let current: RunState | null = null;
 const endedListeners = new Set<EndedListener>();
 
-/** 媒体播放插件收到播放请求、开始启动播放时调用，开始一次播放。 */
-export function beginPlayback(): PlaybackRun {
+/**
+ * 媒体播放插件收到播放请求、开始启动播放时调用，开始一次播放。
+ * 已有一次播放在启动或播放中时不开始，返回 null；上一次只剩进度回传时照常开始，回传在后台继续。
+ */
+export function beginPlayback(): PlaybackRun | null {
+    if (isPlaying()) {
+        return null;
+    }
     let markDone!: () => void;
     const state: RunState = {
         player: null,
