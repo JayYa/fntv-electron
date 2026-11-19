@@ -4,7 +4,6 @@ import * as fn from '../../../modules/fn_api/api';
 import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
-import { ItemListRequest } from '../../../modules/fn_api/core/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
@@ -13,14 +12,13 @@ import { MpvPlayer, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
-import { isNearEnd, resumePosition } from '../../../modules/playback/nearEnd';
-import { applyRestart } from '../../../modules/playback/restart';
-import { isPlayRequest, PlayRequest } from '../../../modules/playback/playRequest';
+import { isPlayRequest } from '../../../modules/playback/playRequest';
+import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
 import * as playbackState from '../../../modules/playback/playbackState';
 
 /**
-* 媒体播放插件
-* 处理视频播放相关功能。播放开始和结束记进播放状态模块，其它模块从那里读取。
+* 媒体播放插件：把网页端的播放请求交给播放模块（src/modules/playback/play.ts），
+* 并提供它要的当前登录、Proxy、MPV 和窗口。
 */
 
 // 找不到 MPV 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
@@ -48,200 +46,67 @@ async function refreshWindow(): Promise<void> {
     getMainWindow().webContents.reloadIgnoringCache();
 }
 
-/**
- * 构造服务端播放记录：进度上报与「从头播放」清零共用同一份结构，只有 ts 不同。
- */
-function buildPlayStatusRecord(
-    fnapi: fn.ApiService,
-    info: fn.PlayInfo,
-    itemGuid: string,
-    ts: number,
-    duration: number,
-): fn.PlayRecord {
+async function connect(): ReturnType<PlayDeps['connect']> {
+    const config = await fnConfig.readConfig();
+    if (!config?.domain || !config.token || !config.account) {
+        throw new Error('无法找到有效的服务器登录配置');
+    }
+    const { domain, token, account } = config;
+
+    // 播放凭据只取自主进程安全配置，不信任远程页面传入的 token。
+    const fnapi = new fn.ApiService(domain, token);
+
     return {
-        item_guid: itemGuid,
-        media_guid: info.media_guid,
-        video_guid: info.video_guid,
-        audio_guid: info.audio_guid,
-        subtitle_guid: info.subtitle_guid,
-        play_link: new URL(fnapi.getVideoUrl(info.media_guid)).hostname,
-        ts,
-        duration,
+        fnapi,
+        async openProxySession(itemGuids) {
+            const playback = await createPlaybackSession({
+                token,
+                account,
+                domain,
+                accessCookie: getAccessCookieHeader(domain),
+                skipVerify: isTrusted(domain),
+                useNasLocal: config.nasProxyEnabled === true,
+                itemGuids,
+            });
+            return (itemGuid, sourceIndex) => createProxyPlaybackUrl(playback, itemGuid, sourceIndex);
+        },
     };
 }
 
-/**
- * 上报一次播放进度记录（进度更新与播放项结束共用同一份记录结构）。
- *
- * 进度上报属于外部依赖：查询播放信息或写入记录失败时只记日志并返回 false，
- * 不抛出、不重试、不提示用户，避免影响播放。
- *
- * @param fnapi - API服务实例
- * @param status - 播放状态快照
- * @returns 是否上报成功
- */
-async function reportPlayRecord(fnapi: fn.ApiService, status: ply.PlayStatusData): Promise<boolean> {
-    try {
-        // 优先从缓存查询播放信息
-        const resp = await fnapi.getPlayInfoCached(status.itemGuid);
-        if (!resp.success || !resp.data) {
-            log.error('获取播放信息失败:', resp ? resp.message : '未知错误');
-            return false;
-        }
-
-        const record = buildPlayStatusRecord(fnapi, resp.data, status.itemGuid, status.ts, status.duration);
-
-        log.info('播放进度更新:', record);
-
-        const recorded = await fnapi.savePlayRecord(record);
-        if (!recorded.success) {
-            log.error('记录播放状态失败:', recorded.message || '未知错误');
-            return false;
-        }
-        return true;
-    } catch (err) {
-        log.error('记录播放状态异常:', err instanceof Error ? err.message : String(err));
-        return false;
+function launchPlayer(options: PlayerOptions): ply.Player | undefined {
+    const mpv = getPlayerOrNotify();
+    if (!mpv) {
+        return undefined;
     }
+
+    const extraArgs = [
+        '--force-window=immediate',
+        '--border=no',
+        '--network-timeout=180',
+        `--volume=${fnConfig.getMpvVolume()}`,
+    ];
+    if (mpv.bundled) {
+        // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
+        extraArgs.push(`--config-dir=${getMpvConfigDir()}`);
+    }
+
+    return new ply.MpvPlayer({
+        ...options,
+        playerPath: mpv.path,
+        extraArgs,
+        debug: true,
+        onVolumeChange: fnConfig.setMpvVolume,
+    });
 }
 
-/**
- * 「从头播放」语义的一半：把服务端播放进度清零（写一条 `ts = 0` 的播放记录）。
- *
- * 这是用户主动选择"不接着上次看"，清进度是动作的一部分；与「接近片尾」时重新打开
- * 从头播不同——后者只是不恢复位置，服务端进度原样保留。已观看标记不在此处清除。
- *
- * 尽力而为：写入失败（非成功响应或异常）只记日志并返回 false，不抛出、不重试、
- * 不阻断播放；另一半语义（本地播放项 `ts` 归零）由调用方独立完成。
- *
- * @param fnapi - API服务实例
- * @param info - 本次播放的播放信息（已由 getPlayInfo 取得）
- * @param duration - 播放项总时长（秒）
- * @returns 是否清零成功
- */
-async function clearPlayRecord(fnapi: fn.ApiService, info: fn.PlayInfo, duration: number): Promise<boolean> {
-    try {
-        const record = buildPlayStatusRecord(fnapi, info, info.guid, 0, duration);
-
-        log.info('从头播放，清零服务端播放进度:', record);
-
-        const recorded = await fnapi.savePlayRecord(record);
-        if (!recorded.success) {
-            log.warn('清零播放进度失败:', recorded.message || '未知错误');
-            return false;
-        }
-        return true;
-    } catch (err) {
-        log.warn('清零播放进度异常:', err instanceof Error ? err.message : String(err));
-        return false;
-    }
-}
-
-/**
- * 播放项结束时的收尾处理：先上报最终播放进度，再判定是否标记为已观看。
- *
- * 顺序不可颠倒：已观看必须后写，否则可能被随后的进度记录覆盖，导致服务端出现
- * 「标了已观看但进度停在一半」的不一致。
- *
- * 两步彼此独立：进度上报失败（例如断网、缓存未命中）不会阻止已观看判定，
- * 因为该判定只依赖播放器实测的 ts / duration，不需要服务端返回的播放信息。
- *
- * 整条收尾链路只记日志、不抛异常：不重试、不提示用户、不影响播放。
- *
- * @param fnapi - API服务实例
- * @param status - 被离开的播放项的最终播放状态快照
- */
-async function finishPlayItem(fnapi: fn.ApiService, status: ply.PlayStatusData): Promise<void> {
-    if (status.itemGuid.length === 0) {
-        return;
-    }
-
-    // 先尝试上报最终进度，成功与否都继续判定已观看
-    await reportPlayRecord(fnapi, status);
-
-    if (!isNearEnd(status.ts, status.duration)) {
-        return;
-    }
-
-    try {
-        const watchedResp = await fnapi.setWatched(status.itemGuid);
-        if (!watchedResp.success) {
-            log.error('标记已观看失败:', watchedResp.message || '未知错误');
-            return;
-        }
-        log.info('已标记为已观看:', status.itemGuid);
-    } catch (err) {
-        log.error('标记已观看异常:', err instanceof Error ? err.message : String(err));
-    }
-}
-
-/**
- * 创建播放器事件处理器
- * @param fnapi - API服务实例
- * @param session - 这次播放在播放状态模块里的记录
- * @returns 事件处理函数
- */
-function eventHandler(fnapi: fn.ApiService, session: playbackState.PlaybackSession) {
-    return async (type: ply.EventType, data: ply.EventData) => {
-        switch (type) {
-            case ply.EventType.PROGRESS:
-                const progressData = data as ply.PlayStatusData;
-
-                if (progressData.itemGuid.length === 0) {
-                    log.info("process itemguid is empty")
-                    return;
-                }
-
-                await reportPlayRecord(fnapi, progressData);
-                break;
-
-            case ply.EventType.ITEM_END:
-                // 播放器只报告"这一项结束了"，是否算已观看在这里判定
-                const endedItem = data as ply.PlayStatusData;
-                log.info('播放项结束:', endedItem);
-                await finishPlayItem(fnapi, endedItem);
-                break;
-
-            case ply.EventType.ERROR:
-                const errorData = data as ply.PlayErrorData;
-                log.error('MPV error:', String(errorData.message));
-                break;
-
-            case ply.EventType.EXIT: {
-                // 播放器同步发出退出事件，这里同步记下播放结束，回传完成后播放状态模块再通知订阅者
-                const report = handleExit(fnapi, data as ply.PlayExitData);
-                session.ended(report);
-                await report;
-                break;
-            }
-
-            default:
-                log.debug('收到播放器事件:', type);
-                break;
-        }
-    };
-}
-
-// MPV 退出后的收尾：异常退出刷新窗口，正常退出回传最终进度与已观看状态
-async function handleExit(fnapi: fn.ApiService, event: ply.PlayExitData): Promise<void> {
-    if (event.code !== 0) {
-        log.error(`播放器异常退出 (code ${event.code})`);
+const play = createPlay({
+    connect,
+    launchPlayer,
+    async onAbnormalExit() {
         await new Promise(resolve => setTimeout(resolve, 50));
         await refreshWindow();
-        return;
-    }
-
-    if (event.status.itemGuid.length === 0) {
-        return;
-    }
-
-    log.info('MPV exited with code:', event.code);
-    log.info('最后播放位置:', event.status);
-
-    await finishPlayItem(fnapi, event.status);
-
-    // 正常退出只回传最终进度与已观看状态；整页刷新会造成主窗口白闪。
-}
+    },
+});
 
 // 处理播放事件
 async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<void> {
@@ -255,190 +120,7 @@ async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<
         return;
     }
 
-    const session = playbackState.beginPlayback();
-    let started = false;
-    try {
-        started = await startPlayback(request, session);
-    } finally {
-        // 播放开始后由 MPV 退出事件记录结束；没开始播放就在这里结束
-        if (!started) {
-            session.ended();
-        }
-    }
-}
-
-// 返回 MPV 是否开始播放
-async function startPlayback({ id, sourceIndex, restart }: PlayRequest, session: playbackState.PlaybackSession): Promise<boolean> {
-    log.info('Play movie event received id:', id, ' index:', sourceIndex, ' restart:', restart === true);
-
-    const config = await fnConfig.readConfig();
-    if (!config?.domain || !config.token || !config.account) {
-        throw new Error('无法找到有效的服务器登录配置');
-    }
-
-    // 播放凭据只取自主进程安全配置，不信任远程页面传入的 token。
-    const fnapi = new fn.ApiService(config.domain, config.token);
-
-    const response = await fnapi.getPlayInfo(id);
-    if (!response.success || !response.data) {
-        log.error('获取播放信息失败:', response ? response.message : '未知错误');
-        return false;
-    }
-
-    log.info('获取播放信息成功:', {
-        guid: response.data.guid,
-        type: response.data.type,
-        parent_guid: response.data.parent_guid || '',
-    });
-
-    const type = response.data.type;
-    const parentGuid = response.data.parent_guid;
-    const itemGuid = response.data.guid;
-
-    let playList: ply.PlayItem[] = [];
-    if (type === 'Episode' && parentGuid) {
-        log.info('当前为剧集，尝试获取系列下的所有剧集进行播放');
-        const episodeList = await fnapi.getEpisodeList(parentGuid);
-        if (!episodeList.success || !episodeList.data) {
-            log.error('获取剧集列表失败:', episodeList ? episodeList.message : '未知错误');
-            return false;
-        }
-
-        for (const episode of episodeList.data) {
-            const mediaItem = processEpisodeMedia(episode);
-            playList.push(mediaItem);
-            log.info('添加剧集到播放列表:', mediaItem.itemGuid);
-        }
-    } 
-    else if (type === 'Video' && parentGuid) {
-        log.info('当前为其他视频，添加到播放列表');
-        const req: ItemListRequest = {
-            parent_guid: parentGuid,
-            exclude_folder: 1,
-            sort_column: 'sort_title',
-            sort_type: 'ASC',
-        };
-
-        const mediaList = await fnapi.getItemList(req);
-        if (!mediaList.success || !mediaList.data || !mediaList.data.list) {
-            log.error('获取媒体列表失败:', mediaList ? mediaList.message : '未知错误');
-            return false;
-        }
-        log.info(`获取媒体列表成功，共 ${mediaList.data.list.length} 项`);
-
-        for (const media of mediaList.data.list) {
-            const mediaItem = processEpisodeMedia(media);
-            playList.push(mediaItem);
-            log.info('添加媒体到播放列表:', mediaItem.itemGuid);
-        }
-    }
-    else {
-        const mediaItem = processSingleMedia(response.data);
-        playList.push(mediaItem);
-        log.info('添加单集到播放列表:', mediaItem.itemGuid);
-    }
-
-    if (playList.length === 0) {
-        log.warn('播放列表为空');
-        return false;
-    }
-
-    // 寻找当前播放的媒体在数组中的位置
-    const currentIndex = playList.findIndex(item => item.itemGuid === itemGuid);
-    if (currentIndex < 0) {
-        throw new Error('当前播放项不在生成的播放列表中');
-    }
-
-    // 从头播放：先尽力清零服务端进度（失败不阻断），再把当前项 ts 归零，mpv 不做续播 seek
-    if (restart === true) {
-        log.info('从头播放', { itemGuid, previousTs: playList[currentIndex].ts });
-        await clearPlayRecord(fnapi, response.data, playList[currentIndex].duration);
-        playList[currentIndex] = applyRestart(playList[currentIndex], true);
-    }
-
-    const playback = await createPlaybackSession({
-        token: config.token,
-        account: config.account,
-        domain: config.domain,
-        accessCookie: getAccessCookieHeader(config.domain),
-        skipVerify: isTrusted(config.domain),
-        useNasLocal: config.nasProxyEnabled === true,
-        itemGuids: playList.map(item => item.itemGuid),
-    });
-    playList = playList.map(item => ({
-        ...item,
-        playLink: createProxyPlaybackUrl(playback, item.itemGuid),
-    }));
-
-    // 检查是否选择了特定的播放源索引
-    const selectedSourceIndex = Number.isInteger(sourceIndex) && sourceIndex > 0 ? sourceIndex : 0;
-    if (selectedSourceIndex > 0) {
-        log.info(`使用指定的播放源索引: ${selectedSourceIndex}`);
-        // 修改播放列表中的源索引
-        playList[currentIndex].playLink = createProxyPlaybackUrl(
-            playback,
-            playList[currentIndex].itemGuid,
-            selectedSourceIndex,
-        );
-    }
-
-    // 获取MPV播放器
-    const mpv = getPlayerOrNotify();
-    if (!mpv) {
-        return false;
-    }
-
-    const mpvArgs = [
-        '--force-window=immediate',
-        '--border=no',
-        '--network-timeout=180',
-        `--volume=${fnConfig.getMpvVolume()}`,
-    ];
-    if (mpv.bundled) {
-        // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
-        mpvArgs.push(`--config-dir=${getMpvConfigDir()}`);
-    }
-
-    const player = new ply.MpvPlayer({
-        playerPath: mpv.path,
-        extraArgs: mpvArgs,
-        debug: true,
-        onEvent: eventHandler(fnapi, session),
-        onVolumeChange: fnConfig.setMpvVolume,
-        resumePosition,
-        loadSubtitles: async (guid) => fnapi.downloadSubtitle(await fnapi.getSubtitle(guid)),
-    });
-
-    // 开始播放。启动期间已请求停止播放（例如应用内更新要安装）时不打开 MPV，返回 false；契约见 PlaybackSession.start
-    return session.start(player, () => player.playList(playList, currentIndex));
-}
-
-// 处理当前播放的媒体信息
-function processEpisodeMedia(info: fn.PlayListItem): ply.PlayItem {
-    return {
-        itemGuid: info.guid,
-        title: info.title,
-        tvTitle: info.tv_title,
-        seasonNumber: info.season_number,
-        episodeNumber: info.episode_number,
-        ts: info.ts,
-        duration: info.duration,
-        playLink: '',
-    };
-}
-
-// 处理单个待播放媒体信息
-function processSingleMedia(info: fn.PlayInfo): ply.PlayItem {
-    return {
-        itemGuid: info.guid,
-        title: info.item.title,
-        tvTitle: info.item.tv_title,
-        seasonNumber: info.item.season_number,
-        episodeNumber: info.item.episode_number,
-        ts: info.ts,
-        duration: info.item.duration,
-        playLink: '',
-    };
+    await play(request, playbackState.beginPlayback());
 }
 
 // 注册媒体播放处理器。退出时停止播放、等进度回传由退出协调做（src/modules/quit/quitCoordinator.ts）

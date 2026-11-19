@@ -90,6 +90,10 @@ _Avoid_: 隐藏原播放按钮、hide original play button
 一次播放期间 Proxy 持有的短期授权，只允许取这次播放列表里的播放项。
 _Avoid_: session（泛指时）
 
+**一次播放 (playback run)**：
+从接管一个播放入口开始，到 MPV 退出、这次播放的进度回传全部完成为止；同一时间最多只有一次。播放会话是它期间 Proxy 持有的授权，二者不是一回事。
+_Avoid_: 播放会话（指整个过程时）、playback session（指整个过程时）
+
 **直链直连 (cloud direct)**：
 直链媒体由 Proxy 直接向直链地址取流，不经过 NAS；默认方式。
 _Avoid_: 网盘直连、302、302 重定向

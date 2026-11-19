@@ -2,20 +2,20 @@
  * 播放状态：记录 MPV 是否在播放（包括正在启动播放），播放结束时通知订阅者，
  * 也能停止播放并等这次退出的进度回传完成（有超时）。
  *
- * 只有媒体播放插件通过 beginPlayback 写入状态，其它模块只读取、订阅或停止播放。
+ * 只有媒体播放插件通过 beginPlayback 开始一次播放（playback run），播放模块（play.ts）结束它；其它模块只读取、订阅或停止播放。
  */
 
 import log from '../logger';
 
-/** 能停止的播放器。停止后播放器要报告退出，媒体播放插件随之调用 ended。 */
+/** 能停止的播放器。停止后播放器要报告退出，播放模块随之调用 ended。 */
 interface StoppablePlayer {
     stop(): void;
 }
 
-export interface PlaybackSession {
+export interface PlaybackRun {
     /**
      * 播放器创建后调用，开始播放：在这一次同步调用里记录播放器并调用 play，返回 play 的结果。
-     * 启动期间已请求停止或播放已结束时不调用 play，返回兑现为 false 的 Promise；媒体播放插件随后调用 ended。
+     * 启动期间已请求停止或播放已结束时不调用 play，返回兑现为 false 的 Promise；播放模块随后调用 ended。
      *
      * play 必须在返回前同步建好播放器（MPV 实例），之后的 stop() 才会报告退出。
      * 记录播放器后 stopPlaybackAndWait 就会对它调 stop()；若此时实例还没建好，stop() 不发退出事件，
@@ -46,8 +46,8 @@ const STOP_PLAYBACK_TIMEOUT_MS = 5000;
 let current: SessionState | null = null;
 const endedListeners = new Set<EndedListener>();
 
-/** 媒体播放插件收到播放请求、开始启动播放时调用。 */
-export function beginPlayback(): PlaybackSession {
+/** 媒体播放插件收到播放请求、开始启动播放时调用，开始一次播放。 */
+export function beginPlayback(): PlaybackRun {
     let markDone!: () => void;
     const state: SessionState = {
         player: null,
