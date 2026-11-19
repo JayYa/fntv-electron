@@ -199,16 +199,16 @@ async function reportPlayRecord(fnapi: PlayApi, status: PlayStatusData): Promise
         }
 
         const record = buildPlayRecord(fnapi, resp.data, status.itemGuid, status.ts, status.duration);
-        log.info('播放进度更新:', record);
+        log.info('播放进度更新:', { item_guid: record.item_guid, ts: record.ts, duration: record.duration });
 
         const recorded = await fnapi.savePlayRecord(record);
         if (!recorded.success) {
-            log.error('记录播放状态失败:', recorded.message || '未知错误');
+            log.error('回传播放进度失败:', recorded.message || '未知错误');
             return false;
         }
         return true;
     } catch (err) {
-        log.error('记录播放状态异常:', err instanceof Error ? err.message : String(err));
+        log.error('回传播放进度异常:', err instanceof Error ? err.message : String(err));
         return false;
     }
 }
@@ -220,7 +220,7 @@ async function reportPlayRecord(fnapi: PlayApi, status: PlayStatusData): Promise
 async function clearPlayRecord(fnapi: PlayApi, info: PlayInfo, duration: number): Promise<void> {
     try {
         const record = buildPlayRecord(fnapi, info, info.guid, 0, duration);
-        log.info('从头播放，清零服务端播放进度:', record);
+        log.info('从头播放，清零服务端播放进度:', { item_guid: record.item_guid, duration: record.duration });
 
         const recorded = await fnapi.savePlayRecord(record);
         if (!recorded.success) {
@@ -264,7 +264,8 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
     return async (type: EventType, data: EventData) => {
         switch (type) {
             case EventType.PROGRESS: {
-                const progress = data as PlayStatusData;
+                // 先拷贝：回传要先 await 查播放信息，不依赖播放器之后不再改这个对象
+                const progress = { ...(data as PlayStatusData) };
                 if (progress.itemGuid.length === 0) {
                     log.info('process itemguid is empty');
                     return;
@@ -274,8 +275,8 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
             }
 
             case EventType.ITEM_END: {
-                // 播放器只报告"这一项结束了"，是否算已观看在这里判定
-                const endedItem = data as PlayStatusData;
+                // 播放器只报告「这一项结束了」，是否算已观看在这里判定
+                const endedItem = { ...(data as PlayStatusData) };
                 log.info('播放项结束:', endedItem);
                 await finishPlayItem(fnapi, endedItem);
                 break;

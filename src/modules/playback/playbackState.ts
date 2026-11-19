@@ -29,7 +29,7 @@ export interface PlaybackRun {
     ended(report?: Promise<unknown>): void;
 }
 
-interface SessionState {
+interface RunState {
     player: StoppablePlayer | null;
     stopRequested: boolean;
     hasEnded: boolean;
@@ -43,13 +43,13 @@ type EndedListener = () => void;
 const STOP_PLAYBACK_TIMEOUT_MS = 5000;
 
 // 最近一次播放；它结束且退出的进度回传完成后清空
-let current: SessionState | null = null;
+let current: RunState | null = null;
 const endedListeners = new Set<EndedListener>();
 
 /** 媒体播放插件收到播放请求、开始启动播放时调用，开始一次播放。 */
 export function beginPlayback(): PlaybackRun {
     let markDone!: () => void;
-    const state: SessionState = {
+    const state: RunState = {
         player: null,
         stopRequested: false,
         hasEnded: false,

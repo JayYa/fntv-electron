@@ -24,7 +24,7 @@ export function isNearEnd(ts: number, duration: number): boolean {
  * 打开播放项时续播的位置（秒），0 表示从头播。
  *
  * 只有播放进度大于 0、总时长可信（大于 0）且没接近片尾时才续播。
- * 总时长不可信时不续播：`isNearEnd` 对它返回 false，不能拿它的反面当成"可以续播"。
+ * 总时长不可信时不续播：`isNearEnd` 对它返回 false，不能拿它的反面当成「可以续播」。
  */
 export function resumePosition(item: { ts: number; duration: number }): number {
     const { ts, duration } = item;

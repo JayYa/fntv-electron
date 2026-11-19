@@ -182,6 +182,20 @@ test('progress is reported as a play record for the play item it belongs to', as
     });
 });
 
+test('progress is reported as emitted even if the player then switches to the next item', async (t) => {
+    const world = setup(t);
+    await world.play({ id: 'ep-2' });
+
+    // 播放器若重用同一个对象：回传还在查播放信息时，它被改成了下一集
+    const data = status('ep-2', 700);
+    const report = world.players[0].emit(EventType.PROGRESS, data);
+    Object.assign(data, status('ep-3', 0));
+    await report;
+
+    assert.deepEqual([world.fnMedia.lastRecord.item_guid, world.fnMedia.lastRecord.media_guid, world.fnMedia.lastRecord.ts],
+        ['ep-2', 'media-ep-2', 700]);
+});
+
 test('leaving a play item near end reports its progress, then marks it watched', async (t) => {
     const world = setup(t);
     await world.play({ id: 'ep-2' });
