@@ -26,6 +26,20 @@ test('playback counts as playing from start request until it ends', () => {
     assert.equal(isPlaying(), false);
 });
 
+test('a second playback cannot begin while one is starting or playing, but can while the last one is still reporting', async () => {
+    const first = beginPlayback();
+    assert.equal(beginPlayback(), null);
+
+    const report = deferred();
+    first.ended(report.promise);
+    const second = beginPlayback();
+    assert.notEqual(second, null);
+
+    second.ended();
+    report.resolve();
+    await settle();
+});
+
 test('subscribers are notified once the exit progress report has finished', async (t) => {
     const notified = [];
     t.after(onPlaybackEnded(() => notified.push('ended')));

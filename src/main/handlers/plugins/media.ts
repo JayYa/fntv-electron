@@ -114,12 +114,13 @@ async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<
         return;
     }
 
-    if (playbackState.isPlaying()) {
+    const run = playbackState.beginPlayback();
+    if (!run) {
         log.warn('播放器正在启动或播放，忽略重复播放请求');
         return;
     }
 
-    await play(request, playbackState.beginPlayback());
+    await play(request, run);
 }
 
 // 注册媒体播放处理器。退出时停止播放、等进度回传由退出协调做（src/modules/quit/quitCoordinator.ts）
