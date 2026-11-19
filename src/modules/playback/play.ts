@@ -3,7 +3,7 @@
  *
  * - 播放列表：剧集是同一季的所有集，其它视频是同一文件夹下的所有视频，其余只有当前播放项
  * - 续播和接近片尾（nearEnd.ts），从头播放
- * - 进度回传，播放项结束时标记已观看
+ * - 进度回传，播放项结束时标记已观看；同一次播放的写入按顺序进行（writeQueue.ts）
  * - 和播放状态模块接线：开始播放、MPV 退出时带上进度回传结束这次播放
  *
  * 不依赖 Electron。当前登录、Proxy、MPV 程序和窗口都由调用方经 PlayDeps 提供。
@@ -16,6 +16,7 @@ import log from '../logger';
 import { isNearEnd, resumePosition } from './nearEnd';
 import type { PlayRequest } from './playRequest';
 import type { PlaybackRun } from './playbackState';
+import { createWriteQueue } from './writeQueue';
 
 /** 播放用到的飞牛影视服务调用。 */
 export type PlayApi = Pick<ApiService,
@@ -261,6 +262,9 @@ async function finishPlayItem(fnapi: PlayApi, status: PlayStatusData): Promise<v
 }
 
 function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
+    // 这次播放的写入排成一条队列，顺序见 writeQueue.ts
+    const enqueue = createWriteQueue();
+
     return async (type: EventType, data: EventData) => {
         switch (type) {
             case EventType.PROGRESS: {
@@ -270,7 +274,7 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
                     log.info('process itemguid is empty');
                     return;
                 }
-                await reportPlayRecord(fnapi, progress);
+                await enqueue({ itemGuid: progress.itemGuid, progress: true, write: () => reportPlayRecord(fnapi, progress) });
                 break;
             }
 
@@ -278,7 +282,7 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
                 // 播放器只报告「这一项结束了」，是否算已观看在这里判定
                 const endedItem = { ...(data as PlayStatusData) };
                 log.info('播放项结束:', endedItem);
-                await finishPlayItem(fnapi, endedItem);
+                await enqueue({ itemGuid: endedItem.itemGuid, progress: false, write: () => finishPlayItem(fnapi, endedItem) });
                 break;
             }
 
@@ -287,8 +291,9 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
                 break;
 
             case EventType.EXIT: {
-                // 播放器同步发出退出事件，这里同步结束这次播放；回传完成后播放状态模块再通知订阅者
-                const report = handleExit(deps, fnapi, data as PlayExitData);
+                // 播放器同步发出退出事件，这里同步结束这次播放；排在前面的写入和收尾都完成后，播放状态模块再通知订阅者
+                const exit = data as PlayExitData;
+                const report = enqueue({ itemGuid: exit.status.itemGuid, progress: false, write: () => handleExit(deps, fnapi, exit) });
                 run.ended(report);
                 await report;
                 break;

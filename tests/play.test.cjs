@@ -36,6 +36,8 @@ function fakeFnMedia({ info = playInfo(), episodes = [listItem('ep-1'), listItem
     const writes = [];
     const fnMedia = {
         writes,
+        // 服务端最后存下的播放进度：按请求完成的先后覆盖
+        stored: {},
         saveResult: async () => ({ success: true }),
         api: {
             getPlayInfo: async () => ({ success: true, data: info }),
@@ -45,7 +47,9 @@ function fakeFnMedia({ info = playInfo(), episodes = [listItem('ep-1'), listItem
             savePlayRecord: async (record) => {
                 writes.push(['savePlayRecord', record.item_guid, record.ts]);
                 fnMedia.lastRecord = record;
-                return fnMedia.saveResult(record);
+                const result = await fnMedia.saveResult(record);
+                if (result.success) fnMedia.stored[record.item_guid] = record.ts;
+                return result;
             },
             setWatched: async (guid) => {
                 writes.push(['setWatched', guid]);
@@ -241,6 +245,92 @@ test('the playback run ends only after the exit progress report has finished', a
     await stopped;
     assert.deepEqual(ended, ['ended']);
     assert.deepEqual(fnMedia.writes, [['savePlayRecord', 'ep-2', 1200]]);
+});
+
+// 第一次 savePlayRecord 一直挂着，直到测试放行；之后的立即成功
+function holdFirstSave(fnMedia) {
+    const first = deferred();
+    let calls = 0;
+    fnMedia.saveResult = () => {
+        calls += 1;
+        return calls === 1 ? first.promise.then(() => ({ success: true })) : Promise.resolve({ success: true });
+    };
+    return first;
+}
+
+test('a slow earlier progress report cannot roll back the play record written when leaving the item', async (t) => {
+    const fnMedia = fakeFnMedia();
+    const world = setup(t, { fnMedia });
+    await world.play({ id: 'ep-2' });
+    const first = holdFirstSave(fnMedia);
+
+    const progress = world.players[0].emit(EventType.PROGRESS, status('ep-2', 700));
+    const itemEnd = world.players[0].emit(EventType.ITEM_END, status('ep-2', 1400));
+    await settle();
+    assert.deepEqual(fnMedia.writes, [['savePlayRecord', 'ep-2', 700]]);
+
+    first.resolve();
+    await Promise.all([progress, itemEnd]);
+    assert.deepEqual(fnMedia.writes, [['savePlayRecord', 'ep-2', 700], ['savePlayRecord', 'ep-2', 1400]]);
+    assert.equal(fnMedia.stored['ep-2'], 1400);
+});
+
+test('progress reports piling up behind a slow one are written once, with the latest progress', async (t) => {
+    const fnMedia = fakeFnMedia();
+    const world = setup(t, { fnMedia });
+    await world.play({ id: 'ep-2' });
+    const first = holdFirstSave(fnMedia);
+
+    const reports = [700, 715, 730, 745].map((ts) => world.players[0].emit(EventType.PROGRESS, status('ep-2', ts)));
+    first.resolve();
+    await Promise.all(reports);
+
+    assert.deepEqual(fnMedia.writes, [['savePlayRecord', 'ep-2', 700], ['savePlayRecord', 'ep-2', 745]]);
+});
+
+test('a progress report waiting behind a slow one is dropped when its play item ends', async (t) => {
+    const fnMedia = fakeFnMedia();
+    const world = setup(t, { fnMedia });
+    await world.play({ id: 'ep-2' });
+    const first = holdFirstSave(fnMedia);
+
+    const events = [
+        world.players[0].emit(EventType.PROGRESS, status('ep-1', 100)),
+        world.players[0].emit(EventType.PROGRESS, status('ep-2', 1200)),
+        world.players[0].emit(EventType.ITEM_END, status('ep-2', 1490)),
+    ];
+    first.resolve();
+    await Promise.all(events);
+
+    assert.deepEqual(fnMedia.writes, [
+        ['savePlayRecord', 'ep-1', 100],
+        ['savePlayRecord', 'ep-2', 1490],
+        ['setWatched', 'ep-2'],
+    ]);
+});
+
+test('the playback run ends only after the writes queued before the exit have finished', async (t) => {
+    const fnMedia = fakeFnMedia();
+    const world = setup(t, { fnMedia });
+    await world.play({ id: 'ep-2' });
+    const ended = [];
+    t.after(playbackState.onPlaybackEnded(() => ended.push('ended')));
+    const first = holdFirstSave(fnMedia);
+
+    void world.players[0].emit(EventType.ITEM_END, status('ep-1', 1490));
+    world.players[0].exitStatus = status('ep-2', 300);
+    const stopped = playbackState.stopPlaybackAndWait();
+    await settle();
+    assert.deepEqual(ended, []);
+
+    first.resolve();
+    await stopped;
+    assert.deepEqual(ended, ['ended']);
+    assert.deepEqual(fnMedia.writes, [
+        ['savePlayRecord', 'ep-1', 1490],
+        ['setWatched', 'ep-1'],
+        ['savePlayRecord', 'ep-2', 300],
+    ]);
 });
 
 test('an abnormal MPV exit hands over to the caller without reporting progress', async (t) => {
