@@ -108,7 +108,6 @@ const play = createPlay({
     },
 });
 
-// 处理播放事件
 async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<void> {
     if (!isPlayRequest(request)) {
         log.warn('忽略无效的播放请求：缺少播放项 id');

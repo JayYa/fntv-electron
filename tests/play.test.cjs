@@ -31,12 +31,10 @@ function listItem(guid, ts = 0) {
     return { guid, title: guid, tv_title: 'Show', season_number: 1, episode_number: 1, ts, duration: 1500 };
 }
 
-// 替身飞牛影视服务：记下写入的播放进度和已观看，savePlayRecord 的结果可以按测试改
 function fakeFnMedia({ info = playInfo(), episodes = [listItem('ep-1'), listItem('ep-2', 600), listItem('ep-3')], items = [] } = {}) {
     const writes = [];
     const fnMedia = {
         writes,
-        // 服务端最后存下的播放进度：按请求完成的先后覆盖
         stored: {},
         saveResult: async () => ({ success: true }),
         api: {
@@ -63,7 +61,6 @@ function fakeFnMedia({ info = playInfo(), episodes = [listItem('ep-1'), listItem
     return fnMedia;
 }
 
-// 替身播放器：记下要播的播放列表，stop() 像 MPV 一样报告正常退出
 class FakePlayer {
     constructor(options) {
         this.options = options;
@@ -190,7 +187,6 @@ test('progress is reported as emitted even if the player then switches to the ne
     const world = setup(t);
     await world.play({ id: 'ep-2' });
 
-    // 播放器若重用同一个对象：回传还在查播放信息时，它被改成了下一集
     const data = status('ep-2', 700);
     const report = world.players[0].emit(EventType.PROGRESS, data);
     Object.assign(data, status('ep-3', 0));
@@ -247,7 +243,6 @@ test('the playback run ends only after the exit progress report has finished', a
     assert.deepEqual(fnMedia.writes, [['savePlayRecord', 'ep-2', 1200]]);
 });
 
-// 第一次 savePlayRecord 一直挂着，直到测试放行；之后的立即成功
 function holdFirstSave(fnMedia) {
     const first = deferred();
     let calls = 0;

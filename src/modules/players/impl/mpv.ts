@@ -18,7 +18,6 @@ import NodeMpv, { TimePosition } from 'node-mpv-2';
 
 export class MpvPlayer implements Player {
     private config: Required<Config>;
-    // 当前播放项的状态。只经 getStatus / updateGlobalStatus 读写，交出去的都是副本
     private globalStatus: PlayStatusData = { itemGuid: '', ts: 0, duration: 0, percentage: 0 };
     private mpvInstance: NodeMpv | null = null;
     // 这次播放的 IPC 地址，不用 node-mpv-2 的固定默认值
@@ -39,8 +38,7 @@ export class MpvPlayer implements Player {
         };
     }
 
-    // 当前播放状态的副本。事件数据交出去后会被异步读取，不能和后续的状态更新共用一个对象
-    private getStatus(): PlayStatusData {
+    private statusSnapshot(): PlayStatusData {
         return { ...this.globalStatus };
     }
 
@@ -121,8 +119,7 @@ export class MpvPlayer implements Player {
 
             // 跳转到指定位置
             if (pos > 0) {
-                // 更新全局状态
-                this.updateCurrentItemStatus(pos);
+                this.switchToItem(pos);
                 // 这个函数如果await的话有可能会卡死，有点坑
                 this.mpvInstance.jump(pos);
                 if (this.config.debug) {
@@ -175,50 +172,26 @@ export class MpvPlayer implements Player {
         return content;
     }
 
-    /**
-     * 播放项切换时，报告被离开的那一项已结束播放
-     *
-     * 只陈述"这一项结束了"这个事实，携带它的最终播放状态快照；
-     * 够不够格算已观看由业务层判定，播放器层不做任何价值判断。
-     *
-     * 必须在 `updateCurrentItemStatus` 之前调用：那里会用**新**播放项的信息
-     * 覆盖全局播放状态，之后再读就是下一项的数据了。
-     *
-     * @param nextIndex - 即将切换到的播放列表位置
-     */
-    private emitItemEnd(nextIndex: number): void {
-        const previous = this.getStatus();
+    private switchToItem(index: number): void {
+        const previous = this.statusSnapshot();
+        const next = this.playlistItems[index];
+        const hadPrevious = previous.itemGuid.length > 0;
+        const stillSameItem = next?.itemGuid === previous.itemGuid;
 
-        // 刚开始播放时没有"上一项"，playlist-pos 的首次回调不应产生 ITEM_END
-        if (previous.itemGuid.length === 0) {
-            return;
+        if (hadPrevious && !stillSameItem) {
+            if (this.config.debug) {
+                log.debug('播放项结束:', previous);
+            }
+            this.emitEvent(EventType.ITEM_END, previous);
         }
 
-        // 位置回调重复落到同一播放项时，这一项并没有结束
-        const nextItem = this.playlistItems[nextIndex];
-        if (nextItem && nextItem.itemGuid === previous.itemGuid) {
-            return;
-        }
-
-        if (this.config.debug) {
-            log.debug('播放项结束:', previous);
-        }
-        this.emitEvent(EventType.ITEM_END, previous);
-    }
-
-    /**
-     * 更新当前播放项状态
-     */
-    private updateCurrentItemStatus(index: number): void {
-        if (index >= 0 && index < this.playlistItems.length) {
-            const currentItem = this.playlistItems[index];
-
-            const st = this.getStatus();
-            st.itemGuid = currentItem.itemGuid;
-            st.ts = currentItem.ts;
-            st.duration = currentItem.duration;
-            st.percentage = currentItem.duration > 0 ? Math.floor((currentItem.ts / currentItem.duration) * 100) : 0;
-            this.updateGlobalStatus(st);
+        if (next) {
+            this.updateGlobalStatus({
+                itemGuid: next.itemGuid,
+                ts: next.ts,
+                duration: next.duration,
+                percentage: next.duration > 0 ? Math.floor((next.ts / next.duration) * 100) : 0,
+            });
         }
     }
 
@@ -273,10 +246,7 @@ export class MpvPlayer implements Player {
             }
 
             if (status.property === 'playlist-pos' && typeof status.value === 'number') {
-                // 先报告上一项已结束（内部会抓快照），再用新播放项覆盖全局状态
-                this.emitItemEnd(status.value);
-                // 更新当前播放项状态
-                this.updateCurrentItemStatus(status.value);
+                this.switchToItem(status.value);
             }
 
             if (status.property === 'volume' && typeof status.value === 'number') {
@@ -294,7 +264,6 @@ export class MpvPlayer implements Player {
                     return;
                 }
 
-                // 设置窗口标题
                 this.mpvInstance?.setProperty('force-media-title', this.getTitle(currentItem)).catch(err => {
                     if (this.config.debug) {
                         log.debug('设置窗口标题失败:', err);
@@ -303,7 +272,6 @@ export class MpvPlayer implements Player {
 
                 const position = this.config.resumePosition(currentItem);
                 if (position > 0) {
-                    // 使用重试机制进行跳转, 这里粗暴了点, 视频没加载没法跳，只能重试
                     this.seekWithRetry(position, 50000, 10);
                 }
 
@@ -330,7 +298,7 @@ export class MpvPlayer implements Player {
             }
 
             // 通知更新跳转
-            const st = this.getStatus();
+            const st = this.statusSnapshot();
             st.ts = Math.floor(t.end);
 
             // 保存到全局的playlist
@@ -420,7 +388,7 @@ export class MpvPlayer implements Player {
                 return;
             }
 
-            const progressData: PlayStatusData = this.getStatus();
+            const progressData: PlayStatusData = this.statusSnapshot();
             progressData.itemGuid = itemGuid;
             progressData.ts = Math.floor(currentTime);
             progressData.duration = Math.floor(duration);
@@ -449,7 +417,7 @@ export class MpvPlayer implements Player {
         // 发射退出事件
         const event: PlayExitData = {
             code: code,
-            status: this.getStatus()
+            status: this.statusSnapshot()
         };
 
         this.emitEvent(EventType.EXIT, event);

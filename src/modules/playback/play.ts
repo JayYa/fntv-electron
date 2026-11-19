@@ -1,14 +1,3 @@
-/**
- * 播放模块：一次播放从拼播放列表到 MPV 退出、进度回传完成的全部业务规则。
- *
- * - 播放列表：剧集是同一季的所有集，其它视频是同一文件夹下的所有视频，其余只有当前播放项
- * - 续播和接近片尾（nearEnd.ts），从头播放
- * - 进度回传，播放项结束时标记已观看；同一次播放的写入按顺序进行（writeQueue.ts）
- * - 和播放状态模块接线：开始播放、MPV 退出时带上进度回传结束这次播放
- *
- * 不依赖 Electron。当前登录、Proxy、MPV 程序和窗口都由调用方经 PlayDeps 提供。
- */
-
 import type { ApiService } from '../fn_api/api';
 import type { ItemListRequest, PlayInfo, PlayListItem, PlayRecord } from '../fn_api/core/types';
 import { EventData, EventHandler, EventType, Player, PlayErrorData, PlayExitData, PlayItem, PlayStatusData } from '../players/types';
@@ -16,9 +5,8 @@ import log from '../logger';
 import { isNearEnd, resumePosition } from './nearEnd';
 import type { PlayRequest } from './playRequest';
 import type { PlaybackRun } from './playbackState';
-import { createWriteQueue } from './writeQueue';
+import { createWriteQueue, WriteKind } from './writeQueue';
 
-/** 播放用到的飞牛影视服务调用。 */
 export type PlayApi = Pick<ApiService,
     'getPlayInfo' | 'getPlayInfoCached' | 'getEpisodeList' | 'getItemList'
     | 'savePlayRecord' | 'setWatched' | 'getVideoUrl' | 'getSubtitle' | 'downloadSubtitle'>;
@@ -57,7 +45,7 @@ export function createPlay(deps: PlayDeps): (request: PlayRequest, run: Playback
             started = await startPlayback(deps, request, run);
         } finally {
             if (!started) {
-                run.ended();
+                void run.ended();
             }
         }
     };
@@ -77,9 +65,6 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
     log.info('获取播放信息成功:', { guid: info.guid, type: info.type, parent_guid: info.parent_guid || '' });
 
     let playList = await buildPlayList(fnapi, info);
-    if (!playList) {
-        return false;
-    }
     if (playList.length === 0) {
         log.warn('播放列表为空');
         return false;
@@ -90,7 +75,6 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
         throw new Error('当前播放项不在生成的播放列表中');
     }
 
-    // 从头播放：先尽力清除播放进度（失败不阻断），再把当前项 ts 归零，就不会续播
     if (restart === true) {
         log.info('从头播放', { itemGuid: info.guid, previousTs: playList[currentIndex].ts });
         await clearPlayRecord(fnapi, info, playList[currentIndex].duration);
@@ -116,18 +100,16 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
         return false;
     }
 
-    // 启动期间已请求停止播放（例如应用内更新要安装）时不打开 MPV，返回 false；契约见 PlaybackRun.start
     return run.start(player, () => player.playList(playList, currentIndex));
 }
 
-// 返回 undefined 表示取列表失败
-async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[] | undefined> {
+async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[]> {
     if (info.type === 'Episode' && info.parent_guid) {
         log.info('当前为剧集，尝试获取系列下的所有剧集进行播放');
         const episodeList = await fnapi.getEpisodeList(info.parent_guid);
         if (!episodeList.success || !episodeList.data) {
             log.error('获取剧集列表失败:', episodeList ? episodeList.message : '未知错误');
-            return undefined;
+            return [];
         }
         return episodeList.data.map(fromListItem);
     }
@@ -143,7 +125,7 @@ async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[]
         const mediaList = await fnapi.getItemList(req);
         if (!mediaList.success || !mediaList.data || !mediaList.data.list) {
             log.error('获取媒体列表失败:', mediaList ? mediaList.message : '未知错误');
-            return undefined;
+            return [];
         }
         log.info(`获取媒体列表成功，共 ${mediaList.data.list.length} 项`);
         return mediaList.data.list.map(fromListItem);
@@ -174,7 +156,6 @@ function fromListItem(item: PlayListItem): PlayItem {
     };
 }
 
-/** 播放进度回传和从头播放清零共用同一份记录结构，只有 ts 不同。 */
 function buildPlayRecord(fnapi: PlayApi, info: PlayInfo, itemGuid: string, ts: number, duration: number): PlayRecord {
     return {
         item_guid: itemGuid,
@@ -188,9 +169,6 @@ function buildPlayRecord(fnapi: PlayApi, info: PlayInfo, itemGuid: string, ts: n
     };
 }
 
-/**
- * 回传一次播放进度。失败只记日志并返回 false：不抛出、不重试、不提示用户，不影响播放。
- */
 async function reportPlayRecord(fnapi: PlayApi, status: PlayStatusData): Promise<boolean> {
     try {
         const resp = await fnapi.getPlayInfoCached(status.itemGuid);
@@ -214,10 +192,6 @@ async function reportPlayRecord(fnapi: PlayApi, status: PlayStatusData): Promise
     }
 }
 
-/**
- * 从头播放的一半：写一条 ts = 0 的播放进度。已观看不清除。
- * 尽力而为：失败只记日志，不阻断播放。
- */
 async function clearPlayRecord(fnapi: PlayApi, info: PlayInfo, duration: number): Promise<void> {
     try {
         const record = buildPlayRecord(fnapi, info, info.guid, 0, duration);
@@ -232,12 +206,6 @@ async function clearPlayRecord(fnapi: PlayApi, info: PlayInfo, duration: number)
     }
 }
 
-/**
- * 离开一个播放项：先回传最终播放进度，再判定是否标记已观看。
- *
- * 顺序不可颠倒：已观看必须后写，否则可能被随后的进度记录覆盖。
- * 进度回传失败不阻止已观看判定，它只依赖播放器实测的 ts / duration。整条链路只记日志、不抛异常。
- */
 async function finishPlayItem(fnapi: PlayApi, status: PlayStatusData): Promise<void> {
     if (status.itemGuid.length === 0) {
         return;
@@ -262,13 +230,11 @@ async function finishPlayItem(fnapi: PlayApi, status: PlayStatusData): Promise<v
 }
 
 function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
-    // 这次播放的写入排成一条队列，顺序见 writeQueue.ts
     const enqueue = createWriteQueue();
 
     return async (type: EventType, data: EventData) => {
         switch (type) {
             case EventType.PROGRESS: {
-                // 先拷贝：回传要先 await 查播放信息，不依赖播放器之后不再改这个对象
                 const progress = { ...(data as PlayStatusData) };
                 if (progress.itemGuid.length === 0) {
                     log.info('process itemguid is empty');
@@ -279,7 +245,6 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
             }
 
             case EventType.ITEM_END: {
-                // 播放器只报告「这一项结束了」，是否算已观看在这里判定
                 const endedItem = { ...(data as PlayStatusData) };
                 log.info('播放项结束:', endedItem);
                 await enqueue({ itemGuid: endedItem.itemGuid, kind: 'final', write: () => finishPlayItem(fnapi, endedItem) });
@@ -291,13 +256,8 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
                 break;
 
             case EventType.EXIT: {
-                // 播放器同步发出退出事件，这里同步结束这次播放；排在前面的写入和收尾都完成后，播放状态模块再通知订阅者
                 const exit = data as PlayExitData;
-                // 只有正常退出会写最终播放进度；异常退出不写，排队的进度回传要照常写完
-                const kind = exit.code === 0 ? 'final' : 'other';
-                const report = enqueue({ itemGuid: exit.status.itemGuid, kind, write: () => handleExit(deps, fnapi, exit) });
-                run.ended(report);
-                await report;
+                await run.ended(enqueue({ itemGuid: exit.status.itemGuid, kind: exitWriteKind(exit), write: () => handleExit(deps, fnapi, exit) }));
                 break;
             }
 
@@ -308,9 +268,17 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
     };
 }
 
-// MPV 退出后的收尾：异常退出交给调用方（刷新网页端），正常退出回传最终进度与已观看
+function isAbnormalExit(event: PlayExitData): boolean {
+    return event.code !== 0;
+}
+
+// 异常退出不写最终播放进度，不能取代排队的进度回传
+function exitWriteKind(event: PlayExitData): WriteKind {
+    return isAbnormalExit(event) ? 'other' : 'final';
+}
+
 async function handleExit(deps: PlayDeps, fnapi: PlayApi, event: PlayExitData): Promise<void> {
-    if (event.code !== 0) {
+    if (isAbnormalExit(event)) {
         log.error(`播放器异常退出 (code ${event.code})`);
         await deps.onAbnormalExit();
         return;

@@ -18,7 +18,6 @@ class FakeNodeMpv {
     isRunning() { return false; }
 }
 
-// 替身 NodeMpv：正常启动，记下事件监听器和收到的调用，测试用 emit 模拟 MPV 发来的回调
 class RunningNodeMpv {
     static last = null;
     constructor() {
@@ -74,7 +73,6 @@ const playerConfig = (overrides) => ({
     ...overrides,
 });
 
-// 两个播放项的播放列表，播放地址和 Proxy 拼的一样带编码和查询参数
 function twoItems() {
     return ['item 1', 'item-2'].map((itemGuid) => ({
         ...playItem,
@@ -109,7 +107,6 @@ test('event data stays as emitted after the player moves on to the next item', a
     const { mpv } = await startPlaying(t, ply, items, { onEvent: (type, data) => events.push({ type, data }) });
     mpv.emit('status', { property: 'playlist-pos', value: 0 });
 
-    // 进度回传会先 await 查播放信息，再读事件数据；这期间播放器切到了下一项
     mpv.path = items[0].playLink;
     await mpv.emit('timeposition', 600);
     mpv.emit('seek', { end: 700 });
@@ -140,7 +137,6 @@ test('an item starting seeks to the position the caller gives for it, with its l
     mpv.emit('status', { property: 'path', value: items[0].playLink });
     mpv.path = items[0].playLink;
     await mpv.emit('timeposition', 600);
-    // 切到下一项再回来：问到的是这次播放里最新的进度
     mpv.emit('status', { property: 'path', value: items[1].playLink });
     mpv.emit('status', { property: 'path', value: items[0].playLink });
     await delay(50);
@@ -172,7 +168,6 @@ test('a path that is not a play item in the playlist is ignored', async (t) => {
         loadSubtitles: async (itemGuid) => { asked.push(itemGuid); return []; },
     });
 
-    // MPV 先报的是播放列表文件本身
     mpv.emit('status', { property: 'path', value: 'C:\\Temp\\mpv_playlist_1.m3u8' });
     mpv.path = 'C:\\Temp\\mpv_playlist_1.m3u8';
     await mpv.emit('timeposition', 5);
