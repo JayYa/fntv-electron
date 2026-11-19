@@ -1,0 +1,241 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const Module = require('node:module');
+const axios = require('axios');
+
+const NAS = 'https://nas.example:5667';
+const PASSWORD_LOGIN = { domain: 'nas.example:5667', username: 'alice', password: 'secret', useHttps: true };
+
+const ok = (data) => ({ status: 200, headers: { 'content-type': 'application/json' }, data: { code: 0, msg: '', data } });
+const rejected = (msg) => ({ status: 200, headers: { 'content-type': 'application/json' }, data: { code: 1, msg } });
+const certificateError = () => Object.assign(new Error('self-signed certificate'), { code: 'DEPTH_ZERO_SELF_SIGNED_CERT' });
+
+// 用假 ipcMain 跑真实的 auth.init()；飞牛影视服务是假的 axios，Cookie 写进假的 persist:fntv 会话。
+function setup(t, { loginResponses = [], userInfo = ok({ username: 'alice' }), cookiesFail = false, trustCertificate = false } = {}) {
+    const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-current-login-'));
+    const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
+    const listeners = new Map();
+    const cookies = [];
+    const dialogs = [];
+    const loginRequests = [];
+    let mainWindow = null;
+
+    class FakeBrowserWindow extends EventEmitter {
+        constructor() {
+            super();
+            mainWindow = this;
+            this.loaded = { urls: [], files: [] };
+            this.webContents = new EventEmitter();
+        }
+
+        loadURL(url) { this.loaded.urls.push(url); return Promise.resolve(); }
+
+        loadFile(file) { this.loaded.files.push(file); return Promise.resolve(); }
+    }
+
+    const display = { workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
+    const electronMock = {
+        app: {
+            isPackaged: false,
+            getAppPath() { return testRoot; },
+            getPath(name) { return paths[name]; },
+            commandLine: { getSwitchValue() { return ''; } },
+            setPath(name, value) { paths[name] = value; },
+        },
+        BrowserWindow: FakeBrowserWindow,
+        screen: { getAllDisplays: () => [display], getPrimaryDisplay: () => display },
+        ipcMain: {
+            on(channel, listener) { listeners.set(channel, listener); },
+            handle() {},
+            removeAllListeners(channel) { listeners.delete(channel); },
+        },
+        dialog: {
+            async showMessageBox(...args) {
+                dialogs.push(args.at(-1).title);
+                return { response: trustCertificate ? 0 : 1, checkboxChecked: false };
+            },
+        },
+        net: { request() { throw new Error('no access code, the gateway is not asked'); } },
+        session: {
+            fromPartition() {
+                return {
+                    cookies: {
+                        get: async () => [],
+                        remove: async () => {},
+                        async set(cookie) {
+                            if (cookiesFail) throw new Error('cookie store unavailable');
+                            cookies.push(cookie);
+                        },
+                    },
+                };
+            },
+        },
+        safeStorage: {
+            async isAsyncEncryptionAvailable() { return true; },
+            getSelectedStorageBackend() { return 'gnome_libsecret'; },
+            async encryptStringAsync(value) { return Buffer.from(value, 'utf8'); },
+            async decryptStringAsync(value) { return { result: value.toString('utf8'), shouldReEncrypt: false }; },
+        },
+    };
+
+    const originalLoad = Module._load;
+    Module._load = function(request, parent, isMain) {
+        if (request === 'electron') return electronMock;
+        return originalLoad.call(this, request, parent, isMain);
+    };
+    const clearCompiledModules = () => Object.keys(require.cache)
+        .filter((id) => id.includes(`${path.sep}dest${path.sep}`))
+        .forEach((id) => delete require.cache[id]);
+
+    const originalPost = axios.post;
+    const originalGet = axios.get;
+    axios.post = async (url) => {
+        loginRequests.push(url);
+        const next = loginResponses.shift();
+        if (next instanceof Error) throw next;
+        return next;
+    };
+    axios.get = async () => userInfo;
+
+    t.after(() => {
+        axios.post = originalPost;
+        axios.get = originalGet;
+        Module._load = originalLoad;
+        clearCompiledModules();
+        fs.rmSync(testRoot, { recursive: true, force: true });
+    });
+
+    fs.mkdirSync(paths.userData, { recursive: true });
+    clearCompiledModules();
+    const config = require('../dest/modules/fn_config/config.js');
+    require('../dest/main/handlers/plugins/auth.js').init();
+
+    return {
+        config,
+        cookies,
+        dialogs,
+        loginRequests,
+        mainWindow: () => mainWindow,
+        loadWinctrl: () => require('../dest/main/common/winctrl.js'),
+        async login(loginData = PASSWORD_LOGIN) {
+            const replies = [];
+            await listeners.get('login')({
+                reply(channel, data) { replies.push({ channel, data }); },
+            }, loginData);
+            return replies;
+        },
+    };
+}
+
+async function assertNothingSaved(world) {
+    assert.equal((await world.config.readConfig())?.token, undefined);
+    assert.deepEqual(await world.config.getHistory(), []);
+}
+
+test('password login saves the current login and history, then opens the web UI', async (t) => {
+    const world = setup(t, { loginResponses: [ok({ token: 'new-token' })] });
+
+    assert.deepEqual(await world.login(), []);
+
+    const saved = await world.config.readConfig();
+    assert.equal(saved.domain, NAS);
+    assert.equal(saved.token, 'new-token');
+    assert.deepEqual((await world.config.getHistory()).map(({ domain, account }) => ({ domain, account })), [
+        { domain: 'nas.example:5667', account: 'alice' },
+    ]);
+    assert.ok(world.cookies.some((cookie) => cookie.name === 'Trim-MC-token' && cookie.value === 'new-token'));
+    assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/v`]);
+});
+
+test('password login keeps the path of an address served under a subpath', async (t) => {
+    const world = setup(t, { loginResponses: [ok({ token: 'new-token' })] });
+
+    await world.login({ ...PASSWORD_LOGIN, domain: 'nas.example:5667/fn' });
+
+    assert.deepEqual(world.loginRequests, [`${NAS}/fn/v/api/v1/login`]);
+    assert.equal((await world.config.readConfig()).domain, `${NAS}/fn`);
+    assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/fn/v`]);
+});
+
+test('when the login state cannot be restored, password login saves nothing and stays on the login page', async (t) => {
+    const world = setup(t, { loginResponses: [ok({ token: 'new-token' })], cookiesFail: true });
+
+    assert.deepEqual(await world.login(), [{
+        channel: 'login-error',
+        data: { title: '登录失败', message: '无法恢复登录状态，请重新登录。' },
+    }]);
+
+    await assertNothingSaved(world);
+    assert.equal(world.mainWindow(), null);
+});
+
+test('a rejected password is reported as it came from FNMedia and nothing is saved', async (t) => {
+    const world = setup(t, { loginResponses: [rejected('用户名或密码错误')] });
+
+    assert.deepEqual(await world.login(), [{
+        channel: 'login-error',
+        data: { title: '登录失败', message: '用户名或密码错误' },
+    }]);
+    await assertNothingSaved(world);
+});
+
+test('after the user trusts an untrusted certificate, password login is retried once and succeeds', async (t) => {
+    const world = setup(t, {
+        loginResponses: [certificateError(), ok({ token: 'new-token' })],
+        trustCertificate: true,
+    });
+
+    assert.deepEqual(await world.login(), []);
+
+    assert.deepEqual(world.dialogs, ['证书安全警告']);
+    assert.equal(world.loginRequests.length, 2);
+    assert.equal((await world.config.readConfig()).token, 'new-token');
+    assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/v`]);
+});
+
+test('when the user does not trust the certificate, password login is cancelled and nothing is saved', async (t) => {
+    const world = setup(t, { loginResponses: [certificateError()] });
+
+    assert.deepEqual(await world.login(), [{
+        channel: 'login-error',
+        data: { title: '登录取消', message: '用户取消信任证书，无法继续登录。' },
+    }]);
+    assert.equal(world.loginRequests.length, 1);
+    await assertNothingSaved(world);
+});
+
+function fakeStartupWindow() {
+    const loaded = { urls: [], files: [] };
+    return { loaded, loadURL(url) { loaded.urls.push(url); }, loadFile(file) { loaded.files.push(file); } };
+}
+
+async function seedCurrentLogin(config) {
+    await config.saveConfig({ account: 'alice', domain: NAS, token: 'saved-token', accessCode: '', useHttps: true });
+}
+
+test('startup restores a saved login that FNMedia still accepts', async (t) => {
+    const world = setup(t);
+    await seedCurrentLogin(world.config);
+    const window = fakeStartupWindow();
+
+    await world.loadWinctrl().setupCookieRestore(window);
+
+    assert.deepEqual(window.loaded, { urls: [`${NAS}/v`], files: [] });
+    assert.ok(world.cookies.some((cookie) => cookie.name === 'Trim-MC-token' && cookie.value === 'saved-token'));
+});
+
+test('startup goes to the login page when FNMedia no longer accepts the saved token', async (t) => {
+    const world = setup(t, { userInfo: rejected('token 无效') });
+    await seedCurrentLogin(world.config);
+    const window = fakeStartupWindow();
+
+    await world.loadWinctrl().setupCookieRestore(window);
+
+    assert.deepEqual(window.loaded.urls, []);
+    assert.equal(path.relative(path.resolve(__dirname, '..'), window.loaded.files[0]), path.join('resource', 'login', 'index.html'));
+    assert.deepEqual(world.cookies, []);
+});

@@ -1,10 +1,7 @@
-import * as path from 'path';
 import * as log from '../../modules/logger';
-import { readConfig, saveConfig } from '../../modules/fn_config/config';
-import { restoreCookies } from '../../modules/fn_config/cookie';
+import { readConfig } from '../../modules/fn_config/config';
 import { BrowserWindow, dialog } from 'electron';
-import { AccessCodeVerificationError, establishAccessCodeSession } from './accessCodeSession';
-import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
+import { establishCurrentLogin, showLoginPage } from './currentLogin';
 import { shouldStartMaximized } from './mainwin';
 
 export function unmaximizeWindow(mainWindow: BrowserWindow): void {
@@ -86,58 +83,23 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
             message,
             detail: '请检查配置文件 ~/.fntv/config.json 是否可读，然后重新登录。',
         });
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        showLoginPage(mainWindow);
         return;
     }
     if (!savedConfig || !savedConfig.token || !savedConfig.domain) {
         log.warn('没有找到已保存的配置，无法恢复 cookie');
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        showLoginPage(mainWindow);
         return;
     }
 
-    if (savedConfig.accessCode) {
-        try {
-            const accessSession = await establishAccessCodeSession(savedConfig.domain, savedConfig.accessCode);
-            const resolvedBaseUrl = applyVerifiedOriginToFnConnectBaseUrl(
-                savedConfig.domain,
-                accessSession.baseUrl,
-            );
-            if (resolvedBaseUrl !== savedConfig.domain) {
-                savedConfig.domain = resolvedBaseUrl;
-                savedConfig.useHttps = resolvedBaseUrl.startsWith('https://');
-                await saveConfig({
-                    account: savedConfig.account || '',
-                    domain: savedConfig.domain,
-                    token: savedConfig.token,
-                    accessCode: savedConfig.accessCode,
-                    useHttps: savedConfig.useHttps,
-                });
-            }
-        } catch (error) {
-            const reason = error instanceof AccessCodeVerificationError ? error.reason : 'network';
-            log.warn('恢复访问码会话失败:', reason);
-            mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
-            return;
-        }
-    }
-
-    // 恢复 cookie 并跳转到对应的 URL
-    log.info('恢复登录状态，即将跳转到主页面, domain:', savedConfig.domain);
-
-    // 恢复 cookie
-    await restoreCookies(savedConfig.domain, savedConfig.token).then((result) => {
-        if (result === true) {
-            // cookie 恢复成功，跳转到主页面
-            mainWindow.loadURL(`${savedConfig.domain}/v`);
-            return;
-        }
-
-        // cookie 恢复失败，跳转到登录页面
-        log.warn('Cookie 恢复失败，跳转到登录页面');
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
-    }).catch((error) => {
-        // 出现异常，也跳转到登录页面
-        log.error('Cookie 恢复过程中出现异常:', error);
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+    const result = await establishCurrentLogin(() => mainWindow, {
+        baseUrl: savedConfig.domain,
+        accessCode: savedConfig.accessCode || '',
+        account: savedConfig.account || '',
+        credential: { savedToken: savedConfig.token },
     });
+    if (!result.ok) {
+        log.warn('恢复当前登录失败，跳转到登录页面:', result.reason);
+        showLoginPage(mainWindow);
+    }
 }
