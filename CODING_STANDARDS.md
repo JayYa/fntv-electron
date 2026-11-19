@@ -25,20 +25,20 @@
 - 新建窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnIdOauthWindow.ts`）。
 - preload 在沙箱里运行，只能 `require('electron')`。需要 `fs`、`path`、`process` 或 `electron.shell` 时走主进程 IPC。
 - 新增页面可用的 IPC 频道时加进 `src/preload/loginPageApi.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
-- IPC 处理器用 `registerHandler` 注册。它已经捕获并记录同步和异步错误，处理器只在需要告诉渲染进程失败时写 `try`/`catch`（`src/main/handlers/core/ipcHandler.ts`）。
+- `registerHandler` 已经捕获并记录 IPC 处理器的同步和异步错误，处理器只在需要告诉渲染进程失败时写 `try`/`catch`（`src/main/handlers/core/ipcHandler.ts`）。
 - FN ID 窗口加载远程页面。向它注入脚本、处理 bridge 消息、放行导航或采用 `Trim-MC-token` Cookie 前，都要过 `fnIdTrust.ts` 的判断。信任按 FN Connect 运行时返回的 NAS 地址判断，不按域名白名单（`tests/fnIdTrust.test.cjs`）。
 - 依赖 `persist:fntv` 会话 Cookie 的请求用 Electron `net`（`src/main/common/accessCodeSession.ts`）。
 
 ## 凭据和配置
 
 - `config.json` 只由 `src/modules/fn_config/config.ts` 写（落盘和损坏备份在 `configFile.ts`）：凭据操作走 `writeConfig`，设置项走 `writeStoredConfig`（不解密，凭据密文原样写回）。新增凭据字段时在 `credentialFields` 登记，读写两边用 `readCredential` 和 `storeCredential`，解不开的原值才会原样写回。
-- `safeStorage` 只用异步接口，同步方法由 ESLint 拦截。要明文凭据的导出函数是异步的，按调用顺序排队执行；加解密都在读改写之前做完，读改写本身同步完成。
+- 要明文凭据的导出函数是异步的（`safeStorage` 只有异步接口可用），按调用顺序排队执行；加解密都在读改写之前做完，读改写本身同步完成。
 - FN ID、用户名和完整 NAS 地址不进日志。`log.noformat` 也会脱敏，但那只是兜底。
 - 访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时脱敏（`src/modules/logger/masking.ts`）。
 
 ## 模块
 
-- `src/modules/fn_api/core/` 由主进程和 Proxy 共用，`src/modules/proxy_service/` 运行在 Proxy 子进程里，两者不能加载 `electron`，由 ESLint 的 `no-restricted-imports` 检查（`eslint.config.mjs`）。访问授权 Cookie、证书信任和日志由调用方通过 `RequestContext` 或参数传入。
+- `src/modules/fn_api/core/` 和 `src/modules/proxy_service/` 不加载 `electron`：访问授权 Cookie、证书信任和日志由调用方通过 `RequestContext` 或参数传入。
 - 登录页脚本是按顺序加载的经典脚本，不用 `type="module"`，`file:` 下会被拦。顶层 `const`、`let` 和函数跨文件共享，给其它脚本用的名字写进文件头的 `/* exported */`；顶层语句只能用已加载脚本里的名字。会重新赋值的状态放在唯一写它的脚本里（`resource/login/index.html`）。
 - 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`mpvUserConfigDir`、`mpvIpcSocket`、`mpvPlayer`、`expectedAssetName`），调用处只读结果。lint 拦截直接比较或 switch `currentPlatform()`、`currentArch()`；先存进变量再比较的写法拦不住，审查时看。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`src/public/platform.ts`）。
 
@@ -48,17 +48,10 @@
 
 ## 依赖
 
-- `nodeLinker` 保持 `hoisted`，这个布局打包出的生产依赖和迁移前一致。改依赖布局时解开产物的 `app.asar`，核对 `node_modules` 里生产依赖齐全，构建成功不算验证。
+- 改依赖布局（如 `nodeLinker`）时解开产物的 `app.asar`，核对 `node_modules` 里生产依赖齐全，构建成功不算验证。
 - `node-mpv-2` 带一个 `pnpm patch` 补丁（`patches/`），只给 socket 消息加按行缓冲。补丁按版本号绑定，换版本时先确认新版本是否已修，没修就在新版本上重做补丁。
 
-## GitHub Workflow
+## Markdown 文档
 
-- 提交信息、PR 标题、分支名这类不可信内容先放进 `env:`，再在 shell 里用 `"$VAR"` 读取。范例是 `release.yml` 的 `Select platforms` 步骤（`PLATFORM`）。
-- `ci.yml` 的 `pull_request` 不按 `branches` 过滤，堆叠 PR 的 base 不是 `main`，也要跑。
-
-## 文档
-
-- 中文和英文、数字之间加一个空格，行内代码和链接的两侧也一样。中文句子用全角标点。
 - 产品名用官方写法：Windows、macOS、Linux、PotPlayer、Anime4K、NAS。说播放器时写 MPV，只有命令才写 `mpv`。
 - 文件名、路径和配置项放进行内代码。
-- 验证：`perl -CSD -ne 'print "$.:$_" if /\p{sc=Han}[A-Za-z0-9]|[A-Za-z0-9]\p{sc=Han}/' README.md` 只剩代码块和链接锚点里的内容。

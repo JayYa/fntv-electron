@@ -37,6 +37,15 @@ const SAFE_STORAGE_SYNC_PROPERTIES = [
     message: `safeStorage.${property} 在 Electron 46 删除，用 ${replacement}。`
 }));
 
+// IPC 处理器统一由 registerHandler 注册：它捕获并记录 ipcMain.on 处理器的同步和异步错误，还拦下重复注册。
+// 拦截的写法见 tests/eslintIpcRules.test.cjs。
+const IPC_HANDLER_FILE = 'src/main/handlers/core/ipcHandler.ts';
+const IPC_REGISTER_PROPERTIES = ['handle', 'handleOnce', 'on', 'once', 'addListener', 'prependListener', 'prependOnceListener'].map((property) => ({
+    object: 'ipcMain',
+    property,
+    message: `IPC 处理器用 ${IPC_HANDLER_FILE} 的 registerHandler 注册，不要直接调用 ipcMain.${property}。`
+}));
+
 // no-restricted-properties 只认对象名，os 模块换个写法导入就拦不住，这里把其它写法也禁掉。
 const OS_MODULE = '/^(node:)?os$/';
 const OS_PLATFORM_MEMBER = '/^(platform|arch)$/';
@@ -143,6 +152,13 @@ export default [
             // 各种写法的拦截见 tests/eslintPlatformRules.test.cjs。
             'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
             // safeStorage 同步方法的拦截见 tests/eslintSafeStorageRules.test.cjs。
+            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
+        }
+    },
+    {
+        // 唯一直接向 ipcMain 注册处理器的地方。
+        files: [IPC_HANDLER_FILE],
+        rules: {
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES]
         }
     },
@@ -176,7 +192,7 @@ export default [
         files: ['src/public/platform.ts'],
         rules: {
             'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
-            'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES]
+            'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
         }
     },
     {

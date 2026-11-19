@@ -2,8 +2,7 @@
 
 ## 运行
 
-- 改完代码跑 `pnpm run check`：依次跑文件大小检查（HEAD 相对 `origin/main` 合并基点改动的文件）、lint、knip 和 `pnpm test`，结尾汇总每步结果，任一步失败则整体失败。CI 的 `ci.yml` 跑同一条命令。macOS、Linux 的平台分支由 CI 三平台矩阵验证。
-- `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`。
+- `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`，并加 `--test-timeout=30000`，和 `pnpm test` 一致。
 - `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还会被 `readdirSync` 加载。
 
 ### `Electron failed to install correctly`
@@ -12,12 +11,11 @@
 
 ## `tests/*.test.cjs` 写法
 
-- 用 CommonJS、`node:test` 和 `node:assert/strict`，从 `../dest/...` 引入编译产物。
 - 测试名用一句英文写清行为，例如 `first initialization does not overwrite pre-existing user state`。
 - 用到文件系统时，在 `fs.mkdtempSync(path.join(os.tmpdir(), ...))` 里操作，并用 `t.after` 清理（`tests/mpvConfigMigration.test.cjs`）。
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
 - 模块直接使用 Electron API 时，用 `tests/helpers/fakeElectron.cjs` 的 `useFakeElectron(t, 假对象, { platform })` 替换 `electron`，它负责恢复、清理 `dest/` 模块缓存和模拟平台（`tests/trayMpvMenu.test.cjs`）。
-- CI 在 Windows、macOS 和 Linux 上都跑，Electron 假对象要包含各平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。按平台跳过的测试由 CI 三平台矩阵验证，本地只确认它在本机是跳过而不是失败，并在报告里写明哪个平台的分支待 CI 验证，不要在本机临时拼装其他平台的运行环境。单独跑测试文件时也加 `--test-timeout=30000`，和 `pnpm test` 一致。
+- Electron 假对象要包含各平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。按平台跳过的测试，本地只确认它在本机是跳过而不是失败。
 - 更新检查的测试替换 `axios.get` 返回 GitHub 响应，HTTP 错误用真实的 `axios.AxiosError` 构造（`tests/updateChecker.test.cjs`）。
 
 ## 只测外部行为
@@ -38,4 +36,4 @@
 
 - 配置类改动用 `git grep` 做静态验收，结果只能剩下有意保留的内容。能写成断言的放进 `tests/standards.test.cjs`。
 - 工作流改动要有真实运行记录作为证据，只读 YAML 不算验证。
-- workflow 产物（安装包、更新元数据）的证据是 CI 运行链接和对应步骤的日志，不要在本地下载 artifact 核对。
+- 核对 workflow 产物（安装包、更新元数据）用 CI 运行链接和对应步骤的日志作证据，不靠本地下载 artifact。排查失败时下载截图和日志不受此限（`CLAUDE.md` 的 CI failures）。
