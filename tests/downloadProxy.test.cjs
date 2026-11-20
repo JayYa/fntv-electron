@@ -34,7 +34,7 @@ function setupMain(t, storedConfig) {
     return {
         ipcMain,
         configPath,
-        config: require('../dest/modules/fn_config/config.js'),
+        config: require('../dest/modules/fn_config/settings.js'),
         loadConfigPlugin: () => require('../dest/main/handlers/plugins/config.js'),
     };
 }

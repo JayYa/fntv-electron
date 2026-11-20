@@ -1,5 +1,5 @@
 import { IpcMainEvent } from 'electron';
-import * as fnConfig from '../../../modules/fn_config/config';
+import * as settings from '../../../modules/fn_config/settings';
 import { isMpvPlaybackEnabled } from '../../../modules/fn_config/playbackPreference';
 import { registerHandler } from '../core/ipcHandler';
 
@@ -19,16 +19,16 @@ interface PlayButtonConfig {
 
 // 获取应用更新下载加速设置，带上默认地址给登录页做 placeholder
 function handleGetAppDownloadProxy(event: IpcMainEvent): void {
-    const proxyConfig = fnConfig.getAppDownloadProxyConfig();
-    event.reply('download-proxy-info', { ...proxyConfig, defaultProxyUrl: fnConfig.DEFAULT_DOWNLOAD_PROXY_URL });
+    const proxyConfig = settings.getAppDownloadProxyConfig();
+    event.reply('download-proxy-info', { ...proxyConfig, defaultProxyUrl: settings.DEFAULT_DOWNLOAD_PROXY_URL });
 }
 
 // 设置应用更新下载加速，地址为空时用默认地址
 function handleSetAppDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Partial<ProxyConfig>): void {
     try {
-        fnConfig.setAppDownloadProxyConfig({
+        settings.setAppDownloadProxyConfig({
             enabled: enabled === true,
-            proxyUrl: proxyUrl || fnConfig.DEFAULT_DOWNLOAD_PROXY_URL
+            proxyUrl: proxyUrl || settings.DEFAULT_DOWNLOAD_PROXY_URL
         });
         event.reply('download-proxy-set', { success: true });
     } catch (error) {
@@ -40,14 +40,14 @@ function handleSetAppDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: P
 // 获取播放按钮配置
 function handleGetPlayButtonConfig(event: IpcMainEvent): void {
     event.reply('play-button-config-info', {
-        hideOriginalPlayButton: fnConfig.getHideOriginalPlayButton(),
+        hideOriginalPlayButton: settings.getHideOriginalPlayButton(),
     });
 }
 
 // 设置播放按钮配置
 function handleSetPlayButtonConfig(event: IpcMainEvent, config?: Partial<PlayButtonConfig>): void {
     try {
-        fnConfig.setHideOriginalPlayButton(isMpvPlaybackEnabled(config?.hideOriginalPlayButton));
+        settings.setHideOriginalPlayButton(isMpvPlaybackEnabled(config?.hideOriginalPlayButton));
         event.reply('play-button-config-set', { success: true });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -57,14 +57,14 @@ function handleSetPlayButtonConfig(event: IpcMainEvent, config?: Partial<PlayBut
 
 // 获取NAS代理配置
 function handleGetNasProxyConfig(event: IpcMainEvent): void {
-    const nasProxyEnabled = fnConfig.getNasProxyEnabled();
+    const nasProxyEnabled = settings.getNasProxyEnabled();
     event.reply('nas-proxy-info', { nasProxyEnabled });
 }
 
 // 设置NAS代理配置
 function handleSetNasProxyConfig(event: IpcMainEvent, { nasProxyEnabled }: { nasProxyEnabled: boolean }): void {
     try {
-        fnConfig.setNasProxyEnabled(nasProxyEnabled !== false);
+        settings.setNasProxyEnabled(nasProxyEnabled !== false);
         event.reply('nas-proxy-set', { success: true });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

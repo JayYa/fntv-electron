@@ -1,17 +1,26 @@
 import * as fs from 'fs';
 import * as path from 'node:path';
-import type { Config, HistoryItem } from './config';
+import { app } from 'electron';
+import { USER_DATA_PATH } from '../../public/constants';
+import * as log from '../logger';
 
 const CONFIG_BACKUP_LIMIT = 3;
 
-// readConfig 被频繁调用，同一条只记一次。
+app.setPath('userData', USER_DATA_PATH);
+
+export type StoredConfig = Record<string, unknown>;
+
+export interface StoredHistoryItem extends Record<string, unknown> {
+    domain: string;
+    account: string;
+}
+
 const loggedWarnings = new Set<string>();
 
 export function warnOnce(message: string): void {
     if (loggedWarnings.has(message)) return;
     loggedWarnings.add(message);
-    // config.ts 加载时才设置 userData，静态引入会让 logger 先用默认目录初始化。
-    (require('../logger') as typeof import('../logger')).warn(message);
+    log.warn(message);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -19,18 +28,49 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 // 顶层不是对象的 JSON 和语法错误一样算损坏，读取和备份判定都走 SyntaxError 这条路。
-export function parseConfig(text: string): Config {
+export function parseConfig(text: string): StoredConfig {
     const stored: unknown = JSON.parse(text);
     if (!isObject(stored)) throw new SyntaxError('配置顶层不是对象');
     return stored;
 }
 
-export function isHistoryItem(item: unknown): item is HistoryItem {
+function isHistoryItem(item: unknown): item is StoredHistoryItem {
     return isObject(item) && typeof item.domain === 'string' && typeof item.account === 'string';
 }
 
-export function hasUnusableHistory(stored: { history?: unknown }): boolean {
+function hasUnusableHistory(stored: { history?: unknown }): boolean {
     return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
+}
+
+/** history 里能用的条目；history 缺失或为 null 时是 undefined，写回时这个字段被去掉。 */
+export function usableHistory(stored: StoredConfig): StoredHistoryItem[] | undefined {
+    const historyUnusable = hasUnusableHistory(stored);
+    if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
+    return Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
+}
+
+function getConfigPath(): string {
+    const dir = app.getPath('userData');
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    return path.join(dir, 'config.json');
+}
+
+/** 文件不存在或内容损坏时返回 null；其它读取错误照常抛出。 */
+export function readConfigFile(): StoredConfig | null {
+    const p = getConfigPath();
+    if (!fs.existsSync(p)) return null;
+    try {
+        return parseConfig(fs.readFileSync(p, 'utf-8'));
+    } catch (error) {
+        if (error instanceof SyntaxError) return null;
+        throw error;
+    }
+}
+
+export function writeConfigFile(stored: StoredConfig): void {
+    replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
 // 这样的文件读出来会丢内容，被替换前要留底。
@@ -67,7 +107,7 @@ function backupConfig(configPath: string): void {
 }
 
 // 先写完临时文件再备份：写不下去时不占备份名额。rename 之前 config.json 始终是旧内容。
-export function replaceConfig(configPath: string, content: string): void {
+function replaceConfig(configPath: string, content: string): void {
     const tempPath = `${configPath}.tmp`;
     const mode = fs.existsSync(configPath) ? fs.statSync(configPath).mode : undefined;
     try {

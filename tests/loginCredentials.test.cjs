@@ -66,7 +66,7 @@ function setupAuth(t) {
     t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    const config = require('../dest/modules/fn_config/config.js');
+    const config = require('../dest/modules/fn_config/loginStore.js');
     require('../dest/main/handlers/plugins/auth.js').init();
 
     return {
@@ -84,9 +84,16 @@ function setupAuth(t) {
 }
 
 async function seedLogins({ config }) {
-    await config.saveConfig(CURRENT_LOGIN);
-    await config.addHistory(FIRST_LOGIN);
-    await config.addHistory(SECOND_LOGIN);
+    for (const entry of [FIRST_LOGIN, SECOND_LOGIN]) {
+        await config.saveNewLogin({
+            account: entry.account,
+            domain: `https://${entry.domain}`,
+            token: `${entry.account}-token`,
+            accessCode: entry.accessCode,
+            useHttps: true,
+        }, entry);
+    }
+    await config.saveCurrentLogin(CURRENT_LOGIN);
 }
 
 test('config-data lists logins and says whether an access code is saved without sending credentials', async (t) => {

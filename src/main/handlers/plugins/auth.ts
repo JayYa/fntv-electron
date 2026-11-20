@@ -3,7 +3,7 @@ import { isLoginPage } from '../../common/loginPage';
 import { getMainWindow } from '../../common/mainwin';
 import * as fn from '../../../modules/fn_api/api';
 import { HTTPS_PORT_MISMATCH_MESSAGE, isHttpsPortMismatch } from '../../../modules/fn_api/core/httpsPortMismatch';
-import * as fnConfig from '../../../modules/fn_config/config';
+import * as loginStore from '../../../modules/fn_config/loginStore';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
@@ -33,17 +33,16 @@ let fnIdLoginInProgress = false;
 // 获取配置处理
 async function handleGetConfig(event: IpcMainEvent): Promise<void> {
     try {
-        const config = (await fnConfig.readConfig()) || {};
-        const history = await fnConfig.getHistory();
+        const login = await loginStore.readCurrentLogin();
         // 这里按字段白名单发送：密码、访问码和 token 都不进列表数据，凭据走下面的按需频道。
         event.reply('config-data', {
             config: {
-                account: config.account,
-                domain: config.domain,
-                hasAccessCode: Boolean(config.accessCode),
-                useHttps: config.useHttps,
+                account: login?.account,
+                domain: login?.domain,
+                hasAccessCode: Boolean(login?.accessCode),
+                useHttps: login?.useHttps,
             },
-            history: history.map(({ domain, account, useHttps }) => ({ domain, account, useHttps })),
+            history: loginStore.listHistory(),
         });
     } catch (error) {
         log.error('读取配置失败:', error);
@@ -60,31 +59,30 @@ async function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partia
     const { domain, account } = request ?? {};
     if (typeof domain !== 'string' || typeof account !== 'string') return;
     try {
-        const credentials = await fnConfig.getHistoryCredentials({ domain, account });
+        const credentials = await loginStore.historyCredentials({ domain, account });
         event.reply('history-credentials', { domain, account, ...credentials });
     } catch (error) {
         log.error('读取历史凭据失败:', error);
     }
 }
 
-// 按需读取当前配置的访问码，用于回填登录页。
 async function handleGetCurrentAccessCode(event: IpcMainEvent): Promise<void> {
     if (!isLoginPage(event)) {
         log.warn('拒绝了非登录页的访问码请求');
         return;
     }
     try {
-        const { domain, account, accessCode } = (await fnConfig.readConfig()) || {};
-        event.reply('current-access-code', { domain, account, accessCode: accessCode || '' });
+        const login = await loginStore.readCurrentLogin();
+        event.reply('current-access-code', { domain: login?.domain, account: login?.account, accessCode: login?.accessCode ?? '' });
     } catch (error) {
         log.error('读取当前访问码失败:', error);
     }
 }
 
 // 清除历史记录处理
-function handleClearHistory(event: IpcMainEvent): void {
+async function handleClearHistory(event: IpcMainEvent): Promise<void> {
     try {
-        fnConfig.clearHistory();
+        await loginStore.clearHistory();
         event.reply('history-cleared');
     } catch (error) {
         log.error('清除历史记录失败:', error);
@@ -92,9 +90,9 @@ function handleClearHistory(event: IpcMainEvent): void {
 }
 
 // 删除单个历史记录处理
-function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }: HistoryItem): void {
+async function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }: HistoryItem): Promise<void> {
     try {
-        const success = fnConfig.deleteHistoryItem({ domain, account });
+        const success = await loginStore.removeHistory({ domain, account });
         if (success) {
             event.reply('history-item-deleted');
         }

@@ -7,7 +7,7 @@ import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } 
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { closeBehaviorMenuItem, provideTrayBalloon, showMainWindow } from './closeBehavior';
 import * as log from '../../modules/logger';
-import * as fnConfig from '../../modules/fn_config/config';
+import * as settings from '../../modules/fn_config/settings';
 import { platformBehavior } from '../../public/platform';
 
 let tray: Tray | null = null;
@@ -50,10 +50,10 @@ function pendingMpvUpdatesItems(mainWindow: BrowserWindow | null, mpvConfigDir: 
  */
 async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
     // 获取当前配置
-    const proxyConfig = fnConfig.getAppDownloadProxyConfig();
-    const mpvEnabled = fnConfig.getHideOriginalPlayButton();
-    const nasProxyEnabled = fnConfig.getNasProxyEnabled();
-    const currentMpvPath = fnConfig.getMpvPlayerPath();
+    const proxyConfig = settings.getAppDownloadProxyConfig();
+    const mpvEnabled = settings.getHideOriginalPlayButton();
+    const nasProxyEnabled = settings.getNasProxyEnabled();
+    const currentMpvPath = settings.getMpvPlayerPath();
     const playerPath = getCurrentMpvPlayer()?.path;
     // 取不到目录（Windows 上 app.getPath('appData') 可能失败）时只让这一项不可用，托盘和启动照常。
     let mpvConfigDir: string | undefined;
@@ -70,7 +70,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             checked: proxyConfig.enabled,
             click: () => {
                 const newEnabled = !proxyConfig.enabled;
-                fnConfig.setAppDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
+                settings.setAppDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
             }
@@ -83,7 +83,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'checkbox',
             checked: mpvEnabled,
             click: () => {
-                fnConfig.setHideOriginalPlayButton(!mpvEnabled);
+                settings.setHideOriginalPlayButton(!mpvEnabled);
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
                 if (mainWindow && !mainWindow.isDestroyed()) {
@@ -100,7 +100,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             checked: nasProxyEnabled,
             click: () => {
                 const newEnabled = !nasProxyEnabled;
-                fnConfig.setNasProxyEnabled(newEnabled);
+                settings.setNasProxyEnabled(newEnabled);
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
             }
@@ -125,7 +125,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
 
                     if (!result.canceled && result.filePaths.length > 0) {
                         const selectedPath = result.filePaths[0];
-                        fnConfig.setMpvPlayerPath(selectedPath);
+                        settings.setMpvPlayerPath(selectedPath);
                         log.info(`MPV 播放器路径已设置为: ${selectedPath}`);
 
                         // 更新托盘菜单以显示新路径
@@ -138,7 +138,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             label: '清空 MPV 播放器路径',
             enabled: !!currentMpvPath, // 只有当有设置路径时才启用
             click: () => {
-                fnConfig.setMpvPlayerPath(''); // 清空配置中的路径
+                settings.setMpvPlayerPath('');
                 log.info('MPV 播放器路径已清空，将使用自动检测');
 
                 // 更新托盘菜单以刷新状态

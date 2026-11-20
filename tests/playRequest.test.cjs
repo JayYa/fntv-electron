@@ -15,15 +15,15 @@ function loadPlayMovieHandler(t) {
     };
     useFakeElectron(t, electron);
 
-    const config = require('../dest/modules/fn_config/config.js');
-    const originalRead = config.readConfig;
+    const config = require('../dest/modules/fn_config/loginStore.js');
+    const originalRead = config.readCurrentLogin;
     let configReads = 0;
-    config.readConfig = () => {
+    config.readCurrentLogin = () => {
         configReads += 1;
         return null;
     };
     t.after(() => {
-        config.readConfig = originalRead;
+        config.readCurrentLogin = originalRead;
     });
 
     require('../dest/main/handlers/plugins/media.js').init();
