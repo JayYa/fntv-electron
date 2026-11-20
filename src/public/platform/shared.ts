@@ -1,9 +1,28 @@
 /** 关闭主窗口时读哪项设置：macOS 是 macCloseAction（隐藏到状态栏），其它平台是 exitMode（最小化到托盘）。 */
 export type CloseBehaviorSetting = 'macCloseAction' | 'exitMode';
 
+export type CloseBehavior = 'hide' | 'quit' | 'ask';
+
+/** 关闭行为的一个弹窗。buttons 从左到右排列，最后自动加一个“取消”。 */
+export interface CloseBehaviorDialog {
+    title: string;
+    message: string;
+    detail: string;
+    buttons: { behavior: CloseBehavior; label: string }[];
+    defaultBehavior: CloseBehavior;
+}
+
 export interface PlatformBehavior {
-    /** 关闭主窗口时读哪项设置，也决定托盘菜单显示“关闭行为设置”还是“退出行为设置”。 */
     closeBehaviorSetting: CloseBehaviorSetting;
+    closeBehaviorText: {
+        /** 关闭行为是“每次询问”时，关闭主窗口弹出的询问；带“记住我的选择”。 */
+        askOnClose: CloseBehaviorDialog;
+        /** 托盘菜单里改关闭行为的菜单项文字和弹窗。 */
+        settingsMenuLabel: string;
+        settings: CloseBehaviorDialog;
+    };
+    /** 第一次隐藏主窗口时怎样提示用户窗口去了哪里，null 时不提示。 */
+    hideNotice: { shownBy: 'notification' | 'trayBalloon'; body: string } | null;
     /** 所有窗口关闭后是否退出应用。macOS 保持运行，等 dock 图标重新打开窗口。 */
     quitsWhenAllWindowsClosed: boolean;
     /** 有 dock：恢复窗口时显示 dock 图标，隐藏到状态栏时隐藏，activate 时重建窗口。 */
@@ -19,8 +38,6 @@ export interface PlatformBehavior {
         restoreEvent: 'click' | 'double-click';
         /** build/ 下的图标文件。template 为 true 时是 macOS 模板图标，加载失败时回退到 icon.png。 */
         icon: { file: string; template: boolean };
-        /** 最小化到托盘后是否弹出一次气泡提示。 */
-        showsMinimizeBalloon: boolean;
     };
     /** 选择 MPV 播放器时“可执行文件”过滤器的扩展名。 */
     mpvExecutableExtensions: string[];

@@ -74,14 +74,13 @@ test('macOS keeps running in the status bar and dock and asks about closing the 
         quitLabel: '退出飞牛影视',
         restoreEvent: 'click',
         icon: { file: 'iconTemplate2.png', template: true },
-        showsMinimizeBalloon: false,
     });
     assert.deepEqual(behavior.mpvExecutableExtensions, []);
     assert.equal(behavior.mpvNotFoundMessage, 'macOS平台未找到mpv播放器，请使用Homebrew安装mpv后重试: brew install mpv');
     assert.equal(behavior.rejectsBasicTextStorage, false);
 });
 
-test('Windows minimizes to the tray, restores on double-click and announces it once with a balloon', () => {
+test('Windows minimizes to the tray and restores on double-click', () => {
     const behavior = platformBehavior('win32');
     assert.equal(behavior.closeBehaviorSetting, 'exitMode');
     assert.equal(behavior.quitsWhenAllWindowsClosed, true);
@@ -93,7 +92,6 @@ test('Windows minimizes to the tray, restores on double-click and announces it o
         quitLabel: '退出',
         restoreEvent: 'double-click',
         icon: { file: 'icon.ico', template: false },
-        showsMinimizeBalloon: true,
     });
     assert.deepEqual(behavior.mpvExecutableExtensions, ['exe']);
     assert.equal(behavior.rejectsBasicTextStorage, false);
@@ -113,7 +111,6 @@ test('Linux uses the exit mode, a PNG window icon, restores on tray click and re
         // Linux 上用户激活托盘图标时发 click，没有 double-click（#75）。
         restoreEvent: 'click',
         icon: { file: 'icon.png', template: false },
-        showsMinimizeBalloon: false,
     });
     assert.deepEqual(behavior.mpvExecutableExtensions, []);
     assert.equal(behavior.mpvNotFoundMessage, 'Linux平台未找到mpv播放器，请安装mpv播放器后重试');

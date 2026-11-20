@@ -13,6 +13,31 @@ const MPV_SEARCH_PATHS = [
 export const linux: PlatformImpl = {
     behavior: {
         closeBehaviorSetting: 'exitMode',
+        closeBehaviorText: {
+            askOnClose: {
+                title: '退出确认',
+                message: '确定要退出飞牛影视吗？',
+                detail: '您可以选择完全退出应用或最小化到托盘。',
+                buttons: [
+                    { behavior: 'quit', label: '退出应用' },
+                    { behavior: 'hide', label: '最小化到托盘' },
+                ],
+                defaultBehavior: 'hide',
+            },
+            settingsMenuLabel: '退出行为设置',
+            settings: {
+                title: '退出行为设置',
+                message: '设置点击退出时的行为',
+                detail: '您可以选择单击退出时的默认行为。',
+                buttons: [
+                    { behavior: 'quit', label: '直接退出' },
+                    { behavior: 'hide', label: '最小化到托盘' },
+                    { behavior: 'ask', label: '每次询问' },
+                ],
+                defaultBehavior: 'ask',
+            },
+        },
+        hideNotice: null,
         quitsWhenAllWindowsClosed: true,
         hasDock: false,
         titleBar: 'frameless',
@@ -22,7 +47,6 @@ export const linux: PlatformImpl = {
             quitLabel: '退出',
             restoreEvent: 'click',
             icon: { file: 'icon.png', template: false },
-            showsMinimizeBalloon: false,
         },
         mpvExecutableExtensions: [],
         mpvNotFoundMessage: 'Linux平台未找到mpv播放器，请安装mpv播放器后重试',

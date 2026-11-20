@@ -5,7 +5,7 @@ import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvCon
 import { mpvCapabilityTrayItems } from './mpvConfigNotices';
 import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } from './mpvConfigSync/pendingUpdates';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
-import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
+import { closeBehaviorMenuItem, provideTrayBalloon, showMainWindow } from './closeBehavior';
 import * as log from '../../modules/logger';
 import * as fnConfig from '../../modules/fn_config/config';
 import { platformBehavior } from '../../public/platform';
@@ -181,18 +181,7 @@ async function updateTrayMenu(): Promise<void> {
         },
         {
             label: behavior.tray.showWindowLabel,
-            click: () => {
-                if (mainWindow) {
-                    if (mainWindow.isMinimized()) mainWindow.restore();
-                    if (!mainWindow.isVisible()) mainWindow.show();
-                    mainWindow.focus();
-
-                    // macOS 特有：确保应用在 dock 中显示
-                    if (behavior.hasDock) {
-                        app.dock?.show();
-                    }
-                }
-            }
+            click: showMainWindow,
         },
         {
             type: 'separator'
@@ -204,94 +193,19 @@ async function updateTrayMenu(): Promise<void> {
                     log.error('手动检查更新失败:', error);
                 });
             }
-        }
-    ];
-
-    // 在 macOS 上添加偏好设置选项
-    if (behavior.closeBehaviorSetting === 'macCloseAction') {
-        menuTemplate.push(
-            {
-                type: 'separator'
-            },
-            {
-                label: '关闭行为设置',
-                click: async () => {
-                    if (mainWindow) {
-                        const result = await dialog.showMessageBox(mainWindow, {
-                            type: 'question',
-                            title: '关闭行为设置',
-                            message: '设置点击关闭按钮时的行为',
-                            detail: '您可以选择关闭窗口时的默认行为。',
-                            buttons: ['隐藏到状态栏', '退出应用', '每次询问', '取消'],
-                            defaultId: 2,
-                            cancelId: 3
-                        });
-
-                        switch (result.response) {
-                            case 0:
-                                setMacCloseAction('minimize');
-                                break;
-                            case 1:
-                                setMacCloseAction('quit');
-                                break;
-                            case 2:
-                                setMacCloseAction('ask');
-                                break;
-                        }
-                    }
-                }
-            }
-        );
-    } else {
-        // Windows 和 Linux 上添加退出模式设置
-        menuTemplate.push(
-            {
-                type: 'separator'
-            },
-            {
-                label: '退出行为设置',
-                click: async () => {
-                    if (mainWindow) {
-                        const result = await dialog.showMessageBox(mainWindow, {
-                            type: 'question',
-                            title: '退出行为设置',
-                            message: '设置点击退出时的行为',
-                            detail: '您可以选择单击退出时的默认行为。',
-                            buttons: ['直接退出', '最小化到托盘', '每次询问', '取消'],
-                            defaultId: 2,
-                            cancelId: 3
-                        });
-
-                        switch (result.response) {
-                            case 0:
-                                fnConfig.setExitMode('direct');
-                                break;
-                            case 1:
-                                fnConfig.setExitMode('minimize');
-                                break;
-                            case 2:
-                                fnConfig.setExitMode('ask');
-                                break;
-                        }
-                    }
-                }
-            }
-        );
-    }
-
-    menuTemplate.push(
+        },
+        {
+            type: 'separator'
+        },
+        closeBehaviorMenuItem(),
         {
             type: 'separator'
         },
         {
             label: behavior.tray.quitLabel,
-            click: () => {
-                // 托盘菜单中的退出按钮直接退出应用
-                (app as any).isQuiting = true;
-                app.quit();
-            }
+            click: () => app.quit(),
         }
-    );
+    ];
 
     const contextMenu = Menu.buildFromTemplate(menuTemplate);
 
@@ -353,30 +267,13 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     });
 
     // 根据平台设置不同的恢复窗口操作：Windows 双击，macOS 和 Linux 单击
-    tray.on(behavior.tray.restoreEvent as 'click', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            if (!mainWindow.isVisible()) mainWindow.show();
-            mainWindow.focus();
-            if (behavior.hasDock) app.dock?.show();
-        }
+    tray.on(behavior.tray.restoreEvent as 'click', showMainWindow);
+
+    provideTrayBalloon((content) => {
+        tray?.displayBalloon({ iconType: 'info', title: '飞牛影视', content });
     });
 
     log.info('系统托盘创建成功');
-}
-
-/**
- * 显示托盘通知（仅在Windows上首次显示）
- */
-export function showTrayNotification(): void {
-    if (platformBehavior().tray.showsMinimizeBalloon && !getTrayNotificationShown() && tray) {
-        tray.displayBalloon({
-            iconType: 'info',
-            title: '飞牛影视',
-            content: '应用已最小化到托盘，双击托盘图标或右键菜单可以恢复窗口'
-        });
-        setTrayNotificationShown(true); // 标记已显示过提示
-    }
 }
 
 /**
