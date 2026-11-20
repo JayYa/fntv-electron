@@ -219,3 +219,9 @@ _Avoid_: 更新日志、changelog
 **应用更新下载加速 (app download proxy)**：
 可选的第三方中转，用于加速从 GitHub 下载安装包；与 Proxy 无关。
 _Avoid_: 下载代理、代理、GitHub 代理、download proxy
+
+### 窗口
+
+**关闭行为 (close behavior)**：
+用户关闭主窗口时客户端怎么做：隐藏、退出或每次询问。macOS 上隐藏是隐藏到状态栏，其它平台是最小化到托盘；隐藏后客户端照常运行。托盘菜单里的“退出”不受它影响。
+_Avoid_: 退出模式、exit mode、关闭动作、close action

@@ -1,11 +1,10 @@
-import { app, BrowserWindow, dialog, Notification } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import * as winctrl from './common/winctrl';
-import { createTray, showTrayNotification, destroyTray } from './common/tray';
+import { createTray, destroyTray } from './common/tray';
 import { bindTaskbarProgress } from './common/taskbarProgress';
-import { getMacCloseAction, setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './common/preferences';
-import * as fnConfig from '../modules/fn_config/config';
+import { manageMainWindow, showMainWindow } from './common/closeBehavior';
 import * as log from '../modules/logger';
 import { getMainWindow } from './common/mainwin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
@@ -26,13 +25,7 @@ if (!gotTheLock) {
     app.quit();
 } else {
     // 当尝试启动第二个实例时，聚焦到现有窗口
-    app.on('second-instance', () => {
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            if (!mainWindow.isVisible()) mainWindow.show();
-            mainWindow.focus();
-        }
-    });
+    app.on('second-instance', showMainWindow);
 
     app.whenReady().then(async () => {
         try {
@@ -79,8 +72,8 @@ if (!gotTheLock) {
             // 创建系统托盘
             await createTray(mainWindow);
 
-            // 设置窗口关闭事件
-            setupWindowEvents(mainWindow);
+            // 关闭主窗口时按关闭行为隐藏、退出或询问
+            manageMainWindow(mainWindow);
 
             // 设置全屏切换
             winctrl.setupFullScreenToggle(mainWindow);
@@ -110,130 +103,10 @@ if (!gotTheLock) {
     });
 }
 
-// 设置窗口事件
-function setupWindowEvents(mainWindow: BrowserWindow): void {
-    if (mainWindow) {
-        // 监听窗口关闭事件
-        mainWindow.on('close', async (event) => {
-            if (!(app as any).isQuiting) {
-                event.preventDefault();
-
-                if (platformBehavior().closeBehaviorSetting === 'macCloseAction') {
-                    // macOS 上的特殊处理
-                    const action = getMacCloseAction();
-
-                    if (action === 'ask') {
-                        // 询问用户偏好
-                        const result = await dialog.showMessageBox(mainWindow, {
-                            type: 'question',
-                            title: '关闭窗口',
-                            message: '您希望如何处理窗口关闭？',
-                            detail: '在 macOS 上，您可以选择隐藏到状态栏或完全退出应用。',
-                            buttons: ['隐藏到状态栏', '退出应用', '取消'],
-                            defaultId: 0,
-                            cancelId: 2,
-                            checkboxLabel: '记住我的选择',
-                            checkboxChecked: false
-                        });
-
-                        if (result.response === 0) {
-                            // 隐藏到状态栏
-                            if (result.checkboxChecked) {
-                                setMacCloseAction('minimize');
-                            }
-                            mainWindow.hide();
-                            app.dock?.hide();
-                            showMacNotification();
-                        } else if (result.response === 1) {
-                            // 退出应用
-                            if (result.checkboxChecked) {
-                                setMacCloseAction('quit');
-                            }
-                            (app as any).isQuiting = true;
-                            app.quit();
-                        }
-                        // 取消则什么都不做
-                    } else if (action === 'minimize') {
-                        // 直接隐藏到托盘
-                        mainWindow.hide();
-                        app.dock?.hide();
-                        showMacNotification();
-                    } else if (action === 'quit') {
-                        // 直接退出
-                        (app as any).isQuiting = true;
-                        app.quit();
-                    }
-                } else {
-                    // Windows 和 Linux 上根据退出模式处理
-                    const exitMode = fnConfig.getExitMode();
-
-                    if (exitMode === 'ask') {
-                        // 询问用户
-                        const result = await dialog.showMessageBox(mainWindow, {
-                            type: 'question',
-                            title: '退出确认',
-                            message: '确定要退出飞牛影视吗？',
-                            detail: '您可以选择完全退出应用或最小化到托盘。',
-                            buttons: ['退出应用', '最小化到托盘', '取消'],
-                            defaultId: 1,
-                            cancelId: 2,
-                            checkboxLabel: '记住我的选择',
-                            checkboxChecked: false
-                        });
-
-                        if (result.response === 0) {
-                            // 退出应用
-                            if (result.checkboxChecked) {
-                                fnConfig.setExitMode('direct');
-                            }
-                            (app as any).isQuiting = true;
-                            app.quit();
-                        } else if (result.response === 1) {
-                            // 最小化到托盘
-                            if (result.checkboxChecked) {
-                                fnConfig.setExitMode('minimize');
-                            }
-                            mainWindow.hide();
-                            showTrayNotification();
-                        }
-                    } else if (exitMode === 'minimize') {
-                        // 隐藏到托盘
-                        mainWindow.hide();
-                        showTrayNotification();
-                    } else {
-                        // 直接退出
-                        (app as any).isQuiting = true;
-                        app.quit();
-                    }
-                }
-            }
-        });
-    }
-}
-
-// macOS 通知显示函数
-function showMacNotification(): void {
-    if (!getTrayNotificationShown()) {
-        if (Notification.isSupported()) {
-            const notification = new Notification({
-                title: '飞牛影视',
-                body: '应用已隐藏到状态栏，点击状态栏图标可以恢复窗口',
-                silent: false
-            });
-            notification.show();
-        }
-        setTrayNotificationShown(true);
-    }
-}
-
 // 退出收尾：先停播放、等进度回传，再关 Proxy，最后才销毁托盘（src/modules/quit/quitCoordinator.ts）
 initQuitCoordinator({
     closeProxy: shutdownProxyProcess,
-    onQuitReleased() {
-        // 主窗口的 close 看到它就不再拦下改为隐藏
-        (app as any).isQuiting = true;
-        destroyTray();
-    },
+    onQuitReleased: destroyTray,
 });
 
 // 唯一的 window-all-closed 监听（#76）。不在退出途中时，主窗口的 close 被拦下改为隐藏，这个事件很少发生；
@@ -250,17 +123,12 @@ app.on('activate', () => {
     // 通常会重新创建一个窗口
     if (platformBehavior().hasDock) {
         if (BrowserWindow.getAllWindows().length === 0) {
+            // 新窗口以 show: false 创建，这里不立即显示，只显示 dock 图标
             mainWindow = getMainWindow();
-            setupWindowEvents(mainWindow);
-        } else if (mainWindow) {
-            // 如果窗口存在但被隐藏，则显示它
-            if (!mainWindow.isVisible()) {
-                mainWindow.show();
-            }
-            mainWindow.focus();
+            manageMainWindow(mainWindow);
+            app.dock?.show();
+        } else {
+            showMainWindow();
         }
-
-        // 确保 dock 图标显示
-        app.dock?.show();
     }
 });

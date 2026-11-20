@@ -17,7 +17,7 @@ import { stopPlaybackAndWait } from '../playback/playbackState';
 export interface QuitSteps {
     /** 第 2 步：关闭 Proxy，返回的 Promise 完成才算关完 */
     closeProxy(): Promise<void>;
-    /** 退出放行时同步调用：标记正在退出、销毁托盘 */
+    /** 退出放行时同步调用：销毁托盘 */
     onQuitReleased(): void;
 }
 
@@ -133,6 +133,11 @@ function handleBeforeQuit(event: Electron.Event): void {
     }
     state = 'cleaningUp';
     void cleanUpAndQuit(current);
+}
+
+/** 退出已经开始（收尾中或已放行）：主窗口的 close 不再按关闭行为拦下。 */
+export function isQuitting(): boolean {
+    return state !== 'idle' || released;
 }
 
 /** 主进程入口启动时调用一次，注册 before-quit。 */
