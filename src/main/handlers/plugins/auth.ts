@@ -6,7 +6,7 @@ import { HTTPS_PORT_MISMATCH_MESSAGE, isHttpsPortMismatch } from '../../../modul
 import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
-import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
+import { showCertificateTrustDialog } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
 import { establishNewLogin, type IssuedToken } from '../../common/currentLogin';
 
@@ -140,7 +140,6 @@ async function requestToken(
                 },
             };
         }
-        addTrustedHost(baseUrl);
         log.info('用户信任证书，重试登录');
         return requestToken(baseUrl, loginData, true);
     }
