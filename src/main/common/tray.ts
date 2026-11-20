@@ -203,7 +203,6 @@ async function updateTrayMenu(): Promise<void> {
         },
         {
             label: behavior.tray.quitLabel,
-            // 托盘菜单中的退出不看关闭行为，直接退出
             click: () => app.quit(),
         }
     ];
@@ -270,7 +269,6 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     // 根据平台设置不同的恢复窗口操作：Windows 双击，macOS 和 Linux 单击
     tray.on(behavior.tray.restoreEvent as 'click', showMainWindow);
 
-    // 隐藏提示用托盘气泡的平台（Windows），第一次隐藏主窗口时弹它
     provideTrayBalloon((content) => {
         tray?.displayBalloon({ iconType: 'info', title: '飞牛影视', content });
     });

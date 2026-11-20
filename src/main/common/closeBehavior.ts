@@ -3,35 +3,32 @@ import * as fnConfig from '../../modules/fn_config/config';
 import * as log from '../../modules/logger';
 import { isQuitting } from '../../modules/quit/quitCoordinator';
 import { platformBehavior } from '../../public/platform';
-import type { CloseBehavior, CloseBehaviorDialog } from '../../public/platform/shared';
-
-/**
- * 关闭行为（GLOSSARY.md）：主窗口的 close 只在这里处理，托盘的「关闭行为设置」「显示主窗口」也在这里。
- * 退出开始后（退出协调，src/modules/quit/quitCoordinator.ts）close 不再拦下，窗口照常关闭。
- */
+import type { CloseBehavior, CloseBehaviorDialog, CloseBehaviorSetting } from '../../public/platform/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let showTrayBalloon: ((content: string) => void) | null = null;
 
-// 配置文件里沿用原来的键名和取值，兼容已有配置
+const STORED_CLOSE_BEHAVIOR = {
+    macCloseAction: { hide: 'minimize', quit: 'quit', ask: 'ask' },
+    exitMode: { hide: 'minimize', quit: 'direct', ask: 'ask' },
+} as const satisfies Record<CloseBehaviorSetting, Record<CloseBehavior, string>>;
+
+const CLOSE_BEHAVIORS: CloseBehavior[] = ['hide', 'quit', 'ask'];
+
 function readCloseBehavior(): CloseBehavior {
-    if (platformBehavior().closeBehaviorSetting === 'macCloseAction') {
-        const action = fnConfig.getMacCloseAction();
-        return action === 'minimize' ? 'hide' : action;
-    }
-    const mode = fnConfig.getExitMode();
-    return mode === 'minimize' ? 'hide' : mode === 'ask' ? 'ask' : 'quit';
+    const setting = platformBehavior().closeBehaviorSetting;
+    const stored: string = setting === 'macCloseAction' ? fnConfig.getMacCloseAction() : fnConfig.getExitMode();
+    return CLOSE_BEHAVIORS.find(behavior => STORED_CLOSE_BEHAVIOR[setting][behavior] === stored) ?? 'ask';
 }
 
 function saveCloseBehavior(behavior: CloseBehavior): void {
     if (platformBehavior().closeBehaviorSetting === 'macCloseAction') {
-        fnConfig.setMacCloseAction(behavior === 'hide' ? 'minimize' : behavior);
+        fnConfig.setMacCloseAction(STORED_CLOSE_BEHAVIOR.macCloseAction[behavior]);
     } else {
-        fnConfig.setExitMode(behavior === 'hide' ? 'minimize' : behavior === 'quit' ? 'direct' : 'ask');
+        fnConfig.setExitMode(STORED_CLOSE_BEHAVIOR.exitMode[behavior]);
     }
 }
 
-/** 弹出关闭行为的弹窗，返回选中的关闭行为；取消时为 null */
 async function askCloseBehavior(window: BrowserWindow, text: CloseBehaviorDialog, withRemember: boolean): Promise<{ behavior: CloseBehavior; remember: boolean } | null> {
     const labels = [...text.buttons.map(button => button.label), '取消'];
     const result = await dialog.showMessageBox(window, {
@@ -48,7 +45,6 @@ async function askCloseBehavior(window: BrowserWindow, text: CloseBehaviorDialog
     return chosen ? { behavior: chosen.behavior, remember: result.checkboxChecked } : null;
 }
 
-// 第一次隐藏时提示窗口去了哪里，之后不再提示
 function noticeHidden(): void {
     const notice = platformBehavior().hideNotice;
     if (!notice || fnConfig.getTrayNotificationShown()) return;
@@ -77,10 +73,9 @@ async function handleClose(window: BrowserWindow): Promise<void> {
         if (choice.remember) saveCloseBehavior(choice.behavior);
         behavior = choice.behavior;
     }
-    // macCloseAction 被改成认不出的值时什么都不做，和原来一样
     if (behavior === 'hide') {
         hide(window);
-    } else if (behavior === 'quit') {
+    } else {
         app.quit();
     }
 }
@@ -100,7 +95,6 @@ export function provideTrayBalloon(show: (content: string) => void): void {
     showTrayBalloon = show;
 }
 
-/** 恢复、显示并聚焦主窗口；有 dock 的平台同时显示 dock 图标。 */
 export function showMainWindow(): void {
     if (!mainWindow) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -109,7 +103,6 @@ export function showMainWindow(): void {
     if (platformBehavior().hasDock) app.dock?.show();
 }
 
-/** 托盘菜单里改关闭行为的菜单项。 */
 export function closeBehaviorMenuItem(): { label: string; click: () => Promise<void> } {
     const text = platformBehavior().closeBehaviorText;
     return {

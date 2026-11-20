@@ -1,7 +1,6 @@
 /** 关闭主窗口时读哪项设置：macOS 是 macCloseAction（隐藏到状态栏），其它平台是 exitMode（最小化到托盘）。 */
 export type CloseBehaviorSetting = 'macCloseAction' | 'exitMode';
 
-/** 关闭行为（GLOSSARY.md）：隐藏、退出或每次询问。 */
 export type CloseBehavior = 'hide' | 'quit' | 'ask';
 
 /** 关闭行为的一个弹窗。buttons 从左到右排列，最后自动加一个“取消”。 */
@@ -14,7 +13,6 @@ export interface CloseBehaviorDialog {
 }
 
 export interface PlatformBehavior {
-    /** 关闭行为存在哪项设置里。 */
     closeBehaviorSetting: CloseBehaviorSetting;
     closeBehaviorText: {
         /** 关闭行为是“每次询问”时，关闭主窗口弹出的询问；带“记住我的选择”。 */

@@ -8,9 +8,6 @@ const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { settle, waitFor } = require('./helpers/updateChecker.cjs');
 const { createQuittingApp, deferred, startPlaying, startQuitCoordinator } = require('./helpers/fakeQuitApp.cjs');
 
-// 关闭行为（src/main/common/closeBehavior.ts）：关闭主窗口时隐藏、退出或询问，托盘里改设置，显示主窗口。
-// 配置用真的 fn_config 写进临时目录，退出用真的退出协调，弹窗按按钮文字选择。
-
 function createWindow(events) {
     return Object.assign(new EventEmitter(), {
         minimized: false,
@@ -24,7 +21,6 @@ function createWindow(events) {
     });
 }
 
-/** 模拟用户点主窗口的关闭按钮，返回 close 事件，看有没有被拦下 */
 function clickClose(window) {
     const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
     window.emit('close', event);
@@ -39,7 +35,6 @@ function setup(t, { platform, config } = {}) {
     t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     const events = [];
-    // 每次弹窗记下文字，再由测试排好的回答决定点哪个按钮
     const dialogs = [];
     const answers = [];
     const app = createQuittingApp(events, {
@@ -108,7 +103,6 @@ test('on Windows choosing quit with remember quits, and the next start quits on 
     env.answer('退出应用', { remember: true });
     clickClose(env.window);
     await waitFor(() => env.app.exited);
-    // 退出放行后 Electron 关闭主窗口，这次 close 不再拦下
     assert.equal(clickClose(env.window).defaultPrevented, false);
     assert.equal(env.dialogs.length, 1);
 
@@ -142,7 +136,6 @@ test('an existing exitMode of minimize hides on close without asking', async (t)
     await settle();
 
     assert.equal(env.dialogs.length, 0);
-    // Linux 隐藏后不提示
     assert.deepEqual(env.events, ['window hidden']);
 });
 
@@ -187,6 +180,17 @@ test('an existing macCloseAction of quit quits on close without asking', async (
     await waitFor(() => env.app.exited);
 
     assert.equal(env.dialogs.length, 0);
+});
+
+test('an unrecognized stored close behavior asks on close', async (t) => {
+    const env = setup(t, { platform: 'darwin', config: { macCloseAction: 'bogus' } });
+
+    env.answer('取消');
+    clickClose(env.window);
+    await settle();
+
+    assert.equal(env.dialogs.length, 1);
+    assert.equal(env.app.exited, false);
 });
 
 test('the close behavior settings dialog changes what closing does', async (t) => {

@@ -72,7 +72,6 @@ if (!gotTheLock) {
             // 创建系统托盘
             await createTray(mainWindow);
 
-            // 关闭主窗口时按关闭行为隐藏、退出或询问
             manageMainWindow(mainWindow);
 
             // 设置全屏切换
@@ -123,7 +122,6 @@ app.on('activate', () => {
     // 通常会重新创建一个窗口
     if (platformBehavior().hasDock) {
         if (BrowserWindow.getAllWindows().length === 0) {
-            // 新窗口以 show: false 创建，这里不立即显示，只显示 dock 图标
             mainWindow = getMainWindow();
             manageMainWindow(mainWindow);
             app.dock?.show();

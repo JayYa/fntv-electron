@@ -135,7 +135,7 @@ function handleBeforeQuit(event: Electron.Event): void {
     void cleanUpAndQuit(current);
 }
 
-/** 退出已经开始（收尾中或已放行）：主窗口的 close 不再按关闭行为拦下。 */
+/** 退出已经开始：收尾中或已放行。 */
 export function isQuitting(): boolean {
     return state !== 'idle' || released;
 }
