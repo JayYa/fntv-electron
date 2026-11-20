@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+const { addHistoryEntry, readHistory } = require('./helpers/credentialConfig.cjs');
 
 function setupConfig(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-config-durability-'));
@@ -32,7 +33,10 @@ function setupConfig(t) {
     fs.mkdirSync(paths.userData, { recursive: true });
     const userData = paths.userData;
     return {
-        config: require('../dest/modules/fn_config/config.js'),
+        config: {
+            ...require('../dest/modules/fn_config/loginStore.js'),
+            ...require('../dest/modules/fn_config/settings.js'),
+        },
         configPath: path.join(userData, 'config.json'),
         userData,
         backups: () => fs.readdirSync(userData).filter((name) => name.startsWith('config.json.corrupt-')).sort(),
@@ -50,7 +54,7 @@ test('a setter after a corrupt config keeps the damaged content in a backup', as
     const { config, configPath, backups, readBackup } = setupConfig(t);
     fs.writeFileSync(configPath, CORRUPT);
 
-    assert.equal((await config.readConfig()), null);
+    assert.equal((await config.readCurrentLogin()), null);
     config.setNasProxyEnabled(true);
 
     assert.equal(backups().length, 1);
@@ -144,9 +148,8 @@ for (const [label, history] of [
         const original = JSON.stringify({ domain: 'https://nas.example', history });
         fs.writeFileSync(configPath, original);
 
-        assert.deepEqual((await config.readConfig()).history, []);
-        assert.deepEqual((await config.getHistory()), []);
-        assert.equal((await config.readConfig()).domain, 'https://nas.example');
+        assert.deepEqual((await readHistory(config)), []);
+        assert.equal((await config.readCurrentLogin()).domain, 'https://nas.example');
         assert.equal(fs.readFileSync(configPath, 'utf8'), original);
     });
 }
@@ -156,11 +159,11 @@ test('writing over a non-array history keeps the original file in a backup', asy
     const original = JSON.stringify({ mpvVolume: 33, history: { password: 'c2VjcmV0' } });
     fs.writeFileSync(configPath, original);
 
-    await config.addHistory({ domain: 'nas.example', account: 'user', password: 'new-password' });
+    await addHistoryEntry(config, { domain: 'nas.example', account: 'user', password: 'new-password' });
 
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), original);
-    assert.equal((await config.getHistory())[0].account, 'user');
+    assert.equal((await readHistory(config))[0].account, 'user');
     assert.equal(config.getMpvVolume(), 33);
     assert.doesNotMatch(logText(), /c2VjcmV0/);
 
@@ -178,8 +181,8 @@ for (const [label, content] of [
         const { config, configPath, backups } = setupConfig(t);
         fs.writeFileSync(configPath, content);
 
-        assert.equal((await config.readConfig()), null);
-        assert.deepEqual((await config.getHistory()), []);
+        assert.equal((await config.readCurrentLogin()), null);
+        assert.deepEqual((await readHistory(config)), []);
         assert.equal(fs.readFileSync(configPath, 'utf8'), content);
         assert.deepEqual(backups(), []);
     });
@@ -217,8 +220,7 @@ for (const [label, entry] of [
         const original = JSON.stringify({ mpvVolume: 33, history: [entry, SAVED_ENTRY] });
         fs.writeFileSync(configPath, original);
 
-        assert.equal((await config.readConfig()).history.length, 1);
-        assert.deepEqual((await config.getHistory()), [{
+        assert.deepEqual((await readHistory(config)), [{
             domain: 'nas.example',
             account: 'user',
             password: 'saved-password',
@@ -251,7 +253,7 @@ test('migrating legacy credentials on read keeps the unusable history entries in
     const original = JSON.stringify({ token: 'legacy-token', history: [null, SAVED_ENTRY] });
     fs.writeFileSync(configPath, original);
 
-    assert.equal((await config.readConfig()).token, 'legacy-token');
+    assert.equal((await config.readCurrentLogin()).token, 'legacy-token');
 
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), original);

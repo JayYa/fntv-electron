@@ -29,7 +29,7 @@ FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离�
 ## 存储与暴露范围
 
 - 当前配置和历史里的访问码都由 `safeStorage` 加密。没有 `accessCode` 的旧历史记录读出来是空值。
-- 当前访问码解不开时，`readConfig` 连同 token 一起按未登录返回，启动回到登录页，不跳过网关。两者的密文都保留，密钥恢复后还能用。
+- 当前访问码解不开时，`readCurrentLogin` 连同 token 一起按未登录返回，启动回到登录页，不跳过网关。两者的密文都保留，密钥恢复后还能用。
 - 访问码不进日志、URL、命令行参数和环境变量，也不出现在 Proxy 响应里。派生的 Cookie 不出现在播放会话 URL 里。
 - `config-data` 不含密码、访问码和 token。当前配置只带 `hasAccessCode` 布尔值，`history` 只带 `domain`、`account` 和 `useHttps`。
 - 明文凭据按需发给本地登录页：用户点击历史时走 `get-history-credentials`，当前配置有访问码时走 `get-current-access-code` 回填表单。主进程校验 `senderFrame` 是本地 `file:` 登录页，其它来源不回复。回复带域名和账号，登录页丢弃对不上的回复。解不开的凭据是空值，表单留空由用户手动输入。

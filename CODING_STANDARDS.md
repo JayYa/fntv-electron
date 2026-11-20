@@ -8,7 +8,7 @@
 
 | 标识 | 位置 | 不改的理由 |
 | --- | --- | --- |
-| `name`（`fntv`） | `package.json` | 决定应用名。Electron `safeStorage` 在 macOS 和 Linux 上按应用名找密钥，改名后可能解不开已保存的凭据，用户只能重新登录（`src/modules/fn_config/config.ts`）。 |
+| `name`（`fntv`） | `package.json` | 决定应用名。Electron `safeStorage` 在 macOS 和 Linux 上按应用名找密钥，改名后可能解不开已保存的凭据，用户只能重新登录（`src/modules/fn_config/credentialCrypto.ts`）。 |
 | `productName`（`飞牛影视`） | `package.json` 的 `build` | 打包后它决定应用名，风险同 `name`；安装目录和快捷方式名也随之改变。 |
 | `appId`（`com.qiaokes.fntv`） | `package.json` 的 `build` | 打包工具用它生成 macOS bundle id 和 Windows 安装标识。改了会变成另一个应用，而不是升级。 |
 | `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、Chromium 会话和 `logs/`。改了等于丢配置。在 `app.setPath` 之前加载的模块用 `USER_DATA_PATH`，那时 `app.getPath('userData')` 还是 Electron 默认目录（`src/modules/logger/logger.ts`）。 |
@@ -18,7 +18,7 @@
 | 更新源 `releases/latest/download/` | `package.json` 的 `build.publish`、`src/modules/updater/updateChecker.ts` | 已发的客户端按 `https://github.com/JayYa/fntv-electron/releases/latest/download/` 找应用内更新。改地址或换仓库，已发客户端就找不到新版本，只能手动升级（`tests/releaseGate.test.cjs`）。 |
 | `latest.yml`、`latest-linux.yml`、`latest-linux-arm64.yml` | electron-builder 生成，`build.yml` 核对 size 和 sha512 后上传，`release.yml` 发布前核对文件齐全 | 已发客户端里的 electron-updater 按平台和架构从更新源读这几个文件名：Windows 读 `latest.yml`，Linux x64 读 `latest-linux.yml`，Linux arm64 读 `latest-linux-arm64.yml`。Release 里缺一个或改了名，对应平台就收不到应用内更新（`tests/releaseGate.test.cjs`）。 |
 | `build.copyright` | `package.json` | 同时写原作者和修改声明。不设时打包工具可能从 `author` 派生版权行，抹掉原作者。 |
-| 旧版解密密钥 `ENCRYPTION_KEY` | `src/modules/fn_config/config.ts` | 只用来读取旧版本加密的历史密码，读出后迁移到 `safeStorage`。改掉后这些密码解不开（`tests/credentialStorage.test.cjs`）。 |
+| 旧版解密密钥 `ENCRYPTION_KEY` | `src/modules/fn_config/credentialCrypto.ts` | 只用来读取旧版本加密的历史密码，读出后迁移到 `safeStorage`。改掉后这些密码解不开（`tests/credentialStorage.test.cjs`）。 |
 
 ## 进程边界
 
@@ -31,7 +31,7 @@
 
 ## 凭据和配置
 
-- `config.json` 只由 `src/modules/fn_config/config.ts` 写（落盘和损坏备份在 `configFile.ts`）：凭据操作走 `writeConfig`，设置项走 `writeStoredConfig`（不解密，凭据密文原样写回）。新增凭据字段时在 `credentialFields` 登记，读写两边用 `readCredential` 和 `storeCredential`，解不开的原值才会原样写回。
+- `config.json` 只由 `src/modules/fn_config/` 下两个 module 写（落盘和损坏备份在 `configFile.ts`）：当前登录和登录历史归 `loginStore.ts`，所有写入走其中的 `transaction`；设置项归 `settings.ts`（不解密，凭据磁盘值原样写回）。新增凭据字段时只在 `loginStore.ts` 的 `LOGIN_CREDENTIALS` 或 `HISTORY_CREDENTIALS` 登记。
 - 要明文凭据的导出函数是异步的（`safeStorage` 只有异步接口可用），按调用顺序排队执行；加解密都在读改写之前做完，读改写本身同步完成。
 - FN ID、用户名和完整 NAS 地址不进日志。`log.noformat` 也会脱敏，但那只是兜底。
 - 访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时脱敏（`src/modules/logger/masking.ts`）。

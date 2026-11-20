@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const {
     seedLoggedInConfig,
     setupConfig,
+    readHistory,
 } = require('./helpers/credentialConfig.cjs');
 
 test('an undecryptable token reads as logged out while other settings stay readable', async (t) => {
@@ -13,13 +14,13 @@ test('an undecryptable token reads as logged out while other settings stay reada
 
     undecryptable.add('saved-token');
 
-    const loaded = (await config.readConfig());
+    const loaded = (await config.readCurrentLogin());
     assert.equal(loaded.token, '');
     assert.equal(loaded.domain, 'https://nas.example');
     assert.equal(loaded.account, 'user');
     assert.equal(loaded.useHttps, true);
     assert.equal(config.getMpvVolume(), 42);
-    assert.equal((await config.getHistory())[0].password, 'saved-password');
+    assert.equal((await readHistory(config))[0].password, 'saved-password');
 });
 
 test('an undecryptable history password blanks only that credential', async (t) => {
@@ -29,14 +30,14 @@ test('an undecryptable history password blanks only that credential', async (t) 
 
     undecryptable.add('saved-password');
 
-    assert.deepEqual((await config.getHistory()), [{
+    assert.deepEqual((await readHistory(config)), [{
         domain: 'nas.example',
         account: 'user',
         password: '',
         accessCode: 'saved-history-access-code',
         useHttps: true,
     }]);
-    assert.equal((await config.readConfig()).token, 'saved-token');
+    assert.equal((await config.readCurrentLogin()).token, 'saved-token');
 });
 
 test('an undecryptable history access code blanks only that credential', async (t) => {
@@ -46,8 +47,8 @@ test('an undecryptable history access code blanks only that credential', async (
 
     undecryptable.add('saved-history-access-code');
 
-    assert.equal((await config.getHistory())[0].accessCode, '');
-    assert.equal((await config.getHistory())[0].password, 'saved-password');
+    assert.equal((await readHistory(config))[0].accessCode, '');
+    assert.equal((await readHistory(config))[0].password, 'saved-password');
 });
 
 test('an undecryptable access code alone reads as logged out so the gateway is not skipped', async (t) => {
@@ -57,7 +58,7 @@ test('an undecryptable access code alone reads as logged out so the gateway is n
 
     undecryptable.add('saved-access-code');
 
-    const loaded = (await config.readConfig());
+    const loaded = (await config.readCurrentLogin());
     assert.equal(loaded.accessCode, '');
     assert.equal(loaded.token, '');
     assert.equal(loaded.domain, 'https://nas.example');
@@ -70,7 +71,7 @@ test('a legacy history password that cannot be decrypted reads as empty', async 
         history: [{ domain: 'nas.example', account: 'user', password: 'not-legacy-ciphertext' }],
     }));
 
-    assert.equal((await loadConfig().getHistory())[0].password, '');
+    assert.equal((await readHistory(loadConfig()))[0].password, '');
 });
 
 test('decryption failures are logged by field without ciphertext or plaintext', async (t) => {
@@ -81,8 +82,8 @@ test('decryption failures are logged by field without ciphertext or plaintext', 
 
     ['saved-token', 'saved-access-code', 'saved-password', 'saved-history-access-code']
         .forEach((value) => undecryptable.add(value));
-    (await config.readConfig());
-    (await config.readConfig());
+    (await config.readCurrentLogin());
+    (await config.readCurrentLogin());
 
     const logged = fs.readFileSync(logPath, 'utf8');
     assert.equal(logged.match(/解密失败/g).length, 4);

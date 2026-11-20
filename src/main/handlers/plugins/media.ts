@@ -1,7 +1,8 @@
 import { dialog, IpcMainEvent } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
-import * as fnConfig from '../../../modules/fn_config/config';
+import * as settings from '../../../modules/fn_config/settings';
+import { readCurrentLogin } from '../../../modules/fn_config/loginStore';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { isTrusted } from '../../../modules/cert_trust';
@@ -47,7 +48,7 @@ async function refreshWindow(): Promise<void> {
 }
 
 async function connect(): ReturnType<PlayDeps['connect']> {
-    const config = await fnConfig.readConfig();
+    const config = await readCurrentLogin();
     if (!config?.domain || !config.token || !config.account) {
         throw new Error('无法找到有效的服务器登录配置');
     }
@@ -65,7 +66,7 @@ async function connect(): ReturnType<PlayDeps['connect']> {
                 domain,
                 accessCookie: getAccessCookieHeader(domain),
                 skipVerify: isTrusted(domain),
-                useNasLocal: config.nasProxyEnabled === true,
+                useNasLocal: settings.getNasProxyEnabled(),
                 itemGuids,
             });
             return (itemGuid, sourceIndex) => createProxyPlaybackUrl(playback, itemGuid, sourceIndex);
@@ -83,7 +84,7 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
         '--force-window=immediate',
         '--border=no',
         '--network-timeout=180',
-        `--volume=${fnConfig.getMpvVolume()}`,
+        `--volume=${settings.getMpvVolume()}`,
     ];
     if (mpv.bundled) {
         // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
@@ -95,7 +96,7 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
         playerPath: mpv.path,
         extraArgs,
         debug: true,
-        onVolumeChange: fnConfig.setMpvVolume,
+        onVolumeChange: settings.setMpvVolume,
     });
 }
 

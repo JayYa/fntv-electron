@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
-import { getAppDownloadProxyConfig } from '../fn_config/config';
+import { getAppDownloadProxyConfig } from '../fn_config/settings';
 import log from '../logger';
 import {
     assetDownloadUrl,

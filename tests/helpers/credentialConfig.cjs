@@ -35,6 +35,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
         return () => { encryptionGate = null; release(); };
     };
     let encryptCount = 0;
+    let decryptCount = 0;
     const dialogs = [];
     const electronMock = {
         app: {
@@ -65,6 +66,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
                 return Buffer.from(`protected:${value}`, 'utf8');
             },
             async decryptStringAsync(value) {
+                decryptCount++;
                 const decoded = value.toString('utf8');
                 assert.match(decoded, /^protected:/);
                 const plaintext = decoded.slice('protected:'.length);
@@ -81,7 +83,11 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
 
     fs.mkdirSync(paths.userData, { recursive: true });
     return {
-        loadConfig: () => require('../../dest/modules/fn_config/config.js'),
+        // 登录存储和设置项写同一个 config.json，测试里合在一个对象上用。
+        loadConfig: () => ({
+            ...require('../../dest/modules/fn_config/loginStore.js'),
+            ...require('../../dest/modules/fn_config/settings.js'),
+        }),
         loadWinctrl: () => require('../../dest/main/common/winctrl.js'),
         dialogs,
         configPath: path.join(paths.userData, 'config.json'),
@@ -90,19 +96,19 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
         reEncrypt,
         holdEncryption,
         encryptCount: () => encryptCount,
+        decryptCount: () => decryptCount,
         setEncryptionAvailable(value) { encryptionAvailable = value; },
     };
 }
 
 async function seedLoggedInConfig(config) {
-    await config.saveConfig({
+    await config.saveCurrentLogin({
         account: 'user',
         domain: 'https://nas.example',
         token: 'saved-token',
         accessCode: 'saved-access-code',
         useHttps: true,
-    });
-    await config.addHistory({
+    }, {
         domain: 'nas.example',
         account: 'user',
         password: 'saved-password',
@@ -110,6 +116,27 @@ async function seedLoggedInConfig(config) {
         useHttps: true,
     });
     config.setMpvVolume(42);
+}
+
+// 登录历史只随一次新登录写入，这条登录也成为当前登录。
+async function addHistoryEntry(config, entry) {
+    await config.saveCurrentLogin({
+        account: entry.account,
+        domain: `https://${entry.domain}`,
+        token: `${entry.account}-token`,
+        accessCode: entry.accessCode || '',
+        useHttps: true,
+    }, entry);
+}
+
+// 列表加上每一条的凭据，和登录页点开每一条时看到的一样。
+async function readHistory(config) {
+    return Promise.all(config.listHistory().map(async (item) => ({
+        domain: item.domain,
+        account: item.account,
+        ...(await config.historyCredentials(item)),
+        useHttps: item.useHttps,
+    })));
 }
 
 function fakeMainWindow() {
@@ -134,10 +161,10 @@ function simulateLinux(t) {
 }
 
 async function assertCredentialsRestored(config) {
-    const loaded = await config.readConfig();
+    const loaded = await config.readCurrentLogin();
     assert.equal(loaded.token, 'saved-token');
     assert.equal(loaded.accessCode, 'saved-access-code');
-    const history = await config.getHistory();
+    const history = await readHistory(config);
     assert.equal(history.at(-1).password, 'saved-password');
     assert.equal(history.at(-1).accessCode, 'saved-history-access-code');
 }
@@ -146,6 +173,8 @@ const SAVED_CREDENTIALS = ['saved-token', 'saved-access-code', 'saved-password',
 
 module.exports = {
     SAVED_CREDENTIALS,
+    addHistoryEntry,
+    readHistory,
     assertCredentialsRestored,
     assertLandedOnLoginPage,
     fakeMainWindow,

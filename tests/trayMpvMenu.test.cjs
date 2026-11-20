@@ -89,7 +89,7 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
         errorBoxes,
         openedPaths,
         openDialogResults,
-        config: () => require('../dest/modules/fn_config/config.js'),
+        config: () => require('../dest/modules/fn_config/settings.js'),
         async createTray() {
             trayModule = require('../dest/main/common/tray.js');
             await trayModule.createTray({});

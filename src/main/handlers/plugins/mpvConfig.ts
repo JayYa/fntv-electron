@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
-import * as fnConfig from '../../../modules/fn_config/config';
+import * as settings from '../../../modules/fn_config/settings';
 import * as logger from '../../../modules/logger';
 import { resolveBundledMpvPath, resolvePortableConfigDir } from '../../common/mpvConfigHelpers';
 import { setMpvCapabilitiesSatisfied, showMergePrompt } from '../../common/mpvConfigNotices';
@@ -41,7 +41,7 @@ export function getCurrentMpvPlayer(): MpvPlayer | undefined {
         execPath: process.execPath,
         isPackaged: app.isPackaged,
     });
-    return mpvPlayer(currentPlatform(), fnConfig.getMpvPlayerPath(), bundledMpvPath, fs.existsSync);
+    return mpvPlayer(currentPlatform(), settings.getMpvPlayerPath(), bundledMpvPath, fs.existsSync);
 }
 
 // 获取应用中的portable_config目录
@@ -63,7 +63,7 @@ function checkCapabilities(input: MpvCapabilityCheckInput): void {
 // 按归档清单同步用户配置。失败只记日志，不阻塞启动，下次启动重试。
 function initializeMpvConfig(): void {
     try {
-        const mpvConfigDir = getMpvConfigDir(fnConfig.getMpvPlayerPath());
+        const mpvConfigDir = getMpvConfigDir(settings.getMpvPlayerPath());
         const portableConfigDir = getPortableConfigDir();
         const manifestPath = resolveManifestPath(portableConfigDir);
         const result = synchronizeMpvConfig({

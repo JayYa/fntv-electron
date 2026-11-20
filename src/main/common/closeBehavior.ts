@@ -1,5 +1,5 @@
 import { app, dialog, Notification, type BrowserWindow } from 'electron';
-import * as fnConfig from '../../modules/fn_config/config';
+import * as settings from '../../modules/fn_config/settings';
 import * as log from '../../modules/logger';
 import { isQuitting } from '../../modules/quit/quitCoordinator';
 import { platformBehavior } from '../../public/platform';
@@ -17,15 +17,15 @@ const CLOSE_BEHAVIORS: CloseBehavior[] = ['hide', 'quit', 'ask'];
 
 function readCloseBehavior(): CloseBehavior {
     const setting = platformBehavior().closeBehaviorSetting;
-    const stored: string = setting === 'macCloseAction' ? fnConfig.getMacCloseAction() : fnConfig.getExitMode();
+    const stored: string = setting === 'macCloseAction' ? settings.getMacCloseAction() : settings.getExitMode();
     return CLOSE_BEHAVIORS.find(behavior => STORED_CLOSE_BEHAVIOR[setting][behavior] === stored) ?? 'ask';
 }
 
 function saveCloseBehavior(behavior: CloseBehavior): void {
     if (platformBehavior().closeBehaviorSetting === 'macCloseAction') {
-        fnConfig.setMacCloseAction(STORED_CLOSE_BEHAVIOR.macCloseAction[behavior]);
+        settings.setMacCloseAction(STORED_CLOSE_BEHAVIOR.macCloseAction[behavior]);
     } else {
-        fnConfig.setExitMode(STORED_CLOSE_BEHAVIOR.exitMode[behavior]);
+        settings.setExitMode(STORED_CLOSE_BEHAVIOR.exitMode[behavior]);
     }
 }
 
@@ -47,7 +47,7 @@ async function askCloseBehavior(window: BrowserWindow, text: CloseBehaviorDialog
 
 function noticeHidden(): void {
     const notice = platformBehavior().hideNotice;
-    if (!notice || fnConfig.getTrayNotificationShown()) return;
+    if (!notice || settings.getTrayNotificationShown()) return;
     if (notice.shownBy === 'notification') {
         if (Notification.isSupported()) {
             new Notification({ title: '飞牛影视', body: notice.body, silent: false }).show();
@@ -56,7 +56,7 @@ function noticeHidden(): void {
         if (!showTrayBalloon) return;
         showTrayBalloon(notice.body);
     }
-    fnConfig.setTrayNotificationShown(true);
+    settings.setTrayNotificationShown(true);
 }
 
 function hide(window: BrowserWindow): void {

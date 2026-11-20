@@ -1,5 +1,5 @@
 import * as log from '../../modules/logger';
-import { readConfig } from '../../modules/fn_config/config';
+import { readCurrentLogin } from '../../modules/fn_config/loginStore';
 import { BrowserWindow, dialog } from 'electron';
 import { restoreCurrentLogin, showLoginPage } from './currentLogin';
 import { shouldStartMaximized } from './mainwin';
@@ -73,7 +73,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     // 从配置中恢复 cookie
     let savedConfig;
     try {
-        savedConfig = await readConfig();
+        savedConfig = await readCurrentLogin();
     } catch (error) {
         const message = error instanceof Error ? error.message : '无法读取配置文件';
         log.error('读取配置失败:', error);

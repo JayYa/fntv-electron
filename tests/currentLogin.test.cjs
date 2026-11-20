@@ -130,7 +130,7 @@ function setup(t, {
     });
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    const config = require('../dest/modules/fn_config/config.js');
+    const config = require('../dest/modules/fn_config/loginStore.js');
     require('../dest/main/handlers/plugins/auth.js').init();
 
     return {
@@ -156,8 +156,8 @@ function setup(t, {
 }
 
 async function assertNothingSaved(world) {
-    assert.equal((await world.config.readConfig())?.token, undefined);
-    assert.deepEqual(await world.config.getHistory(), []);
+    assert.equal((await world.config.readCurrentLogin())?.token, undefined);
+    assert.deepEqual(await world.config.listHistory(), []);
 }
 
 test('password login saves the current login and history, then opens the web UI', async (t) => {
@@ -165,10 +165,10 @@ test('password login saves the current login and history, then opens the web UI'
 
     assert.deepEqual(await world.login(), []);
 
-    const saved = await world.config.readConfig();
+    const saved = await world.config.readCurrentLogin();
     assert.equal(saved.domain, NAS);
     assert.equal(saved.token, 'new-token');
-    assert.deepEqual((await world.config.getHistory()).map(({ domain, account }) => ({ domain, account })), [
+    assert.deepEqual((await world.config.listHistory()).map(({ domain, account }) => ({ domain, account })), [
         { domain: 'nas.example:5667', account: 'alice' },
     ]);
     assert.ok(world.cookies.some((cookie) => cookie.name === 'Trim-MC-token' && cookie.value === 'new-token'));
@@ -181,7 +181,7 @@ test('password login keeps the path of an address served under a subpath', async
     await world.login({ ...PASSWORD_LOGIN, domain: 'nas.example:5667/fn' });
 
     assert.deepEqual(world.loginRequests, [`${NAS}/fn/v/api/v1/login`]);
-    assert.equal((await world.config.readConfig()).domain, `${NAS}/fn`);
+    assert.equal((await world.config.readCurrentLogin()).domain, `${NAS}/fn`);
     assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/fn/v`]);
 });
 
@@ -217,7 +217,7 @@ test('after the user trusts an untrusted certificate, password login is retried 
 
     assert.deepEqual(world.dialogs, ['证书安全警告']);
     assert.equal(world.loginRequests.length, 2);
-    assert.equal((await world.config.readConfig()).token, 'new-token');
+    assert.equal((await world.config.readCurrentLogin()).token, 'new-token');
     assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/v`]);
 });
 
@@ -254,7 +254,7 @@ test('when FNMedia moves the login to another address, the current login and the
 
     assert.deepEqual(await world.login(), []);
 
-    assert.equal((await world.config.readConfig()).domain, moved);
+    assert.equal((await world.config.readCurrentLogin()).domain, moved);
     assert.deepEqual(world.mainWindow().loaded.urls, [`${moved}/v`]);
 });
 
@@ -275,7 +275,7 @@ function fakeStartupWindow() {
 }
 
 async function seedCurrentLogin(config) {
-    await config.saveConfig({ account: 'alice', domain: NAS, token: 'saved-token', accessCode: '', useHttps: true });
+    await config.saveCurrentLogin({ account: 'alice', domain: NAS, token: 'saved-token', accessCode: '', useHttps: true });
 }
 
 test('startup restores a saved login that FNMedia still accepts', async (t) => {
@@ -319,10 +319,10 @@ test('a login whose access code was already verified saves the current login and
     assert.deepEqual(result, { ok: true });
     assert.equal(world.gatewayRequests.length, 1);
     assert.equal(world.accessGrant().getAccessCookieHeader(NAS), 'gateway=granted');
-    const saved = await world.config.readConfig();
+    const saved = await world.config.readCurrentLogin();
     assert.equal(saved.domain, NAS);
     assert.equal(saved.token, 'fnid-token');
-    assert.deepEqual((await world.config.getHistory()).map(({ domain }) => domain), ['alice-fnid']);
+    assert.deepEqual((await world.config.listHistory()).map(({ domain }) => domain), ['alice-fnid']);
     assert.deepEqual(window.loaded.urls, [`${NAS}/v`]);
 });
 
@@ -371,7 +371,7 @@ test('ending the current login clears the token, the access grant and the cookie
     await currentLogin.endCurrentLogin(window);
 
     assert.deepEqual(stateWhenShown, { loginPage: true, token: '', grant: '', clearedStorages: ['cookies'] });
-    assert.equal((await world.config.readConfig()).domain, NAS);
+    assert.equal((await world.config.readCurrentLogin()).domain, NAS);
 });
 
 test('ending the current login still shows the login page when clearing the cookies never finishes', async (t) => {
@@ -386,7 +386,7 @@ test('ending the current login still shows the login page when clearing the cook
     await ending;
 
     assert.ok(isLoginPage(window.loaded.files[0]));
-    assert.equal((await world.config.readConfig()).token, '');
+    assert.equal((await world.config.readCurrentLogin()).token, '');
 });
 
 test('a rejected access code fails verification with the access code error', async (t) => {

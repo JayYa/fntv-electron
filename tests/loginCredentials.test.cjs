@@ -66,7 +66,7 @@ function setupAuth(t) {
     t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    const config = require('../dest/modules/fn_config/config.js');
+    const config = require('../dest/modules/fn_config/loginStore.js');
     require('../dest/main/handlers/plugins/auth.js').init();
 
     return {
@@ -83,10 +83,18 @@ function setupAuth(t) {
     };
 }
 
+// 登录历史只随新登录写入；最后再保存一次当前登录，让它和历史里的两条不同。
 async function seedLogins({ config }) {
-    await config.saveConfig(CURRENT_LOGIN);
-    await config.addHistory(FIRST_LOGIN);
-    await config.addHistory(SECOND_LOGIN);
+    for (const entry of [FIRST_LOGIN, SECOND_LOGIN]) {
+        await config.saveCurrentLogin({
+            account: entry.account,
+            domain: `https://${entry.domain}`,
+            token: `${entry.account}-token`,
+            accessCode: entry.accessCode,
+            useHttps: true,
+        }, entry);
+    }
+    await config.saveCurrentLogin(CURRENT_LOGIN);
 }
 
 test('config-data lists logins and says whether an access code is saved without sending credentials', async (t) => {

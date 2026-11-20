@@ -1,6 +1,6 @@
 import { session } from 'electron';
 import { clearAccessGrants, getAccessCookieHeader } from '../../modules/fn_api/accessGrant';
-import * as fnConfig from '../../modules/fn_config/config';
+import * as loginStore from '../../modules/fn_config/loginStore';
 import { restoreCookies } from '../../modules/fn_config/cookie';
 import * as log from '../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
@@ -103,7 +103,7 @@ interface LoginSteps {
     account: string;
     token(baseUrl: string): Promise<IssuedToken>;
     isNewLogin: boolean;
-    history?: fnConfig.AddHistoryParams;
+    history?: loginStore.NewHistoryEntry;
 }
 
 async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): Promise<LoginResult> {
@@ -123,16 +123,13 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
         }
 
         if (isNewLogin || baseUrl !== access.baseUrl) {
-            await fnConfig.saveConfig({
+            await loginStore.saveCurrentLogin({
                 account: steps.account,
                 domain: baseUrl,
                 token,
                 accessCode: granted.accessCode,
                 useHttps: baseUrl.startsWith('https://'),
-            });
-        }
-        if (steps.history) {
-            await fnConfig.addHistory(steps.history);
+            }, steps.history);
         }
 
         log.info('已建立当前登录，进入网页端, domain:', baseUrl);
@@ -152,7 +149,7 @@ export interface NewLogin {
     account: string;
     /** 已经拿到的 token，或用验证后的地址换取 token。 */
     token: string | ((baseUrl: string) => Promise<IssuedToken>);
-    history: fnConfig.AddHistoryParams;
+    history: loginStore.NewHistoryEntry;
 }
 
 export function establishNewLogin(windowForWebUi: () => LoginWindow, login: NewLogin): Promise<LoginResult> {
@@ -180,7 +177,7 @@ export async function endCurrentLogin(window: LoginWindow): Promise<void> {
     log.info('结束当前登录，清空 token、访问授权和 Cookie');
     clearAccessGrants();
     const clearing = Promise.all([
-        fnConfig.clearSavedToken().then(
+        loginStore.clearToken().then(
             (cleared) => { if (cleared) log.info('已清空配置中的登录 token'); },
             (error: unknown) => { log.error('清空配置中的登录 token 失败:', error); },
         ),

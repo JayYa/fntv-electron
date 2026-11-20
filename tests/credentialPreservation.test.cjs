@@ -6,11 +6,12 @@ const {
     assertCredentialsRestored,
     seedLoggedInConfig,
     setupConfig,
+    addHistoryEntry,
+    readHistory,
 } = require('./helpers/credentialConfig.cjs');
 
 const SETTERS = {
     setAppDownloadProxyConfig: (config) => config.setAppDownloadProxyConfig({ enabled: false, proxyUrl: 'https://proxy.example' }),
-    setAppDownloadProxyUrl: (config) => config.setAppDownloadProxyUrl('https://proxy.example'),
     setHideOriginalPlayButton: (config) => config.setHideOriginalPlayButton(false),
     setNasProxyEnabled: (config) => config.setNasProxyEnabled(true),
     setMacCloseAction: (config) => config.setMacCloseAction('quit'),
@@ -27,7 +28,7 @@ for (const [name, write] of Object.entries(SETTERS)) {
         await seedLoggedInConfig(config);
 
         SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
-        assert.equal((await config.readConfig()).token, '');
+        assert.equal((await config.readCurrentLogin()).token, '');
         write(config);
 
         undecryptable.clear();
@@ -57,11 +58,11 @@ test('adding another history entry keeps the undecryptable entries', async (t) =
 
     undecryptable.add('saved-password');
     undecryptable.add('saved-history-access-code');
-    await config.addHistory({ domain: 'other.example', account: 'other', password: 'other-password' });
+    await addHistoryEntry(config, { domain: 'other.example', account: 'other', password: 'other-password' });
 
     undecryptable.clear();
-    assert.deepEqual((await config.getHistory()).map((item) => item.password), ['other-password', 'saved-password']);
-    assert.equal((await config.getHistory())[1].accessCode, 'saved-history-access-code');
+    assert.deepEqual((await readHistory(config)).map((item) => item.password), ['other-password', 'saved-password']);
+    assert.equal((await readHistory(config))[1].accessCode, 'saved-history-access-code');
 });
 
 test('logging out while the token is undecryptable does not erase its ciphertext', async (t) => {
@@ -70,7 +71,7 @@ test('logging out while the token is undecryptable does not erase its ciphertext
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-token');
-    await config.saveConfig({ account: 'user', domain: 'https://nas.example', token: '', useHttps: true });
+    assert.equal(await config.clearToken(), true);
 
     undecryptable.clear();
     await assertCredentialsRestored(config);
@@ -82,14 +83,13 @@ test('logging in again replaces undecryptable credentials with the new values', 
     await seedLoggedInConfig(config);
 
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
-    await config.saveConfig({
+    await config.saveCurrentLogin({
         account: 'user',
         domain: 'https://nas.example',
         token: 'new-token',
         accessCode: 'new-access-code',
         useHttps: true,
-    });
-    await config.addHistory({
+    }, {
         domain: 'nas.example',
         account: 'user',
         password: 'new-password',
@@ -97,11 +97,11 @@ test('logging in again replaces undecryptable credentials with the new values', 
         useHttps: true,
     });
 
-    assert.equal((await config.readConfig()).token, 'new-token');
-    assert.equal((await config.readConfig()).accessCode, 'new-access-code');
-    assert.equal((await config.getHistory()).length, 1);
-    assert.equal((await config.getHistory())[0].password, 'new-password');
-    assert.equal((await config.getHistory())[0].accessCode, 'new-history-access-code');
+    assert.equal((await config.readCurrentLogin()).token, 'new-token');
+    assert.equal((await config.readCurrentLogin()).accessCode, 'new-access-code');
+    assert.equal((await readHistory(config)).length, 1);
+    assert.equal((await readHistory(config))[0].password, 'new-password');
+    assert.equal((await readHistory(config))[0].accessCode, 'new-history-access-code');
     const stored = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     assert.equal(Buffer.from(stored.token.replace('safe-storage:v1:', ''), 'base64').toString(), 'protected:new-token');
 });
@@ -112,7 +112,7 @@ test('logging in without an access code clears the undecryptable one so startup 
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-access-code');
-    await config.saveConfig({
+    await config.saveCurrentLogin({
         account: 'user',
         domain: 'https://nas.example',
         token: 'new-token',
@@ -120,21 +120,21 @@ test('logging in without an access code clears the undecryptable one so startup 
         useHttps: true,
     });
 
-    assert.equal((await config.readConfig()).token, 'new-token');
-    assert.equal((await config.readConfig()).accessCode, '');
+    assert.equal((await config.readCurrentLogin()).token, 'new-token');
+    assert.equal((await config.readCurrentLogin()).accessCode, '');
 });
 
 test('deleting history removes undecryptable entries on request', async (t) => {
     const { loadConfig, configPath, undecryptable } = setupConfig(t);
     const config = loadConfig();
     await seedLoggedInConfig(config);
-    await config.addHistory({ domain: 'other.example', account: 'other', password: 'other-password' });
+    await addHistoryEntry(config, { domain: 'other.example', account: 'other', password: 'other-password' });
 
     undecryptable.add('saved-password');
-    assert.equal(config.deleteHistoryItem({ domain: 'nas.example', account: 'user' }), true);
-    assert.deepEqual((await config.getHistory()).map((item) => item.domain), ['other.example']);
+    assert.equal(await config.removeHistory({ domain: 'nas.example', account: 'user' }), true);
+    assert.deepEqual((await readHistory(config)).map((item) => item.domain), ['other.example']);
 
     undecryptable.add('other-password');
-    config.clearHistory();
+    await config.clearHistory();
     assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')).history, []);
 });

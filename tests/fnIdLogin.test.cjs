@@ -111,7 +111,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
     };
 
     const { handleFnIdLogin, isFnId } = require('../dest/main/handlers/plugins/fnid_login.js');
-    const { readConfig } = require('../dest/modules/fn_config/config.js');
+    const { readCurrentLogin } = require('../dest/modules/fn_config/loginStore.js');
     const replies = [];
     const finished = handleFnIdLogin(
         { reply: (channel, payload) => replies.push({ channel, payload }) },
@@ -134,7 +134,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         nasRequests,
         isFnId,
         finished,
-        readConfig,
+        readCurrentLogin,
         mainWindowLoaded: () => mainWindow?.loaded ?? [],
         async start() {
             await flush();
@@ -364,8 +364,8 @@ for (const { name, page, confirmed, domain, baseUrl } of [
         await login.finished;
 
         assert.deepEqual(login.nasRequests, [{ url: `${baseUrl}/v/api/v1/user/info`, token: 'nas-token' }]);
-        assert.equal((await login.readConfig()).token, 'nas-token');
-        assert.equal((await login.readConfig()).domain, baseUrl);
+        assert.equal((await login.readCurrentLogin()).token, 'nas-token');
+        assert.equal((await login.readCurrentLogin()).domain, baseUrl);
         assert.deepEqual(login.mainWindowLoaded(), [`${baseUrl}/v`]);
     });
 }
@@ -385,7 +385,7 @@ test('skips a token cookie of another site and uses the one of the confirmed NAS
     await login.finished;
 
     assert.deepEqual(login.nasRequests, [{ url: `${NAS}/v/api/v1/user/info`, token: 'nas-token' }]);
-    assert.equal((await login.readConfig()).token, 'nas-token');
+    assert.equal((await login.readCurrentLogin()).token, 'nas-token');
 });
 
 test('never sends a token cookie of another site to the NAS', async (t) => {
