@@ -39,7 +39,7 @@ test('finds the manifest at the archive root next to the portable config', () =>
 const onWindowsHost = { skip: process.platform !== 'win32' && 'Windows paths only resolve on a Windows host' };
 
 test('leaves the bundled config intact when the chosen mpv is the bundled mpv', onWindowsHost, (t) => {
-    const { mpvUserConfigDir } = require('../dest/public/platform.js');
+    const { mpvUserConfigDir } = require('../dest/public/platform/index.js');
     const root = tempRoot(t, 'same');
     const bundleDir = path.join(root, 'third_party', 'fntv-mpv');
     const archive = writeArchive(path.join(root, 'third_party'), 'fntv-mpv', {

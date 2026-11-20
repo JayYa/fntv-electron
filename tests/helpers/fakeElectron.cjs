@@ -43,7 +43,7 @@ function useFakeModule(t, name, replacement) {
 
 /**
  * 让 require('electron') 返回 electronMock。
- * platform 给出时同时改写 process.platform，模拟在该平台上运行（src/public/platform.ts 每次调用都读它）。
+ * platform 给出时同时改写 process.platform，模拟在该平台上运行（src/public/platform/index.ts 每次调用都读它）。
  * 只放这个测试用到的 Electron API；各平台分支用到的 API 都要有（TESTING_STANDARDS.md）。
  */
 function useFakeElectron(t, electronMock, { platform } = {}) {

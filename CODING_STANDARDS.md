@@ -40,7 +40,7 @@
 
 - `src/modules/fn_api/core/` 和 `src/modules/proxy_service/` 不加载 `electron`：访问授权 Cookie、证书信任和日志由调用方通过 `RequestContext` 或参数传入。
 - 登录页脚本是按顺序加载的经典脚本，不用 `type="module"`，`file:` 下会被拦。顶层 `const`、`let` 和函数跨文件共享，给其它脚本用的名字写进文件头的 `/* exported */`；顶层语句只能用已加载脚本里的名字。会重新赋值的状态放在唯一写它的脚本里（`resource/login/index.html`）。
-- 新的平台差异写进 `platformBehavior(platform)` 的返回值，或写成接收平台参数的纯函数（`mpvUserConfigDir`、`mpvIpcSocket`、`mpvPlayer`、`expectedAssetName`），调用处只读结果。lint 拦截直接比较或 switch `currentPlatform()`、`currentArch()`；先存进变量再比较的写法拦不住，审查时看。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关（`src/public/platform.ts`）。
+- 新的平台差异写进 `src/public/platform/` 下对应平台的文件（`win32.ts`、`darwin.ts`、`linux.ts`，macOS 和 Linux 共用的逻辑放 `posix.ts`）：给 `PlatformImpl` 加字段，由 `index.ts` 查表选取，调用处只读结果（ADR-0006）。src 里不和 `'win32'`、`'darwin'`、`'linux'` 比较或 `case` 它们，也不比较 `currentPlatform()`、`currentArch()`，lint 拦截。路径按目标平台的 `path.win32` 或 `path.posix` 拼，测试结果与主机无关。
 
 ## 跨层改动
 

@@ -1,5 +1,6 @@
 import { getMainWindow } from '../../common/mainwin';
 import { unmaximizeWindow, setFullScreen } from '../../common/winctrl';
+import { platformBehavior, PlatformBehavior } from '../../../public/platform';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 
@@ -31,11 +32,17 @@ function handleClose(): void {
     if (mainWindow) mainWindow.close();
 }
 
+// 沙箱里的 preload 不读平台，标题栏样式由主进程给出
+function handleGetTitleBar(): PlatformBehavior['titleBar'] {
+    return platformBehavior().titleBar;
+}
+
 // 注册窗口控制处理器
 function init(): void {
     registerHandler('window-minimize', handleMinimize);
     registerHandler('window-maximize', handleMaximize);
     registerHandler('window-close', handleClose);
+    registerHandler('get-title-bar', handleGetTitleBar, { useHandle: true });
 }
 
 export {
