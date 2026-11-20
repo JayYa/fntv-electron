@@ -2,28 +2,25 @@ import * as fs from 'fs';
 import * as path from 'node:path';
 import { app } from 'electron';
 import { USER_DATA_PATH } from '../../public/constants';
+import * as log from '../logger';
 
 const CONFIG_BACKUP_LIMIT = 3;
 
 app.setPath('userData', USER_DATA_PATH);
 
-/** config.json 的原始内容：凭据是磁盘上的值（密文或旧格式），设置项原样保存。 */
 export type StoredConfig = Record<string, unknown>;
 
-/** 登录历史里能用的一条：至少有地址和账号。 */
 export interface StoredHistoryItem extends Record<string, unknown> {
     domain: string;
     account: string;
 }
 
-// 读取被频繁调用，同一条只记一次。
 const loggedWarnings = new Set<string>();
 
 export function warnOnce(message: string): void {
     if (loggedWarnings.has(message)) return;
     loggedWarnings.add(message);
-    // 本文件加载时才设置 userData，静态引入会让 logger 先用默认目录初始化。
-    (require('../logger') as typeof import('../logger')).warn(message);
+    log.warn(message);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

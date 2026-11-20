@@ -66,7 +66,6 @@ async function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partia
     }
 }
 
-// 按需读取当前登录的访问码，用于回填登录页。
 async function handleGetCurrentAccessCode(event: IpcMainEvent): Promise<void> {
     if (!isLoginPage(event)) {
         log.warn('拒绝了非登录页的访问码请求');

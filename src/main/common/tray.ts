@@ -138,7 +138,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             label: '清空 MPV 播放器路径',
             enabled: !!currentMpvPath, // 只有当有设置路径时才启用
             click: () => {
-                settings.setMpvPlayerPath(''); // 清空配置中的路径
+                settings.setMpvPlayerPath('');
                 log.info('MPV 播放器路径已清空，将使用自动检测');
 
                 // 更新托盘菜单以刷新状态

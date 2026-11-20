@@ -2,9 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {
-    addHistoryEntry,
+    logInWithHistory,
     legacyEncrypt,
-    readHistory,
+    readHistoryWithCredentials,
     seedLoggedInConfig,
     setupConfig,
 } = require('./helpers/credentialConfig.cjs');
@@ -12,7 +12,7 @@ const {
 const SECURE_STORAGE_ERROR = /安全存储|密钥环/;
 
 const WRITES = {
-    'saving a new login': (config) => config.saveCurrentLogin(
+    'saving a new login': (config) => config.saveNewLogin(
         { account: 'new', domain: 'https://new.example', token: 'new-token', accessCode: 'new-code', useHttps: true },
         { domain: 'new.example', account: 'new', password: 'new-password', accessCode: 'new-code', useHttps: true },
     ),
@@ -34,10 +34,10 @@ const describe = ({ undecryptable, legacy, encryptionAvailable }) => [
 for (const state of STATES) {
     for (const [name, write] of Object.entries(WRITES)) {
         test(`${name} with ${describe(state)} either succeeds or fails on secure storage, keeping what it cannot decrypt`, async (t) => {
-            const { loadConfig, configPath, undecryptable, setEncryptionAvailable } = setupConfig(t);
-            const config = loadConfig();
+            const { loadStores, configPath, undecryptable, setEncryptionAvailable } = setupConfig(t);
+            const config = loadStores();
             await seedLoggedInConfig(config);
-            await addHistoryEntry(config, { domain: 'other.example', account: 'other', password: 'other-password' });
+            await logInWithHistory(config, { domain: 'other.example', account: 'other', password: 'other-password' });
             await config.saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'saved-token', accessCode: 'saved-access-code', useHttps: true });
             if (state.legacy) {
                 const stored = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -72,8 +72,8 @@ for (const state of STATES) {
 }
 
 test('a first login writes the config keys in the order earlier versions wrote them', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath } = setupConfig(t);
+    const config = loadStores();
 
     await seedLoggedInConfig(config);
 
@@ -83,8 +83,8 @@ test('a first login writes the config keys in the order earlier versions wrote t
 });
 
 test('saving a current login without a token is refused so undecryptable credentials are not dropped', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
     const before = fs.readFileSync(configPath, 'utf8');
 
@@ -96,12 +96,12 @@ test('saving a current login without a token is refused so undecryptable credent
 });
 
 test('a new login that cannot be saved does not reach the history either', async (t) => {
-    const { loadConfig, setEncryptionAvailable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, setEncryptionAvailable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     setEncryptionAvailable(false);
-    await assert.rejects(addHistoryEntry(config, { domain: 'new.example', account: 'new', password: 'new-password' }), SECURE_STORAGE_ERROR);
+    await assert.rejects(logInWithHistory(config, { domain: 'new.example', account: 'new', password: 'new-password' }), SECURE_STORAGE_ERROR);
 
     setEncryptionAvailable(true);
     assert.deepEqual(config.listHistory().map((item) => item.account), ['user']);
@@ -109,8 +109,8 @@ test('a new login that cannot be saved does not reach the history either', async
 });
 
 test('logging out while the access code is undecryptable still clears the readable token', async (t) => {
-    const { loadConfig, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-access-code');
@@ -123,10 +123,10 @@ test('logging out while the access code is undecryptable still clears the readab
 });
 
 test('listing, removing and clearing the history do not touch the secure storage', async (t) => {
-    const { loadConfig, encryptCount, decryptCount } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, encryptCount, decryptCount } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
-    await addHistoryEntry(config, { domain: 'other.example', account: 'other', password: 'other-password', useHttps: true });
+    await logInWithHistory(config, { domain: 'other.example', account: 'other', password: 'other-password', useHttps: true });
     const calls = () => encryptCount() + decryptCount();
     const before = calls();
 
@@ -136,7 +136,7 @@ test('listing, removing and clearing the history do not touch the secure storage
     ]);
     assert.equal(await config.removeHistory({ domain: 'other.example', account: 'other' }), true);
     assert.equal(calls(), before);
-    assert.deepEqual((await readHistory(config)).map((item) => item.password), ['saved-password']);
+    assert.deepEqual((await readHistoryWithCredentials(config)).map((item) => item.password), ['saved-password']);
 
     const beforeClear = calls();
     await config.clearHistory();

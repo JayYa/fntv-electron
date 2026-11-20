@@ -9,11 +9,11 @@ const {
     setupConfig,
     simulateLinux,
     syncFormatCiphertext,
-    readHistory,
+    readHistoryWithCredentials,
 } = require('./helpers/credentialConfig.cjs');
 
 test('credentials saved by the synchronous safeStorage API are read back through the async API', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t);
+    const { loadStores, configPath } = setupConfig(t);
     const original = JSON.stringify({
         account: 'user',
         domain: 'https://nas.example',
@@ -28,7 +28,7 @@ test('credentials saved by the synchronous safeStorage API are read back through
     });
     fs.writeFileSync(configPath, original);
 
-    const config = loadConfig();
+    const config = loadStores();
     const loaded = await config.readCurrentLogin();
     assert.equal(loaded.token, 'saved-token');
     assert.equal(loaded.accessCode, 'saved-access-code');
@@ -40,7 +40,7 @@ test('credentials saved by the synchronous safeStorage API are read back through
 });
 
 test('migrates legacy credentials to OS-protected storage without changing returned values', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t);
+    const { loadStores, configPath } = setupConfig(t);
     fs.writeFileSync(configPath, JSON.stringify({
         account: 'user',
         domain: 'https://nas.example',
@@ -54,11 +54,11 @@ test('migrates legacy credentials to OS-protected storage without changing retur
         }],
     }));
 
-    const config = loadConfig();
+    const config = loadStores();
     assert.equal((await config.readCurrentLogin()).token, 'legacy-token');
     assert.equal((await config.readCurrentLogin()).accessCode, 'legacy-access-code');
-    assert.equal((await readHistory(config))[0].password, 'legacy-password');
-    assert.equal((await readHistory(config))[0].accessCode, 'legacy-history-access-code');
+    assert.equal((await readHistoryWithCredentials(config))[0].password, 'legacy-password');
+    assert.equal((await readHistoryWithCredentials(config))[0].accessCode, 'legacy-history-access-code');
 
     const stored = fs.readFileSync(configPath, 'utf8');
     assert.doesNotMatch(stored, /legacy-token|legacy-password|legacy-access-code|legacy-history-access-code/);
@@ -66,8 +66,8 @@ test('migrates legacy credentials to OS-protected storage without changing retur
 });
 
 test('re-encrypts a credential when safeStorage asks for it after a key change', async (t) => {
-    const { loadConfig, reEncrypt, encryptCount } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, reEncrypt, encryptCount } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     const beforeRead = encryptCount();
@@ -80,8 +80,8 @@ test('re-encrypts a credential when safeStorage asks for it after a key change',
 });
 
 test('saving the same credentials again is still refused once the secure storage becomes unavailable', async (t) => {
-    const { loadConfig, configPath, setEncryptionAvailable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath, setEncryptionAvailable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
     const before = fs.readFileSync(configPath, 'utf8');
 
@@ -94,21 +94,21 @@ test('saving the same credentials again is still refused once the secure storage
 });
 
 test('a legacy value equal to a protected one is still migrated', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t);
+    const { loadStores, configPath } = setupConfig(t);
     fs.writeFileSync(configPath, JSON.stringify({
         token: syncFormatCiphertext('same-code'),
         accessCode: 'same-code',
     }));
 
-    assert.equal((await loadConfig().readCurrentLogin()).accessCode, 'same-code');
+    assert.equal((await loadStores().readCurrentLogin()).accessCode, 'same-code');
     assert.doesNotMatch(fs.readFileSync(configPath, 'utf8'), /"accessCode": "same-code"/);
 });
 
 test('refuses to save credentials when the OS secure storage is unavailable', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t, { encryptionAvailable: false });
+    const { loadStores, configPath } = setupConfig(t, { encryptionAvailable: false });
 
     await assert.rejects(
-        loadConfig().saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'plain-token', accessCode: '', useHttps: true }),
+        loadStores().saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'plain-token', accessCode: '', useHttps: true }),
         /操作系统安全存储不可用，无法保存登录凭据/,
     );
     assert.equal(fs.existsSync(configPath), false);
@@ -116,10 +116,10 @@ test('refuses to save credentials when the OS secure storage is unavailable', as
 
 test('Linux refuses to save credentials when safeStorage falls back to basic_text', async (t) => {
     simulateLinux(t);
-    const { loadConfig, configPath } = setupConfig(t, { storageBackend: 'basic_text' });
+    const { loadStores, configPath } = setupConfig(t, { storageBackend: 'basic_text' });
 
     await assert.rejects(
-        loadConfig().saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'plain-token', accessCode: '', useHttps: true }),
+        loadStores().saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'plain-token', accessCode: '', useHttps: true }),
         /拒绝以明文方式保存登录凭据/,
     );
     assert.equal(fs.existsSync(configPath), false);
@@ -127,9 +127,9 @@ test('Linux refuses to save credentials when safeStorage falls back to basic_tex
 
 test('Linux saves credentials encrypted when safeStorage uses a real keyring', async (t) => {
     simulateLinux(t);
-    const { loadConfig, configPath } = setupConfig(t);
+    const { loadStores, configPath } = setupConfig(t);
 
-    await loadConfig().saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'plain-token', accessCode: '', useHttps: true });
+    await loadStores().saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'plain-token', accessCode: '', useHttps: true });
 
     const stored = fs.readFileSync(configPath, 'utf8');
     assert.doesNotMatch(stored, /plain-token/);
@@ -137,8 +137,8 @@ test('Linux saves credentials encrypted when safeStorage uses a real keyring', a
 });
 
 test('changing a setting leaves stored credentials byte-for-byte unchanged, even undecryptable ones', async (t) => {
-    const { loadConfig, configPath, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
     const before = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
@@ -152,8 +152,8 @@ test('changing a setting leaves stored credentials byte-for-byte unchanged, even
 });
 
 test('a setting written while a login save is encrypting survives the save', async (t) => {
-    const { loadConfig, configPath, holdEncryption } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath, holdEncryption } = setupConfig(t);
+    const config = loadStores();
     const release = holdEncryption();
 
     const saving = config.saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'new-token', accessCode: 'new-code', useHttps: true });
@@ -168,8 +168,8 @@ test('a setting written while a login save is encrypting survives the save', asy
 });
 
 test('the legacy migration on reading the current login keeps ciphertext it cannot decrypt', async (t) => {
-    const { loadConfig, configPath, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
     const stored = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     fs.writeFileSync(configPath, JSON.stringify({
@@ -183,7 +183,7 @@ test('the legacy migration on reading the current login keeps ciphertext it cann
 
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
     assert.equal((await config.readCurrentLogin()).token, '');
-    assert.equal((await readHistory(config))[0].password, 'legacy-password');
+    assert.equal((await readHistoryWithCredentials(config))[0].password, 'legacy-password');
 
     const migrated = fs.readFileSync(configPath, 'utf8');
     assert.equal(migrated.includes(legacyEncrypt('legacy-password')), false);
@@ -191,12 +191,12 @@ test('the legacy migration on reading the current login keeps ciphertext it cann
 
     undecryptable.clear();
     await assertCredentialsRestored(config);
-    assert.equal((await readHistory(config))[0].password, 'legacy-password');
+    assert.equal((await readHistoryWithCredentials(config))[0].password, 'legacy-password');
 });
 
 test('a failed migration write does not stop an undecryptable config from being read', async (t) => {
     simulateLinux(t);
-    const { loadConfig, configPath, logPath } = setupConfig(t, { storageBackend: 'basic_text' });
+    const { loadStores, configPath, logPath } = setupConfig(t, { storageBackend: 'basic_text' });
     const original = JSON.stringify({
         domain: 'https://nas.example',
         token: 'safe-storage:v1:not-decryptable',
@@ -204,7 +204,7 @@ test('a failed migration write does not stop an undecryptable config from being 
     });
     fs.writeFileSync(configPath, original);
 
-    assert.equal((await loadConfig().readCurrentLogin()).domain, 'https://nas.example');
+    assert.equal((await loadStores().readCurrentLogin()).domain, 'https://nas.example');
     assert.equal(fs.readFileSync(configPath, 'utf8'), original);
     assert.match(fs.readFileSync(logPath, 'utf8'), /迁移旧版凭据失败/);
 });

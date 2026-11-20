@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
-const { addHistoryEntry, readHistory } = require('./helpers/credentialConfig.cjs');
+const { logInWithHistory, readHistoryWithCredentials } = require('./helpers/credentialConfig.cjs');
 
 function setupConfig(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-config-durability-'));
@@ -148,7 +148,7 @@ for (const [label, history] of [
         const original = JSON.stringify({ domain: 'https://nas.example', history });
         fs.writeFileSync(configPath, original);
 
-        assert.deepEqual((await readHistory(config)), []);
+        assert.deepEqual((await readHistoryWithCredentials(config)), []);
         assert.equal((await config.readCurrentLogin()).domain, 'https://nas.example');
         assert.equal(fs.readFileSync(configPath, 'utf8'), original);
     });
@@ -159,11 +159,11 @@ test('writing over a non-array history keeps the original file in a backup', asy
     const original = JSON.stringify({ mpvVolume: 33, history: { password: 'c2VjcmV0' } });
     fs.writeFileSync(configPath, original);
 
-    await addHistoryEntry(config, { domain: 'nas.example', account: 'user', password: 'new-password' });
+    await logInWithHistory(config, { domain: 'nas.example', account: 'user', password: 'new-password' });
 
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), original);
-    assert.equal((await readHistory(config))[0].account, 'user');
+    assert.equal((await readHistoryWithCredentials(config))[0].account, 'user');
     assert.equal(config.getMpvVolume(), 33);
     assert.doesNotMatch(logText(), /c2VjcmV0/);
 
@@ -182,7 +182,7 @@ for (const [label, content] of [
         fs.writeFileSync(configPath, content);
 
         assert.equal((await config.readCurrentLogin()), null);
-        assert.deepEqual((await readHistory(config)), []);
+        assert.deepEqual((await readHistoryWithCredentials(config)), []);
         assert.equal(fs.readFileSync(configPath, 'utf8'), content);
         assert.deepEqual(backups(), []);
     });
@@ -220,7 +220,7 @@ for (const [label, entry] of [
         const original = JSON.stringify({ mpvVolume: 33, history: [entry, SAVED_ENTRY] });
         fs.writeFileSync(configPath, original);
 
-        assert.deepEqual((await readHistory(config)), [{
+        assert.deepEqual((await readHistoryWithCredentials(config)), [{
             domain: 'nas.example',
             account: 'user',
             password: 'saved-password',

@@ -83,10 +83,9 @@ function setupAuth(t) {
     };
 }
 
-// 登录历史只随新登录写入；最后再保存一次当前登录，让它和历史里的两条不同。
 async function seedLogins({ config }) {
     for (const entry of [FIRST_LOGIN, SECOND_LOGIN]) {
-        await config.saveCurrentLogin({
+        await config.saveNewLogin({
             account: entry.account,
             domain: `https://${entry.domain}`,
             token: `${entry.account}-token`,

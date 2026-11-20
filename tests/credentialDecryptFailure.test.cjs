@@ -4,12 +4,12 @@ const fs = require('node:fs');
 const {
     seedLoggedInConfig,
     setupConfig,
-    readHistory,
+    readHistoryWithCredentials,
 } = require('./helpers/credentialConfig.cjs');
 
 test('an undecryptable token reads as logged out while other settings stay readable', async (t) => {
-    const { loadConfig, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-token');
@@ -20,17 +20,17 @@ test('an undecryptable token reads as logged out while other settings stay reada
     assert.equal(loaded.account, 'user');
     assert.equal(loaded.useHttps, true);
     assert.equal(config.getMpvVolume(), 42);
-    assert.equal((await readHistory(config))[0].password, 'saved-password');
+    assert.equal((await readHistoryWithCredentials(config))[0].password, 'saved-password');
 });
 
 test('an undecryptable history password blanks only that credential', async (t) => {
-    const { loadConfig, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-password');
 
-    assert.deepEqual((await readHistory(config)), [{
+    assert.deepEqual((await readHistoryWithCredentials(config)), [{
         domain: 'nas.example',
         account: 'user',
         password: '',
@@ -41,19 +41,19 @@ test('an undecryptable history password blanks only that credential', async (t) 
 });
 
 test('an undecryptable history access code blanks only that credential', async (t) => {
-    const { loadConfig, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-history-access-code');
 
-    assert.equal((await readHistory(config))[0].accessCode, '');
-    assert.equal((await readHistory(config))[0].password, 'saved-password');
+    assert.equal((await readHistoryWithCredentials(config))[0].accessCode, '');
+    assert.equal((await readHistoryWithCredentials(config))[0].password, 'saved-password');
 });
 
 test('an undecryptable access code alone reads as logged out so the gateway is not skipped', async (t) => {
-    const { loadConfig, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
 
     undecryptable.add('saved-access-code');
@@ -65,18 +65,18 @@ test('an undecryptable access code alone reads as logged out so the gateway is n
 });
 
 test('a legacy history password that cannot be decrypted reads as empty', async (t) => {
-    const { loadConfig, configPath } = setupConfig(t);
+    const { loadStores, configPath } = setupConfig(t);
     fs.writeFileSync(configPath, JSON.stringify({
         domain: 'https://nas.example',
         history: [{ domain: 'nas.example', account: 'user', password: 'not-legacy-ciphertext' }],
     }));
 
-    assert.equal((await readHistory(loadConfig()))[0].password, '');
+    assert.equal((await readHistoryWithCredentials(loadStores()))[0].password, '');
 });
 
 test('decryption failures are logged by field without ciphertext or plaintext', async (t) => {
-    const { loadConfig, configPath, logPath, undecryptable } = setupConfig(t);
-    const config = loadConfig();
+    const { loadStores, configPath, logPath, undecryptable } = setupConfig(t);
+    const config = loadStores();
     await seedLoggedInConfig(config);
     const stored = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 

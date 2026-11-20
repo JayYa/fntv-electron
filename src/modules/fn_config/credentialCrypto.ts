@@ -6,13 +6,8 @@ const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-2
 const IV = Buffer.alloc(16, 0); // Initialization vector
 const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
 
-/** 凭据在没有 safeStorage 前缀时的旧格式：明文，或旧版本用固定密钥加密的密码。 */
 export type LegacyFormat = 'plaintext' | 'legacyPassword';
 
-/**
- * 内存里的一个凭据。plain 是明文，stored 是可以原样写回的磁盘值；没有 stored 时写入前要加密
- * （新值、旧格式、safeStorage 要求重新加密）。sealed 是没解开的磁盘值，原样写回，读出来是空值。
- */
 export type Credential = { plain: string; stored?: string } | { sealed: string };
 
 export const NO_CREDENTIAL: Credential = { plain: '' };
@@ -21,7 +16,6 @@ export function plaintextOf(credential: Credential): string {
     return 'plain' in credential ? credential.plain : '';
 }
 
-/** 不解密，原样带着磁盘值。 */
 export function sealedCredential(stored: string): Credential {
     return stored ? { sealed: stored } : NO_CREDENTIAL;
 }

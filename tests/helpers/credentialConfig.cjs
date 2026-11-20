@@ -83,8 +83,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
 
     fs.mkdirSync(paths.userData, { recursive: true });
     return {
-        // 登录存储和设置项写同一个 config.json，测试里合在一个对象上用。
-        loadConfig: () => ({
+        loadStores: () => ({
             ...require('../../dest/modules/fn_config/loginStore.js'),
             ...require('../../dest/modules/fn_config/settings.js'),
         }),
@@ -102,7 +101,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
 }
 
 async function seedLoggedInConfig(config) {
-    await config.saveCurrentLogin({
+    await config.saveNewLogin({
         account: 'user',
         domain: 'https://nas.example',
         token: 'saved-token',
@@ -118,9 +117,8 @@ async function seedLoggedInConfig(config) {
     config.setMpvVolume(42);
 }
 
-// 登录历史只随一次新登录写入，这条登录也成为当前登录。
-async function addHistoryEntry(config, entry) {
-    await config.saveCurrentLogin({
+async function logInWithHistory(config, entry) {
+    await config.saveNewLogin({
         account: entry.account,
         domain: `https://${entry.domain}`,
         token: `${entry.account}-token`,
@@ -129,8 +127,7 @@ async function addHistoryEntry(config, entry) {
     }, entry);
 }
 
-// 列表加上每一条的凭据，和登录页点开每一条时看到的一样。
-async function readHistory(config) {
+async function readHistoryWithCredentials(config) {
     return Promise.all(config.listHistory().map(async (item) => ({
         domain: item.domain,
         account: item.account,
@@ -164,7 +161,7 @@ async function assertCredentialsRestored(config) {
     const loaded = await config.readCurrentLogin();
     assert.equal(loaded.token, 'saved-token');
     assert.equal(loaded.accessCode, 'saved-access-code');
-    const history = await readHistory(config);
+    const history = await readHistoryWithCredentials(config);
     assert.equal(history.at(-1).password, 'saved-password');
     assert.equal(history.at(-1).accessCode, 'saved-history-access-code');
 }
@@ -173,8 +170,8 @@ const SAVED_CREDENTIALS = ['saved-token', 'saved-access-code', 'saved-password',
 
 module.exports = {
     SAVED_CREDENTIALS,
-    addHistoryEntry,
-    readHistory,
+    logInWithHistory,
+    readHistoryWithCredentials,
     assertCredentialsRestored,
     assertLandedOnLoginPage,
     fakeMainWindow,

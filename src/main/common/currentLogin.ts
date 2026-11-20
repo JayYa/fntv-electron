@@ -122,14 +122,17 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
             return fail('session-not-restored', { title: '登录失败', message: '无法恢复登录状态，请重新登录。' });
         }
 
-        if (isNewLogin || baseUrl !== access.baseUrl) {
-            await loginStore.saveCurrentLogin({
-                account: steps.account,
-                domain: baseUrl,
-                token,
-                accessCode: granted.accessCode,
-                useHttps: baseUrl.startsWith('https://'),
-            }, steps.history);
+        const login = {
+            account: steps.account,
+            domain: baseUrl,
+            token,
+            accessCode: granted.accessCode,
+            useHttps: baseUrl.startsWith('https://'),
+        };
+        if (steps.history) {
+            await loginStore.saveNewLogin(login, steps.history);
+        } else if (isNewLogin || baseUrl !== access.baseUrl) {
+            await loginStore.saveCurrentLogin(login);
         }
 
         log.info('已建立当前登录，进入网页端, domain:', baseUrl);
