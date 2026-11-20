@@ -180,7 +180,7 @@ test('a new archive opens a PR from the automation branch against main', t => {
     const { calls, body } = runPrStep(t);
     assert.ok(calls.includes('push --force origin HEAD:refs/heads/automation/mpv-archive'), calls.join('\n'));
     const create = calls.find(call => call.startsWith('pr create'));
-    assert.match(create, /--base main --head automation\/mpv-archive --title fix\(deps\): 附带的 MPV 和插件更新到 fntv-mpv-v20261201_093000/);
+    assert.match(create, /--base main --head automation\/mpv-archive --title fix: 附带的 MPV 和插件更新到 fntv-mpv-v20261201_093000/);
     assert.match(calls.find(call => call.startsWith('commit')), /-- mpv-archive\.json README\.md docs\/external-runtime\.md$/);
     assert.ok(body.includes(NEW_ASSET) && body.includes(NEW_SHA) && body.includes('Approve workflows to run'), body);
 });
