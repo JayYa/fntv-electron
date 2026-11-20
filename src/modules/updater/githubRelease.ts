@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { currentArch, currentPlatform } from '../../public/platform';
+import { currentArch, currentPlatform, installerAssetName } from '../../public/platform';
 
 // GitHub 访问细节：限流判断、Release 页面回退、安装包命名
 
@@ -82,16 +82,8 @@ export async function fetchLatestTagFromReleasePage(repository: GitHubRepository
     return decodeURIComponent(match[1]);
 }
 
-/**
- * 按 package.json 的 artifactName（FNMedia_${version}_${os}_${arch}.${ext}）拼出当前平台的安装包名。
- * 以 v2.7.0 的真实资产核对过：Linux x64 是 x86_64。
- */
-export function expectedAssetName(version: string, platform: string = currentPlatform(), arch: string = currentArch()): string | null {
-    if (platform === 'win32' && arch === 'x64') return `FNMedia_${version}_win_x64.exe`;
-    if (platform === 'darwin' && (arch === 'x64' || arch === 'arm64')) return `FNMedia_${version}_mac_${arch}.dmg`;
-    if (platform === 'linux' && arch === 'x64') return `FNMedia_${version}_linux_x86_64.AppImage`;
-    if (platform === 'linux' && arch === 'arm64') return `FNMedia_${version}_linux_arm64.AppImage`;
-    return null;
+export function expectedAssetName(version: string, platform: NodeJS.Platform = currentPlatform(), arch: string = currentArch()): string | null {
+    return installerAssetName(platform, arch, version);
 }
 
 export function assetDownloadUrl({ owner, repo }: GitHubRepository, tagName: string, assetName: string): string {

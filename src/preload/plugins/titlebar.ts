@@ -3,13 +3,15 @@ import { ipcRenderer } from 'electron';
 import { registerHook } from '../core/hooks';
 import { HookType } from '../core/hooks';
 import logger from '../core/logger';
+import type { PlatformBehavior } from '../../public/platform';
 
-function injectTitleBar(): void {
+type TitleBar = PlatformBehavior['titleBar'];
+
+function injectTitleBar(titleBar: TitleBar): void {
     logger.info('Injecting custom title bar...');
     if (document.getElementById('custom-titlebar')) return;
 
-    // Chromium 在 macOS 上固定返回 MacIntel，Apple 芯片也一样。
-    const isMac = navigator.platform.startsWith('Mac');
+    const usesSystemButtons = titleBar === 'hiddenInset';
 
     const bar = document.createElement('div');
     bar.id = 'custom-titlebar';
@@ -31,7 +33,7 @@ function injectTitleBar(): void {
 
     // macOS 的按钮由系统窗口绘制，这里只保留透明拖动区域。
     // 其他平台继续使用原来的自定义窗口控制按钮。
-    bar.innerHTML = isMac ? '' : `
+    bar.innerHTML = usesSystemButtons ? '' : `
         <div id="titlebar-btns" style="-webkit-app-region:no-drag; display:flex; gap:2px; padding-right:4px;">
             <button id="min-btn" style="
                 background:transparent; 
@@ -91,7 +93,7 @@ function injectTitleBar(): void {
     document.body.appendChild(bar);
     logger.info('自定义标题栏已注入');
 
-    if (isMac) return;
+    if (usesSystemButtons) return;
 
     // 按钮交互效果
     const buttonIds: string[] = ['min-btn', 'max-btn', 'close-btn'];
@@ -144,6 +146,11 @@ function injectTitleBar(): void {
 }
 
 // 注册到 hook
-registerHook(HookType.OnReady, injectTitleBar);
+registerHook(HookType.OnReady, () => {
+    ipcRenderer.invoke('get-title-bar').then(
+        (titleBar: TitleBar) => injectTitleBar(titleBar),
+        (err: unknown) => logger.error('获取标题栏样式失败:', err),
+    );
+});
 
 export {};

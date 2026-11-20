@@ -9,7 +9,7 @@ const { once } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
 
 const NodeMpv = require('node-mpv-2');
-const { currentPlatform, mpvIpcSocket } = require('../dest/public/platform.js');
+const { currentPlatform, mpvIpcSocket } = require('../dest/public/platform/index.js');
 const { createPlaybackIpcSocket, removePlaybackIpcSocket } = require('../dest/modules/players/impl/mpvIpcSocket.js');
 
 // 假的 MPV JSON IPC 服务端：每个请求按 request_id 回 success，mpv-version 探测回一个版本号。

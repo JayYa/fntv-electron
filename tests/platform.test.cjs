@@ -11,7 +11,7 @@ const {
     mpvIpcSocket,
     mpvPlayer,
     inAppUpdateAvailability,
-} = require('../dest/public/platform.js');
+} = require('../dest/public/platform/index.js');
 
 const APPIMAGE = '/home/user/Apps/FNMedia_3.1.0_linux_x86_64.AppImage';
 
@@ -118,6 +118,15 @@ test('Linux uses the exit mode, a PNG window icon, restores on tray click and re
     assert.deepEqual(behavior.mpvExecutableExtensions, []);
     assert.equal(behavior.mpvNotFoundMessage, 'Linux平台未找到mpv播放器，请安装mpv播放器后重试');
     assert.equal(behavior.rejectsBasicTextStorage, true);
+});
+
+test('a platform without its own implementation behaves like Linux', () => {
+    assert.deepEqual(platformBehavior('freebsd'), platformBehavior('linux'));
+    assert.deepEqual(mpvPlayer('freebsd', undefined, 'C:\\mpv.exe', (target) => target === '/usr/bin/mpv'), { path: '/usr/bin/mpv', bundled: false });
+});
+
+test('a platform without its own installer never updates in app, even as a packaged AppImage', () => {
+    assert.equal(inAppUpdateAvailability('freebsd', true, APPIMAGE, () => true).available, false);
 });
 
 const windowsDirs = { homeDir: 'C:\\Users\\me', appDataDir: 'D:\\Profiles\\me\\Roaming' };
