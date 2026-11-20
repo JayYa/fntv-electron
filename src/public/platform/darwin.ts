@@ -2,9 +2,9 @@ import { firstExistingMpv, posixMpvIpcSocket, posixMpvUserConfigDir } from './po
 import { PlatformImpl } from './shared';
 
 const MPV_SEARCH_PATHS = [
-    '/opt/homebrew/bin/mpv',                     // Apple Silicon 上的 Homebrew
-    '/usr/local/bin/mpv',                        // Intel 上的 Homebrew 或手动安装
-    '/Applications/mpv.app/Contents/MacOS/mpv',  // App bundle
+    '/opt/homebrew/bin/mpv',
+    '/usr/local/bin/mpv',
+    '/Applications/mpv.app/Contents/MacOS/mpv',
 ];
 
 export const darwin: PlatformImpl = {

@@ -32,7 +32,6 @@ function handleClose(): void {
     if (mainWindow) mainWindow.close();
 }
 
-// 沙箱里的 preload 不读平台，标题栏样式由主进程给出
 function handleGetTitleBar(): PlatformBehavior['titleBar'] {
     return platformBehavior().titleBar;
 }

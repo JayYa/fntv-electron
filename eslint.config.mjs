@@ -20,7 +20,6 @@ const sharedRules = {
 const PLATFORM_INDEX_FILE = 'src/public/platform/index.ts';
 const PLATFORM_HINT = `用 ${PLATFORM_INDEX_FILE} 的 currentPlatform()、currentArch() 和 platformBehavior()`;
 
-// process.platform、process.arch，os.platform()、os.arch()，以及渲染进程里的 navigator.platform。
 const PLATFORM_PROPERTIES = [
     ...['process', 'os'].flatMap((object) => ['platform', 'arch'].map((property) => ({ object, property }))),
     { object: 'navigator', property: 'platform' },
@@ -77,9 +76,6 @@ const OS_IMPORT_SYNTAX = [
     }
 ];
 
-// 平台只在 platform/index.ts 按表选实现（docs/adr/0006），src 里任何地方都不比较平台：
-// 和 'win32'、'darwin'、'linux' 比较或 case 它们，不论值从哪来，平台目录里也一样；currentPlatform()、currentArch() 也不拿来比较。
-// 差异写进 platform/ 下对应平台的文件，调用处只读结果（CODING_STANDARDS.md「模块」）。
 const PLATFORM_FUNCTION = '/^current(Platform|Arch)$/';
 const PLATFORM_NAME = '/^(win32|darwin|linux)$/';
 const PLATFORM_BRANCH_MESSAGE = '平台差异写进 src/public/platform/ 下对应平台的文件，由 index.ts 查表选取，调用处只读结果，不要比较平台。';
@@ -127,7 +123,6 @@ const NO_SHUTDOWN_LISTENER = {
     message: `系统关机信号（session-end、powerMonitor 的 shutdown）只在 ${QUIT_COORDINATOR_FILE} 监听（listenForSystemShutdown），不要自己监听。`
 };
 
-// src 下除 platform/index.ts 外共用的 no-restricted-syntax；退出协调模块只额外放开 before-quit 和关机信号
 const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
 
 // fn_api/core 由主进程和 Proxy 共用，Proxy 服务运行在 utilityProcess 里，两者都不能加载 electron。
@@ -155,9 +150,6 @@ export default [
         },
         rules: {
             ...sharedRules,
-            // 平台判断散在各处时，macOS 和 Linux 分支只能在对应系统上验证。集中到 src/public/platform/，
-            // 由接收平台参数的函数查表决定，在 Windows 上也能测三个平台（tests/platform.test.cjs）。
-            // 各种写法的拦截见 tests/eslintPlatformRules.test.cjs。
             'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
             // safeStorage 同步方法的拦截见 tests/eslintSafeStorageRules.test.cjs。
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]

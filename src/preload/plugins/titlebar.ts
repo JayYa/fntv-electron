@@ -11,7 +11,6 @@ function injectTitleBar(titleBar: TitleBar): void {
     logger.info('Injecting custom title bar...');
     if (document.getElementById('custom-titlebar')) return;
 
-    // hiddenInset 是 macOS 的系统交通灯按钮，由主进程按平台给出（platformBehavior().titleBar）。
     const usesSystemButtons = titleBar === 'hiddenInset';
 
     const bar = document.createElement('div');

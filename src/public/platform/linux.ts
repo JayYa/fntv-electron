@@ -3,11 +3,11 @@ import { firstExistingMpv, posixMpvIpcSocket, posixMpvUserConfigDir } from './po
 import { NOT_PACKAGED, PlatformImpl } from './shared';
 
 const MPV_SEARCH_PATHS = [
-    '/usr/bin/mpv',       // 系统包管理器
-    '/usr/local/bin/mpv', // 手动编译安装
-    '/snap/bin/mpv',      // Snap
-    '/usr/games/mpv',     // 某些发行版
-    '/opt/mpv/bin/mpv',   // 可选安装位置
+    '/usr/bin/mpv',
+    '/usr/local/bin/mpv',
+    '/snap/bin/mpv',
+    '/usr/games/mpv',
+    '/opt/mpv/bin/mpv',
 ];
 
 export const linux: PlatformImpl = {

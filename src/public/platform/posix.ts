@@ -1,8 +1,6 @@
 import * as path from 'node:path';
 import { MpvIpcSocket, MpvPlayer, UserDirs } from './shared';
 
-/** macOS 和 Linux 共用的部分。路径都用 path.posix 拼，结果与运行测试的主机无关。 */
-
 /**
  * mpv 的查找规则（osdep/path-unix.c、osdep/path-darwin.c、options/configfiles.c）：
  * $XDG_CONFIG_HOME/mpv（mpv 只认绝对路径），否则 ~/.config/mpv。
@@ -19,7 +17,6 @@ export function posixMpvUserConfigDir(dirs: UserDirs, env: Record<string, string
     return standardDir;
 }
 
-/** 依次检查 searchPaths，取第一个存在的。macOS 和 Linux 没有附带 MPV。 */
 export function firstExistingMpv(searchPaths: string[], pathExists: (target: string) => boolean): MpvPlayer | undefined {
     const found = searchPaths.find(pathExists);
     return found ? { path: found, bundled: false } : undefined;

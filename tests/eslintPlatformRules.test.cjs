@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-// 平台只在 src/public/platform/index.ts 读取和选择（eslint.config.mjs，docs/adr/0006）。
 const eslint = new ESLint({ cwd: path.join(__dirname, '..') });
 const PLATFORM_INDEX = 'src/public/platform/index.ts';
 

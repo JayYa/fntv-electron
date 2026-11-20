@@ -5,16 +5,6 @@ import { win32 } from './win32';
 
 export type { CloseBehaviorSetting, InAppUpdateAvailability, MpvIpcSocket, MpvPlayer, PlatformBehavior, UserDirs } from './shared';
 
-/**
- * 平台差异集中在这个目录：维护者只有 Windows，散在各处的 macOS 和 Linux 分支在本机跑不到（docs/adr/0006）。
- * 每个平台一个文件（win32.ts、darwin.ts、linux.ts），实现 shared.ts 的 PlatformImpl；macOS 和 Linux 共用的逻辑在 posix.ts。
- * 本文件按平台查表取实现，这是唯一选平台的地方，src 里不写平台比较（eslint.config.mjs）。
- * 读取 process.platform 和 process.arch 只在本文件发生，其它模块用 currentPlatform() 取得当前平台，再传给下面的函数。
- * 函数接收平台参数，测试可以在任意主机上覆盖三个平台（tests/platform.test.cjs）。
- *
- * currentPlatform() 每次调用时读取，不缓存：已有测试通过改写 process.platform 模拟其它平台。
- */
-
 export function currentPlatform(): NodeJS.Platform {
     return process.platform;
 }
@@ -25,17 +15,16 @@ export function currentArch(): string {
 
 const IMPLS: Record<'win32' | 'darwin' | 'linux', PlatformImpl> = { win32, darwin, linux };
 
-function supportedImpl(platform: NodeJS.Platform): PlatformImpl | undefined {
+function implWithInstaller(platform: NodeJS.Platform): PlatformImpl | undefined {
     return Object.hasOwn(IMPLS, platform) ? IMPLS[platform as keyof typeof IMPLS] : undefined;
 }
 
-/** 没有自己实现的平台（freebsd 之类）按 Linux 运行。安装包名和应用内更新不这样回退：这些平台没有安装包。 */
-function implFor(platform: NodeJS.Platform): PlatformImpl {
-    return supportedImpl(platform) ?? linux;
+function implOrLinux(platform: NodeJS.Platform): PlatformImpl {
+    return implWithInstaller(platform) ?? linux;
 }
 
 export function platformBehavior(platform: NodeJS.Platform = currentPlatform()): PlatformBehavior {
-    return implFor(platform).behavior;
+    return implOrLinux(platform).behavior;
 }
 
 /**
@@ -54,7 +43,7 @@ export function mpvUserConfigDir(
     if (env.MPV_HOME) {
         return env.MPV_HOME;
     }
-    return implFor(platform).mpvUserConfigDir(dirs, env, userMpvPath, pathExists);
+    return implOrLinux(platform).mpvUserConfigDir(dirs, env, userMpvPath, pathExists);
 }
 
 /**
@@ -71,7 +60,7 @@ export function mpvPlayer(
     if (userMpvPath) {
         return { path: userMpvPath, bundled: false };
     }
-    return implFor(platform).defaultMpvPlayer(bundledMpvPath, pathExists);
+    return implOrLinux(platform).defaultMpvPlayer(bundledMpvPath, pathExists);
 }
 
 /**
@@ -81,7 +70,7 @@ export function mpvPlayer(
  * Windows 是命名管道，不落盘；其它平台是 tmpDir 下的 socket 文件。
  */
 export function mpvIpcSocket(platform: NodeJS.Platform, tmpDir: string, id: string): MpvIpcSocket {
-    return implFor(platform).mpvIpcSocket(tmpDir, `fntv-mpv-${id}`);
+    return implOrLinux(platform).mpvIpcSocket(tmpDir, `fntv-mpv-${id}`);
 }
 
 /**
@@ -94,7 +83,7 @@ export function inAppUpdateAvailability(
     appImagePath: string | undefined,
     isWritableDir: (dir: string) => boolean,
 ): InAppUpdateAvailability {
-    const impl = supportedImpl(platform);
+    const impl = implWithInstaller(platform);
     if (!impl) {
         return { available: false, reason: `${platform} 不支持应用内更新` };
     }
@@ -103,6 +92,6 @@ export function inAppUpdateAvailability(
 
 /** 按 package.json 的 artifactName（FNMedia_${version}_${os}_${arch}.${ext}）拼出安装包名，没有这个架构的包时是 null。 */
 export function installerAssetName(platform: NodeJS.Platform, arch: string, version: string): string | null {
-    const suffixes = supportedImpl(platform)?.installerAssetSuffix ?? {};
+    const suffixes = implWithInstaller(platform)?.installerAssetSuffix ?? {};
     return Object.hasOwn(suffixes, arch) ? `FNMedia_${version}_${suffixes[arch]}` : null;
 }

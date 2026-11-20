@@ -16,7 +16,6 @@ export const win32: PlatformImpl = {
             showsMinimizeBalloon: true,
         },
         mpvExecutableExtensions: ['exe'],
-        // 总有附带 MPV，用不到。
         mpvNotFoundMessage: '未找到mpv播放器',
         rejectsBasicTextStorage: false,
         treatsUnknownMpvConfAsUserOwned: false,
@@ -38,17 +37,14 @@ export const win32: PlatformImpl = {
         return path.win32.join(dirs.appDataDir, 'mpv');
     },
 
-    /** 附带 MPV，不检查它是否存在。 */
     defaultMpvPlayer(bundledMpvPath) {
         return { path: bundledMpvPath, bundled: true };
     },
 
-    /** 命名管道，不落盘。 */
     mpvIpcSocket(_tmpDir, name) {
         return { path: `\\\\.\\pipe\\${name}`, isFile: false };
     },
 
-    /** NSIS 安装包，打包后就能更新。 */
     inAppUpdateAvailability(isPackaged) {
         return isPackaged ? { available: true } : NOT_PACKAGED;
     },

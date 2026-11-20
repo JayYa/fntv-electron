@@ -82,7 +82,6 @@ export async function fetchLatestTagFromReleasePage(repository: GitHubRepository
     return decodeURIComponent(match[1]);
 }
 
-/** 当前平台的安装包名，命名规则见 installerAssetName。 */
 export function expectedAssetName(version: string, platform: NodeJS.Platform = currentPlatform(), arch: string = currentArch()): string | null {
     return installerAssetName(platform, arch, version);
 }
