@@ -9,10 +9,6 @@ const fs = require('node:fs');
 
 const TYPES = ['feat', 'fix', 'perf', 'docs', 'refactor', 'test', 'chore', 'ci', 'build', 'style', 'revert'];
 const CONVENTIONAL = new RegExp(`^(${TYPES.join('|')})(\\([A-Za-z0-9._/-]+\\))?!?: \\S`);
-// CI、构建、测试方面的改动不进 release（用户 2026-11-14 定的规则）。这些类型会进 CHANGELOG 并触发版本，
-// 和下面的 scope 搭配时拒绝，改用同名的 ci、build、test 类型（它们在 release-please-config.json 里是 hidden）。
-// 按 scope 而不按改动路径判定：CI 改动常常也改 package.json、CLAUDE.md，路径判定拦不住；按 scope 判定
-// commit-msg hook 和 PR 标题检查都能用。deps 不在列：Renovate 对运行时依赖用 fix(deps)，这些依赖进安装包。
 const RELEASE_TYPES = ['feat', 'fix', 'perf'];
 const INTERNAL_SCOPES = ['ci', 'build', 'test', 'tests'];
 const RELEASE_WITH_INTERNAL_SCOPE = new RegExp(`^(${RELEASE_TYPES.join('|')})\\((${INTERNAL_SCOPES.join('|')})\\)!?:`, 'i');

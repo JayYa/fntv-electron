@@ -76,8 +76,8 @@ jobs:
             exit 0
           fi
 
-          # 打进安装包的运行时依赖，和 Renovate 一样用 fix(deps)，会进用户可见的更新日志。
-          title="fix(deps): 附带的 MPV 和插件更新到 $TAG"
+          # 不带 scope，否则更新日志里会出现 **deps:** 前缀。
+          title="fix: 附带的 MPV 和插件更新到 $TAG"
           body="$RUNNER_TEMP/mpv-archive-pr.md"
           {
             echo "由 \`update-mpv-archive.yml\` 运行 \`scripts/update-mpv-archive.cjs\` 生成。"
