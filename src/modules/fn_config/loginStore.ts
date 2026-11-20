@@ -21,6 +21,12 @@ const HISTORY_CREDENTIALS = { password: 'legacyPassword', accessCode: 'plaintext
 
 type Credentials<Table> = { -readonly [Field in keyof Table]: Credential };
 
+/**
+ * open：解开凭据，用于要读明文或写入新凭据的操作，写回时凭据字段总是写出。
+ * sealed：凭据保持磁盘值，用于只删登录历史条目的操作，不碰 safeStorage，写回时原样。
+ */
+type CredentialAccess = 'open' | 'sealed';
+
 interface HistoryEntry {
     /** 磁盘上的这一条，凭据以外的字段原样写回。 */
     item: StoredHistoryItem;
@@ -28,6 +34,7 @@ interface HistoryEntry {
 }
 
 interface LoginState {
+    access: CredentialAccess;
     found: boolean;
     account?: unknown;
     domain?: unknown;
@@ -36,16 +43,8 @@ interface LoginState {
     history?: HistoryEntry[];
 }
 
-/** 读取当前登录的结果。token 为空表示已退出登录或凭据解不开。 */
+/** 当前登录。读出来 token 为空表示已退出登录或凭据解不开。 */
 export interface SavedLogin {
-    domain: string;
-    account: string;
-    token: string;
-    accessCode: string;
-    useHttps: boolean;
-}
-
-export interface LoginToSave {
     domain: string;
     account: string;
     token: string;
@@ -71,16 +70,25 @@ export interface HistoryListing extends HistoryKey {
 
 const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+const isEntry = (item: HistoryKey, { domain, account }: HistoryKey): boolean => item.domain === domain && item.account === account;
+
+const historyOf = (stored: StoredConfig | null): StoredHistoryItem[] => (stored ? usableHistory(stored) ?? [] : []);
+
+// 访问码解不开时过不了网关，token 单独可用也不算已登录。
+function visibleToken({ token, accessCode }: LoginState['credentials']): string {
+    return 'sealed' in accessCode ? '' : plaintextOf(token);
+}
+
 async function readCredentials<Table extends Record<string, LegacyFormat>>(
     table: Table,
     source: Record<string, unknown>,
     label: string,
-    decrypt: boolean,
+    access: CredentialAccess,
 ): Promise<Credentials<Table>> {
     const credentials = {} as Credentials<Table>;
     for (const field of Object.keys(table) as (keyof Table & string)[]) {
         const stored = asString(source[field]);
-        if (!decrypt) {
+        if (access === 'sealed') {
             credentials[field] = sealedCredential(stored);
             continue;
         }
@@ -92,28 +100,33 @@ async function readCredentials<Table extends Record<string, LegacyFormat>>(
     return credentials;
 }
 
-// 原来没有这个字段、现在也是空值时不加字段。
-function writeCredentials(target: Record<string, unknown>, credentials: Record<string, Credential>, encrypted: Map<string, string>): void {
+// sealed 时原来没有这个字段、现在也是空值就不加字段，写回的内容和读到的一样。
+function writeCredentials(
+    target: Record<string, unknown>,
+    credentials: Record<string, Credential>,
+    encrypted: Map<string, string>,
+    access: CredentialAccess,
+): void {
     for (const [field, credential] of Object.entries(credentials)) {
         const value = storedValueOf(credential, encrypted);
-        if (value !== '' || field in target) target[field] = value;
+        if (access === 'open' || value !== '' || field in target) target[field] = value;
     }
 }
 
-// decrypt 为 false 时凭据保持磁盘值，用于只删条目、不碰明文的操作。
-async function load(decrypt: boolean): Promise<LoginState> {
+async function load(access: CredentialAccess): Promise<LoginState> {
     const stored = readConfigFile();
     const source: StoredConfig = stored ?? {};
     const history = usableHistory(source);
     return {
+        access,
         found: stored !== null,
         account: source.account,
         domain: source.domain,
         useHttps: source.useHttps,
-        credentials: await readCredentials(LOGIN_CREDENTIALS, source, '', decrypt),
+        credentials: await readCredentials(LOGIN_CREDENTIALS, source, '', access),
         history: history && await Promise.all(history.map(async (item, index) => ({
             item,
-            credentials: await readCredentials(HISTORY_CREDENTIALS, item, `history[${index}].`, decrypt),
+            credentials: await readCredentials(HISTORY_CREDENTIALS, item, `history[${index}].`, access),
         }))),
     };
 }
@@ -126,21 +139,19 @@ function allCredentials(state: LoginState): Credential[] {
 }
 
 /**
- * 写回登录存储：先加密所有新明文，加密完成后才重新读文件取设置项，所以期间同步写入的设置项不会丢。
- * 加密失败时不写。
+ * 登录存储唯一的写盘处：先加密所有新明文，加密完成后才重新读文件取设置项，
+ * 所以期间同步写入的设置项不会丢。加密失败时不写。
  */
 async function commit(state: LoginState): Promise<void> {
     const encrypted = await encryptAll(allCredentials(state).filter(needsEncryption).map(credential => credential.plain));
-    const stored: StoredConfig = {
-        ...readConfigFile(),
-        account: state.account,
-        domain: state.domain,
-        useHttps: state.useHttps,
-    };
-    writeCredentials(stored, state.credentials, encrypted);
+    const stored: StoredConfig = { ...readConfigFile() };
+    stored.account = state.account;
+    stored.domain = state.domain;
+    writeCredentials(stored, state.credentials, encrypted, state.access);
+    stored.useHttps = state.useHttps;
     stored.history = state.history?.map(({ item, credentials }) => {
         const written: Record<string, unknown> = { ...item };
-        writeCredentials(written, credentials, encrypted);
+        writeCredentials(written, credentials, encrypted, state.access);
         return written;
     });
     writeConfigFile(stored);
@@ -155,10 +166,10 @@ function serialize<T>(task: () => Promise<T>): Promise<T> {
     return run;
 }
 
-/** 凭据的唯一写路径。change 同步修改读出的状态，返回 false 时不写。 */
-function transaction(decrypt: boolean, change: (state: LoginState) => boolean | void): Promise<boolean> {
+/** 改动登录存储的操作都经过这里。change 同步修改读出的状态，返回 false 时不写。 */
+function transaction(access: CredentialAccess, change: (state: LoginState) => boolean | void): Promise<boolean> {
     return serialize(async () => {
-        const state = await load(decrypt);
+        const state = await load(access);
         if (change(state) === false) return false;
         await commit(state);
         return true;
@@ -167,26 +178,20 @@ function transaction(decrypt: boolean, change: (state: LoginState) => boolean | 
 
 /**
  * 读取当前登录，必要时把旧格式凭据迁移到安全存储；文件不存在或损坏时返回 null。
- * 访问码解不开时过不了网关，token 单独可用也不算已登录，所以 token 读出来为空。
+ * 迁移失败不影响本次读取，旧值留在磁盘上，下次读取时重试。
  */
 export function readCurrentLogin(): Promise<SavedLogin | null> {
     return serialize(async () => {
-        const state = await load(true);
+        const state = await load('open');
         if (!state.found) return null;
         if (allCredentials(state).some(needsEncryption)) {
-            try {
-                await commit(state);
-            } catch {
-                // 迁移失败不影响本次读取，旧值留在磁盘上，下次读取时重试。
-                warnOnce('迁移旧版凭据失败，暂时保留原值');
-            }
+            await commit(state).catch(() => warnOnce('迁移旧版凭据失败，暂时保留原值'));
         }
-        const { token, accessCode } = state.credentials;
         return {
             domain: asString(state.domain),
             account: asString(state.account),
-            token: 'sealed' in accessCode ? '' : plaintextOf(token),
-            accessCode: plaintextOf(accessCode),
+            token: visibleToken(state.credentials),
+            accessCode: plaintextOf(state.credentials.accessCode),
             useHttps: state.useHttps === true,
         };
     });
@@ -200,11 +205,11 @@ function findEvictionIndex(history: HistoryEntry[]): number {
     return history.length - 1;
 }
 
-function addToHistory(state: LoginState, { domain, account, password, accessCode, useHttps }: NewHistoryEntry): void {
-    const history = (state.history ?? []).filter(entry => !(entry.item.domain === domain && entry.item.account === account));
+function addToHistory(state: LoginState, entry: NewHistoryEntry): void {
+    const history = (state.history ?? []).filter(existing => !isEntry(existing.item, entry));
     history.unshift({
-        item: { domain, account, password: '', accessCode: '', useHttps: useHttps || false },
-        credentials: { password: { plain: password }, accessCode: { plain: accessCode || '' } },
+        item: { domain: entry.domain, account: entry.account, password: '', accessCode: '', useHttps: entry.useHttps || false },
+        credentials: { password: { plain: entry.password }, accessCode: { plain: entry.accessCode || '' } },
     });
     while (history.length > HISTORY_LIMIT) {
         history.splice(findEvictionIndex(history), 1);
@@ -214,10 +219,12 @@ function addToHistory(state: LoginState, { domain, account, password, accessCode
 
 /**
  * 保存当前登录；给了 history 就在同一次写入里加进登录历史（去重、最多 5 条），两者要么都写上，要么都没写。
- * 新凭据总是重新加密：安全存储不可用时抛错，文件不变。解不开的旧凭据被这次的值替换。
+ * 新凭据总是重新加密：安全存储不可用时抛错，文件不变。解不开的旧 token 和访问码被这次的值替换，
+ * 所以 token 不能为空，退出登录用 clearToken。
  */
-export function saveCurrentLogin(login: LoginToSave, history?: NewHistoryEntry): Promise<void> {
-    return transaction(true, (state) => {
+export function saveCurrentLogin(login: SavedLogin, history?: NewHistoryEntry): Promise<void> {
+    if (!login.token) return Promise.reject(new Error('保存当前登录需要 token，退出登录用 clearToken'));
+    return transaction('open', (state) => {
         state.account = login.account;
         state.domain = login.domain;
         state.useHttps = login.useHttps;
@@ -227,26 +234,23 @@ export function saveCurrentLogin(login: LoginToSave, history?: NewHistoryEntry):
 }
 
 /**
- * 退出登录：清空 token，保留账号、地址、访问码和 HTTPS 设置。解不开的 token 原样留着，
- * 密钥恢复后由用户重新登录替换。没有可清的内容时不写文件，返回 false。
+ * 退出登录：清空 token，保留账号、地址、访问码和 HTTPS 设置。token 本身解不开时原样留着，
+ * 由用户之后的登录替换。没有可清的内容时不写文件，返回 false。
  */
 export function clearToken(): Promise<boolean> {
-    return transaction(true, (state) => {
-        const { token, accessCode } = state.credentials;
-        const visibleToken = 'sealed' in accessCode ? '' : plaintextOf(token);
-        if (!state.found || !(visibleToken || state.domain)) return false;
+    return transaction('open', (state) => {
+        if (!state.found || !(visibleToken(state.credentials) || state.domain)) return false;
         state.account = asString(state.account);
         state.domain = asString(state.domain);
         state.useHttps = state.useHttps === true;
-        if ('plain' in token) state.credentials.token = NO_CREDENTIAL;
+        if ('plain' in state.credentials.token) state.credentials.token = NO_CREDENTIAL;
         return true;
     });
 }
 
 /** 登录历史列表，不解密、不含凭据。读盘失败时抛出。 */
 export function listHistory(): HistoryListing[] {
-    const stored = readConfigFile();
-    return (stored ? usableHistory(stored) ?? [] : []).map(item => ({
+    return historyOf(readConfigFile()).map(item => ({
         domain: item.domain,
         account: item.account,
         useHttps: item.useHttps === true,
@@ -254,22 +258,21 @@ export function listHistory(): HistoryListing[] {
 }
 
 /** 一条登录历史的凭据。找不到或解不开时读出来是空值，由用户手动输入。 */
-export function historyCredentials({ domain, account }: HistoryKey): Promise<{ password: string; accessCode: string }> {
+export function historyCredentials(key: HistoryKey): Promise<{ password: string; accessCode: string }> {
     return serialize(async () => {
-        const stored = readConfigFile();
-        const history = stored ? usableHistory(stored) ?? [] : [];
-        const index = history.findIndex(item => item.domain === domain && item.account === account);
+        const history = historyOf(readConfigFile());
+        const index = history.findIndex(item => isEntry(item, key));
         if (index < 0) return { password: '', accessCode: '' };
-        const { password, accessCode } = await readCredentials(HISTORY_CREDENTIALS, history[index], `history[${index}].`, true);
+        const { password, accessCode } = await readCredentials(HISTORY_CREDENTIALS, history[index], `history[${index}].`, 'open');
         return { password: plaintextOf(password), accessCode: plaintextOf(accessCode) };
     });
 }
 
 /** 删除一条登录历史，不影响当前登录。没有这一条时返回 false。 */
-export function removeHistory({ domain, account }: HistoryKey): Promise<boolean> {
-    return transaction(false, (state) => {
+export function removeHistory(key: HistoryKey): Promise<boolean> {
+    return transaction('sealed', (state) => {
         const history = state.history ?? [];
-        const kept = history.filter(entry => !(entry.item.domain === domain && entry.item.account === account));
+        const kept = history.filter(entry => !isEntry(entry.item, key));
         if (kept.length === history.length) return false;
         state.history = kept;
         return true;
@@ -278,7 +281,7 @@ export function removeHistory({ domain, account }: HistoryKey): Promise<boolean>
 
 /** 清空登录历史，不影响当前登录。 */
 export function clearHistory(): Promise<void> {
-    return transaction(false, (state) => {
+    return transaction('sealed', (state) => {
         state.history = [];
     }).then(() => undefined);
 }

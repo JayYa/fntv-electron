@@ -71,9 +71,9 @@ export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
  */
 export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<void> {
     // 从配置中恢复 cookie
-    let savedConfig;
+    let savedLogin;
     try {
-        savedConfig = await readCurrentLogin();
+        savedLogin = await readCurrentLogin();
     } catch (error) {
         const message = error instanceof Error ? error.message : '无法读取配置文件';
         log.error('读取配置失败:', error);
@@ -86,17 +86,17 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
         showLoginPage(mainWindow);
         return;
     }
-    if (!savedConfig || !savedConfig.token || !savedConfig.domain) {
+    if (!savedLogin || !savedLogin.token || !savedLogin.domain) {
         log.warn('没有找到已保存的配置，无法恢复 cookie');
         showLoginPage(mainWindow);
         return;
     }
 
     const result = await restoreCurrentLogin(() => mainWindow, {
-        baseUrl: savedConfig.domain,
-        accessCode: savedConfig.accessCode || '',
-        account: savedConfig.account || '',
-        savedToken: savedConfig.token,
+        baseUrl: savedLogin.domain,
+        accessCode: savedLogin.accessCode || '',
+        account: savedLogin.account || '',
+        savedToken: savedLogin.token,
     });
     if (!result.ok) {
         log.warn('恢复当前登录失败，跳转到登录页面:', result.reason);

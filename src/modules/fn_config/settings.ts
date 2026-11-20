@@ -40,7 +40,6 @@ function readStoredConfig(): Settings {
     return stored ? { ...stored, history: usableHistory(stored) } : {};
 }
 
-const writeStoredConfig = writeConfigFile;
 
 /** 应用更新下载加速的默认中转地址，主进程和登录页都从这里取 */
 export const DEFAULT_DOWNLOAD_PROXY_URL = 'https://gh-proxy.com/';
@@ -65,7 +64,7 @@ export function setAppDownloadProxyConfig({ enabled = false, proxyUrl = DEFAULT_
     const config = readStoredConfig();
     config.downloadProxyEnabled = enabled;
     config.downloadProxy = proxyUrl;
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 // 获取是否启用 MPV 播放接管（沿用旧字段以兼容已有配置）
@@ -78,7 +77,7 @@ export function getHideOriginalPlayButton(): boolean {
 export function setHideOriginalPlayButton(enabled: boolean): void {
     const config = readStoredConfig();
     config.hideOriginalPlayButton = enabled;
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 // 获取NAS 中转开关
@@ -91,7 +90,7 @@ export function getNasProxyEnabled(): boolean {
 export function setNasProxyEnabled(enabled: boolean): void {
     const config = readStoredConfig();
     config.nasProxyEnabled = enabled;
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 // 获取 macOS 关闭行为偏好
@@ -104,7 +103,7 @@ export function getMacCloseAction(): 'minimize' | 'quit' | 'ask' {
 export function setMacCloseAction(action: 'minimize' | 'quit' | 'ask'): void {
     const config = readStoredConfig();
     config.macCloseAction = action;
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 // 获取托盘通知是否已显示过
@@ -117,7 +116,7 @@ export function getTrayNotificationShown(): boolean {
 export function setTrayNotificationShown(shown: boolean): void {
     const config = readStoredConfig();
     config.trayNotificationShown = shown;
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 // 获取MPV播放器路径配置
@@ -134,7 +133,7 @@ export function setMpvPlayerPath(path: string | null): void {
     } else {
         config.mpvPlayerPath = path;
     }
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 export function getMpvVolume(): number {
@@ -151,7 +150,7 @@ export function setMpvVolume(volume: number): void {
 
     const config = readStoredConfig();
     config.mpvVolume = Math.min(100, Math.max(0, Math.round(volume)));
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }
 
 export function getExitMode(): 'direct' | 'minimize' | 'ask' {
@@ -161,5 +160,5 @@ export function getExitMode(): 'direct' | 'minimize' | 'ask' {
 export function setExitMode(mode: 'direct' | 'minimize' | 'ask'): void {
     const config = readStoredConfig();
     config.exitMode = mode;
-    writeStoredConfig(config);
+    writeConfigFile(config);
 }

@@ -21,14 +21,9 @@ const WRITES = {
     'clearing the history': (config) => config.clearHistory(),
 };
 
-const STATES = [
-    { undecryptable: false, legacy: false, encryptionAvailable: true },
-    { undecryptable: true, legacy: false, encryptionAvailable: true },
-    { undecryptable: false, legacy: true, encryptionAvailable: true },
-    { undecryptable: true, legacy: true, encryptionAvailable: true },
-    { undecryptable: true, legacy: false, encryptionAvailable: false },
-    { undecryptable: true, legacy: true, encryptionAvailable: false },
-];
+const STATES = [false, true].flatMap((undecryptable) => [false, true].flatMap((legacy) => [true, false].map(
+    (encryptionAvailable) => ({ undecryptable, legacy, encryptionAvailable }),
+)));
 
 const describe = ({ undecryptable, legacy, encryptionAvailable }) => [
     undecryptable && 'an undecryptable entry',
@@ -49,10 +44,14 @@ for (const state of STATES) {
                 stored.history.push({ domain: 'old.example', account: 'old', password: legacyEncrypt('old-password') });
                 fs.writeFileSync(configPath, JSON.stringify(stored));
             }
-            if (state.undecryptable) undecryptable.add('saved-password');
+            if (state.undecryptable) {
+                undecryptable.add('saved-password');
+                undecryptable.add('saved-token');
+            }
             setEncryptionAvailable(state.encryptionAvailable);
             const before = fs.readFileSync(configPath, 'utf8');
             const keptCiphertext = JSON.parse(before).history.find((item) => item.domain === 'nas.example').password;
+            const tokenCiphertext = JSON.parse(before).token;
 
             const outcome = await write(config).then(() => 'ok', (error) => error);
 
@@ -65,9 +64,36 @@ for (const state of STATES) {
             if (name !== 'clearing the history') {
                 assert.equal(JSON.parse(after).history.find((item) => item.domain === 'nas.example').password, keptCiphertext);
             }
+            if (state.undecryptable && name !== 'saving a new login') {
+                assert.equal(JSON.parse(after).token, tokenCiphertext);
+            }
         });
     }
 }
+
+test('a first login writes the config keys in the order earlier versions wrote them', async (t) => {
+    const { loadConfig, configPath } = setupConfig(t);
+    const config = loadConfig();
+
+    await seedLoggedInConfig(config);
+
+    const stored = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.deepEqual(Object.keys(stored), ['account', 'domain', 'token', 'accessCode', 'useHttps', 'history', 'mpvVolume']);
+    assert.deepEqual(Object.keys(stored.history[0]), ['domain', 'account', 'password', 'accessCode', 'useHttps']);
+});
+
+test('saving a current login without a token is refused so undecryptable credentials are not dropped', async (t) => {
+    const { loadConfig, configPath } = setupConfig(t);
+    const config = loadConfig();
+    await seedLoggedInConfig(config);
+    const before = fs.readFileSync(configPath, 'utf8');
+
+    await assert.rejects(
+        config.saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: '', accessCode: '', useHttps: true }),
+        /clearToken/,
+    );
+    assert.equal(fs.readFileSync(configPath, 'utf8'), before);
+});
 
 test('a new login that cannot be saved does not reach the history either', async (t) => {
     const { loadConfig, setEncryptionAvailable } = setupConfig(t);

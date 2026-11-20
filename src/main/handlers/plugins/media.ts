@@ -48,11 +48,11 @@ async function refreshWindow(): Promise<void> {
 }
 
 async function connect(): ReturnType<PlayDeps['connect']> {
-    const config = await readCurrentLogin();
-    if (!config?.domain || !config.token || !config.account) {
+    const login = await readCurrentLogin();
+    if (!login?.domain || !login.token || !login.account) {
         throw new Error('无法找到有效的服务器登录配置');
     }
-    const { domain, token, account } = config;
+    const { domain, token, account } = login;
 
     // 播放凭据只取自主进程安全配置，不信任远程页面传入的 token。
     const fnapi = new fn.ApiService(domain, token);
