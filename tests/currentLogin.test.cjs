@@ -19,6 +19,7 @@ function setup(t, {
     userInfo = ok({ username: 'alice' }),
     cookiesFail = false,
     trustCertificate = false,
+    rememberCertificate = false,
     accessCodeStatus = null,
     encryptionAvailable = true,
     clearStorageHangs = false,
@@ -65,7 +66,7 @@ function setup(t, {
         dialog: {
             async showMessageBox(...args) {
                 dialogs.push(args.at(-1).title);
-                return { response: trustCertificate ? 0 : 1, checkboxChecked: false };
+                return { response: trustCertificate ? 0 : 1, checkboxChecked: rememberCertificate };
             },
         },
         net: {
@@ -144,6 +145,7 @@ function setup(t, {
         mainWindow: () => mainWindow,
         currentLogin: () => require('../dest/main/common/currentLogin.js'),
         accessGrant: () => require('../dest/modules/fn_api/accessGrant.js'),
+        certTrust: () => require('../dest/modules/cert_trust/index.js'),
         loadWinctrl: () => require('../dest/main/common/winctrl.js'),
         async login(loginData = PASSWORD_LOGIN) {
             const replies = [];
@@ -219,6 +221,32 @@ test('after the user trusts an untrusted certificate, password login is retried 
     assert.equal(world.loginRequests.length, 2);
     assert.equal((await world.config.readCurrentLogin()).token, 'new-token');
     assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/v`]);
+});
+
+test('trusting a certificate without "remember" does not add the host to the trusted hosts kept across restarts', async (t) => {
+    const world = setup(t, {
+        loginResponses: [certificateError(), ok({ token: 'new-token' })],
+        trustCertificate: true,
+    });
+
+    assert.deepEqual(await world.login(), []);
+
+    assert.equal(world.certTrust().isTrusted(NAS), true);
+    world.certTrust().reloadTrustedHosts();
+    assert.deepEqual(world.certTrust().getTrustedHosts(), []);
+});
+
+test('trusting a certificate with "remember" keeps the host trusted across restarts', async (t) => {
+    const world = setup(t, {
+        loginResponses: [certificateError(), ok({ token: 'new-token' })],
+        trustCertificate: true,
+        rememberCertificate: true,
+    });
+
+    assert.deepEqual(await world.login(), []);
+
+    world.certTrust().reloadTrustedHosts();
+    assert.deepEqual(world.certTrust().getTrustedHosts(), [new URL(NAS).host]);
 });
 
 test('when the user does not trust the certificate, password login is cancelled and nothing is saved', async (t) => {
