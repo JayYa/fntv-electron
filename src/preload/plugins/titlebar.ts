@@ -3,8 +3,9 @@ import { ipcRenderer } from 'electron';
 import { registerHook } from '../core/hooks';
 import { HookType } from '../core/hooks';
 import logger from '../core/logger';
+import type { PlatformBehavior } from '../../public/platform';
 
-type TitleBar = 'hiddenInset' | 'frameless';
+type TitleBar = PlatformBehavior['titleBar'];
 
 function injectTitleBar(titleBar: TitleBar): void {
     logger.info('Injecting custom title bar...');

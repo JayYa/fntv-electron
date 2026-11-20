@@ -29,7 +29,7 @@ function supportedImpl(platform: NodeJS.Platform): PlatformImpl | undefined {
     return Object.hasOwn(IMPLS, platform) ? IMPLS[platform as keyof typeof IMPLS] : undefined;
 }
 
-/** 没有自己实现的平台（freebsd 之类）按 Linux 运行。只有安装包名不这样回退：这些平台没有安装包。 */
+/** 没有自己实现的平台（freebsd 之类）按 Linux 运行。安装包名和应用内更新不这样回退：这些平台没有安装包。 */
 function implFor(platform: NodeJS.Platform): PlatformImpl {
     return supportedImpl(platform) ?? linux;
 }
@@ -94,7 +94,11 @@ export function inAppUpdateAvailability(
     appImagePath: string | undefined,
     isWritableDir: (dir: string) => boolean,
 ): InAppUpdateAvailability {
-    return implFor(platform).inAppUpdateAvailability(isPackaged, appImagePath, isWritableDir);
+    const impl = supportedImpl(platform);
+    if (!impl) {
+        return { available: false, reason: `${platform} 不支持应用内更新` };
+    }
+    return impl.inAppUpdateAvailability(isPackaged, appImagePath, isWritableDir);
 }
 
 /** 按 package.json 的 artifactName（FNMedia_${version}_${os}_${arch}.${ext}）拼出安装包名，没有这个架构的包时是 null。 */

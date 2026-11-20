@@ -8,7 +8,7 @@ status: accepted
 
 ## 维护者的决定（2026-11-20）
 
-- **没有自己实现的平台（freebsd 之类）按 Linux 运行。** 回退只写在 `index.ts` 的 `implFor` 里。安装包名例外：这些平台没有安装包，`installerAssetName` 返回 null，更新提示不给下载链接。
+- **没有自己实现的平台（freebsd 之类）按 Linux 运行。** 回退只写在 `index.ts` 的 `implFor` 里。比原来多的影响：拒绝 basic_text 凭据后端，按 Linux 的位置找 mpv。安装包名和应用内更新例外：这些平台没有安装包，`installerAssetName` 返回 null，更新提示不给下载链接，`inAppUpdateAvailability` 返回不可用。
 - **对外函数的签名不变**，仍接收平台参数，测试走公开 API 在任意主机上覆盖三个平台，不单独测平台文件。
 - **每个平台文件把 `platformBehavior` 写成完整的字面量**，Windows 和 Linux 相同的文案也各写一份；接口保证不漏字段。`posix.ts` 只共用函数逻辑。
 

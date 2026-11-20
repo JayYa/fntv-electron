@@ -125,6 +125,10 @@ test('a platform without its own implementation behaves like Linux', () => {
     assert.deepEqual(mpvPlayer('freebsd', undefined, 'C:\\mpv.exe', (target) => target === '/usr/bin/mpv'), { path: '/usr/bin/mpv', bundled: false });
 });
 
+test('a platform without its own installer never updates in app, even as a packaged AppImage', () => {
+    assert.equal(inAppUpdateAvailability('freebsd', true, APPIMAGE, () => true).available, false);
+});
+
 const windowsDirs = { homeDir: 'C:\\Users\\me', appDataDir: 'D:\\Profiles\\me\\Roaming' };
 const macDirs = { homeDir: '/Users/me', appDataDir: '/Users/me/Library/Application Support' };
 const linuxDirs = { homeDir: '/home/me', appDataDir: '/home/me/.config' };

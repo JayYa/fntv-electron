@@ -87,8 +87,8 @@ const PLATFORM_BRANCH_SYNTAX = [
     `BinaryExpression[left.callee.name=${PLATFORM_FUNCTION}]`,
     `BinaryExpression[right.callee.name=${PLATFORM_FUNCTION}]`,
     `SwitchStatement[discriminant.callee.name=${PLATFORM_FUNCTION}]`,
-    `BinaryExpression[left.value=${PLATFORM_NAME}]`,
-    `BinaryExpression[right.value=${PLATFORM_NAME}]`,
+    `BinaryExpression[operator=/^[!=]==?$/][left.value=${PLATFORM_NAME}]`,
+    `BinaryExpression[operator=/^[!=]==?$/][right.value=${PLATFORM_NAME}]`,
     `SwitchCase[test.value=${PLATFORM_NAME}]`,
 ].map((selector) => ({ selector, message: PLATFORM_BRANCH_MESSAGE }));
 
