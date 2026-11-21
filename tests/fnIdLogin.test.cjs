@@ -112,11 +112,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
 
     const { handleFnIdLogin, isFnId } = require('../dest/main/handlers/plugins/fnid_login.js');
     const { readCurrentLogin } = require('../dest/modules/fn_config/loginStore.js');
-    const replies = [];
-    const finished = handleFnIdLogin(
-        { reply: (channel, payload) => replies.push({ channel, payload }) },
-        { domain: 'demo123', username: 'alice', password: PASSWORD, accessCode },
-    );
+    const finished = handleFnIdLogin({ domain: 'demo123', username: 'alice', password: PASSWORD, accessCode });
 
     t.after(async () => {
         oauthWindow?.close();
@@ -361,7 +357,7 @@ for (const { name, page, confirmed, domain, baseUrl } of [
         await login.finishLoad(page);
 
         await login.tokenCookieChanged(domain);
-        await login.finished;
+        assert.deepEqual(await login.finished, { ok: true });
 
         assert.deepEqual(login.nasRequests, [{ url: `${baseUrl}/v/api/v1/user/info`, token: 'nas-token' }]);
         assert.equal((await login.readCurrentLogin()).token, 'nas-token');
@@ -398,6 +394,18 @@ test('never sends a token cookie of another site to the NAS', async (t) => {
 
     assert.deepEqual(login.nasRequests, []);
     assert.deepEqual(login.mainWindowLoaded(), []);
+});
+
+test('closing the FN Connect window ends the login with an error for the login page', async (t) => {
+    const login = setupLogin(t);
+    const oauthWindow = await login.start();
+
+    oauthWindow.close();
+
+    assert.deepEqual(await login.finished, {
+        ok: false,
+        error: { title: 'FN ID 登录失败', message: '用户关闭了登录窗口' },
+    });
 });
 
 test('a token cookie change on another site does not start the login check', async (t) => {

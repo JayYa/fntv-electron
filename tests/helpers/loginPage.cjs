@@ -93,9 +93,24 @@ function openLoginPage() {
         return elements.get(id);
     };
     const sent = [];
+    const invoked = [];
+    const pendingInvocations = [];
     const pageListeners = new Map();
+    const copy = (payload) => payload && JSON.parse(JSON.stringify(payload));
+    const takeInvocation = (channel) => {
+        const index = pendingInvocations.findIndex((invocation) => invocation.channel === channel);
+        assert.notEqual(index, -1, `no pending ${channel} invocation`);
+        return pendingInvocations.splice(index, 1)[0];
+    };
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
     const electronAPI = {
-        send(channel, payload) { sent.push({ channel, payload: payload && JSON.parse(JSON.stringify(payload)) }); },
+        send(channel, payload) { sent.push({ channel, payload: copy(payload) }); },
+        invoke(channel, payload) {
+            invoked.push({ channel, payload: copy(payload) });
+            return new Promise((resolve, reject) => {
+                pendingInvocations.push({ channel, payload: copy(payload), resolve, reject });
+            });
+        },
         on(channel, listener) { pageListeners.set(channel, listener); },
         once() {},
         off() {},
@@ -106,8 +121,8 @@ function openLoginPage() {
     const messageDialog = createElement();
     const context = {
         console,
-        setTimeout() { return 0; },
-        clearTimeout() {},
+        setTimeout: (...args) => setTimeout(...args),
+        clearTimeout: (...args) => clearTimeout(...args),
         document: Object.assign(documentElement, {
             getElementById: getElement,
             createElement: () => createElement(),
@@ -135,6 +150,16 @@ function openLoginPage() {
 
     return {
         sent,
+        invoked,
+        pending: () => pendingInvocations.map(({ channel, payload }) => ({ channel, payload })),
+        async resolve(channel, value) {
+            takeInvocation(channel).resolve(value);
+            await settle();
+        },
+        async reject(channel, error) {
+            takeInvocation(channel).reject(error);
+            await settle();
+        },
         form,
         input: getElement,
         loginEnabled: () => getElement('loginBtn').disabled === false,

@@ -12,6 +12,8 @@ function setupMain(t, storedConfig) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-download-proxy-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     const ipcMain = new EventEmitter();
+    ipcMain.invokeHandlers = new Map();
+    ipcMain.handle = (channel, handler) => ipcMain.invokeHandlers.set(channel, handler);
     const electronMock = {
         ipcMain,
         app: {
@@ -43,24 +45,30 @@ function setupMain(t, storedConfig) {
 function openConnectedLoginPage(ipcMain) {
     const page = openLoginPage();
     let delivered = 0;
-    const deliver = () => {
+    const deliverSent = () => {
         while (delivered < page.sent.length) {
             const { channel, payload } = page.sent[delivered];
             delivered += 1;
-            if (channel === 'get-download-proxy' || channel === 'set-download-proxy') {
+            if (channel === 'get-download-proxy') {
                 ipcMain.emit(channel, { reply: (replyChannel, data) => page.receive(replyChannel, data) }, payload);
             }
         }
     };
+    const deliverInvoked = async () => {
+        for (const { channel, payload } of page.pending()) {
+            await page.resolve(channel, await ipcMain.invokeHandlers.get(channel)({}, payload));
+        }
+        deliverSent();
+    };
     page.load();
-    deliver();
+    deliverSent();
     return {
         proxyUrlInput: () => page.input('proxyUrlInput'),
-        clearProxyUrlAndSave() {
+        async clearProxyUrlAndSave() {
             page.click('proxySettingsBtn');
             page.input('proxyUrlInput').value = '';
             page.click('proxySaveBtn');
-            deliver();
+            await deliverInvoked();
         },
     };
 }
@@ -113,13 +121,13 @@ test('the settings panel shows the built-in relay when no address was ever saved
     assert.equal(page.proxyUrlInput().placeholder, config.DEFAULT_DOWNLOAD_PROXY_URL);
 });
 
-test('saving an empty relay address still shows the built-in relay, also after reopening the page', (t) => {
+test('saving an empty relay address still shows the built-in relay, also after reopening the page', async (t) => {
     const { ipcMain, config, loadConfigPlugin } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: 'https://relay.example.test/' });
     loadConfigPlugin().init();
     const page = openConnectedLoginPage(ipcMain);
     assert.equal(page.proxyUrlInput().value, 'https://relay.example.test/');
 
-    page.clearProxyUrlAndSave();
+    await page.clearProxyUrlAndSave();
 
     assert.equal(page.proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
     assert.equal(openConnectedLoginPage(ipcMain).proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);

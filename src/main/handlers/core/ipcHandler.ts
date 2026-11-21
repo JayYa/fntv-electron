@@ -27,6 +27,17 @@ function guardHandler(channel: string, handler: IpcHandler): IpcHandler {
     };
 }
 
+function guardInvokeHandler(channel: string, handler: IpcInvokeHandler): IpcInvokeHandler {
+    return async (event, ...args) => {
+        try {
+            return await handler(event, ...args);
+        } catch (error) {
+            log.error(`IPC 处理器执行失败: ${channel}`, error);
+            throw error;
+        }
+    };
+}
+
 /**
  * 注册 IPC 处理器
  * @param channel - IPC 通道名称
@@ -42,7 +53,7 @@ function registerHandler(channel: string, handler: IpcHandler | IpcInvokeHandler
     
     // 根据选项决定使用 handle 还是 on
     if (options.useHandle) {
-        ipcMain.handle(channel, handler as IpcInvokeHandler);
+        ipcMain.handle(channel, guardInvokeHandler(channel, handler as IpcInvokeHandler));
     } else {
         ipcMain.on(channel, guardHandler(channel, handler as IpcHandler));
     }

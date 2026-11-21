@@ -1,4 +1,4 @@
-import { IpcMainEvent } from 'electron';
+import { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { isLoginPage } from '../../common/loginPage';
 import { getMainWindow } from '../../common/mainwin';
 import * as fn from '../../../modules/fn_api/api';
@@ -8,7 +8,7 @@ import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
-import { establishNewLogin, type IssuedToken } from '../../common/currentLogin';
+import { establishNewLogin, type IssuedToken, type LoginReply } from '../../common/currentLogin';
 
 /**
  * 用户认证插件
@@ -149,38 +149,35 @@ async function requestToken(
         : msg || '登录时发生未知错误，请稍后重试。');
 }
 
-async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<void> {
+async function handleLogin(_event: IpcMainInvokeEvent, loginData: LoginData): Promise<LoginReply> {
     log.info('收到登录请求:', {
         useHttps: loginData?.useHttps,
     });
 
     if (!loginData || !loginData.domain || !loginData.username || !loginData.password) {
         log.error('登录失败: 缺少必要的登录信息');
-        event.reply('login-error', {
-            title: '登录失败',
-            message: '请提供完整的登录信息。'
-        });
-        return;
+        return {
+            ok: false,
+            error: { title: '登录失败', message: '请提供完整的登录信息。' },
+        };
     }
 
     // FN ID 登录分支
     if (isFnId(loginData.domain)) {
         if (fnIdLoginInProgress) {
-            event.reply('login-error', {
-                title: 'FN ID 登录进行中',
-                message: '请先在已打开的 FN Connect 窗口中完成或取消登录。'
-            });
-            return;
+            return {
+                ok: false,
+                error: { title: 'FN ID 登录进行中', message: '请先在已打开的 FN Connect 窗口中完成或取消登录。' },
+            };
         }
 
         log.info('检测到 FN ID 格式，使用 FN Connect OAuth 登录');
         fnIdLoginInProgress = true;
         try {
-            await handleFnIdLogin(event, loginData);
+            return await handleFnIdLogin(loginData);
         } finally {
             fnIdLoginInProgress = false;
         }
-        return;
     }
 
     const accessCode = loginData.accessCode?.trim() || '';
@@ -199,9 +196,7 @@ async function handleLogin(event: IpcMainEvent, loginData: LoginData): Promise<v
             useHttps: loginData.useHttps,
         },
     });
-    if (!result.ok) {
-        event.reply('login-error', result.error);
-    }
+    return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
 
 // 注册认证相关处理器
@@ -211,7 +206,7 @@ function init(): void {
     registerHandler('get-current-access-code', handleGetCurrentAccessCode);
     registerHandler('clear-history', handleClearHistory);
     registerHandler('delete-history-item', handleDeleteHistoryItem);
-    registerHandler('login', handleLogin);
+    registerHandler('login', handleLogin, { useHandle: true });
 }
 
 export {

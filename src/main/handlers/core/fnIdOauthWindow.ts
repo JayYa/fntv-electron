@@ -1,8 +1,8 @@
-import { BrowserWindow, IpcMainEvent } from 'electron';
+import { BrowserWindow } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
-import { establishNewLogin, GrantedBaseUrl, LoginFailedError, verifyAccess } from '../../common/currentLogin';
+import { establishNewLogin, GrantedBaseUrl, LoginFailedError, type LoginReply, verifyAccess } from '../../common/currentLogin';
 import { resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
@@ -36,7 +36,7 @@ function buildFnConnectUrl(fnId: string): string {
 /**
  * 处理 FN ID OAuth 登录流程
  */
-export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData): Promise<void> {
+export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply> {
     const fnId = loginData.domain.trim();
     const fnConnectUrl = buildFnConnectUrl(fnId);
     const accessCode = loginData.accessCode?.trim() || '';
@@ -315,6 +315,7 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
             oauthWindow.close();
         }
 
+        return { ok: true };
     } catch (error: any) {
         const isLoginError = error instanceof LoginFailedError;
         log.error('[FN ID] 登录失败:', isLoginError ? error.reason : error);
@@ -325,12 +326,14 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
         }
 
         if (isLoginError) {
-            event.reply('login-error', error.loginError);
-        } else {
-            event.reply('login-error', {
+            return { ok: false, error: error.loginError };
+        }
+        return {
+            ok: false,
+            error: {
                 title: 'FN ID 登录失败',
                 message: error.message || '通过 FN ID 登录时发生错误，请检查 FN ID 和网络连接。',
-            });
-        }
+            },
+        };
     }
 }

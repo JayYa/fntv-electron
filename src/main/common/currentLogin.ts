@@ -24,6 +24,8 @@ export type LoginFailureReason =
 
 export type LoginResult = { ok: true } | { ok: false; reason: LoginFailureReason; error: LoginError };
 
+export type LoginReply = { ok: true } | { ok: false; error: LoginError };
+
 export class LoginFailedError extends Error {
     constructor(readonly reason: LoginFailureReason, readonly loginError: LoginError) {
         super(loginError.message);

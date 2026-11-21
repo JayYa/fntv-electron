@@ -1,0 +1,180 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { loginPageScripts, openLoginPage } = require('./helpers/loginPage.cjs');
+
+const LOGIN_ERROR = { title: '登录失败', message: '用户名或密码错误' };
+
+function pageWithFilledForm() {
+    const page = openLoginPage();
+    page.load();
+    page.typeInto('domain', 'nas.example:5667');
+    page.typeInto('username', 'user');
+    page.typeInto('password', 'secret');
+    return page;
+}
+
+const loginRequests = (page) => page.invoked.filter(({ channel }) => channel === 'login');
+const shownMessage = (page) => (page.input('customMessage').classList.contains('show')
+    ? { title: page.input('messageTitle').textContent, message: page.input('messageContent').textContent }
+    : null);
+
+function openSettings(page) {
+    page.click('proxySettingsBtn');
+    assert.ok(page.input('proxyPanel').classList.contains('show'));
+    page.click('proxySaveBtn');
+}
+
+test('the login page scripts restore no button on a timer', () => {
+    for (const { name, source } of loginPageScripts()) {
+        assert.doesNotMatch(source, /setTimeout/, name);
+    }
+});
+
+test('the login button stays disabled while a login takes longer than five seconds and comes back when it ends', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = pageWithFilledForm();
+
+    page.click('loginBtn');
+    t.mock.timers.tick(6000);
+
+    assert.equal(page.loginEnabled(), false);
+    assert.equal(page.input('loginBtn').textContent, '登录中...');
+
+    await page.resolve('login', { ok: false, error: LOGIN_ERROR });
+
+    assert.equal(page.loginEnabled(), true);
+    assert.notEqual(page.input('loginBtn').textContent, '登录中...');
+});
+
+test('the login request carries the form', () => {
+    const page = pageWithFilledForm();
+    page.input('accessCode').value = 'code';
+    page.input('httpsSwitch').checked = true;
+
+    page.click('loginBtn');
+
+    assert.deepEqual(loginRequests(page).map(({ payload }) => payload), [{
+        domain: 'nas.example:5667',
+        username: 'user',
+        password: 'secret',
+        accessCode: 'code',
+        useHttps: true,
+    }]);
+});
+
+test('clicking login, pressing Enter or editing the form while a login is in progress sends no second request', () => {
+    const page = pageWithFilledForm();
+
+    page.click('loginBtn');
+    page.typeInto('password', 'secret2');
+    page.click('loginBtn');
+    page.focus('password');
+    page.press('Enter');
+
+    assert.equal(loginRequests(page).length, 1);
+    assert.equal(page.loginEnabled(), false);
+});
+
+test('a failed login shows the reason from the main process and enables the button again', async () => {
+    const page = pageWithFilledForm();
+
+    page.click('loginBtn');
+    await page.resolve('login', { ok: false, error: LOGIN_ERROR });
+
+    assert.deepEqual(shownMessage(page), LOGIN_ERROR);
+    assert.equal(page.loginEnabled(), true);
+});
+
+test('when the login handler throws, the button comes back and an error is shown', async () => {
+    const page = pageWithFilledForm();
+
+    page.click('loginBtn');
+    await page.reject('login', new Error("Error invoking remote method 'login': boom"));
+
+    assert.equal(page.loginEnabled(), true);
+    assert.equal(shownMessage(page).title, '登录失败');
+});
+
+test('a successful login shows no message', async () => {
+    const page = pageWithFilledForm();
+
+    page.click('loginBtn');
+    await page.resolve('login', { ok: true });
+
+    assert.equal(shownMessage(page), null);
+});
+
+test('the update button stays in progress until the main process finishes the check', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = openLoginPage();
+    page.load();
+    page.input('updateBtn').textContent = '检查更新';
+
+    page.click('updateBtn');
+    page.click('updateBtn');
+    t.mock.timers.tick(6000);
+
+    assert.equal(page.invoked.filter(({ channel }) => channel === 'check-update').length, 1);
+    assert.equal(page.input('updateBtn').disabled, true);
+    assert.equal(page.input('updateBtn').textContent, '检查中...');
+
+    await page.resolve('check-update', undefined);
+
+    assert.equal(page.input('updateBtn').disabled, false);
+    assert.equal(page.input('updateBtn').textContent, '检查更新');
+});
+
+test('when the update check handler throws, the update button comes back and an error is shown', async () => {
+    const page = openLoginPage();
+    page.load();
+
+    page.click('updateBtn');
+    await page.reject('check-update', new Error('boom'));
+
+    assert.equal(page.input('updateBtn').disabled, false);
+    assert.equal(shownMessage(page).title, '检查更新失败');
+});
+
+test('saving settings closes the panel only after both settings are saved', async () => {
+    const page = openLoginPage();
+    page.load();
+
+    openSettings(page);
+    assert.equal(page.input('proxySaveBtn').disabled, true);
+    assert.deepEqual(page.pending().map(({ channel }) => channel).sort(), ['set-download-proxy', 'set-play-button-config']);
+
+    await page.resolve('set-download-proxy', { success: true });
+    assert.ok(page.input('proxyPanel').classList.contains('show'));
+
+    await page.resolve('set-play-button-config', { success: true });
+    assert.equal(page.input('proxyPanel').classList.contains('show'), false);
+    assert.equal(page.input('proxySaveBtn').disabled, false);
+    assert.equal(shownMessage(page), null);
+});
+
+test('when a setting fails to save, the panel stays open, the button comes back and the failure is shown', async () => {
+    const page = openLoginPage();
+    page.load();
+
+    openSettings(page);
+    await page.resolve('set-download-proxy', { success: true });
+    await page.resolve('set-play-button-config', { success: false, error: 'disk full' });
+
+    assert.ok(page.input('proxyPanel').classList.contains('show'));
+    assert.equal(page.input('proxySaveBtn').disabled, false);
+    assert.equal(shownMessage(page).title, '保存失败');
+    assert.match(shownMessage(page).message, /disk full/);
+});
+
+test('when a settings handler throws, the panel stays open and the failure is shown', async () => {
+    const page = openLoginPage();
+    page.load();
+
+    openSettings(page);
+    await page.reject('set-download-proxy', new Error('boom'));
+    await page.resolve('set-play-button-config', { success: true });
+
+    assert.ok(page.input('proxyPanel').classList.contains('show'));
+    assert.equal(page.input('proxySaveBtn').disabled, false);
+    assert.equal(shownMessage(page).title, '保存失败');
+});

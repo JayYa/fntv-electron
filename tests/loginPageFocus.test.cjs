@@ -21,54 +21,62 @@ test('opening the login page focuses the domain input', () => {
     assert.equal(page.focusedId(), 'domain');
 });
 
-test('closing the login failure message returns focus to the password input that submitted the form', () => {
+const FAILED_LOGIN = { ok: false, error: LOGIN_ERROR };
+
+test('closing the login failure message returns focus to the password input that submitted the form', async () => {
     const page = pageWithFilledForm();
     page.focus('password');
 
     page.press('Enter');
-    assert.equal(page.sent.filter((message) => message.channel === 'login').length, 1);
-    page.receive('login-error', LOGIN_ERROR);
+    assert.equal(page.invoked.filter((message) => message.channel === 'login').length, 1);
+    await page.resolve('login', FAILED_LOGIN);
     page.click('messageButton');
 
     assert.equal(page.focusedId(), 'password');
 });
 
-test('closing the login failure message with Escape returns focus to the password input', () => {
+test('closing the login failure message with Escape returns focus to the password input', async () => {
     const page = pageWithFilledForm();
     page.focus('password');
 
     page.press('Enter');
-    page.receive('login-error', LOGIN_ERROR);
+    await page.resolve('login', FAILED_LOGIN);
     page.press('Escape');
 
     assert.equal(page.focusedId(), 'password');
 });
 
-test('closing a message falls back to the domain input when the previously focused element left the page', () => {
+test('closing a message falls back to the domain input when the previously focused element left the page', async () => {
     const page = pageWithFilledForm();
     page.focus('username');
 
-    page.receive('login-error', LOGIN_ERROR);
+    page.press('Enter');
+    await page.resolve('login', FAILED_LOGIN);
     page.input('username').isConnected = false;
     page.click('messageButton');
 
     assert.equal(page.focusedId(), 'domain');
 });
 
-test('closing a message falls back to the domain input when nothing was focused before it opened', () => {
+test('closing a message falls back to the domain input when nothing was focused before it opened', async () => {
     const page = openLoginPage();
+    page.typeInto('domain', 'nas.example:5667');
+    page.typeInto('username', 'user');
+    page.typeInto('password', 'wrong-password');
 
-    page.receive('login-error', LOGIN_ERROR);
+    page.input('loginBtn').click();
+    await page.resolve('login', FAILED_LOGIN);
     page.click('messageButton');
 
     assert.equal(page.focusedId(), 'domain');
 });
 
-test('closing a message falls back to the domain input when the previously focused element cannot take focus', () => {
+test('closing a message falls back to the domain input when the previously focused element cannot take focus', async () => {
     const page = pageWithFilledForm();
     page.focus('loginBtn');
 
-    page.receive('login-error', LOGIN_ERROR);
+    page.press('Enter');
+    await page.resolve('login', FAILED_LOGIN);
     page.input('loginBtn').disabled = true;
     page.click('messageButton');
 

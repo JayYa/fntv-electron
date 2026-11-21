@@ -10,12 +10,14 @@ function isValidDomainOrIP(value) {
     return domainRegex.test(value) || ipv4Regex.test(value) || ipv6Regex.test(value);
 }
 
+let loginInProgress = false;
+
 function checkInputs() {
     const domain = domainInput.value.trim();
     const username = usernameInput.value.trim();
     const password = passwordInput.value.trim();
 
-    if (domain && isValidDomainOrIP(domain) && username && password) {
+    if (!loginInProgress && domain && isValidDomainOrIP(domain) && username && password) {
         loginBtn.disabled = false;
         loginBtn.classList.add('enabled');
     } else {
@@ -39,14 +41,23 @@ domainInput.addEventListener('input', checkInputs);
 usernameInput.addEventListener('input', checkInputs);
 passwordInput.addEventListener('input', checkInputs);
 
-loginBtn.addEventListener('click', function () {
-    if (loginBtn.disabled) return;
-    
+async function requestLogin(loginData) {
+    try {
+        return await ipcRenderer.invoke('login', loginData);
+    } catch (error) {
+        window.log.error('登录请求失败:', error);
+        return { ok: false, error: { title: '登录失败', message: '登录时发生未知错误，请稍后重试。' } };
+    }
+}
+
+loginBtn.addEventListener('click', async function () {
+    if (loginBtn.disabled || loginInProgress) return;
+
+    loginInProgress = true;
     const originalText = loginBtn.textContent;
     loginBtn.textContent = '登录中...';
-    loginBtn.disabled = true;
-    loginBtn.classList.remove('enabled');
-    
+    checkInputs();
+
     const domain = domainInput.value.trim();
     const username = usernameInput.value.trim();
     const password = passwordInput.value.trim();
@@ -63,31 +74,14 @@ loginBtn.addEventListener('click', function () {
         useHttps: useHttps
     };
 
-    ipcRenderer.send('login', loginData);
-    
-    const timeoutId = setTimeout(() => {
-        loginBtn.textContent = originalText;
-        checkInputs();
-    }, 5000);
-    
-    const handleLoginResult = () => {
-        clearTimeout(timeoutId);
-        loginBtn.textContent = originalText;
-        checkInputs();
-    };
-    
-    const tempErrorListener = () => {
-        handleLoginResult();
-        ipcRenderer.off('login-error', tempErrorListener);
-    };
-    
-    const tempSuccessListener = () => {
-        handleLoginResult();
-        ipcRenderer.off('login-success', tempSuccessListener);
-    };
-    
-    ipcRenderer.once('login-error', tempErrorListener);
-    ipcRenderer.once('login-success', tempSuccessListener);
+    const reply = await requestLogin(loginData);
+
+    loginInProgress = false;
+    loginBtn.textContent = originalText;
+    checkInputs();
+    if (!reply.ok) {
+        showCustomMessage('error', reply.error.title, reply.error.message);
+    }
 });
 
 document.addEventListener('keypress', function (e) {
