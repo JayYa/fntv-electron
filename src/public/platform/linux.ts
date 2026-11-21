@@ -58,10 +58,6 @@ export const linux: PlatformImpl = {
     defaultMpvPlayer: (_bundledMpvPath, pathExists) => firstExistingMpv(MPV_SEARCH_PATHS, pathExists),
     mpvIpcSocket: posixMpvIpcSocket,
 
-    /**
-     * electron-updater 删掉 APPIMAGE 指向的文件，把新 AppImage 移到同一目录，所以要以 AppImage 运行
-     * （appImagePath 是 APPIMAGE 环境变量，解包后运行时没有），并且这个目录可写。
-     */
     inAppUpdateAvailability(isPackaged, appImagePath, isWritableDir) {
         if (!isPackaged) {
             return NOT_PACKAGED;
@@ -75,7 +71,6 @@ export const linux: PlatformImpl = {
         return { available: true };
     },
 
-    // 打包工具给 x64 的架构名是 x86_64，以 v2.7.0 的真实资产核对过。
     installerAssetSuffix: {
         x64: 'linux_x86_64.AppImage',
         arm64: 'linux_arm64.AppImage',

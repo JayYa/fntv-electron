@@ -55,7 +55,6 @@ export const darwin: PlatformImpl = {
     defaultMpvPlayer: (_bundledMpvPath, pathExists) => firstExistingMpv(MPV_SEARCH_PATHS, pathExists),
     mpvIpcSocket: posixMpvIpcSocket,
 
-    /** 包没有 Developer ID 签名，装不了。 */
     inAppUpdateAvailability() {
         return { available: false, reason: 'darwin 不支持应用内更新' };
     },

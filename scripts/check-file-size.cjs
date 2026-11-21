@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// 文件大小检查：agent 写的文件不能超过 MAX_TOKENS，超过 WARN_TOKENS 时提醒但不拦。
-// 不受限的文件在 .gitattributes 里标 -agent-authored，二进制文件跳过。
-// 两种输入，判断逻辑相同：
-//   默认（pre-commit 钩子）：暂存区里新增、修改、重命名的文件，读暂存内容和暂存区的 .gitattributes。
-//   --base <ref>（CI 的 PR 检查）：HEAD 相对 <ref> 与 HEAD 的合并基点改动的文件，读 HEAD 的内容和
-//   .gitattributes，并给每个文件输出 GitHub annotation。
 const { execFileSync } = require('node:child_process');
 
 const MAX_TOKENS = 5000;
@@ -20,8 +14,6 @@ function splitZ(buffer) {
     return buffer.toString('utf8').split('\0').filter(Boolean);
 }
 
-// 输入来源：改动了哪些文件、按什么对象名读内容、check-attr 读哪份 .gitattributes，以及超限时怎么说、
-// 要不要输出 GitHub annotation。
 const stagedSource = {
     files: () => splitZ(git(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'])),
     object: file => `:${file}`,
@@ -30,7 +22,6 @@ const stagedSource = {
     annotate: false,
 };
 
-// check-attr --source 要求 git 2.40 及以上。
 function pullRequestSource(base) {
     return {
         files: () => splitZ(git(['diff', '--name-only', '--diff-filter=ACMR', '-z', `${base}...HEAD`])),
@@ -48,7 +39,6 @@ function sourceFromArgs(args) {
     process.exit(2);
 }
 
-// 受限文件里超过上限的（oversized）和超过预警线但没超上限的（warned）。
 function classify(source) {
     const isAgentAuthored = file =>
         splitZ(git(['check-attr', ...source.attrArgs, '-z', 'agent-authored', '--', file]))[2] !== 'unset';
@@ -103,7 +93,6 @@ ${listOf(files, tokens => `${tokens} tokens（${percentOf(tokens)}%）`)}
 `;
 }
 
-// GitHub workflow command 的转义规则：属性值转义 % \r \n : ,，消息转义 % \r \n。
 function escapeData(value) {
     return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 }

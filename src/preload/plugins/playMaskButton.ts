@@ -23,9 +23,6 @@ function isCardPlayButton(button: HTMLElement): boolean {
 function findManagedPlayButton(target: EventTarget | null): HTMLElement | null {
     if (!(target instanceof Element)) return null;
 
-    // 已被 playButton.ts 打标的详情页主键优先拦截，不依赖文案/图标规则：
-    // tv/season 详情页的主键文案（如「第 1 季 第 3 集」「未知集」）不满足 findSemanticPlayButton
-    // 的文本匹配，只靠语义规则会漏拦，导致网页端原生播放器被拉起。
     const marked = target.closest<HTMLElement>('[data-mpv-detail-intercepted="true"]');
     if (marked) return marked.dataset.customPlay === 'true' ? null : marked;
 
@@ -40,7 +37,6 @@ function suppressNativePlayback(event: Event): void {
     event.stopImmediatePropagation();
 }
 
-// 详情页主键加载中（disabled、文案「查询中」）时不触发播放。
 function isDisabledButton(button: HTMLElement): boolean {
     return button.hasAttribute('disabled') || button.getAttribute('aria-disabled') === 'true';
 }
@@ -99,7 +95,6 @@ function handleClick(event: MouseEvent): void {
     playManagedButton(button);
 }
 
-// 键盘 Enter/Space 触发与鼠标一致：捕获阶段拦截，避免网页端原生播放器响应。
 function handleKeyDown(event: KeyboardEvent): void {
     if (event.repeat) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -131,7 +126,6 @@ async function setupDelegatedPlayHandler(): Promise<void> {
     document.addEventListener('keydown', handleKeyDown, true);
 }
 
-// 只有用户明确启用时才由 MPV 接管；读取失败时保留原生播放。
 setupDelegatedPlayHandler().catch((error: unknown) => {
     logger.error('初始化 MPV 播放接管失败:', error);
 });

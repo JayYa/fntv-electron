@@ -7,10 +7,6 @@
 
 const ipcRenderer = window.electronAPI;
 
-// 简化的日志接口 - 完全透明使用
-// 不再需要手动发送IPC，直接使用即可
-// window.log 已经通过 contextBridge 暴露，会自动处理IPC通信和数据脱敏
-
 const loginBtn = document.getElementById('loginBtn');
 const domainInput = document.getElementById('domain');
 const domainError = document.getElementById('domainError');

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// 冒烟测试 job（build-and-smoke.yml 的 smoke）只装 tests/smoke/ 用到的 npm 包，不跑完整的 pnpm install。
-// 版本和 integrity 取自 pnpm-lock.yaml：从 registry 下载锁定版本的 tarball，核对 sha512 与锁文件一致后
-// 解压到 node_modules/<包名>。只接受锁文件里没有依赖的包，有依赖时报错，免得装出锁文件之外的版本。
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,14 +7,12 @@ const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 
-// tests/smoke/ 里 require 的全部非内置模块。
 const SMOKE_PACKAGES = ['playwright-core'];
 
 function escapeRegExp(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// 从锁文件读出包的唯一版本和 integrity，并确认它在 snapshots 段没有依赖。
 function lockedPackage(lockfile, name) {
     const escaped = escapeRegExp(name);
     const entries = [...lockfile.matchAll(new RegExp(`^ {2}'?${escaped}@(\\d[^:'(\\s]*)'?:\\r?\\n {4}resolution: \\{integrity: (sha512-[A-Za-z0-9+/=]+)\\}`, 'gm'))];
@@ -33,7 +28,6 @@ function lockedPackage(lockfile, name) {
     return { name, version, integrity };
 }
 
-// package.json 里写的版本必须是锁文件里那个，防止锁文件过期时装错版本。
 function assertPinned(packageJson, locked) {
     const declared = packageJson.devDependencies?.[locked.name] ?? packageJson.dependencies?.[locked.name];
     if (declared !== locked.version) {
@@ -48,7 +42,6 @@ function assertIntegrity(tarball, locked) {
     }
 }
 
-// registry 上 tarball 的固定地址：<registry>/<name>/-/<不带 scope 的名字>-<版本>.tgz。
 function tarballUrl(registry, locked) {
     const base = locked.name.split('/').pop();
     return `${registry.replace(/\/+$/, '')}/${locked.name}/-/${base}-${locked.version}.tgz`;
@@ -69,7 +62,6 @@ async function download(url, attempts = 3) {
 }
 
 async function install(locked, dir, registry) {
-    // 临时目录放在 node_modules 下，和目标同盘：Git 自带的 GNU tar 把 `D:\…` 这样的盘符路径当成远程主机，只能给相对路径。
     fs.mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
     const work = fs.mkdtempSync(path.join(dir, 'node_modules', '.install-smoke-deps-'));
     try {
@@ -80,7 +72,6 @@ async function install(locked, dir, registry) {
         const target = path.join(dir, 'node_modules', locked.name);
         fs.rmSync(target, { recursive: true, force: true });
         fs.mkdirSync(target, { recursive: true });
-        // npm 的 tarball 里文件都在 package/ 下。
         execFileSync('tar', ['-xzf', path.basename(tarball), '-C', path.relative(work, target), '--strip-components=1'], { cwd: work, stdio: 'inherit' });
         const installed = JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8')).version;
         if (installed !== locked.version) throw new Error(`${locked.name}: installed ${installed}, expected ${locked.version}`);
@@ -93,7 +84,6 @@ async function install(locked, dir, registry) {
 async function main(dir = root) {
     const lockfile = fs.readFileSync(path.join(dir, 'pnpm-lock.yaml'), 'utf8');
     const packageJson = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
-    // 不读 .npmrc（CI 上已删掉）；本地要用镜像时设 npm_config_registry。
     const registry = process.env.npm_config_registry || DEFAULT_REGISTRY;
     for (const name of SMOKE_PACKAGES) {
         const locked = lockedPackage(lockfile, name);

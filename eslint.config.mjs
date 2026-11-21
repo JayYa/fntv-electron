@@ -1,11 +1,14 @@
+import fs from 'node:fs';
 import tseslint from 'typescript-eslint';
+import noComments from './lint/no-comments.mjs';
+
+const COMMENT_BASELINE = JSON.parse(fs.readFileSync(new URL('./lint/comment-baseline.json', import.meta.url), 'utf8'));
 
 const sharedRules = {
     eqeqeq: 'error',
     'prefer-const': 'error',
     'no-var': 'error',
     'no-empty': 'error',
-    // 浏览器原生弹窗在 Electron 里不可靠，确认和输入走主进程的 dialog 或页面内组件。
     'no-alert': 'error',
     '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-unused-vars': ['error', {
@@ -29,7 +32,6 @@ const PLATFORM_PROPERTIES = [
     message: `${PLATFORM_HINT}，不要直接读 ${object}.${property}。`
 }));
 
-// Electron 45 弃用、46 删除的 safeStorage 同步方法。
 const SAFE_STORAGE_SYNC_PROPERTIES = [
     ['isEncryptionAvailable', 'isAsyncEncryptionAvailable'],
     ['encryptString', 'encryptStringAsync'],
@@ -40,8 +42,6 @@ const SAFE_STORAGE_SYNC_PROPERTIES = [
     message: `safeStorage.${property} 在 Electron 46 删除，用 ${replacement}。`
 }));
 
-// IPC 处理器统一由 registerHandler 注册：它捕获并记录 ipcMain.on 处理器的同步和异步错误，还拦下重复注册。
-// 拦截的写法见 tests/eslintIpcRules.test.cjs。
 const IPC_HANDLER_FILE = 'src/main/handlers/core/ipcHandler.ts';
 const IPC_REGISTER_PROPERTIES = ['handle', 'handleOnce', 'on', 'once', 'addListener', 'prependListener', 'prependOnceListener'].map((property) => ({
     object: 'ipcMain',
@@ -49,10 +49,8 @@ const IPC_REGISTER_PROPERTIES = ['handle', 'handleOnce', 'on', 'once', 'addListe
     message: `IPC 处理器用 ${IPC_HANDLER_FILE} 的 registerHandler 注册，不要直接调用 ipcMain.${property}。`
 }));
 
-// no-restricted-properties 只认对象名，os 模块换个写法导入就拦不住，这里把其它写法也禁掉。
 const OS_MODULE = '/^(node:)?os$/';
 const OS_PLATFORM_MEMBER = '/^(platform|arch)$/';
-// 不用 no-restricted-imports 的 importNames：它连 import * as os 也一起拦下。
 const OS_IMPORT_SYNTAX = [
     {
         selector: `ImportDeclaration[source.value=${OS_MODULE}] > ImportSpecifier[imported.name=${OS_PLATFORM_MEMBER}]`,
@@ -88,16 +86,12 @@ const PLATFORM_BRANCH_SYNTAX = [
     `SwitchCase[test.value=${PLATFORM_NAME}]`,
 ].map((selector) => ({ selector, message: PLATFORM_BRANCH_MESSAGE }));
 
-// module.exports = 整体替换 export 的结果，新函数没加进表时运行时是 undefined，tsc 查不出。
 const NO_MODULE_EXPORTS = {
     selector: "AssignmentExpression[left.object.name='module'][left.property.name='exports']",
     message: '用 ES export，不要写 module.exports =。'
 };
 
-// 退出收尾的先后顺序只由退出协调模块决定，before-quit 只在它那里监听；其它模块向它注册（src/modules/quit/quitCoordinator.ts）。
-// 拦截的写法见 tests/eslintQuitRules.test.cjs。事件名先存进变量的写法拦不住，留给审查。
 const QUIT_COORDINATOR_FILE = 'src/modules/quit/quitCoordinator.ts';
-// 注册监听器的方法名，两条监听规则共用
 const LISTENER_METHOD = '[callee.property.name=/^(on|once|addListener|prependListener|prependOnceListener)$/]';
 const NO_BEFORE_QUIT_LISTENER = {
     selector: [
@@ -109,7 +103,6 @@ const NO_BEFORE_QUIT_LISTENER = {
     message: `before-quit 只在 ${QUIT_COORDINATOR_FILE} 监听。退出时要做的事向退出协调注册（initQuitCoordinator、onQuitStarted、provideInstallOnQuit），不要自己监听。`
 };
 
-// 系统关机、重启或注销的信号（窗口的 session-end、powerMonitor 的 shutdown）也只在退出协调模块监听（#192）。
 const NO_SHUTDOWN_LISTENER = {
     selector: [
         'CallExpression',
@@ -125,8 +118,6 @@ const NO_SHUTDOWN_LISTENER = {
 
 const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
 
-// fn_api/core 由主进程和 Proxy 共用，Proxy 服务运行在 utilityProcess 里，两者都不能加载 electron。
-// logger、cert_trust 和 fn_api 的主进程层会间接加载 electron，所以只允许引用 Node 内置模块、npm 包和 core 本身。
 const NO_ELECTRON = {
     name: 'electron',
     message: 'fn_api/core 和 Proxy 服务不能引用 electron，依赖由调用方通过参数传入。'
@@ -137,6 +128,21 @@ export default [
     {
         linterOptions: {
             reportUnusedDisableDirectives: 'error'
+        }
+    },
+    {
+        files: ['**/*.{ts,js,cjs,mjs}'],
+        plugins: {
+            local: { rules: { 'no-comments': noComments } }
+        },
+        rules: {
+            'local/no-comments': ['error', { baseline: COMMENT_BASELINE }]
+        }
+    },
+    {
+        files: ['scripts/**/*.js'],
+        languageOptions: {
+            sourceType: 'commonjs'
         }
     },
     {
@@ -151,19 +157,16 @@ export default [
         rules: {
             ...sharedRules,
             'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
-            // safeStorage 同步方法的拦截见 tests/eslintSafeStorageRules.test.cjs。
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
         }
     },
     {
-        // 唯一直接向 ipcMain 注册处理器的地方。
         files: [IPC_HANDLER_FILE],
         rules: {
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES]
         }
     },
     {
-        // 唯一监听 before-quit 和系统关机信号的地方。
         files: [QUIT_COORDINATOR_FILE],
         rules: {
             'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX]
@@ -188,7 +191,6 @@ export default [
         }
     },
     {
-        // 唯一读取当前平台的地方。
         files: [PLATFORM_INDEX_FILE],
         rules: {
             'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...PLATFORM_BRANCH_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
@@ -196,7 +198,6 @@ export default [
         }
     },
     {
-        // 登录页用普通 <script> 加载，不是模块。
         files: ['resource/login/*.js'],
         languageOptions: {
             parser: tseslint.parser,
@@ -208,7 +209,6 @@ export default [
         rules: sharedRules
     },
     {
-        // 测试和冒烟测试脚本，CommonJS，在 Node 里运行。
         files: ['tests/**/*.cjs'],
         languageOptions: {
             sourceType: 'commonjs'

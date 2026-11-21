@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// macOS iconset 需要的所有尺寸
 const iconSizes = [
     { name: 'icon_16x16.png', size: 16 },
     { name: 'icon_16x16@2x.png', size: 32 },
@@ -20,13 +19,11 @@ async function generateIconSet() {
     const iconsetDir = path.join(buildDir, 'icon.iconset');
     const sourceIcon = path.join(buildDir, 'icon.png');
 
-    // 检查源图标是否存在
     if (!fs.existsSync(sourceIcon)) {
         console.error('错误: build/icon.png 文件不存在');
         process.exit(1);
     }
 
-    // 创建 iconset 目录
     if (!fs.existsSync(iconsetDir)) {
         fs.mkdirSync(iconsetDir, { recursive: true });
     }
@@ -39,12 +36,10 @@ async function generateIconSet() {
     console.log('2. 将图标调整为以下尺寸并保存到 build/icon.iconset/ 目录:');
     console.log('');
 
-    // 生成所需文件列表
     iconSizes.forEach(icon => {
         const targetPath = path.join(iconsetDir, icon.name);
         console.log(`   ${icon.name} (${icon.size}x${icon.size} 像素)`);
         
-        // 创建占位文件，提醒用户需要创建
         if (!fs.existsSync(targetPath)) {
             fs.writeFileSync(targetPath, '# 待生成 - 请手动创建此文件\n');
         }
@@ -61,7 +56,6 @@ async function generateIconSet() {
     console.log('iconset 目录已创建: build/icon.iconset/');
 }
 
-// 检查是否安装了 sharp 库 (可选的图像处理库)
 function checkSharpAvailability() {
     try {
         require('sharp');
@@ -71,7 +65,6 @@ function checkSharpAvailability() {
     }
 }
 
-// 如果有 sharp 库，尝试自动生成
 async function generateWithSharp() {
     const sharp = require('sharp');
     const buildDir = path.join(__dirname, '..', 'build');
@@ -103,7 +96,6 @@ async function main() {
         const buildDir = path.join(__dirname, '..', 'build');
         const iconsetDir = path.join(buildDir, 'icon.iconset');
         
-        // 创建 iconset 目录
         if (!fs.existsSync(iconsetDir)) {
             fs.mkdirSync(iconsetDir, { recursive: true });
         }

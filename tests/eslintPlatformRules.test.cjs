@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-const eslint = new ESLint({ cwd: path.join(__dirname, '..') });
+const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 const PLATFORM_INDEX = 'src/public/platform/index.ts';
 
 async function messagesFor(code, file = 'src/main/example.ts') {
