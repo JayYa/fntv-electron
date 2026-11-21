@@ -34,35 +34,84 @@ test('pnpm run check runs the file size check, lint, knip and the tests in order
     assert.throws(() => check.parseArgs(['--fix']), /用法/);
 });
 
-test('a pnpm step reaches pnpm with its arguments unchanged, without a shell', async t => {
-    const dir = tempDir(t, 'fntv-check-pnpm-');
-    const entry = path.join(dir, 'fake-pnpm.cjs');
-    const received = path.join(dir, 'argv.json');
-    fs.writeFileSync(entry, "require('node:fs').writeFileSync(process.env.ARGV_OUT, JSON.stringify(process.argv.slice(2)));\n");
-    const args = ['run', 'lint', 'a b^c', 'HEAD^1', 'x&y', '%PATH%', '"q"'];
-    const { status } = await check.runCommand('pnpm', args, { ...process.env, npm_execpath: entry, ARGV_OUT: received });
-    assert.equal(status, 0);
-    assert.deepEqual(JSON.parse(fs.readFileSync(received, 'utf8')), args);
-    const logged = [];
-    await check.runSteps([{ name: 'lint', file: 'pnpm', args: ['run', 'lint'] }], async () => ({ status: 0, output: '' }), text => logged.push(text));
-    assert.deepEqual(logged, ['\n== lint: pnpm run lint\n']);
+const META = `a b^c&d%PATH%'q'`;
+
+function checkSandbox(t) {
+    const dir = tempDir(t, 'fntv-check-run-');
+    const tools = path.join(dir, META);
+    const calls = path.join(dir, 'calls.jsonl');
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    fs.mkdirSync(tools);
+    fs.copyFileSync(path.join(root, 'scripts', 'check.cjs'), path.join(dir, 'scripts', 'check.cjs'));
+    const recorder = from => `require('node:fs').appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(${from})) + '\\n');\n`;
+    fs.writeFileSync(path.join(dir, 'scripts', 'check-file-size.cjs'), recorder(2));
+    return {
+        tools,
+        pnpm(name, prefix = '') {
+            const entry = path.join(tools, name);
+            fs.writeFileSync(entry, `${prefix}${recorder(1)}`, { mode: 0o755 });
+            return entry;
+        },
+        run(args, npmExecpath) {
+            const env = { ...process.env };
+            delete env.npm_execpath;
+            if (npmExecpath) env.npm_execpath = npmExecpath;
+            return spawnSync(process.execPath, ['scripts/check.cjs', ...args], { cwd: dir, env, encoding: 'utf8' });
+        },
+        calls: () => fs.existsSync(calls) ? lines(calls).map(line => JSON.parse(line)) : [],
+    };
+}
+
+function assertStepsReachedUnchanged(sandbox, entry) {
+    const ref = `${META}"x"`;
+    const result = sandbox.run(['--base', ref], entry);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(sandbox.calls(), [
+        ['--base', ref],
+        [entry, 'run', 'lint'],
+        [entry, 'run', 'knip'],
+        [entry, 'test'],
+    ]);
+    assert.match(result.stdout, /^== lint: pnpm run lint$/m);
+    assert.match(result.stdout, /check passed\n$/);
+}
+
+test('every step reaches its program with the arguments unchanged, without a shell', t => {
+    const sandbox = checkSandbox(t);
+    assertStepsReachedUnchanged(sandbox, sandbox.pnpm('pnpm.cjs'));
 });
 
-test('pnpm runs from npm_execpath: a JS entry through node, a native binary directly, anything else is refused', () => {
-    assert.deepEqual(check.pnpmCommand({ npm_execpath: '/p/pnpm.cjs' }, 'win32'), { file: process.execPath, args: ['/p/pnpm.cjs'] });
-    assert.deepEqual(check.pnpmCommand({ npm_execpath: 'C:\\p\\pnpm.exe' }, 'win32'), { file: 'C:\\p\\pnpm.exe', args: [] });
-    assert.deepEqual(check.pnpmCommand({ npm_execpath: '/p/pnpm' }, 'linux'), { file: '/p/pnpm', args: [] });
-    assert.throws(() => check.pnpmCommand({}, 'win32'), /npm_execpath 未设置.*pnpm run check/);
-    assert.throws(() => check.pnpmCommand({ npm_execpath: 'C:\\p\\pnpm.cmd' }, 'win32'), /不经 shell 无法运行.*pnpm run check/);
+test('a native pnpm binary without an extension runs directly', { skip: process.platform === 'win32' }, t => {
+    const sandbox = checkSandbox(t);
+    assertStepsReachedUnchanged(sandbox, sandbox.pnpm('pnpm', `#!${process.execPath}\n`));
 });
 
-test('node scripts/check.cjs without npm_execpath stops before running any step', () => {
-    const env = { ...process.env };
-    delete env.npm_execpath;
-    const result = spawnSync(process.execPath, [path.join(root, 'scripts', 'check.cjs')], { env, encoding: 'utf8' });
+test('node scripts/check.cjs without npm_execpath stops before running any step', t => {
+    const sandbox = checkSandbox(t);
+    const result = sandbox.run([]);
     assert.equal(result.status, 2);
     assert.match(result.stderr, /npm_execpath 未设置.*请用 pnpm run check 运行/);
     assert.equal(result.stdout, '');
+    assert.deepEqual(sandbox.calls(), []);
+});
+
+test('npm run check is refused instead of running the steps through npm', t => {
+    const sandbox = checkSandbox(t);
+    for (const name of ['npm-cli.js', 'npm', 'yarn.js']) {
+        const result = sandbox.run([], sandbox.pnpm(name));
+        assert.equal(result.status, 2, name);
+        assert.match(result.stderr, /不是 pnpm，请用 pnpm run check 运行/, name);
+        assert.equal(result.stdout, '', name);
+    }
+    assert.deepEqual(sandbox.calls(), []);
+});
+
+test('a pnpm .cmd entry is refused on Windows, since it only runs through a shell', { skip: process.platform !== 'win32' }, t => {
+    const sandbox = checkSandbox(t);
+    const result = sandbox.run([], sandbox.pnpm('pnpm.cmd'));
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /不经 shell 无法运行，请用 pnpm run check 运行/);
+    assert.deepEqual(sandbox.calls(), []);
 });
 
 test('a failed step does not stop the later ones and fails the summary', async () => {
