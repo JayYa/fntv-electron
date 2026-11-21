@@ -1,5 +1,25 @@
 # 更新日志
 
+## [3.5.0](https://github.com/JayYa/fntv-electron/compare/v3.4.0...v3.5.0) (2026-11-21)
+
+
+### 新功能
+
+* 记住主窗口上次的大小、位置和最大化状态 ([#235](https://github.com/JayYa/fntv-electron/issues/235)) ([195d29e](https://github.com/JayYa/fntv-electron/commit/195d29e3cd85b567739ab8f2814cf6fbb8bde15a))
+
+
+### 问题修复
+
+* **deps:** 附带的 MPV 和插件更新到 fntv-mpv-v20261118_225012 ([#234](https://github.com/JayYa/fntv-electron/issues/234)) ([c3eb012](https://github.com/JayYa/fntv-electron/commit/c3eb012a6896edee019b64895d5f884965147146))
+* 不勾「记住此证书」时不再永久信任该主机 ([#255](https://github.com/JayYa/fntv-electron/issues/255)) ([16482ae](https://github.com/JayYa/fntv-electron/commit/16482ae0967024686cfe91778ff791f27e8865f7))
+* 切到下一集时，正在回传的播放进度不再混进下一集的数据 ([#237](https://github.com/JayYa/fntv-electron/issues/237)) ([e693f2d](https://github.com/JayYa/fntv-electron/commit/e693f2d74c575e871b0ca1ce97d39f3000f43990))
+* 登录、检查更新和保存设置的按钮在操作真正结束后才恢复 ([#267](https://github.com/JayYa/fntv-electron/issues/267)) ([d115227](https://github.com/JayYa/fntv-electron/commit/d1152270025d8c9b99a0d32c3a5f3a576acbd3a2))
+* 登录时恢复登录状态失败不再保存 token，三种登录方式走同一套步骤 ([#245](https://github.com/JayYa/fntv-electron/issues/245)) ([9d89016](https://github.com/JayYa/fntv-electron/commit/9d89016112c537e0d43eee64a34fca2e5916a274))
+* 登录页弹窗关闭后，光标回到原来所在的输入框 ([#266](https://github.com/JayYa/fntv-electron/issues/266)) ([575d494](https://github.com/JayYa/fntv-electron/commit/575d4949782f1123f2c5f592903a931b05bc9677))
+* 网络慢时播放进度不再被较早的回传倒退回去 ([#240](https://github.com/JayYa/fntv-electron/issues/240)) ([5f95a05](https://github.com/JayYa/fntv-electron/commit/5f95a05b8f0faa84cb9f42f696e4e8b2dde215f5))
+* 退出登录后重启客户端不再自动登录回去 ([#247](https://github.com/JayYa/fntv-electron/issues/247)) ([ce74a8d](https://github.com/JayYa/fntv-electron/commit/ce74a8d88d14655dc9bd6dc73a1927890de1055a))
+* 通过 scoop 安装的 MPV 也能读到 portable_config 配置 ([#269](https://github.com/JayYa/fntv-electron/issues/269)) ([169cb33](https://github.com/JayYa/fntv-electron/commit/169cb33b1b34b20f6354980f3898b4ffabf5aed3))
+
 ## [3.4.0](https://github.com/JayYa/fntv-electron/compare/v3.3.0...v3.4.0) (2026-11-15)
 
 
