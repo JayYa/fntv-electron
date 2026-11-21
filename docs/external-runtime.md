@@ -8,7 +8,7 @@
 
 - 设了 `MPV_HOME` 就是它。
 - 否则 Windows 是 `app.getPath('appData')` 下的 `mpv`（通常是 `%APPDATA%mpv`），其它平台是 `$XDG_CONFIG_HOME/mpv`，未设或不是绝对路径时 `~/.config/mpv`。Windows 上用打包的 mpv 时，`media.ts` 用 `--config-dir` 把同一个目录传给 mpv。
-- Windows 上用户自己指定的 `mpv.exe` 旁边有 `portable_config` 时，mpv 只读那里，同步也写那里（`MPV_HOME` 仍优先，#114）；指定的是 scoop 之类的 shim 时找不到真实 `mpv.exe` 旁边的目录，不处理。
+- Windows 上用户自己指定的 `mpv.exe` 旁边有 `portable_config` 时，mpv 只读那里，同步也写那里（`MPV_HOME` 仍优先，#114）；指定的是 scoop 的 shim 时，按旁边 `.shim` 文件里的 `path` 找到真实 `mpv.exe`，用它旁边的 `portable_config`（#262，格式见 [ADR-0011](adr/0011-platform-behavior-facts.md)）；其它包管理器的 shim 不处理。
 - macOS 和 Linux 上标准目录不存在而 `~/.mpv` 存在时，同步写 `~/.mpv`，不新建标准目录（#115）。
 
 同步只在客户端启动时进行，改了 MPV 播放器路径后要重启客户端才同步到新目录。

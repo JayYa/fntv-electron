@@ -31,7 +31,16 @@ export function getMpvConfigDir(userMpvPath?: string): string {
         process.env,
         userMpvPath,
         fs.existsSync,
+        readTextFileOrNull,
     );
+}
+
+function readTextFileOrNull(target: string): string | null {
+    try {
+        return fs.readFileSync(target, 'utf8');
+    } catch {
+        return null;
+    }
 }
 
 // 客户端这次会运行的 MPV（自选 MPV、附带 MPV 或在常见位置找到的 MPV），找不到时是 undefined。托盘显示和播放共用。

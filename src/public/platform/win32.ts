@@ -1,6 +1,31 @@
 import * as path from 'node:path';
 import { NOT_PACKAGED, PlatformImpl } from './shared';
 
+const SHIM_PATH_LINE = /^\s*path\s*=\s*(.*?)\s*$/;
+
+function scoopShimTarget(userMpvPath: string, readTextFile: (target: string) => string | null): string | undefined {
+    const shimFile = userMpvPath.replace(/\.exe$/i, '.shim');
+    if (shimFile === userMpvPath) {
+        return undefined;
+    }
+    const lines = (readTextFile(shimFile) ?? '').replace(/^﻿/, '').split(/\r?\n/);
+    for (const line of lines) {
+        const target = SHIM_PATH_LINE.exec(line)?.[1].replace(/^"(.*)"$/, '$1').trim();
+        if (target && path.win32.isAbsolute(target)) {
+            return target;
+        }
+    }
+    return undefined;
+}
+
+function userMpvLocations(userMpvPath: string | undefined, readTextFile: (target: string) => string | null): string[] {
+    if (!userMpvPath) {
+        return [];
+    }
+    const shimTarget = scoopShimTarget(userMpvPath, readTextFile);
+    return shimTarget ? [userMpvPath, shimTarget] : [userMpvPath];
+}
+
 export const win32: PlatformImpl = {
     behavior: {
         closeBehaviorSetting: 'exitMode',
@@ -45,9 +70,9 @@ export const win32: PlatformImpl = {
         treatsUnknownMpvConfAsUserOwned: false,
     },
 
-    mpvUserConfigDir(dirs, _env, userMpvPath, pathExists) {
-        if (userMpvPath) {
-            const portableDir = path.win32.join(path.win32.dirname(userMpvPath), 'portable_config');
+    mpvUserConfigDir(dirs, _env, userMpvPath, pathExists, readTextFile) {
+        for (const mpvPath of userMpvLocations(userMpvPath, readTextFile)) {
+            const portableDir = path.win32.join(path.win32.dirname(mpvPath), 'portable_config');
             if (pathExists(portableDir)) {
                 return portableDir;
             }
