@@ -31,12 +31,14 @@ function loginPageScripts() {
 
 const loginPageScriptText = () => loginPageScripts().map(({ source }) => source).join('\n');
 
-function createElement() {
+function createElement(focusTracker = { focus() {} }) {
     const listeners = new Map();
     const classes = new Set();
     const element = {
         value: '',
         checked: false,
+        disabled: false,
+        isConnected: true,
         dataset: {},
         style: {},
         children: [],
@@ -62,7 +64,8 @@ function createElement() {
         },
         replaceChildren() { element.children = []; },
         contains: () => false,
-        focus() {},
+        focus() { focusTracker.focus(element); },
+        click() { element.dispatch('click'); },
         querySelectorAll(selector) {
             const className = selector.slice(1);
             const found = [];
@@ -79,9 +82,14 @@ function createElement() {
 
 // 用假 DOM 跑登录页真实的脚本，主进程这一侧由测试扮演。
 function openLoginPage() {
+    const focusTracker = {
+        focus(element) {
+            if (!element.disabled && element.isConnected) context.document.activeElement = element;
+        },
+    };
     const elements = new Map();
     const getElement = (id) => {
-        if (!elements.has(id)) elements.set(id, createElement());
+        if (!elements.has(id)) elements.set(id, createElement(focusTracker));
         return elements.get(id);
     };
     const sent = [];
@@ -94,6 +102,8 @@ function openLoginPage() {
     };
     const documentElement = createElement();
     const windowElement = createElement();
+    const body = createElement(focusTracker);
+    const messageDialog = createElement();
     const context = {
         console,
         setTimeout() { return 0; },
@@ -101,7 +111,9 @@ function openLoginPage() {
         document: Object.assign(documentElement, {
             getElementById: getElement,
             createElement: () => createElement(),
-            activeElement: null,
+            querySelector: (selector) => (selector === '.message-dialog' ? messageDialog : null),
+            body,
+            activeElement: body,
         }),
         window: Object.assign(windowElement, {
             electronAPI,
@@ -127,7 +139,20 @@ function openLoginPage() {
         input: getElement,
         loginEnabled: () => getElement('loginBtn').disabled === false,
         load() { windowElement.dispatch('DOMContentLoaded'); },
-        click(id) { getElement(id).dispatch('click'); },
+        click(id) {
+            getElement(id).focus();
+            getElement(id).dispatch('click');
+        },
+        focus(id) { getElement(id).focus(); },
+        focusedId() {
+            const active = context.document.activeElement;
+            return [...elements].find(([, element]) => element === active)?.[0] ?? null;
+        },
+        press(key) {
+            const target = context.document.activeElement;
+            documentElement.dispatch('keydown', { key, target });
+            documentElement.dispatch('keypress', { key, target });
+        },
         receive(channel, data) { pageListeners.get(channel)(undefined, data); },
         clickHistory(index) {
             getElement('historyDropdown').querySelectorAll('.history-content')[index].dispatch('click');

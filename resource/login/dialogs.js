@@ -1,8 +1,21 @@
 /* exported showCustomConfirm, showCustomMessage */
 
 let confirmCallback = null;
+let focusBeforeConfirm = null;
+let focusBeforeMessage = null;
+
+function returnFocusTo(element) {
+    if (element && element !== document.body && element.isConnected) {
+        element.focus();
+        if (document.activeElement === element) return;
+    }
+    domainInput.focus();
+}
 
 function showCustomConfirm(message, callback) {
+    if (!customConfirm.classList.contains('show')) {
+        focusBeforeConfirm = document.activeElement;
+    }
     confirmMessage.textContent = message;
     confirmCallback = callback;
     customConfirm.classList.add('show');
@@ -11,9 +24,9 @@ function showCustomConfirm(message, callback) {
 function hideCustomConfirm() {
     customConfirm.classList.remove('show');
     confirmCallback = null;
-    setTimeout(() => {
-        domainInput.focus();
-    }, 100);
+    const element = focusBeforeConfirm;
+    focusBeforeConfirm = null;
+    returnFocusTo(element);
 }
 
 confirmCancel.addEventListener('click', () => {
@@ -70,14 +83,17 @@ function showCustomMessage(type, title, content) {
     
     messageTitle.textContent = title;
     messageContent.textContent = content;
+    if (!customMessage.classList.contains('show')) {
+        focusBeforeMessage = document.activeElement;
+    }
     customMessage.classList.add('show');
 }
 
 function hideCustomMessage() {
     customMessage.classList.remove('show');
-    setTimeout(() => {
-        domainInput.focus();
-    }, 100);
+    const element = focusBeforeMessage;
+    focusBeforeMessage = null;
+    returnFocusTo(element);
 }
 
 messageButton.addEventListener('click', () => {

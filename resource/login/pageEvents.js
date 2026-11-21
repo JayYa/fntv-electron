@@ -9,25 +9,6 @@ ipcRenderer.on('login-success', (event, data) => {
 });
 
 document.addEventListener('click', function(e) {
-    if (!historyDropdown.contains(e.target) && 
-        e.target !== historyBtn && 
-        !e.target.classList.contains('history-delete') &&
-        e.target.id !== 'clearHistoryBtn') {
-        setTimeout(() => {
-            if (!document.activeElement || 
-                (document.activeElement.tagName !== 'INPUT' && 
-                 document.activeElement.tagName !== 'BUTTON')) {
-                domainInput.focus();
-            }
-        }, 50);
-    }
-});
-
-window.addEventListener('focus', function() {
-    setTimeout(restoreFocus, 100);
-});
-
-document.addEventListener('click', function(e) {
     if (e.target.classList.contains('github-link')) {
         e.preventDefault();
         const url = e.target.href;

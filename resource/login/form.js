@@ -1,29 +1,3 @@
-/* exported restoreFocus */
-
-function restoreFocus() {
-    try {
-        domainInput.disabled = false;
-        domainInput.readOnly = false;
-        
-        domainInput.focus();
-        domainInput.select();
-        
-        const clickEvent = new MouseEvent('click', {
-            view: window,
-            bubbles: true,
-            cancelable: true
-        });
-        domainInput.dispatchEvent(clickEvent);
-        
-        if (domainInput.setSelectionRange) {
-            const len = domainInput.value.length;
-            domainInput.setSelectionRange(len, len);
-        }
-    } catch (error) {
-        window.log.error('恢复焦点失败:', error);
-    }
-}
-
 function isFnId(value) {
     return /^[A-Za-z0-9_-]{6,30}$/.test(value);
 }
