@@ -192,3 +192,41 @@ test('login page accepts the same FN ID characters as the main process', () => {
         assert.equal(accepts(value), false, value);
     }
 });
+
+test('login page accepts domains, IPv4 and bracketed IPv6 addresses with optional ports', () => {
+    const page = openLoginPage();
+    page.typeInto('username', 'alice');
+    page.typeInto('password', 'secret');
+    const accepts = (value) => {
+        page.typeInto('domain', value);
+        return page.loginEnabled();
+    };
+
+    for (const value of [
+        'nas.example.com',
+        'nas.example.com:5667',
+        '飞牛.中国',
+        '192.168.1.10',
+        '192.168.1.10:5666',
+        '[fd00::10]',
+        '[fd00::10]:5666',
+        '[::ffff:192.168.1.10]:5666',
+        '[fe80::1%eth0]',
+    ]) {
+        assert.equal(accepts(value), true, value);
+    }
+
+    for (const value of [
+        '',
+        'nas',
+        'nas.example.c0m',
+        '256.1.1.1',
+        '192.168.1',
+        'fd00::10',
+        '[fd00::10',
+        '[fd00:::10]',
+        'https://nas.example.com',
+    ]) {
+        assert.equal(accepts(value), false, value);
+    }
+});

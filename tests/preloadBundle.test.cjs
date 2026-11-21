@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const vm = require('node:vm');
 
 const { useFakeModule } = require('./helpers/fakeElectron.cjs');
 
@@ -50,6 +51,45 @@ test('the bundled preload uses no Node globals', () => {
     const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
 
     assert.doesNotMatch(bundle, /\b(?:process|__dirname|__filename|Buffer)\b/);
+});
+
+function runBundledPreload(protocol) {
+    const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
+    const exposed = {};
+    const electron = {
+        contextBridge: { exposeInMainWorld(name, value) { exposed[name] = value; } },
+        ipcRenderer: { send() {}, on() {}, once() {}, off() {}, invoke: async () => undefined },
+    };
+    const context = {
+        window: { location: { protocol }, addEventListener() {} },
+        document: { readyState: 'loading', addEventListener() {} },
+        console,
+        setTimeout,
+        clearTimeout,
+        require(name) {
+            assert.equal(name, 'electron');
+            return electron;
+        },
+        module: { exports: {} },
+    };
+    vm.createContext(context);
+    vm.runInContext(bundle, context);
+    return exposed;
+}
+
+test('the login page bridge checks FN IDs synchronously with the main process rule', () => {
+    const { electronAPI } = runBundledPreload('file:');
+    const { isFnId } = require('../dest/public/fnId.js');
+
+    for (const value of ['demo123', '  demo123  ', 'demo1', 'nas.example.com', '192.168.1.10', '[fd00::10]:5666', '']) {
+        assert.equal(electronAPI.isFnId(value), isFnId(value), value);
+    }
+    assert.equal(electronAPI.isFnId('  demo123  '), true);
+    assert.equal(electronAPI.isFnId(''), false);
+});
+
+test('pages other than the login page get no bridge', () => {
+    assert.deepEqual(Object.keys(runBundledPreload('https:')), []);
 });
 
 test('the login page bridge loads before any plugin', () => {

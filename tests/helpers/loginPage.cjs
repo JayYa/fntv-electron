@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const { isFnId } = require('../../dest/public/fnId.js');
+
 const LOGIN_DIR = path.join(__dirname, '..', '..', 'resource', 'login');
 
 const readLoginFile = (name) => fs.readFileSync(path.join(LOGIN_DIR, name), 'utf8');
@@ -114,6 +116,7 @@ function openLoginPage() {
         on(channel, listener) { pageListeners.set(channel, listener); },
         once() {},
         off() {},
+        isFnId,
     };
     const documentElement = createElement();
     const windowElement = createElement();
