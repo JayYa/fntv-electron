@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-// 构建期清单断言（#221，契约见 docs/mpv-archive-contract.md“能力”一节）：固定的 MPV 归档解压后、打包前，
-// 读归档根目录的 fntv-manifest.json，下面任何一条不成立就让构建失败：
-//   清单读得出、formatVersion 在客户端认识的集合里（manifest.ts 的 readManifest）；
-//   archiveVersion 等于 mpv-archive.json 固定的 tag（解压的确实是固定的归档）；
-//   provides 满足客户端的 requires（capabilities.ts 的 unmetCapabilities）。
-// 复用编译后的同步模块，所以要在 pnpm run compile 之后运行（build.yml 的 Check MPV archive manifest）。
-//
-// 用法：check-mpv-manifest.cjs [--archive <归档目录>] [--pin <mpv-archive.json>]
-//   默认 third_party/fntv-mpv 和仓库根目录的 mpv-archive.json。
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -24,7 +15,6 @@ function parseArgs(args) {
     return options;
 }
 
-// 返回问题列表和读到的清单；没有问题时列表为空。
 function checkPinnedManifest({ archive, pin }) {
     const { MANIFEST_FILE_NAME, readManifest } = require(path.join(SYNC_DIR, 'manifest.js'));
     const { describeUnmetCapability, unmetCapabilities } = require(path.join(SYNC_DIR, 'capabilities.js'));

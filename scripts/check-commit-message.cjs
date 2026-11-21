@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// 检查提交信息和 PR 标题是否符合 Conventional Commits。
-// feat、fix、perf 的描述会被 release-please 写进用户可见的 CHANGELOG（release-please-config.json）。
-//
-// 用法：
-//   check-commit-message.cjs <文件>      commit-msg hook，检查文件第一行有效内容
-//   check-commit-message.cjs -           从 stdin 读，CI 检查 PR 标题
 const fs = require('node:fs');
 
 const TYPES = ['feat', 'fix', 'perf', 'docs', 'refactor', 'test', 'chore', 'ci', 'build', 'style', 'revert'];
@@ -12,7 +6,6 @@ const CONVENTIONAL = new RegExp(`^(${TYPES.join('|')})(\\([A-Za-z0-9._/-]+\\))?!
 const RELEASE_TYPES = ['feat', 'fix', 'perf'];
 const INTERNAL_SCOPES = ['ci', 'build', 'test', 'tests'];
 const RELEASE_WITH_INTERNAL_SCOPE = new RegExp(`^(${RELEASE_TYPES.join('|')})\\((${INTERNAL_SCOPES.join('|')})\\)!?:`, 'i');
-// git 自己生成的标题，以及 rebase --autosquash 用的标记。
 const GENERATED = /^(Merge |Revert "|(fixup|squash|amend)! )/;
 
 function subjectOf(message) {

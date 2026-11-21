@@ -1,17 +1,13 @@
 /* exported restoreFocus */
 
-// 强制恢复焦点的通用函数
 function restoreFocus() {
     try {
-        // 确保输入框可用
         domainInput.disabled = false;
         domainInput.readOnly = false;
         
-        // 多种方式尝试恢复焦点
         domainInput.focus();
         domainInput.select();
         
-        // 如果还是无法获取焦点，尝试点击
         const clickEvent = new MouseEvent('click', {
             view: window,
             bubbles: true,
@@ -19,7 +15,6 @@ function restoreFocus() {
         });
         domainInput.dispatchEvent(clickEvent);
         
-        // 强制设置光标位置
         if (domainInput.setSelectionRange) {
             const len = domainInput.value.length;
             domainInput.setSelectionRange(len, len);
@@ -29,13 +24,11 @@ function restoreFocus() {
     }
 }
 
-// 和主进程的 isFnId（fnid_login.ts）保持一致。
 function isFnId(value) {
     return /^[A-Za-z0-9_-]{6,30}$/.test(value);
 }
 
 function isValidDomainOrIP(value) {
-    // 先检查是否为 FN ID 格式
     if (isFnId(value)) return true;
     const domainRegex = /^([\u4e00-\u9fa5a-zA-Z0-9-]+\.)+[\u4e00-\u9fa5a-zA-Z]{2,}(:\d+)?$/;
     const ipv4Regex = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}(:\d+)?$/;
@@ -57,7 +50,6 @@ function checkInputs() {
     }
 }
 
-// 失去焦点时显示红色提示
 domainInput.addEventListener('blur', function () {
     const domain = domainInput.value.trim();
     if (domain && !isValidDomainOrIP(domain)) {
@@ -73,11 +65,9 @@ domainInput.addEventListener('input', checkInputs);
 usernameInput.addEventListener('input', checkInputs);
 passwordInput.addEventListener('input', checkInputs);
 
-// 登录逻辑
 loginBtn.addEventListener('click', function () {
     if (loginBtn.disabled) return;
     
-    // 设置登录中状态
     const originalText = loginBtn.textContent;
     loginBtn.textContent = '登录中...';
     loginBtn.disabled = true;
@@ -99,23 +89,19 @@ loginBtn.addEventListener('click', function () {
         useHttps: useHttps
     };
 
-    // 发送登录请求
     ipcRenderer.send('login', loginData);
     
-    // 5秒后恢复按钮状态（防止无响应）
     const timeoutId = setTimeout(() => {
         loginBtn.textContent = originalText;
-        checkInputs(); // 重新检查输入状态
+        checkInputs();
     }, 5000);
     
-    // 监听登录结果，无论成功还是失败都恢复按钮状态
     const handleLoginResult = () => {
         clearTimeout(timeoutId);
         loginBtn.textContent = originalText;
         checkInputs();
     };
     
-    // 临时监听器，处理完后自动移除
     const tempErrorListener = () => {
         handleLoginResult();
         ipcRenderer.off('login-error', tempErrorListener);
@@ -130,14 +116,12 @@ loginBtn.addEventListener('click', function () {
     ipcRenderer.once('login-success', tempSuccessListener);
 });
 
-// Enter 键触发
 document.addEventListener('keypress', function (e) {
     if (e.key === 'Enter' && !loginBtn.disabled) {
         loginBtn.click();
     }
 });
 
-// 密码显示/隐藏切换
 passwordToggle.addEventListener('click', function () {
     if (passwordInput.type === 'password') {
         passwordInput.type = 'text';

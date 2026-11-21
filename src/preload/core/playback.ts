@@ -42,10 +42,6 @@ function readGuidAttribute(element: Element): string | null {
     return null;
 }
 
-/**
- * 只从 DOM 结构（属性 / 链接）向上识别播放项 guid，不做 URL 兜底。
- * 用于卡片内触发器等“必须来自卡片本身”的场景，避免误用当前页面 guid。
- */
 export function findItemGuidInDom(element: Element | null): string | null {
     let current = element;
     for (let depth = 0; current && depth < 8; depth += 1, current = current.parentElement) {
@@ -98,7 +94,6 @@ export function getSelectedSourceIndex(): number {
 
 export function sendPlayEvent(itemGuid: string, sourceIndex = 0, restart = false): boolean {
     const playData: PlayMovieData = { id: itemGuid, sourceIndex };
-    // 只在需要从头播放时附带标志，保持默认载荷与既有契约一致。
     if (restart) playData.restart = true;
     ipcRenderer.send('play-movie', playData);
     return true;

@@ -12,7 +12,6 @@ export type Hooks = {
     [K in HookType]: Array<(...args: any[]) => void>;
 }
 
-// 动态初始化 hooks 对象，自适应所有 HookType 枚举值
 const hooks: Hooks = Object.values(HookType).reduce((acc, hookType) => {
     acc[hookType] = [];
     return acc;

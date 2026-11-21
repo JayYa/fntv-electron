@@ -45,12 +45,6 @@ export const win32: PlatformImpl = {
         treatsUnknownMpvConfAsUserOwned: false,
     },
 
-    /**
-     * 漫游 AppData 下的 mpv（osdep/path-win.c）。Windows 不读 XDG_CONFIG_HOME 和 ~/.mpv。
-     * 用户自己指定的 mpv.exe（userMpvPath）旁边有 portable_config 时，mpv 只读那里（#114）。
-     * 打包的 mpv 有 --config-dir，不传 userMpvPath。
-     * scoop 之类的 shim 不在真实 mpv.exe 旁边，按 shim 所在目录找不到 portable_config，这里不处理。
-     */
     mpvUserConfigDir(dirs, _env, userMpvPath, pathExists) {
         if (userMpvPath) {
             const portableDir = path.win32.join(path.win32.dirname(userMpvPath), 'portable_config');

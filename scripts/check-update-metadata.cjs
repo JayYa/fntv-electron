@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// 核对更新元数据：electron-builder 打包后，latest*.yml 记录的安装包文件名、size 和 sha512 要和输出目录里的
-// 实际文件一致，否则客户端按元数据下载的安装包校验不过，应用内更新失败（docs/adr/0003-release-gate.md）。
-// 构建 workflow（build.yml）在打包之后、上传 artifact 之前运行。
-// 用法：check-update-metadata.cjs <输出目录> <元数据文件名>...
-// 每个问题输出一条 GitHub ::error:: annotation，有问题时退出码为 1；全部一致时每个元数据文件打印一行摘要。
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,7 +10,6 @@ async function sha512Of(file) {
     return hash.digest('base64');
 }
 
-// 一个元数据文件的问题列表（每条是“字段 expected 期望值, actual 实际值”）和全部一致时的摘要。
 async function checkMetadata(dir, name) {
     const file = path.join(dir, name);
     if (!fs.existsSync(file)) return { problems: ['file expected in the output directory, actual missing'] };

@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import preloadLogger from './core/logger';
 
-// 这个模块要排在插件之前导入：插件顶层出错时，登录页的桥仍然可用。
 const SEND_CHANNELS = new Set([
     'login', 'delete-history-item', 'clear-history', 'get-config',
     'get-history-credentials', 'get-current-access-code',
@@ -62,7 +61,6 @@ function exposeLoginPageApi(): void {
             ipcRenderer.off(channel, wrapped);
             listenerWrappers.get(channel)?.delete(listener);
         },
-        // 沙箱里没有 shell，地址和来源都由主进程校验（src/main/handlers/plugins/externalLink.ts）。
         async openExternal(url: string) {
             await invokeAllowed('open-external', url);
         },

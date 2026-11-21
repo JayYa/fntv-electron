@@ -1,4 +1,3 @@
-// preload/plugins/titlebar.ts
 import { ipcRenderer } from 'electron';
 import { registerHook } from '../core/hooks';
 import { HookType } from '../core/hooks';
@@ -31,8 +30,6 @@ function injectTitleBar(titleBar: TitleBar): void {
         transition: background 0.3s ease;
     `;
 
-    // macOS 的按钮由系统窗口绘制，这里只保留透明拖动区域。
-    // 其他平台继续使用原来的自定义窗口控制按钮。
     bar.innerHTML = usesSystemButtons ? '' : `
         <div id="titlebar-btns" style="-webkit-app-region:no-drag; display:flex; gap:2px; padding-right:4px;">
             <button id="min-btn" style="
@@ -86,22 +83,18 @@ function injectTitleBar(titleBar: TitleBar): void {
         </div>
     `;
 
-    // 添加body顶部内边距
     document.body.style.paddingTop = '10px';
-    // 防止出现双重滚动条
     document.documentElement.style.overflowY = 'hidden';
     document.body.appendChild(bar);
     logger.info('自定义标题栏已注入');
 
     if (usesSystemButtons) return;
 
-    // 按钮交互效果
     const buttonIds: string[] = ['min-btn', 'max-btn', 'close-btn'];
     buttonIds.forEach((id: string) => {
         const btn = document.getElementById(id) as HTMLButtonElement;
         if (!btn) return;
         
-        // 平滑的悬停效果
         btn.addEventListener('mouseenter', () => {
             if (id === 'close-btn') {
                 btn.style.background = 'rgba(232, 17, 35, 0.2)';
@@ -121,7 +114,6 @@ function injectTitleBar(titleBar: TitleBar): void {
         });
     });
 
-    // 窗口控制功能
     const minBtn = document.getElementById('min-btn');
     const maxBtn = document.getElementById('max-btn');
     const closeBtn = document.getElementById('close-btn');
@@ -145,7 +137,6 @@ function injectTitleBar(titleBar: TitleBar): void {
     }
 }
 
-// 注册到 hook
 registerHook(HookType.OnReady, () => {
     ipcRenderer.invoke('get-title-bar').then(
         (titleBar: TitleBar) => injectTitleBar(titleBar),

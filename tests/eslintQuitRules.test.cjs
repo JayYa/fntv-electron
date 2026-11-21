@@ -4,7 +4,7 @@ const path = require('node:path');
 const { ESLint } = require('eslint');
 
 // before-quit 和系统关机信号只在退出协调模块里监听，其它模块向它注册（eslint.config.mjs）。
-const eslint = new ESLint({ cwd: path.join(__dirname, '..') });
+const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 const COORDINATOR = 'src/modules/quit/quitCoordinator.ts';
 
 async function messagesFor(code, file = 'src/main/example.ts') {

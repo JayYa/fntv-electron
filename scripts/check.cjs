@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-// 改完代码后的验证入口（pnpm run check），本地和 CI（ci.yml 的 test job）跑同一条命令。
-// 依次跑文件大小检查、lint、knip、测试；一步失败也接着跑后面的，最后汇总每步结果，有一步失败就以 1 退出。
-//
-// 用法：check.cjs [--base <ref> | --no-file-size]
-//   默认：文件大小检查对 origin/main 的合并基点（HEAD 相对合并基点改动的文件，读 HEAD 的内容；
-//   未提交的改动不在内，暂存区由 pre-commit 钩子检查）。
-//   --base <ref>：换一个对比的 ref。CI 的 PR 上传 HEAD^1（PR 合并提交的第一个父提交就是 base）。
-//   --no-file-size：跳过文件大小检查。CI 只在 Linux 那一格的 PR 上跑它，其它格和 push 到 main 时跳过。
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -22,8 +14,6 @@ function parseArgs(args) {
     throw new Error('用法：check.cjs [--base <ref> | --no-file-size]');
 }
 
-// 每步是 { name, file, args }，跳过的步骤是 { name, skipped }。
-// node 直接运行、不经 shell：Windows 的 cmd 会吞掉 HEAD^1 里的 ^。
 function stepsFor({ base }) {
     return [
         base === null
@@ -39,7 +29,6 @@ function stripAnsi(text) {
     return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-// Windows 上 pnpm 是 .cmd，要经 shell 才能运行，整条命令拼成一个字符串（它的参数里没有要转义的字符）。
 function runCommand(file, args) {
     const viaShell = file === 'pnpm' && process.platform === 'win32';
     const env = process.stdout.isTTY ? { ...process.env, FORCE_COLOR: '1' } : process.env;

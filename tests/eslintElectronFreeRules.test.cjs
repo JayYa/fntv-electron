@@ -4,7 +4,7 @@ const path = require('node:path');
 const { ESLint } = require('eslint');
 
 // fn_api/core 和 Proxy 服务不能加载 electron，也不能经由 logger 这类模块间接加载（eslint.config.mjs）。
-const eslint = new ESLint({ cwd: path.join(__dirname, '..') });
+const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 
 async function messagesFor(code, file) {
     const [result] = await eslint.lintText(code, { filePath: file });

@@ -43,10 +43,6 @@ function extractFromPath(path: string): string | null {
     return null;
 }
 
-/**
- * 从飞牛影视的新旧详情页 URL 中提取播放项标识。
- * 路由结构优先于 GUID 格式，避免服务端以后更换标识格式时再次失效。
- */
 export function extractItemGuidFromUrl(value: string): string | null {
     try {
         const url = new URL(value, 'http://fntv.local');
@@ -81,7 +77,6 @@ function detectFromPath(path: string): DetailRoute | null {
     const segments = pathSegments(path).map((segment) => segment.toLowerCase());
     if (segments.length < 3 || segments[0] !== 'v') return null;
 
-    // 标识段不能是路由关键字，避免把 `/v/tv/season`、`/v/tv/episode` 这类缺少 guid 的路径误判为详情页
     const last = segments[segments.length - 1];
     if (ROUTE_MARKERS.has(last)) return null;
 
@@ -96,11 +91,6 @@ function detectFromPath(path: string): DetailRoute | null {
     return null;
 }
 
-/**
- * 判断 URL 是否为需要接管主播放按钮的详情页，并返回详情页类型。
- * `/v/tv/episode/<guid>`、folder、person、video、library 等页面一律返回 null。
- * 同时兼容 `/#/v/...` 形式的 hash 路由与 query 参数。
- */
 export function detectDetailRoute(url: string): DetailRoute | null {
     try {
         const parsed = new URL(url, 'http://fntv.local');

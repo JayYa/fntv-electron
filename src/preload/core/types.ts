@@ -1,4 +1,3 @@
-// preload/types.ts - 类型定义文件
 export interface Logger {
     debug: (...args: any[]) => void;
     info: (...args: any[]) => void;
@@ -13,8 +12,8 @@ export interface Logger {
 
 export interface PlayMovieData {
     id: string;
-    sourceIndex: number; // 播放源
-    restart?: boolean; // 从头播放：清除续播进度后再拉起播放器
+    sourceIndex: number;
+    restart?: boolean;
 }
 
 export interface LoginPageApi {
@@ -25,7 +24,6 @@ export interface LoginPageApi {
     openExternal: (url: string) => Promise<void>;
 }
 
-// 扩展全局 Window 接口
 declare global {
     interface Window {
         log: Logger;
@@ -33,7 +31,6 @@ declare global {
         electronAPI: LoginPageApi;
     }
     
-    // Node.js 全局变量
     namespace NodeJS {
         interface Global {
             log: Logger;
@@ -41,7 +38,6 @@ declare global {
         }
     }
     
-    // 全局变量
     var log: Logger;
     var logger: Logger;
 }

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-const eslint = new ESLint({ cwd: path.join(__dirname, '..') });
+const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 
 async function messagesFor(code, filePath = 'tests/example.test.cjs') {
     const [result] = await eslint.lintText(code, { filePath });
