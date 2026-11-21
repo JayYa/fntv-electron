@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -31,6 +32,86 @@ test('pnpm run check runs the file size check, lint, knip and the tests in order
     assert.equal(commands(check.stepsFor(check.parseArgs(['--no-file-size'])))[0], 'file-size: skipped');
     assert.throws(() => check.parseArgs(['--base']), /用法/);
     assert.throws(() => check.parseArgs(['--fix']), /用法/);
+});
+
+const META = `a b^c&d%PATH%'q'`;
+
+function checkSandbox(t) {
+    const dir = tempDir(t, 'fntv-check-run-');
+    const tools = path.join(dir, META);
+    const calls = path.join(dir, 'calls.jsonl');
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    fs.mkdirSync(tools);
+    fs.copyFileSync(path.join(root, 'scripts', 'check.cjs'), path.join(dir, 'scripts', 'check.cjs'));
+    const recorder = from => `require('node:fs').appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(${from})) + '\\n');\n`;
+    fs.writeFileSync(path.join(dir, 'scripts', 'check-file-size.cjs'), recorder(2));
+    return {
+        tools,
+        pnpm(name, prefix = '') {
+            const entry = path.join(tools, name);
+            fs.writeFileSync(entry, `${prefix}${recorder(1)}`, { mode: 0o755 });
+            return entry;
+        },
+        run(args, npmExecpath) {
+            const env = { ...process.env };
+            delete env.npm_execpath;
+            if (npmExecpath) env.npm_execpath = npmExecpath;
+            return spawnSync(process.execPath, ['scripts/check.cjs', ...args], { cwd: dir, env, encoding: 'utf8' });
+        },
+        calls: () => fs.existsSync(calls) ? lines(calls).map(line => JSON.parse(line)) : [],
+    };
+}
+
+function assertStepsReachedUnchanged(sandbox, entry) {
+    const ref = `${META}"x"`;
+    const result = sandbox.run(['--base', ref], entry);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(sandbox.calls(), [
+        ['--base', ref],
+        [entry, 'run', 'lint'],
+        [entry, 'run', 'knip'],
+        [entry, 'test'],
+    ]);
+    assert.match(result.stdout, /^== lint: pnpm run lint$/m);
+    assert.match(result.stdout, /check passed\n$/);
+}
+
+test('every step reaches its program with the arguments unchanged, without a shell', t => {
+    const sandbox = checkSandbox(t);
+    assertStepsReachedUnchanged(sandbox, sandbox.pnpm('pnpm.cjs'));
+});
+
+test('a native pnpm binary without an extension runs directly', { skip: process.platform === 'win32' }, t => {
+    const sandbox = checkSandbox(t);
+    assertStepsReachedUnchanged(sandbox, sandbox.pnpm('pnpm', `#!${process.execPath}\n`));
+});
+
+test('node scripts/check.cjs without npm_execpath stops before running any step', t => {
+    const sandbox = checkSandbox(t);
+    const result = sandbox.run([]);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /npm_execpath 未设置.*请用 pnpm run check 运行/);
+    assert.equal(result.stdout, '');
+    assert.deepEqual(sandbox.calls(), []);
+});
+
+test('npm run check is refused instead of running the steps through npm', t => {
+    const sandbox = checkSandbox(t);
+    for (const name of ['npm-cli.js', 'npm', 'yarn.js']) {
+        const result = sandbox.run([], sandbox.pnpm(name));
+        assert.equal(result.status, 2, name);
+        assert.match(result.stderr, /不是 pnpm，请用 pnpm run check 运行/, name);
+        assert.equal(result.stdout, '', name);
+    }
+    assert.deepEqual(sandbox.calls(), []);
+});
+
+test('a pnpm .cmd entry is refused on Windows, since it only runs through a shell', { skip: process.platform !== 'win32' }, t => {
+    const sandbox = checkSandbox(t);
+    const result = sandbox.run([], sandbox.pnpm('pnpm.cmd'));
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /不经 shell 无法运行，请用 pnpm run check 运行/);
+    assert.deepEqual(sandbox.calls(), []);
 });
 
 test('a failed step does not stop the later ones and fails the summary', async () => {
