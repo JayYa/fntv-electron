@@ -29,12 +29,19 @@ function stripAnsi(text) {
     return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-function runCommand(file, args) {
-    const viaShell = file === 'pnpm' && process.platform === 'win32';
-    const env = process.stdout.isTTY ? { ...process.env, FORCE_COLOR: '1' } : process.env;
-    const child = viaShell
-        ? spawn([file, ...args].join(' '), { shell: true, env, stdio: ['inherit', 'pipe', 'pipe'] })
-        : spawn(file, args, { env, stdio: ['inherit', 'pipe', 'pipe'] });
+function pnpmCommand(env = process.env, platform = process.platform) {
+    const entry = env.npm_execpath;
+    if (!entry) throw new Error('找不到 pnpm 的入口（npm_execpath 未设置），请用 pnpm run check 运行');
+    if (/\.[cm]?js$/i.test(entry)) return { file: process.execPath, args: [entry] };
+    if (platform !== 'win32' || /\.exe$/i.test(entry)) return { file: entry, args: [] };
+    throw new Error(`pnpm 的入口 ${entry} 既不是 JS 文件也不是 .exe，不经 shell 无法运行，请用 pnpm run check 运行`);
+}
+
+function runCommand(file, args, env = process.env) {
+    const pnpm = file === 'pnpm' ? pnpmCommand(env) : null;
+    const command = pnpm ? { file: pnpm.file, args: [...pnpm.args, ...args] } : { file, args };
+    const childEnv = process.stdout.isTTY ? { ...env, FORCE_COLOR: '1' } : env;
+    const child = spawn(command.file, command.args, { env: childEnv, stdio: ['inherit', 'pipe', 'pipe'] });
     const chunks = [];
     child.stdout.on('data', chunk => { process.stdout.write(chunk); chunks.push(chunk); });
     child.stderr.on('data', chunk => { process.stderr.write(chunk); chunks.push(chunk); });
@@ -100,6 +107,7 @@ async function main(args) {
     let options;
     try {
         options = parseArgs(args);
+        pnpmCommand();
     } catch (error) {
         process.stderr.write(`${error.message}\n`);
         return 2;
@@ -113,4 +121,4 @@ async function main(args) {
 
 if (require.main === module) main(process.argv.slice(2)).then(code => { process.exitCode = code; });
 
-module.exports = { logText, parseArgs, runSteps, stepsFor, summary };
+module.exports = { logText, parseArgs, pnpmCommand, runCommand, runSteps, stepsFor, summary };
