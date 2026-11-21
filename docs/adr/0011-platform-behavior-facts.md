@@ -15,7 +15,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 按 mpv 的查找规则（mpv 源码 `options/path.c`、`osdep/path-*.c`、`options/configfiles.c`）：
 
 - `MPV_HOME` 优先，各平台都读，也优先于 Windows 的 `portable_config`。空的 `MPV_HOME` 在 mpv 里等于不读用户配置，这里按未设处理，同步仍有地方可写。
-- Windows：漫游 AppData 下的 `mpv`（`app.getPath('appData')` 和 mpv 用的 `FOLDERID_RoamingAppData` 是同一个目录），不读 `XDG_CONFIG_HOME` 和 `~/.mpv`。自选的 `mpv.exe` 旁边有 `portable_config` 时 mpv 只读那里（#114）。附带 MPV 用 `--config-dir` 指向用户配置，否则它读安装目录里的 `portable_config`。
+- Windows：漫游 AppData 下的 `mpv`（`app.getPath('appData')` 和 mpv 用的 `FOLDERID_RoamingAppData` 是同一个目录），不读 `XDG_CONFIG_HOME` 和 `~/.mpv`。自选的 `mpv.exe` 旁边有 `portable_config` 时 mpv 只读那里（#114）。自选的是 scoop 的 shim（如 `scoop\shims\mpv.exe`）时，mpv 读的是 shim 指向的真实 `mpv.exe` 旁边的 `portable_config`（#262）：shim 旁边有同名的 `.shim` 文本文件，scoop 写入 `path = "<真实 exe 的绝对路径>"`，后面可能还有 `args = …` 行；scoop 自己读回时去掉 `path = ` 和引号（ScoopInstaller/Scoop 的 `lib/core.ps1`，函数 `shim` 和 `Get-ShimTarget`）。这里也接受不带引号、多余空格和 BOM 的写法；没有 `.shim`、没有 `path` 行、路径不是绝对路径或那里没有 `portable_config` 时，按没有 shim 处理。shim 自己旁边的 `portable_config` 仍然优先。读 `.shim` 的函数由调用方注入，和 `pathExists` 一样，平台实现不碰文件系统。附带 MPV 用 `--config-dir` 指向用户配置，否则它读安装目录里的 `portable_config`。
 - macOS、Linux：`$XDG_CONFIG_HOME/mpv`（只认绝对路径），否则 `~/.config/mpv`；标准目录不存在而 `~/.mpv` 存在时只读 `~/.mpv`（#115）。这是用户日常用系统 MPV 的目录，所以同步时没有安装记录、也不在历史哈希里的 `mpv.conf` 算用户自己的配置，不写 `.fntv-new`、不算冲突（#219）。
 
 ## 运行哪个 MPV

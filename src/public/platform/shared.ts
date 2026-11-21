@@ -55,7 +55,13 @@ export const NOT_PACKAGED: InAppUpdateAvailability = { available: false, reason:
 
 export interface PlatformImpl {
     behavior: PlatformBehavior;
-    mpvUserConfigDir(dirs: UserDirs, env: Record<string, string | undefined>, userMpvPath: string | undefined, pathExists: (target: string) => boolean): string;
+    mpvUserConfigDir(
+        dirs: UserDirs,
+        env: Record<string, string | undefined>,
+        userMpvPath: string | undefined,
+        pathExists: (target: string) => boolean,
+        readTextFile: (target: string) => string | null,
+    ): string;
     defaultMpvPlayer(bundledMpvPath: string, pathExists: (target: string) => boolean): MpvPlayer | undefined;
     mpvIpcSocket(tmpDir: string, name: string): MpvIpcSocket;
     inAppUpdateAvailability(isPackaged: boolean, appImagePath: string | undefined, isWritableDir: (dir: string) => boolean): InAppUpdateAvailability;

@@ -49,7 +49,7 @@ test('leaves the bundled config intact when the chosen mpv is the bundled mpv', 
     const before = readTree(bundleDir);
     const dirs = { homeDir: root, appDataDir: path.join(root, 'AppData', 'Roaming') };
 
-    const target = mpvUserConfigDir('win32', dirs, {}, path.join(bundleDir, 'mpv.exe'), fs.existsSync);
+    const target = mpvUserConfigDir('win32', dirs, {}, path.join(bundleDir, 'mpv.exe'), fs.existsSync, () => null);
     const result = synchronizeMpvConfig({ ...archive, mpvConfigDir: target, platform: 'win32' });
 
     assert.deepEqual({ status: result.status, reason: result.reason }, { status: 'skipped', reason: 'same-directory' });
