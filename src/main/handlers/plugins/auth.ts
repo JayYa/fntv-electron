@@ -7,7 +7,8 @@ import * as loginStore from '../../../modules/fn_config/loginStore';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog } from '../../../modules/cert_trust';
-import { isFnId, handleFnIdLogin } from './fnid_login';
+import { isFnId } from '../../../public/fnId';
+import { handleFnIdLogin } from './fnid_login';
 import { establishNewLogin, type IssuedToken, type LoginReply } from '../../common/currentLogin';
 
 /**

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import { isFnId } from '../public/fnId';
 import preloadLogger from './core/logger';
 import type { LoginPageApi } from './core/types';
 
@@ -68,6 +69,7 @@ function exposeLoginPageApi(): void {
         async openExternal(url: string) {
             await invokeAllowed('open-external', url);
         },
+        isFnId,
     };
 
     contextBridge.exposeInMainWorld('electronAPI', api);

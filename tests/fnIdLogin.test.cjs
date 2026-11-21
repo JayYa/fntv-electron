@@ -110,7 +110,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         };
     };
 
-    const { handleFnIdLogin, isFnId } = require('../dest/main/handlers/plugins/fnid_login.js');
+    const { handleFnIdLogin } = require('../dest/main/handlers/plugins/fnid_login.js');
     const { readCurrentLogin } = require('../dest/modules/fn_config/loginStore.js');
     const finished = handleFnIdLogin({ domain: 'demo123', username: 'alice', password: PASSWORD, accessCode });
 
@@ -128,7 +128,6 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
     return {
         netRequests,
         nasRequests,
-        isFnId,
         finished,
         readCurrentLogin,
         mainWindowLoaded: () => mainWindow?.loaded ?? [],
@@ -419,8 +418,8 @@ test('a token cookie change on another site does not start the login check', asy
     assert.deepEqual(login.nasRequests, []);
 });
 
-test('treats only URL-safe 6 to 30 character input as an FN ID', async (t) => {
-    const { isFnId } = setupLogin(t);
+test('treats only URL-safe 6 to 30 character input as an FN ID', () => {
+    const { isFnId } = require('../dest/public/fnId.js');
 
     for (const value of [
         'demo123',
