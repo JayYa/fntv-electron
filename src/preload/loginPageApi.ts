@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import { isFnId } from '../public/fnId';
 import preloadLogger from './core/logger';
+import type { LoginPageApi } from './core/types';
 
 const SEND_CHANNELS = new Set([
     'delete-history-item', 'clear-history', 'get-config',
@@ -42,7 +43,7 @@ function wrapListener(channel: string, listener: PageListener): (...args: unknow
 function exposeLoginPageApi(): void {
     if (window.location.protocol !== 'file:') return;
 
-    const api = {
+    const api: LoginPageApi = {
         send(channel: string, ...args: unknown[]) {
             assertAllowed(SEND_CHANNELS, channel);
             ipcRenderer.send(channel, ...args);
