@@ -130,36 +130,37 @@ const windowsDirs = { homeDir: 'C:\\Users\\me', appDataDir: 'D:\\Profiles\\me\\R
 const macDirs = { homeDir: '/Users/me', appDataDir: '/Users/me/Library/Application Support' };
 const linuxDirs = { homeDir: '/home/me', appDataDir: '/home/me/.config' };
 const noPaths = () => false;
+const noFiles = () => null;
 
 test('without environment overrides the user MPV config is in the roaming AppData folder on Windows and ~/.config elsewhere', () => {
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, noPaths), 'D:\\Profiles\\me\\Roaming\\mpv');
-    assert.equal(mpvUserConfigDir('darwin', macDirs, {}, undefined, noPaths), '/Users/me/.config/mpv');
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, {}, undefined, noPaths), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, noPaths, noFiles), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, {}, undefined, noPaths, noFiles), '/Users/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, {}, undefined, noPaths, noFiles), '/home/me/.config/mpv');
 });
 
 test('macOS and Linux put the user MPV config under XDG_CONFIG_HOME when it is set', () => {
     const env = { XDG_CONFIG_HOME: '/data/config' };
-    assert.equal(mpvUserConfigDir('darwin', macDirs, env, undefined, noPaths), '/data/config/mpv');
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, env, undefined, noPaths), '/data/config/mpv');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, env, undefined, noPaths, noFiles), '/data/config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, env, undefined, noPaths, noFiles), '/data/config/mpv');
 });
 
 test('MPV_HOME is the user MPV config itself and wins over XDG_CONFIG_HOME and AppData', () => {
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '/opt/mpv-home', XDG_CONFIG_HOME: '/data/config' }, undefined, noPaths), '/opt/mpv-home');
-    assert.equal(mpvUserConfigDir('darwin', macDirs, { MPV_HOME: '/opt/mpv-home' }, undefined, noPaths), '/opt/mpv-home');
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: 'E:\\mpv-home' }, undefined, noPaths), 'E:\\mpv-home');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '/opt/mpv-home', XDG_CONFIG_HOME: '/data/config' }, undefined, noPaths, noFiles), '/opt/mpv-home');
+    assert.equal(mpvUserConfigDir('darwin', macDirs, { MPV_HOME: '/opt/mpv-home' }, undefined, noPaths, noFiles), '/opt/mpv-home');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: 'E:\\mpv-home' }, undefined, noPaths, noFiles), 'E:\\mpv-home');
 });
 
 test('a relative XDG_CONFIG_HOME is ignored, as mpv only accepts an absolute one', () => {
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, { XDG_CONFIG_HOME: 'config' }, undefined, noPaths), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { XDG_CONFIG_HOME: 'config' }, undefined, noPaths, noFiles), '/home/me/.config/mpv');
 });
 
 test('empty MPV_HOME and XDG_CONFIG_HOME count as unset', () => {
-    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '', XDG_CONFIG_HOME: '' }, undefined, noPaths), '/home/me/.config/mpv');
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: '' }, undefined, noPaths), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('linux', linuxDirs, { MPV_HOME: '', XDG_CONFIG_HOME: '' }, undefined, noPaths, noFiles), '/home/me/.config/mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { MPV_HOME: '' }, undefined, noPaths, noFiles), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
 
 test('Windows ignores XDG_CONFIG_HOME for the user MPV config', () => {
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, { XDG_CONFIG_HOME: 'E:\\xdg' }, undefined, noPaths), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, { XDG_CONFIG_HOME: 'E:\\xdg' }, undefined, noPaths, noFiles), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
 
 function tempHome(t) {
@@ -172,7 +173,7 @@ test('macOS and Linux keep using ~/.mpv when it exists and the standard MPV conf
     const home = tempHome(t);
     fs.mkdirSync(path.join(home, '.mpv'));
     for (const platform of ['darwin', 'linux']) {
-        assert.equal(mpvUserConfigDir(platform, { homeDir: home, appDataDir: home }, {}, undefined, fs.existsSync), `${home}/.mpv`);
+        assert.equal(mpvUserConfigDir(platform, { homeDir: home, appDataDir: home }, {}, undefined, fs.existsSync, noFiles), `${home}/.mpv`);
     }
 });
 
@@ -180,8 +181,8 @@ test('the standard MPV config wins over ~/.mpv when both exist, and Windows neve
     const home = tempHome(t);
     fs.mkdirSync(path.join(home, '.mpv'));
     fs.mkdirSync(path.join(home, '.config', 'mpv'), { recursive: true });
-    assert.equal(mpvUserConfigDir('linux', { homeDir: home, appDataDir: home }, {}, undefined, fs.existsSync), `${home}/.config/mpv`);
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, fs.existsSync), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('linux', { homeDir: home, appDataDir: home }, {}, undefined, fs.existsSync, noFiles), `${home}/.config/mpv`);
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, fs.existsSync, noFiles), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
 
 // Windows 路径要在 Windows 上才能对应到真实目录。
@@ -191,19 +192,81 @@ test('a user-chosen mpv.exe with portable_config next to it reads only that fold
     const mpvDir = tempHome(t);
     fs.mkdirSync(path.join(mpvDir, 'portable_config'));
     const mpvPath = path.join(mpvDir, 'mpv.exe');
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, mpvPath, fs.existsSync), path.join(mpvDir, 'portable_config'));
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, mpvPath, fs.existsSync, noFiles), path.join(mpvDir, 'portable_config'));
 });
 
 test('a user-chosen mpv.exe without portable_config uses the roaming AppData folder', onWindowsHost, t => {
     const mpvPath = path.join(tempHome(t), 'mpv.exe');
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, mpvPath, fs.existsSync), 'D:\\Profiles\\me\\Roaming\\mpv');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, mpvPath, fs.existsSync, noFiles), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
 
 test('MPV_HOME wins over portable_config', onWindowsHost, t => {
     const mpvDir = tempHome(t);
     fs.mkdirSync(path.join(mpvDir, 'portable_config'));
     const env = { MPV_HOME: 'E:\\mpv-home' };
-    assert.equal(mpvUserConfigDir('win32', windowsDirs, env, path.join(mpvDir, 'mpv.exe'), fs.existsSync), 'E:\\mpv-home');
+    assert.equal(mpvUserConfigDir('win32', windowsDirs, env, path.join(mpvDir, 'mpv.exe'), fs.existsSync, noFiles), 'E:\\mpv-home');
+});
+
+const SCOOP_SHIM = 'C:\\Users\\me\\scoop\\shims\\mpv.exe';
+const SCOOP_MPV_DIR = 'C:\\Users\\me\\scoop\\apps\\mpv\\current';
+const SCOOP_PORTABLE = `${SCOOP_MPV_DIR}\\portable_config`;
+
+function fakeDisk(dirs, files) {
+    return {
+        pathExists: target => dirs.includes(target),
+        readTextFile: target => (Object.hasOwn(files, target) ? files[target] : null),
+    };
+}
+
+function scoopConfigDir(shimText, { dirs = [SCOOP_PORTABLE], env = {}, platform = 'win32', mpvPath = SCOOP_SHIM } = {}) {
+    const files = shimText === undefined ? {} : { [mpvPath.replace(/\.exe$/, '.shim')]: shimText };
+    const disk = fakeDisk(dirs, files);
+    const userDirs = { win32: windowsDirs, darwin: macDirs, linux: linuxDirs }[platform];
+    return mpvUserConfigDir(platform, userDirs, env, mpvPath, disk.pathExists, disk.readTextFile);
+}
+
+test('a user-chosen scoop shim uses portable_config next to the mpv.exe the shim points to', () => {
+    assert.equal(scoopConfigDir(`path = "${SCOOP_MPV_DIR}\\mpv.exe"\r\n`), SCOOP_PORTABLE);
+});
+
+test('the scoop shim target is read with or without quotes and with extra spaces', () => {
+    const shims = [
+        `path = "${SCOOP_MPV_DIR}\\mpv.exe"`,
+        `path = ${SCOOP_MPV_DIR}\\mpv.exe`,
+        `  path   =   "${SCOOP_MPV_DIR}\\mpv.exe"   `,
+        `\uFEFFpath=${SCOOP_MPV_DIR}\\mpv.exe\t`,
+        `args = --profile=fast\npath = "${SCOOP_MPV_DIR}\\mpv.exe"\n`,
+    ];
+    for (const shim of shims) {
+        assert.equal(scoopConfigDir(shim), SCOOP_PORTABLE, JSON.stringify(shim));
+    }
+});
+
+test('a scoop shim that cannot be followed to a portable_config falls back to the roaming AppData folder', () => {
+    const roaming = 'D:\\Profiles\\me\\Roaming\\mpv';
+    const target = `path = "${SCOOP_MPV_DIR}\\mpv.exe"`;
+    assert.equal(scoopConfigDir(undefined), roaming, 'no .shim file');
+    assert.equal(scoopConfigDir('args = --no-config\n'), roaming, '.shim without a path line');
+    assert.equal(scoopConfigDir('path = ""'), roaming, 'empty path');
+    assert.equal(scoopConfigDir('path = mpv.exe'), roaming, 'relative path');
+    assert.equal(scoopConfigDir(target, { dirs: [] }), roaming, 'target without portable_config');
+});
+
+test('portable_config next to the chosen mpv.exe wins over the scoop shim target', () => {
+    const shimPortable = 'C:\\Users\\me\\scoop\\shims\\portable_config';
+    const shim = `path = "${SCOOP_MPV_DIR}\\mpv.exe"`;
+    assert.equal(scoopConfigDir(shim, { dirs: [shimPortable, SCOOP_PORTABLE] }), shimPortable);
+});
+
+test('MPV_HOME wins over the scoop shim target', () => {
+    assert.equal(scoopConfigDir(`path = "${SCOOP_MPV_DIR}\\mpv.exe"`, { env: { MPV_HOME: 'E:\\mpv-home' } }), 'E:\\mpv-home');
+});
+
+test('macOS and Linux never follow a shim next to the chosen mpv', () => {
+    const shim = 'path = "/opt/mpv/mpv"';
+    const options = { dirs: ['/opt/mpv/portable_config'], mpvPath: '/usr/local/bin/mpv.exe' };
+    assert.equal(scoopConfigDir(shim, { ...options, platform: 'darwin' }), '/Users/me/.config/mpv');
+    assert.equal(scoopConfigDir(shim, { ...options, platform: 'linux' }), '/home/me/.config/mpv');
 });
 
 test('Windows gives each playback its own named pipe instead of the shared mpvserver pipe', () => {

@@ -33,11 +33,12 @@ export function mpvUserConfigDir(
     env: Record<string, string | undefined>,
     userMpvPath: string | undefined,
     pathExists: (target: string) => boolean,
+    readTextFile: (target: string) => string | null,
 ): string {
     if (env.MPV_HOME) {
         return env.MPV_HOME;
     }
-    return implOrLinux(platform).mpvUserConfigDir(dirs, env, userMpvPath, pathExists);
+    return implOrLinux(platform).mpvUserConfigDir(dirs, env, userMpvPath, pathExists, readTextFile);
 }
 
 export function mpvPlayer(
