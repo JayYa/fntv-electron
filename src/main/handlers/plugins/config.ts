@@ -1,4 +1,4 @@
-import { IpcMainEvent } from 'electron';
+import { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import * as settings from '../../../modules/fn_config/settings';
 import { isMpvPlaybackEnabled } from '../../../modules/fn_config/playbackPreference';
 import { registerHandler } from '../core/ipcHandler';
@@ -17,6 +17,8 @@ interface PlayButtonConfig {
     hideOriginalPlayButton: boolean;
 }
 
+type SaveResult = { success: true } | { success: false; error: string };
+
 // 获取应用更新下载加速设置，带上默认地址给登录页做 placeholder
 function handleGetAppDownloadProxy(event: IpcMainEvent): void {
     const proxyConfig = settings.getAppDownloadProxyConfig();
@@ -24,16 +26,15 @@ function handleGetAppDownloadProxy(event: IpcMainEvent): void {
 }
 
 // 设置应用更新下载加速，地址为空时用默认地址
-function handleSetAppDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Partial<ProxyConfig>): void {
+function handleSetAppDownloadProxy(_event: IpcMainInvokeEvent, { enabled, proxyUrl }: Partial<ProxyConfig> = {}): SaveResult {
     try {
         settings.setAppDownloadProxyConfig({
             enabled: enabled === true,
             proxyUrl: proxyUrl || settings.DEFAULT_DOWNLOAD_PROXY_URL
         });
-        event.reply('download-proxy-set', { success: true });
+        return { success: true };
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        event.reply('download-proxy-set', { success: false, error: errorMessage });
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }
 
@@ -45,13 +46,12 @@ function handleGetPlayButtonConfig(event: IpcMainEvent): void {
 }
 
 // 设置播放按钮配置
-function handleSetPlayButtonConfig(event: IpcMainEvent, config?: Partial<PlayButtonConfig>): void {
+function handleSetPlayButtonConfig(_event: IpcMainInvokeEvent, config?: Partial<PlayButtonConfig>): SaveResult {
     try {
         settings.setHideOriginalPlayButton(isMpvPlaybackEnabled(config?.hideOriginalPlayButton));
-        event.reply('play-button-config-set', { success: true });
+        return { success: true };
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        event.reply('play-button-config-set', { success: false, error: errorMessage });
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }
 
@@ -75,9 +75,9 @@ function handleSetNasProxyConfig(event: IpcMainEvent, { nasProxyEnabled }: { nas
 // 注册配置相关处理器
 function init(): void {
     registerHandler('get-download-proxy', handleGetAppDownloadProxy);
-    registerHandler('set-download-proxy', handleSetAppDownloadProxy);
+    registerHandler('set-download-proxy', handleSetAppDownloadProxy, { useHandle: true });
     registerHandler('get-play-button-config', handleGetPlayButtonConfig);
-    registerHandler('set-play-button-config', handleSetPlayButtonConfig);
+    registerHandler('set-play-button-config', handleSetPlayButtonConfig, { useHandle: true });
     registerHandler('get-nas-proxy', handleGetNasProxyConfig);
     registerHandler('set-nas-proxy', handleSetNasProxyConfig);
 }

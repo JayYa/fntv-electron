@@ -27,6 +27,7 @@ function setup(t, {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-current-login-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
     const listeners = new Map();
+    const invokeHandlers = new Map();
     const cookies = [];
     const dialogs = [];
     const loginRequests = [];
@@ -60,7 +61,7 @@ function setup(t, {
         screen: { getAllDisplays: () => [display], getPrimaryDisplay: () => display },
         ipcMain: {
             on(channel, listener) { listeners.set(channel, listener); },
-            handle() {},
+            handle(channel, handler) { invokeHandlers.set(channel, handler); },
             removeAllListeners(channel) { listeners.delete(channel); },
         },
         dialog: {
@@ -147,12 +148,8 @@ function setup(t, {
         accessGrant: () => require('../dest/modules/fn_api/accessGrant.js'),
         certTrust: () => require('../dest/modules/cert_trust/index.js'),
         loadWinctrl: () => require('../dest/main/common/winctrl.js'),
-        async login(loginData = PASSWORD_LOGIN) {
-            const replies = [];
-            await listeners.get('login')({
-                reply(channel, data) { replies.push({ channel, data }); },
-            }, loginData);
-            return replies;
+        login(loginData = PASSWORD_LOGIN) {
+            return invokeHandlers.get('login')({}, loginData);
         },
     };
 }
@@ -165,7 +162,7 @@ async function assertNothingSaved(world) {
 test('password login saves the current login and history, then opens the web UI', async (t) => {
     const world = setup(t, { loginResponses: [ok({ token: 'new-token' })] });
 
-    assert.deepEqual(await world.login(), []);
+    assert.deepEqual(await world.login(), { ok: true });
 
     const saved = await world.config.readCurrentLogin();
     assert.equal(saved.domain, NAS);
@@ -190,10 +187,10 @@ test('password login keeps the path of an address served under a subpath', async
 test('when the login state cannot be restored, password login saves nothing and stays on the login page', async (t) => {
     const world = setup(t, { loginResponses: [ok({ token: 'new-token' })], cookiesFail: true });
 
-    assert.deepEqual(await world.login(), [{
-        channel: 'login-error',
-        data: { title: '登录失败', message: '无法恢复登录状态，请重新登录。' },
-    }]);
+    assert.deepEqual(await world.login(), {
+        ok: false,
+        error: { title: '登录失败', message: '无法恢复登录状态，请重新登录。' },
+    });
 
     await assertNothingSaved(world);
     assert.equal(world.mainWindow(), null);
@@ -202,10 +199,10 @@ test('when the login state cannot be restored, password login saves nothing and 
 test('a rejected password is reported as it came from FNMedia and nothing is saved', async (t) => {
     const world = setup(t, { loginResponses: [rejected('用户名或密码错误')] });
 
-    assert.deepEqual(await world.login(), [{
-        channel: 'login-error',
-        data: { title: '登录失败', message: '用户名或密码错误' },
-    }]);
+    assert.deepEqual(await world.login(), {
+        ok: false,
+        error: { title: '登录失败', message: '用户名或密码错误' },
+    });
     await assertNothingSaved(world);
 });
 
@@ -215,7 +212,7 @@ test('after the user trusts an untrusted certificate, password login is retried 
         trustCertificate: true,
     });
 
-    assert.deepEqual(await world.login(), []);
+    assert.deepEqual(await world.login(), { ok: true });
 
     assert.deepEqual(world.dialogs, ['证书安全警告']);
     assert.equal(world.loginRequests.length, 2);
@@ -229,7 +226,7 @@ test('trusting a certificate without "remember" does not add the host to the tru
         trustCertificate: true,
     });
 
-    assert.deepEqual(await world.login(), []);
+    assert.deepEqual(await world.login(), { ok: true });
 
     assert.equal(world.certTrust().isTrusted(NAS), true);
     world.certTrust().reloadTrustedHosts();
@@ -243,7 +240,7 @@ test('trusting a certificate with "remember" keeps the host trusted across resta
         rememberCertificate: true,
     });
 
-    assert.deepEqual(await world.login(), []);
+    assert.deepEqual(await world.login(), { ok: true });
 
     world.certTrust().reloadTrustedHosts();
     assert.deepEqual(world.certTrust().getTrustedHosts(), [new URL(NAS).host]);
@@ -252,10 +249,10 @@ test('trusting a certificate with "remember" keeps the host trusted across resta
 test('when the user does not trust the certificate, password login is cancelled and nothing is saved', async (t) => {
     const world = setup(t, { loginResponses: [certificateError()] });
 
-    assert.deepEqual(await world.login(), [{
-        channel: 'login-error',
-        data: { title: '登录取消', message: '用户取消信任证书，无法继续登录。' },
-    }]);
+    assert.deepEqual(await world.login(), {
+        ok: false,
+        error: { title: '登录取消', message: '用户取消信任证书，无法继续登录。' },
+    });
     assert.equal(world.loginRequests.length, 1);
     await assertNothingSaved(world);
 });
@@ -263,10 +260,10 @@ test('when the user does not trust the certificate, password login is cancelled 
 test('a rejected access code stops password login before the login request, and nothing is saved', async (t) => {
     const world = setup(t, { accessCodeStatus: 403, loginResponses: [ok({ token: 'new-token' })] });
 
-    assert.deepEqual(await world.login({ ...PASSWORD_LOGIN, accessCode: 'wrong-code' }), [{
-        channel: 'login-error',
-        data: { title: '访问码错误', message: '访问码错误，请检查后重试。' },
-    }]);
+    assert.deepEqual(await world.login({ ...PASSWORD_LOGIN, accessCode: 'wrong-code' }), {
+        ok: false,
+        error: { title: '访问码错误', message: '访问码错误，请检查后重试。' },
+    });
     assert.deepEqual(world.loginRequests, []);
     await assertNothingSaved(world);
 });
@@ -280,7 +277,7 @@ test('when FNMedia moves the login to another address, the current login and the
         ],
     });
 
-    assert.deepEqual(await world.login(), []);
+    assert.deepEqual(await world.login(), { ok: true });
 
     assert.equal((await world.config.readCurrentLogin()).domain, moved);
     assert.deepEqual(world.mainWindow().loaded.urls, [`${moved}/v`]);
@@ -289,10 +286,11 @@ test('when FNMedia moves the login to another address, the current login and the
 test('when secure storage is unavailable, password login says so and saves nothing', async (t) => {
     const world = setup(t, { loginResponses: [ok({ token: 'new-token' })], encryptionAvailable: false });
 
-    const [reply] = await world.login();
+    const reply = await world.login();
 
-    assert.equal(reply.data.title, '无法安全保存登录信息');
-    assert.match(reply.data.message, /安全存储不可用/);
+    assert.equal(reply.ok, false);
+    assert.equal(reply.error.title, '无法安全保存登录信息');
+    assert.match(reply.error.message, /安全存储不可用/);
     await assertNothingSaved(world);
     assert.equal(world.mainWindow(), null);
 });

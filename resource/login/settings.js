@@ -4,21 +4,24 @@ function initVersionInfo() {
     ipcRenderer.send('get-version');
 }
 
-function handleUpdateCheck() {
-    const btn = updateBtn;
-    const originalText = btn.textContent;
-    
-    btn.textContent = '检查中...';
-    btn.classList.add('checking');
-    btn.disabled = true;
-    
-    ipcRenderer.send('check-update');
-    
-    setTimeout(() => {
-        btn.textContent = originalText;
-        btn.classList.remove('checking');
-        btn.disabled = false;
-    }, 5000);
+async function handleUpdateCheck() {
+    if (updateBtn.disabled) return;
+    const originalText = updateBtn.textContent;
+
+    updateBtn.textContent = '检查中...';
+    updateBtn.classList.add('checking');
+    updateBtn.disabled = true;
+
+    try {
+        await ipcRenderer.invoke('check-update');
+    } catch (error) {
+        window.log.error('检查更新失败:', error);
+        showCustomMessage('error', '检查更新失败', '检查更新时发生错误，请稍后重试。');
+    } finally {
+        updateBtn.textContent = originalText;
+        updateBtn.classList.remove('checking');
+        updateBtn.disabled = false;
+    }
 }
 
 updateBtn.addEventListener('click', handleUpdateCheck);
@@ -42,27 +45,44 @@ function closeProxyPanel() {
     proxyPanel.classList.remove('show');
 }
 
-function saveProxySettings() {
-    const enabled = proxyEnabledSwitch.checked;
-    const proxyUrl = proxyUrlInput.value.trim();
-    const hideOriginalPlayButton = hideOriginalPlayButtonSwitch.checked;
-    
-    ipcRenderer.send('set-download-proxy', {
-        enabled: enabled,
-        proxyUrl: proxyUrl
-    });
+async function requestSaveSettings(downloadProxy, playButtonConfig) {
+    try {
+        const results = await Promise.all([
+            ipcRenderer.invoke('set-download-proxy', downloadProxy),
+            ipcRenderer.invoke('set-play-button-config', playButtonConfig),
+        ]);
+        const failed = results.find((result) => !result || !result.success);
+        return failed ? failed.error || '未知错误' : null;
+    } catch (error) {
+        window.log.error('保存设置请求失败:', error);
+        return '未知错误';
+    }
+}
 
-    ipcRenderer.send('set-play-button-config', { hideOriginalPlayButton });
-    
+async function saveProxySettings() {
+    if (proxySaveBtn.disabled) return;
+    const downloadProxy = {
+        enabled: proxyEnabledSwitch.checked,
+        proxyUrl: proxyUrlInput.value.trim(),
+    };
+    const playButtonConfig = { hideOriginalPlayButton: hideOriginalPlayButtonSwitch.checked };
+
     const originalText = proxySaveBtn.textContent;
     proxySaveBtn.textContent = '保存中...';
     proxySaveBtn.disabled = true;
-    
-    setTimeout(() => {
-        proxySaveBtn.textContent = originalText;
-        proxySaveBtn.disabled = false;
-        closeProxyPanel();
-    }, 1000);
+
+    const failure = await requestSaveSettings(downloadProxy, playButtonConfig);
+
+    proxySaveBtn.textContent = originalText;
+    proxySaveBtn.disabled = false;
+    if (failure) {
+        window.log.error('设置保存失败:', failure);
+        showCustomMessage('error', '保存失败', `设置没有保存：${failure}`);
+        return;
+    }
+    window.log.info('设置保存成功');
+    ipcRenderer.send('get-download-proxy');
+    closeProxyPanel();
 }
 
 proxySettingsBtn.addEventListener('click', toggleProxyPanel);
@@ -70,7 +90,7 @@ proxyCloseBtn.addEventListener('click', closeProxyPanel);
 proxySaveBtn.addEventListener('click', saveProxySettings);
 
 document.addEventListener('click', (e) => {
-    if (!proxyPanel.contains(e.target) && !proxySettingsBtn.contains(e.target)) {
+    if (!proxyPanel.contains(e.target) && !proxySettingsBtn.contains(e.target) && !customMessage.contains(e.target)) {
         closeProxyPanel();
     }
 });
@@ -86,22 +106,5 @@ ipcRenderer.on('download-proxy-info', (event, data) => {
 ipcRenderer.on('play-button-config-info', (event, data) => {
     if (data) {
         hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton !== false;
-    }
-});
-
-ipcRenderer.on('download-proxy-set', (event, data) => {
-    if (data && data.success) {
-        window.log.info('代理设置保存成功');
-        ipcRenderer.send('get-download-proxy');
-    } else {
-        window.log.error('代理设置保存失败:', data.error);
-    }
-});
-
-ipcRenderer.on('play-button-config-set', (event, data) => {
-    if (data && data.success) {
-        window.log.info('播放方式保存成功');
-    } else {
-        window.log.error('播放方式保存失败:', data.error);
     }
 });

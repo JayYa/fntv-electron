@@ -30,7 +30,7 @@ test('does not treat other failures as HTTPS reaching an HTTP port', () => {
 function setupLogin(t, onConnection = () => {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-https-port-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
-    const listeners = new Map();
+    const invokeHandlers = new Map();
     const electronMock = {
         app: {
             isPackaged: true,
@@ -40,9 +40,9 @@ function setupLogin(t, onConnection = () => {}) {
             setPath(name, value) { paths[name] = value; },
         },
         ipcMain: {
-            on(channel, listener) { listeners.set(channel, listener); },
-            handle() {},
-            removeAllListeners(channel) { listeners.delete(channel); },
+            on() {},
+            handle(channel, handler) { invokeHandlers.set(channel, handler); },
+            removeAllListeners() {},
         },
         session: { fromPartition() { return {}; } },
         safeStorage: {
@@ -77,11 +77,7 @@ function setupLogin(t, onConnection = () => {}) {
         async login() {
             await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
             const domain = `127.0.0.1:${server.address().port}`;
-            return new Promise((resolve) => {
-                listeners.get('login')({
-                    reply(channel, data) { resolve({ channel, data }); },
-                }, { domain, username: 'user', password: 'password', useHttps: true });
-            });
+            return invokeHandlers.get('login')({}, { domain, username: 'user', password: 'password', useHttps: true });
         },
     };
 }
@@ -92,8 +88,8 @@ test('login over HTTPS to an HTTP port tells the user to check the HTTPS setting
     const reply = await login.login();
 
     assert.deepEqual(reply, {
-        channel: 'login-error',
-        data: { title: '登录失败', message: '无法用 HTTPS 连接到服务器，请检查 HTTPS 设置和端口。' },
+        ok: false,
+        error: { title: '登录失败', message: '无法用 HTTPS 连接到服务器，请检查 HTTPS 设置和端口。' },
     });
     assert.match(login.log(), /wrong version number/);
 });
@@ -111,6 +107,6 @@ test('login still retries connection failures that can recover', async (t) => {
 
     const reply = await login.login();
 
-    assert.equal(reply.channel, 'login-error');
+    assert.equal(reply.ok, false);
     assert.equal(login.connections(), 6);
 });

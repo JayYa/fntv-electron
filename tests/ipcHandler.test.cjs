@@ -10,6 +10,8 @@ function setupIpc(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-ipc-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     const ipcMain = new EventEmitter();
+    const invokeHandlers = new Map();
+    ipcMain.handle = (channel, handler) => invokeHandlers.set(channel, handler);
     const electronMock = {
         ipcMain,
         app: {
@@ -28,6 +30,7 @@ function setupIpc(t) {
     fs.mkdirSync(paths.userData, { recursive: true });
     return {
         ipcMain,
+        invoke: (channel, ...args) => invokeHandlers.get(channel)({}, ...args),
         configPath: path.join(paths.userData, 'config.json'),
         logText: () => fs.readFileSync(path.join(testRoot, 'log', 'app.log'), 'utf8'),
         loadIpcHandler: () => require('../dest/main/handlers/core/ipcHandler.js'),
@@ -63,6 +66,31 @@ test('a config write failure still reaches the renderer as a failed reply', (t) 
     assert.equal(event.replies.length, 1);
     assert.equal(event.replies[0].channel, 'nas-proxy-set');
     assert.equal(event.replies[0].payload.success, false);
+});
+
+for (const [channel, payload] of [
+    ['set-download-proxy', { enabled: true, proxyUrl: 'https://relay.example.test/' }],
+    ['set-play-button-config', { hideOriginalPlayButton: true }],
+]) {
+    test(`a config write failure in ${channel} answers the login page with a failure`, async (t) => {
+        const { invoke, configPath, loadConfigPlugin } = setupIpc(t);
+        fs.mkdirSync(configPath);
+        loadConfigPlugin().init();
+
+        const result = await invoke(channel, payload);
+
+        assert.equal(result.success, false);
+        assert.equal(typeof result.error, 'string');
+    });
+}
+
+test('an invoke handler that throws is logged and the error still reaches the caller', async (t) => {
+    const { invoke, logText, loadIpcHandler } = setupIpc(t);
+
+    loadIpcHandler().registerHandler('invoke-channel', async () => { throw new Error('invoke failure'); }, { useHandle: true });
+
+    await assert.rejects(invoke('invoke-channel'), /invoke failure/);
+    assert.match(logText(), /invoke-channel/);
 });
 
 test('a rejected async handler is logged instead of becoming an unhandled rejection', async (t) => {
