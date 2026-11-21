@@ -11,7 +11,7 @@ const options = {
     bundle: true,
     platform: 'browser',
     format: 'cjs',
-    target: 'chrome140',
+    target: 'chrome156',
     external: ['electron'],
     logLevel: 'info',
 };

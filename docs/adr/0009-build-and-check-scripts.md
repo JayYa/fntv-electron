@@ -10,6 +10,8 @@ status: accepted
 
 把 preload 打成单文件 `dest/preload/bundle.js`：主窗口开了 sandbox，preload 只能 `require('electron')`。不覆盖 tsc 输出的 `index.js`，否则 `tsc --watch` 重新输出时会盖掉打包结果。`--watch` 同时运行 `tsc --watch`。用 `platform: 'browser'`：导入 Node 内置模块在构建时就报错，不用等到运行时。
 
+`target` 写死为 `chrome<主版本>`，等于依赖里 Electron 内置 Chrome 的主版本。不在构建时从 Electron 推导：electron 42 起二进制在第一次 `require('electron')` 时才下载，构建会因此依赖网络。升级 Electron 后 `tests/preloadBundle.test.cjs` 用 `ELECTRON_RUN_AS_NODE` 运行已安装的 Electron 取 `process.versions.chrome`，不一致时失败并给出新值。
+
 ## `check.cjs`（`pnpm run check`）
 
 改完代码后的验证入口，本地和 CI（`ci.yml`）跑同一条命令：文件大小检查、lint、knip、测试依次运行，一步失败也接着跑后面的，最后汇总，有一步失败就以 1 退出。
