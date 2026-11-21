@@ -17,7 +17,7 @@ status: accepted
 改完代码后的验证入口，本地和 CI（`ci.yml`）跑同一条命令：文件大小检查、lint、knip、测试依次运行，一步失败也接着跑后面的，最后汇总，有一步失败就以 1 退出。
 
 - 默认文件大小检查对 `origin/main` 的合并基点：HEAD 相对合并基点改动的文件，读 HEAD 的内容；未提交的改动由 pre-commit 钩子检查。`--base <ref>` 换对比的 ref，CI 的 PR 传 `HEAD^1`（PR 合并提交的第一个父提交就是 base）。`--no-file-size` 跳过，CI 只在 Linux 那一格的 PR 上跑它。
-- node 直接运行、不经 shell：Windows 的 cmd 会吞掉 `HEAD^1` 里的 `^`。Windows 上 `pnpm` 是 `.cmd`，只能经 shell 运行。
+- 所有步骤都不经 shell、参数按数组传：Windows 的 cmd 会改写参数里的空格和 `^`、`&`、`%` 等元字符（比如吞掉 `HEAD^1` 里的 `^`），不报错。PATH 上的 `pnpm` 在 Windows 上可能是 `.cmd`，只能经 shell 运行，所以不按名字找 pnpm，而是用 `pnpm run` 设置的 `npm_execpath`：JS 入口用 `process.execPath` 运行，原生可执行文件（pnpm 12 起是原生二进制，Windows 上是 `.exe`）直接运行。没有 `npm_execpath`（直接 `node scripts/check.cjs`），或者它在 Windows 上既不是 JS 也不是 `.exe`，在运行任何步骤前报错退出，提示用 `pnpm run check`，不回退到 shell。步骤显示仍写成 `pnpm …`。
 
 ## `check-file-size.cjs`
 
