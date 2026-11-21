@@ -33,7 +33,7 @@ function handleGetVersion(event: IpcMainEvent): void {
 
 // 注册更新相关处理器
 function init(): void {
-    registerHandler('check-update', handleCheckUpdate);
+    registerHandler('check-update', handleCheckUpdate, { useHandle: true });
     registerHandler('auto-check-update', handleAutoCheckUpdate);
     registerHandler('get-version', handleGetVersion);
 }

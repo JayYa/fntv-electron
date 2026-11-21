@@ -1,13 +1,3 @@
-ipcRenderer.on('login-error', (event, data) => {
-    const { title, message } = data;
-    showCustomMessage('error', title, message);
-});
-
-ipcRenderer.on('login-success', (event, data) => {
-    const { title, message } = data;
-    showCustomMessage('success', title, message);
-});
-
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('github-link')) {
         e.preventDefault();

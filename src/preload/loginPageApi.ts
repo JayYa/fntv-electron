@@ -3,18 +3,18 @@ import { contextBridge, ipcRenderer } from 'electron';
 import preloadLogger from './core/logger';
 
 const SEND_CHANNELS = new Set([
-    'login', 'delete-history-item', 'clear-history', 'get-config',
+    'delete-history-item', 'clear-history', 'get-config',
     'get-history-credentials', 'get-current-access-code',
-    'get-version', 'check-update', 'get-download-proxy', 'get-play-button-config',
-    'set-download-proxy', 'set-play-button-config',
+    'get-version', 'get-download-proxy', 'get-play-button-config',
 ]);
 const RECEIVE_CHANNELS = new Set([
     'config-data', 'history-credentials', 'current-access-code',
-    'history-item-deleted', 'login-error', 'login-success',
+    'history-item-deleted',
     'version-info', 'update-status', 'download-proxy-info', 'play-button-config-info',
-    'download-proxy-set', 'play-button-config-set',
 ]);
-const INVOKE_CHANNELS = new Set(['open-external']);
+const INVOKE_CHANNELS = new Set([
+    'open-external', 'login', 'check-update', 'set-download-proxy', 'set-play-button-config',
+]);
 type PageListener = (...args: unknown[]) => void;
 const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();
 
@@ -45,6 +45,9 @@ function exposeLoginPageApi(): void {
         send(channel: string, ...args: unknown[]) {
             assertAllowed(SEND_CHANNELS, channel);
             ipcRenderer.send(channel, ...args);
+        },
+        invoke(channel: string, ...args: unknown[]) {
+            return invokeAllowed(channel, ...args);
         },
         on(channel: string, listener: PageListener) {
             assertAllowed(RECEIVE_CHANNELS, channel);
