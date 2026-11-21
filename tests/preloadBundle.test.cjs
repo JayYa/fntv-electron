@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
@@ -18,6 +19,21 @@ test('preload statically imports every plugin in alphabetical order', () => {
 
     const reported = index.match(/const PLUGINS = \[([^\]]+)\]/)[1].match(/[A-Za-z]+/g);
     assert.deepEqual(reported, plugins);
+});
+
+test('the preload bundle targets the Chrome of the installed Electron', () => {
+    const electron = require('electron');
+    const result = spawnSync(electron, ['-p', 'process.versions.chrome'], {
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const expected = `chrome${result.stdout.trim().split('.')[0]}`;
+
+    const script = fs.readFileSync(path.join(root, 'scripts', 'build-preload.cjs'), 'utf8');
+    const targets = [...script.matchAll(/target: '([^']+)'/g)].map(match => match[1]);
+
+    assert.deepEqual(targets, [expected], `scripts/build-preload.cjs 的 target 应改为 '${expected}'`);
 });
 
 test('the bundled preload requires nothing but electron', () => {
