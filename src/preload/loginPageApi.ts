@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import { isFnId } from '../public/fnId';
 import preloadLogger from './core/logger';
 
 const SEND_CHANNELS = new Set([
@@ -67,6 +68,7 @@ function exposeLoginPageApi(): void {
         async openExternal(url: string) {
             await invokeAllowed('open-external', url);
         },
+        isFnId,
     };
 
     contextBridge.exposeInMainWorld('electronAPI', api);

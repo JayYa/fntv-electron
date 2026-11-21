@@ -35,7 +35,6 @@
     "src/main/handlers/plugins/clean.ts": 6,
     "src/main/handlers/plugins/config.ts": 8,
     "src/main/handlers/plugins/externalLink.ts": 2,
-    "src/main/handlers/plugins/fnid_login.ts": 2,
     "src/main/handlers/plugins/logger.ts": 7,
     "src/main/handlers/plugins/media.ts": 7,
     "src/main/handlers/plugins/mpvConfig.ts": 8,
