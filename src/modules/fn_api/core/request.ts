@@ -121,6 +121,17 @@ export function request<T = any>(
     return followingRedirects<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, expect, MAX_REDIRECTS);
 }
 
+function describeOriginChange(from: string, to: string): string {
+    const before = new URL(from);
+    const after = new URL(to);
+    const changed = [
+        before.protocol !== after.protocol ? '协议' : '',
+        before.hostname !== after.hostname ? '主机' : '',
+        before.port !== after.port ? '端口' : '',
+    ].filter(Boolean);
+    return changed.length > 0 ? `换了${changed.join('、')}` : 'NAS 地址不变';
+}
+
 async function followingRedirects<T>(
     context: RequestContext,
     baseUrl: string,
@@ -178,7 +189,6 @@ async function followingRedirects<T>(
 
             if ([301, 302, 307, 308].includes(response.status)) {
                 const location = response.headers.location;
-                context.log.warn(`检测到重定向 (${response.status}) -> ${location}`);
 
                 if (location) {
                     if (redirectsLeft <= 0) {
@@ -193,6 +203,8 @@ async function followingRedirects<T>(
                         newBaseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
                         newUrlPath = parsedUrl.pathname + parsedUrl.search;
                     }
+                    const hop = MAX_REDIRECTS - redirectsLeft + 1;
+                    context.log.warn(`检测到重定向 (${response.status})，第 ${hop} 次，${describeOriginChange(normalizedBaseUrl, newBaseUrl)}`);
 
                     const recursiveResult = await followingRedirects<T>(
                         context,
@@ -214,6 +226,7 @@ async function followingRedirects<T>(
                         moveUrl: recursiveResult.moveUrl || newBaseUrl
                     };
                 }
+                context.log.warn(`检测到重定向 (${response.status})，但响应没有 Location`);
             }
 
             const contentType = response.headers['content-type'];

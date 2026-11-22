@@ -7,12 +7,6 @@ interface MaskingPatternConfig {
     showEnd?: number;
 }
 
-interface MaskingCharsConfig {
-    default: string;
-    number: string;
-    letter: string;
-}
-
 export const maskingPatterns: Record<string, MaskingPatternConfig> = {
     password: {
         patterns: [
@@ -105,12 +99,6 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
         showStart: 4,
         showEnd: 4
     }
-};
-
-export const maskingChars: MaskingCharsConfig = {
-    default: '*',
-    number: '*',
-    letter: '*'
 };
 
 export const maskingEnabled: boolean = true;

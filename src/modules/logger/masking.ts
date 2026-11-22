@@ -129,7 +129,7 @@ function maskHostname(hostname: string): string {
 }
 
 function isFilePath(text: string): boolean {
-    if (!text || typeof text !== 'string') {
+    if (!text || typeof text !== 'string' || /^https?:\/\//i.test(text)) {
         return false;
     }
     

@@ -7,31 +7,19 @@ export enum LogLevel {
 }
 
 interface LogConfig {
-    defaultLevel: LogLevel;
     developmentLevel: LogLevel;
     productionLevel: LogLevel;
     maxFileSize: number;
     maxFiles: number;
     consoleOutput: boolean;
-    format: {
-        timestamp: boolean;
-        level: boolean;
-        colors: boolean;
-    };
 }
 
 export const logConfig: LogConfig = {
-    defaultLevel: LogLevel.INFO,
     developmentLevel: LogLevel.DEBUG,
     productionLevel: LogLevel.INFO,
     maxFileSize: 10 * 1024 * 1024,
     maxFiles: 3,
-    consoleOutput: true,
-    format: {
-        timestamp: true,
-        level: true,
-        colors: false
-    }
+    consoleOutput: true
 };
 
 export function getLogLevel(): LogLevel {

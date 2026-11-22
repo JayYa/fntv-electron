@@ -8,6 +8,21 @@ const { withoutElectron } = require('./helpers/fakeElectron.cjs');
 
 const CORE_DIR = path.join(__dirname, '..', 'dest', 'modules', 'fn_api', 'core');
 
+async function listen(t, server) {
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(resolve);
+    }));
+    return server.address().port;
+}
+
+function nasContext(overrides = {}) {
+    const logged = [];
+    const record = (...args) => logged.push(args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' '));
+    return { accessCookie: () => '', skipVerify: () => false, log: { warn: record, error: record }, logged, ...overrides };
+}
+
 test('the fn_api core layer loads in a plain Node process without requiring electron', (t) => {
     const requested = withoutElectron(t);
 
@@ -28,15 +43,9 @@ test('the core request sends the access grant cookie it is given', async (t) => 
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ code: 0, msg: '', data: { ok: true } }));
     });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    t.after(() => new Promise((resolve) => server.close(resolve)));
-    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const baseUrl = `http://127.0.0.1:${await listen(t, server)}`;
 
-    const context = {
-        accessCookie: (origin) => (origin === baseUrl ? 'gateway=granted; mode=web' : ''),
-        skipVerify: () => false,
-        log: { warn() {}, error() {} },
-    };
+    const context = nasContext({ accessCookie: (origin) => (origin === baseUrl ? 'gateway=granted; mode=web' : '') });
     const result = await request(context, baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1');
 
     assert.deepEqual(result, { success: true, data: { ok: true } });
@@ -59,12 +68,9 @@ test('a failed cached call is not cached, so an immediate retry asks the NAS aga
             : { code: 0, msg: '', data: { list: ['video'] } };
         res.end(JSON.stringify(body));
     });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    t.after(() => new Promise((resolve) => server.close(resolve)));
-    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const baseUrl = `http://127.0.0.1:${await listen(t, server)}`;
 
-    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn() {}, error() {} } };
-    const api = new FnApiClient(context, baseUrl, 'token-1', new TtlCache());
+    const api = new FnApiClient(nasContext(), baseUrl, 'token-1', new TtlCache());
 
     const failed = await api.getStreamListCached('item-1');
     assert.equal(failed.success, false);
@@ -93,14 +99,9 @@ test('requests to an HTTPS NAS with the same TLS settings reuse one connection',
     });
     let connections = 0;
     server.on('secureConnection', () => { connections += 1; });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    t.after(() => new Promise((resolve) => {
-        server.closeAllConnections();
-        server.close(resolve);
-    }));
-    const baseUrl = `https://127.0.0.1:${server.address().port}`;
+    const baseUrl = `https://127.0.0.1:${await listen(t, server)}`;
     const ca = [fs.readFileSync(path.join(tlsDir, 'ca.pem'), 'utf8')];
-    const context = (skipVerify) => ({ accessCookie: () => '', skipVerify: () => skipVerify, ca, log: { warn() {}, error() {} } });
+    const context = (skipVerify) => nasContext({ skipVerify: () => skipVerify, ca });
 
     for (let i = 0; i < 3; i++) {
         assert.equal((await request(context(true), baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1')).success, true);
@@ -128,10 +129,8 @@ async function redirectingNas(t, hops, finalResponses = [{ code: 0, msg: '', dat
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify(body));
     });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    t.after(() => new Promise((resolve) => server.close(resolve)));
-    const baseUrl = `http://127.0.0.1:${server.address().port}`;
-    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn() {}, error() {} } };
+    const baseUrl = `http://127.0.0.1:${await listen(t, server)}`;
+    const context = nasContext();
     const call = (tryTimes) => {
         const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
         return request(context, baseUrl, `/hop/${hops}`, HttpMethod.GET, 'token-1', undefined, undefined, undefined, 5000, tryTimes);
@@ -183,17 +182,13 @@ async function nasAnswering(t, contentType, body) {
         if (contentType) res.setHeader('Content-Type', contentType);
         res.end(body);
     });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    t.after(() => new Promise((resolve) => server.close(resolve)));
-    const baseUrl = `http://127.0.0.1:${server.address().port}`;
-    const logged = [];
-    const record = (...args) => logged.push(args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' '));
-    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn: record, error: record } };
+    const baseUrl = `http://127.0.0.1:${await listen(t, server)}`;
+    const context = nasContext();
     const call = (expect) => {
         const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
         return request(context, baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1', undefined, undefined, undefined, 5000, 0, expect);
     };
-    return { logged, call };
+    return { logged: context.logged, call };
 }
 
 test('a request expecting JSON reports an HTML page as a failure with its status and content type', async (t) => {
@@ -243,4 +238,30 @@ test('a request expecting raw data still reports an fnAPI error answered as JSON
     const nas = await nasAnswering(t, 'application/json', JSON.stringify({ code: 401, msg: 'token expired', data: null }));
 
     assert.deepEqual(await nas.call('raw'), { success: false, message: 'token expired' });
+});
+
+test('following a redirect to another NAS address logs neither its host nor its port', async (t) => {
+    withoutElectron(t);
+    const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
+    const targetPort = await listen(t, http.createServer((req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ code: 0, msg: '', data: { ok: true } }));
+    }));
+    const target = `http://localhost:${targetPort}`;
+    const sourcePort = await listen(t, http.createServer((req, res) => {
+        res.statusCode = 302;
+        res.setHeader('Location', `${target}/v/api/v1/user/info?from=moved`);
+        res.end();
+    }));
+    const context = nasContext();
+
+    const result = await request(context, `http://127.0.0.1:${sourcePort}`, '/v/api/v1/user/info', HttpMethod.GET, 'token-1');
+
+    assert.deepEqual(result, { success: true, data: { ok: true }, moveUrl: target });
+    assert.ok(context.logged.length > 0, 'the redirect was not logged');
+    for (const line of context.logged) {
+        assert.doesNotMatch(line, /localhost/);
+        assert.doesNotMatch(line, new RegExp(String(targetPort)));
+        assert.doesNotMatch(line, /from=moved/);
+    }
 });
