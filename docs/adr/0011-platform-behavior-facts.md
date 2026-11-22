@@ -24,7 +24,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 
 ## MPV IPC 地址
 
-每次播放用唯一的地址（进程号加随机串）。node-mpv-2 默认用固定的 `\\.\pipe\mpvserver` 或 `/tmp/node-mpv.sock`，`start()` 先连这个地址，连上就直接接管，用户自己开着带同名 IPC 的 MPV 或客户端开了两份时会连错。Windows 是命名管道，不落盘；其它平台是 `tmpDir` 下的 Unix socket，播放结束后由调用方删除。socket 路径有字节上限（macOS 的 `sun_path` 104 字节含结尾的 0，Linux 108），超过时改放 `/tmp`。
+每次播放用唯一的地址（进程号加随机串）。node-mpv-2 默认用固定的 `\\.\pipe\mpvserver` 或 `/tmp/node-mpv.sock`，`start()` 先连这个地址，连上就直接接管，用户自己开着带同名 IPC 的 MPV 或客户端开了两份时会连错。Windows 是命名管道，不落盘；其它平台是 `tmpDir` 下的 Unix socket，播放结束后由调用方删除。socket 路径有字节上限（macOS 的 `sun_path` 104 字节含结尾的 0，Linux 108），超过时改放 `/tmp`。Unix socket 文件只在 MPV 进程退出或 `quit()` 返回后删除：`node-mpv-2` 处理 `seek` 等事件时会按路径另开连接，MPV 还在运行时删掉会让那次连接失败成为未捕获异常；`quit()` 返回时库已断开连接、不再处理事件。
 
 ## 窗口和托盘
 

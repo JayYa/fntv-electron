@@ -30,7 +30,7 @@
 
 ## macOS
 
-`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。`darwin-arm64` 在 Apple Silicon 的 `macos-latest` 上跑，`darwin-x64` 在 Intel 的 `macos-26-intel` 上原生运行；`process.arch` 断言证明客户端是目标架构的进程，`sysctl hw.optional.arm64` 证明机器也是这个架构。GitHub 不再提供 Intel macOS 镜像时的退路见 `targets.cjs` 的 `darwin-x64`。
+`darwin-arm64` 和 `darwin-x64` 用 `hdiutil attach -nobrowse` 把 dmg 挂到临时目录，启动里面 `.app` 的可执行文件，测试结束后 `hdiutil detach`，CI 上另有一步检查 dmg 已卸载。`darwin-arm64` 在 Apple Silicon 的 `macos-latest` 上跑，`darwin-x64` 在 Intel 的 `macos-26-intel` 上原生运行；`process.arch` 断言证明客户端是目标架构的进程，`sysctl hw.optional.arm64` 证明机器也是这个架构。GitHub 不再提供 Intel macOS 镜像时的退路见 `docs/adr/0013-smoke-test-harness.md`。
 
 ## 在 CI 上跑
 
