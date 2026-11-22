@@ -34,27 +34,6 @@ export function setupFullScreenToggle(mainWindow: BrowserWindow): void {
 }
 
 /**
- * 设置输入法相关功能
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
-export function setupInputMethodDisable(mainWindow: BrowserWindow): void {
-    // 禁用输入法相关功能
-    mainWindow.webContents.on('dom-ready', () => {
-        // 注入CSS来禁用输入法自动切换
-        mainWindow.webContents.insertCSS(`
-            * {
-                ime-mode: disabled !important;
-                -webkit-ime-mode: disabled !important;
-            }
-            input, textarea {
-                ime-mode: inactive !important;
-                -webkit-ime-mode: inactive !important;
-            }
-        `);
-    });
-}
-
-/**
  * 设置窗口显示事件
  * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
  */

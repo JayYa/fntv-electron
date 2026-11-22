@@ -20,7 +20,7 @@
     "src/main/common/proxySession.ts": 5,
     "src/main/common/taskbarProgress.ts": 1,
     "src/main/common/utils.ts": 1,
-    "src/main/common/winctrl.ts": 8,
+    "src/main/common/winctrl.ts": 5,
     "src/main/handlers/core/appHook.ts": 6,
     "src/main/handlers/core/fnConnect.ts": 1,
     "src/main/handlers/core/fnIdOauthMessages.ts": 17,
