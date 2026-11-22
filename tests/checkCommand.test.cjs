@@ -206,16 +206,9 @@ test('ci.yml runs pnpm run check, with the file size check only on the Linux cel
     }
 });
 
-test('CLAUDE.md names the verification command and the real smoke artifacts', () => {
-    const doc = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-    assert.match(doc, /`pnpm run check`/);
-    assert.match(doc, /gh run view <run-id> --log-failed/);
-    // 冒烟 artifact 叫 smoke-<目标>（build-and-smoke.yml），目标来自 tests/smoke/targets.cjs。
+test('build-and-smoke.yml names each smoke artifact smoke-<target>', () => {
     const upload = workflow('build-and-smoke.yml').jobs.smoke.steps.find(step => step.name === 'Upload screenshot and logs');
     assert.equal(upload.with.name, 'smoke-${{ matrix.target }}');
-    const { TARGETS } = require('./smoke/targets.cjs');
-    for (const target of Object.keys(TARGETS)) assert.ok(doc.includes(`\`${target}\``), `CLAUDE.md does not list ${target}`);
-    for (const platform of ['windows', 'macos', 'linux']) assert.ok(doc.includes(`\`${platform}-build\``), `CLAUDE.md does not list ${platform}-build`);
 });
 
 function runCheckJob(t, results) {

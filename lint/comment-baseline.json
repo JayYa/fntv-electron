@@ -90,7 +90,7 @@
     "src/modules/updater/releaseNotes.ts": 7,
     "src/modules/updater/updateChecker.ts": 39,
     "tests/buildDownloads.test.cjs": 7,
-    "tests/checkCommand.test.cjs": 6,
+    "tests/checkCommand.test.cjs": 5,
     "tests/ciElectronDownload.test.cjs": 15,
     "tests/ciWorkflow.test.cjs": 8,
     "tests/configDurability.test.cjs": 1,
