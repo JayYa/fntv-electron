@@ -104,7 +104,7 @@ export class MpvPlayer implements Player {
 
             if (pos > 0) {
                 this.switchToItem(pos);
-                this.mpvInstance.jump(pos);
+                await this.mpvInstance.setProperty('playlist-pos', pos);
                 if (this.config.debug) {
                     log.debug(`跳转到播放列表位置: ${pos} (${infos[pos].title})`);
                 }

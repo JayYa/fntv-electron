@@ -13,21 +13,25 @@ class FakeNodeMpv {
 
 class RunningNodeMpv {
     static last = null;
+    static onSetProperty = null;
     constructor() {
         this.handlers = new Map();
         this.path = '';
         this.seeks = [];
         this.subtitles = [];
+        this.properties = [];
         RunningNodeMpv.last = this;
     }
     on(event, handler) { this.handlers.set(event, handler); }
     emit(event, value) { return this.handlers.get(event)(value); }
     start() { return Promise.resolve(); }
     loadPlaylist() { return Promise.resolve(); }
-    jump() { return Promise.resolve(); }
     quit() { return Promise.resolve(); }
     isRunning() { return true; }
-    setProperty() { return Promise.resolve(); }
+    setProperty(property, value) {
+        this.properties.push([property, value]);
+        return RunningNodeMpv.onSetProperty ? RunningNodeMpv.onSetProperty(property, value) : Promise.resolve();
+    }
     goToPosition(position) { this.seeks.push(position); return Promise.resolve(); }
     addSubtitles(file) { this.subtitles.push(file); return Promise.resolve(); }
     getDuration() { return Promise.resolve(1500); }
@@ -158,4 +162,50 @@ test('a path that is not a play item in the playlist is ignored', async (t) => {
 
     assert.deepEqual(asked, []);
     assert.deepEqual(events, []);
+});
+
+function onSetProperty(t, targetProperty, handler) {
+    RunningNodeMpv.onSetProperty = (property, value) => (
+        property === targetProperty ? handler(value) : Promise.resolve()
+    );
+    t.after(() => { RunningNodeMpv.onSetProperty = null; });
+}
+
+test('playList waits for playlist-pos to be set before resolving when starting past the first item', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    let resolvePos;
+    onSetProperty(t, 'playlist-pos', () => new Promise((resolve) => { resolvePos = resolve; }));
+
+    const { mpv: firstMpv } = await startPlaying(t, ply, twoItems());
+    assert.deepEqual(firstMpv.properties, []);
+
+    const player = new ply.MpvPlayer(playerConfig());
+    t.after(() => player.stop());
+
+    let settled = false;
+    const playing = player.playList(twoItems(), 1).then((ok) => {
+        settled = true;
+        return ok;
+    });
+
+    await delay(20);
+    assert.equal(settled, false);
+    assert.deepEqual(RunningNodeMpv.last.properties, [['playlist-pos', 1]]);
+
+    resolvePos();
+    assert.equal(await playing, true);
+});
+
+test('playList emits an error and returns false when setting playlist-pos fails', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    onSetProperty(t, 'playlist-pos', () => Promise.reject(new Error('invalid playlist-pos')));
+
+    const events = [];
+    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type, data) => events.push({ type, data }) }));
+    t.after(() => player.stop());
+
+    const ok = await player.playList(twoItems(), 1);
+
+    assert.equal(ok, false);
+    assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'invalid playlist-pos' } }]);
 });
