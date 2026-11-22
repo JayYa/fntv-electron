@@ -7,10 +7,6 @@ const { TARGETS } = require('./smoke/targets.cjs');
 const { asList, root, runStep, workflow } = require('./helpers/workflowSteps.cjs');
 const { UPDATE_FEED_URL, UPDATE_METADATA } = require('./helpers/updateFeed.cjs');
 
-// 发版门禁：release.yml 的 publish 只在 5 个安装包的冒烟测试都通过后运行，测的就是要上传的那批文件。
-// workflow 本身跑不了单测，这里读 workflow 文件，锁住 job 之间的依赖关系，并核对 workflow 里的
-// 平台、目标和安装包名与 tests/smoke/targets.cjs 一致，加平台时漏改哪一处这里就会失败。
-
 const BUILD_AND_SMOKE = './.github/workflows/build-and-smoke.yml';
 const BUILD = './.github/workflows/build.yml';
 
@@ -20,7 +16,6 @@ function runStepOutputs(t, job, stepId, env) {
     return result.outputs;
 }
 
-// build-and-smoke.yml 对一个平台测哪些目标。
 function smokeTargetsOf(t, platform) {
     const outputs = runStepOutputs(t, workflow('build-and-smoke.yml').jobs['select-targets'], 'targets', { PLATFORM: platform });
     return JSON.parse(outputs['smoke-matrix']).include.map(entry => entry.target);
@@ -30,7 +25,6 @@ function smokeJobsOf(release) {
     return Object.entries(release.jobs).filter(([, job]) => job.uses === BUILD_AND_SMOKE);
 }
 
-// targets.cjs 里出现的平台，就是 workflow 里构建和测试的单位。
 function platformsOfTargets() {
     return [...new Set(Object.values(TARGETS).map(target => target.platform))].sort();
 }
@@ -46,27 +40,22 @@ test('publishing a release waits for every build-and-smoke job to succeed', () =
         assert.ok(needs.includes(name), `publish.needs is missing ${name}`);
         assert.match(publish.if, new RegExp(`needs\\.${name}\\.result == 'success'`), `publish.if does not require ${name} to succeed`);
     }
-    // always()、!cancelled() 或 failure() 会让 publish 在冒烟测试失败后照样运行。
     assert.doesNotMatch(publish.if, /always\(\)|cancelled\(\)|failure\(\)/);
 });
 
 test('the installers uploaded to the release are the ones the smoke tests ran on', () => {
     const release = workflow('release.yml');
-    // 另有一个直接调用 build.yml 的 job 就意味着又构建了一份没经过冒烟测试的安装包。
     for (const [name, job] of Object.entries(release.jobs)) {
         assert.notEqual(job.uses, BUILD, `${name} builds installers without smoke testing them`);
     }
-    // 只有一个 build-and-smoke job：同一次运行里再调用一次会上传同名的 <platform>-build，publish 分不清是哪一份。
     assert.equal(smokeJobsOf(release).length, 1);
     const download = release.jobs.publish.steps.find(step => String(step.uses).startsWith('actions/download-artifact@'));
-    // build-and-smoke.yml 经 build.yml 上传 <platform>-build，冒烟测试下载的也是它。
     assert.equal(download.with.pattern, '*-build');
 });
 
 test('a release is smoke tested on all five targets', t => {
     const release = workflow('release.yml');
     const [[name, job]] = smokeJobsOf(release);
-    // 发版时 push 触发，没有 platform 输入。
     const outputs = runStepOutputs(t, release.jobs[asList(job.needs).find(need => need !== 'release-please')], 'matrix', { PLATFORM: 'all' });
     const platforms = JSON.parse(outputs.platforms);
     assert.match(job.strategy.matrix.platform, /fromJSON\(needs\.select-matrix\.outputs\.platforms\)/, name);
@@ -74,8 +63,6 @@ test('a release is smoke tested on all five targets', t => {
     assert.equal(Object.keys(TARGETS).length, 5);
 });
 
-// macOS 的两个 dmg 都在 Apple Silicon 上构建，各在同架构的机器上原生测试。darwin-x64 经 Rosetta 运行时
-// 首次转译耗时不定，预热也会超时，2026-11-10 改到 Intel 镜像（tests/smoke/targets.cjs 的 darwin-x64）。
 test('macOS installers are smoke tested natively: darwin-x64 on an Intel runner, without Rosetta', t => {
     const job = workflow('build-and-smoke.yml').jobs['select-targets'];
     const outputs = runStepOutputs(t, job, 'targets', { PLATFORM: 'macos' });
@@ -86,9 +73,6 @@ test('macOS installers are smoke tested natively: darwin-x64 on an Intel runner,
     assert.ok(!steps.some(step => /rosetta/i.test(`${step.name} ${step.run ?? ''}`)), 'the smoke job still installs Rosetta');
 });
 
-// Release PR 会触发 pull_request workflow（要维护者批准后才运行），它的冒烟测试由 smoke-test.yml 跑，
-// release.yml 不对 Release PR 构建（2026-11-08 维护者决定）。release.yml 只在发版和手动触发时构建，
-// 构建的是 release-please 打 tag 的提交或当前提交。
 test('release.yml builds only for a release or a manual run, never for a Release PR branch', () => {
     const release = workflow('release.yml');
     const releasePlease = release.jobs['release-please'];
@@ -106,11 +90,9 @@ test('a Release PR is smoke tested by smoke-test.yml because it always changes p
     const smoke = workflow('smoke-test.yml');
     const pullRequest = smoke.on.pull_request;
     assert.ok(pullRequest, 'smoke-test.yml has no pull_request trigger');
-    // release-please 的 Release PR 改 package.json、.release-please-manifest.json 和 CHANGELOG.md。
     assert.ok(pullRequest.paths.includes('package.json'), 'smoke-test.yml does not run when package.json changes');
     assert.equal(pullRequest.branches, undefined, 'smoke-test.yml filters pull_request by base branch');
     assert.equal(pullRequest['paths-ignore'], undefined);
-    // PR 时测全部平台。
     assert.match(smoke.jobs.smoke.strategy.matrix.platform, /'\["linux","macos","windows"\]'/);
 });
 
@@ -122,7 +104,6 @@ test('each platform in the workflows smoke tests exactly its targets from target
         assert.deepEqual(smokeTargetsOf(t, platform).sort(), expected, platform);
     }
 
-    // smoke-test.yml 在 PR 和 all 时测的平台列表，以及两个 workflow 手动触发时可选的平台。
     const smoke = workflow('smoke-test.yml');
     const prPlatforms = JSON.parse(smoke.jobs.smoke.strategy.matrix.platform.match(/'(\[(?:"[a-z]+",?)+\])'/)[1]);
     assert.deepEqual(prPlatforms.sort(), platforms);
@@ -135,7 +116,6 @@ test('each platform in the workflows smoke tests exactly its targets from target
 
 const checkReleaseAssets = step => step.name === 'Check release assets';
 
-// dist 为空时，step 列出它要找的每个文件名。
 function missingReleaseAssets(t) {
     const missing = runStep(t, workflow('release.yml').jobs.publish, checkReleaseAssets, { VERSION: '9.9.9' }, cwd => fs.mkdirSync(path.join(cwd, 'dist')));
     assert.notEqual(missing.status, 0);
@@ -163,7 +143,6 @@ test('publish checks for the update metadata of Windows, Linux x64 and Linux arm
 
     const present = runAssetCheckWith(t, names);
     assert.equal(present.status, 0, present.stdout + present.stderr);
-    // 缺任何一个更新元数据都不发布。
     for (const absent of UPDATE_METADATA) {
         const result = runAssetCheckWith(t, names.filter(name => name !== absent));
         assert.notEqual(result.status, 0, `publish proceeds without ${absent}`);
@@ -171,8 +150,6 @@ test('publish checks for the update metadata of Windows, Linux x64 and Linux arm
     }
 });
 
-// 发布的是 build.yml 上传的 <platform>-build artifact，更新元数据要和安装包一起上传，
-// sha512 才和同一份冒烟测试过的安装包对得上。
 test('the build artifact carries the update metadata next to the installers', () => {
     const upload = workflow('build.yml').jobs.build.steps.find(step => step.name === 'Upload build artifacts');
     const paths = upload.with.path.split('\n').map(line => line.trim()).filter(Boolean);
@@ -182,7 +159,6 @@ test('the build artifact carries the update metadata next to the installers', ()
 
 const checkUpdateMetadata = step => step.name === 'Check update metadata';
 
-// 在空的 release 目录里运行构建 workflow 的核对步骤，返回它报缺失的元数据文件名，即这个平台要核对的文件。
 function checkedUpdateMetadata(t, platform) {
     const result = runStep(t, workflow('build.yml').jobs.build, checkUpdateMetadata, {
         PLATFORM: platform,
@@ -196,7 +172,6 @@ function checkedUpdateMetadata(t, platform) {
     return [...result.stdout.matchAll(/^::error::(\S+): file expected in the output directory, actual missing$/gm)].map(match => match[1]);
 }
 
-// 元数据的 size 和 sha512 由构建时的核对步骤和安装包比对，不一致时构建失败，不会上传成 artifact。
 test('the build checks the update metadata against the installers after packaging and before uploading', () => {
     const steps = workflow('build.yml').jobs.build.steps;
     const index = name => steps.findIndex(step => step.name === name);
@@ -204,7 +179,6 @@ test('the build checks the update metadata against the installers after packagin
     assert.notEqual(check, -1, 'build.yml has no Check update metadata step');
     assert.ok(index('Build application') < check, 'the check must run after Build application');
     assert.ok(check < index('Upload build artifacts'), 'the check must run before Upload build artifacts');
-    // macOS 不做应用内更新，latest-mac.yml 不核对（ADR 0003）。
     assert.equal(steps[check].if, "inputs.platform != 'macos'");
     assert.equal(steps[check].env.PLATFORM, '${{ inputs.platform }}');
 });
@@ -214,12 +188,9 @@ test('the build checks latest.yml on Windows and both Linux metadata files on Li
     const linux = checkedUpdateMetadata(t, 'linux');
     assert.deepEqual(windows, ['latest.yml']);
     assert.deepEqual(linux, ['latest-linux.yml', 'latest-linux-arm64.yml']);
-    // 两个平台合起来就是应用内更新读的全部元数据，和 release.yml 发布前核对的清单相同。
     assert.deepEqual([...windows, ...linux].sort(), [...UPDATE_METADATA].sort());
 });
 
-// 生成更新元数据需要 publish 配置；--publish never 只是不上传。更新元数据里的 url 是相对文件名，
-// 客户端按 generic 地址拼出最新正式 Release 的下载链接。
 test('electron-builder publishes to the latest release download URL of this repository', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     assert.deepEqual(pkg.build.publish, { provider: 'generic', url: UPDATE_FEED_URL });
@@ -233,7 +204,6 @@ test('running the Release workflow by hand builds and smoke tests but does not p
     const release = workflow('release.yml');
     assert.ok('workflow_dispatch' in release.on);
     assert.match(release.jobs['release-please'].if, /github\.event_name == 'push'/);
-    // 手动触发时 release-please 被跳过，release_created 为空，publish 跟着跳过。
     assert.match(release.jobs.publish.if, /needs\.release-please\.outputs\.release_created == 'true'/);
     const [, job] = smokeJobsOf(release)[0];
     assert.match(job.if, /!cancelled\(\)/);

@@ -23,3 +23,19 @@ status: accepted
 - 退出流程里停止播放也会触发 `onPlaybackEnded`，因此必须在 `onQuitStarted`（停止播放之前）取消推迟的更新提示。
 - 用户主动手动检查时，即使正在播放也立即弹框，并取消此前推迟的提示。
 - 用户选择“下载并安装”后在后台启动 `inAppUpdate.downloadAndInstall()`，不阻塞对话框调用返回；下载失败时的错误提示由 `InAppUpdate` 自行弹出。
+- 启动 3 秒后才自动检查更新，不拖慢启动。
+
+## 应用内更新（`src/modules/updater/inAppUpdate.ts`）
+
+用户在更新检查的弹框里点「下载并安装」后，由 `electron-updater` 下载、校验 sha512 并安装。要不要更新只由更新检查判断；这里调 `autoUpdater.checkForUpdates()` 只是为了读更新源上的 `latest.yml`，`downloadUpdate()` 要先有这份元数据。任何一步失败都退回手动更新：弹框提供「打开下载页面」，打开 Release 页面。
+
+- 更新源地址每次开始下载时才读取，下载加速开关改了随时生效。
+- `downloadAndInstall()` 的 Promise 要等下载结束、用户选完安装方式才完成，调用方不必等它，错误都在里面处理成弹框；下载中再次调用不会开始第二次下载。下载进度（0 到 100 的整数，下载结束时为 `null`）供托盘的「检查更新」项和主窗口的任务栏进度条显示。
+- 差量下载开着，只下有变化的块；中转不支持 `Range` 等原因让差量失败时，`electron-updater` 自动改下完整安装包。
+- 下载完成那一刻 `electron-updater` 只在 `autoInstallOnAppQuit` 为 `true` 时注册退出时安装的处理，所以下载期间先打开，下载完成后立刻关掉，用户选了「退出时安装」再打开。
+- 下载完成后问安装方式：「立即重启安装」「退出时安装」「稍后提醒」。关掉对话框等于「稍后提醒」，什么都不装，下次检查再问：安装要用户点头。
+- 「立即重启安装」先停 MPV 并等这次退出的进度回传：Windows 上附带的 MPV 在安装目录里，`mpv.exe` 运行时安装程序覆盖不了它。回传失败只记日志、不阻止安装；回传或 MPV 退出迟迟不来时，`stopPlaybackAndWait` 等到超时就返回，照常安装。安装前关掉 `autoInstallOnAppQuit`（之前选过「退出时安装」时它还开着）：这次安装失败的话，`electron-updater` 会在退出时自己再装，那条路径不先停 MPV。之后静默安装（不显示向导，沿用原安装目录），装完重新打开客户端。安装程序启动失败时 `electron-updater` 同步发 `error` 事件，阶段回到已下载，客户端不退出。
+- 「退出时安装」由退出协调执行：它先停 MPV、等进度回传、关 Proxy，再由 `quitAndInstall` 静默安装并重新发起退出，装完不重新打开客户端（用户要的是退出）。`electron-updater` 自己的退出时安装挂在 `quit` 事件上，那时 MPV 可能还开着，所以抢在它前面装；`quitAndInstall` 之后 `electron-updater` 看到安装已经开始，不会在 `quit` 时再装一次。安装失败时弹框提示，然后照常退出。
+- 系统关机、重启或注销时放弃「退出时安装」（维护者决定不在关机时尽力安装，#192），回到「已下载、未选安装方式」，下次点「下载并安装」时 `electron-updater` 复用已下载的安装包。安装已经开始或没选「退出时安装」时不受影响。
+- 下载阶段的错误会让 `downloadUpdate()` 失败，在那里处理；安装阶段（`quitAndInstall` 启动安装程序失败）只有 `error` 事件，所以总要监听它，没有监听时 `EventEmitter` 会把 error 抛出去。
+- Linux：`electron-updater` 安装时先删掉旧 AppImage。旧文件名里有 x.y.z 三段数字时，新文件用新版本的文件名，指向旧文件名的快捷方式会失效，并发 `appimage-filename-updated` 事件（只记日志，用户该怎么做见 README 的 Linux 安装说明）；没有时沿用原文件名，不发。

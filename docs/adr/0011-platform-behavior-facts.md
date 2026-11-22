@@ -32,6 +32,9 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 - 标题栏：macOS 用系统交通灯按钮（`hiddenInset`），其它平台是无边框窗口加页面里的自定义按钮。
 - 主窗口图标：`nativeImage` 只在 Windows 上读 ICO，其它平台用 PNG（#74）。macOS 托盘用模板图标，加载失败时回退到 `icon.png`。
 - 托盘恢复窗口的事件：Linux 上激活托盘图标只发 `click`，没有 `double-click`（#75）。
+- `window-all-closed` 只有 `main.ts` 一处监听（#76）。不在退出途中时主窗口的 `close` 被拦下改为隐藏，这个事件很少发生；`app.quit()` 关掉所有窗口时 Electron 直接退出，不发这个事件（Electron `shell/browser/browser.cc` 的 `Browser::OnWindowAllClosed`）。
+- 托盘「设置 MPV 播放器路径」的文件对话框传入当前路径所在目录作 `defaultPath`：Electron 43 起不传 `defaultPath` 时总从「下载」目录开始，系统不再记住上次的目录。
+- Windows 上 `app.getPath('appData')` 可能失败，这时托盘的「打开 MPV 用户配置目录」项不可用，托盘和启动照常。
 
 ## 凭据
 
