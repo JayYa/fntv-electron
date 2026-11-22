@@ -138,7 +138,7 @@ export class ApiService extends FnApiClient {
                 return Promise.resolve({ id, filePath, success: true } as types.SubtitleDownloadResult);
             }
 
-            return fn.request(this.baseURL, `/v/api/v1/subtitle/dl/${id}`, HttpMethod.GET, this.token)
+            return fn.requestRaw(this.baseURL, `/v/api/v1/subtitle/dl/${id}`, HttpMethod.GET, this.token)
                 .then(response => {
                     if (response.success && response.data) {
                         return fs.promises.writeFile(filePath, response.data)

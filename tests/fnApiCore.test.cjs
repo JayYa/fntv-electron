@@ -175,3 +175,72 @@ test('a redirect does not use up the retries for an invalid signature at the tar
     assert.equal(result.success, true);
     assert.equal(nas.hits.final, 2);
 });
+
+const GATEWAY_ERROR_PAGE = '<html><body>502 Bad Gateway from the reverse proxy</body></html>';
+
+async function nasAnswering(t, contentType, body) {
+    const server = http.createServer((req, res) => {
+        if (contentType) res.setHeader('Content-Type', contentType);
+        res.end(body);
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const logged = [];
+    const record = (...args) => logged.push(args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' '));
+    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn: record, error: record } };
+    const call = (expect) => {
+        const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
+        return request(context, baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1', undefined, undefined, undefined, 5000, 0, expect);
+    };
+    return { logged, call };
+}
+
+test('a request expecting JSON reports an HTML page as a failure with its status and content type', async (t) => {
+    withoutElectron(t);
+    const nas = await nasAnswering(t, 'text/html', GATEWAY_ERROR_PAGE);
+
+    const result = await nas.call();
+
+    assert.equal(result.success, false);
+    assert.match(result.message, /200/);
+    assert.match(result.message, /text\/html/);
+    assert.doesNotMatch(result.message, /Bad Gateway/);
+    assert.ok(nas.logged.every((line) => !line.includes('Bad Gateway')));
+});
+
+test('a request expecting JSON reports a response without a content type as a failure', async (t) => {
+    withoutElectron(t);
+    const nas = await nasAnswering(t, undefined, GATEWAY_ERROR_PAGE);
+
+    const result = await nas.call();
+
+    assert.equal(result.success, false);
+    assert.match(result.message, /200/);
+    assert.match(result.message, /Content-Type: 缺失/);
+    assert.ok(nas.logged.every((line) => !line.includes('Bad Gateway')));
+});
+
+test('a request expecting raw data returns the body whatever its content type', async (t) => {
+    withoutElectron(t);
+    const subtitle = '1\n00:00:01,000 --> 00:00:02,000\n你好\n';
+
+    for (const contentType of ['text/plain; charset=utf-8', undefined]) {
+        const nas = await nasAnswering(t, contentType, subtitle);
+        assert.deepEqual(await nas.call('raw'), { success: true, data: subtitle });
+    }
+});
+
+test('a request expecting raw data keeps a body that happens to parse as JSON as text', async (t) => {
+    withoutElectron(t);
+    const nas = await nasAnswering(t, 'text/plain', '{"cues":[]}');
+
+    assert.deepEqual(await nas.call('raw'), { success: true, data: '{"cues":[]}' });
+});
+
+test('a request expecting raw data still reports an fnAPI error answered as JSON', async (t) => {
+    withoutElectron(t);
+    const nas = await nasAnswering(t, 'application/json', JSON.stringify({ code: 401, msg: 'token expired', data: null }));
+
+    assert.deepEqual(await nas.call('raw'), { success: false, message: 'token expired' });
+});

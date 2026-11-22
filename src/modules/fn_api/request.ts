@@ -25,3 +25,7 @@ export function request<T = any>(
 ): Promise<core.ApiResponse<T>> {
     return core.request<T>(mainContext, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes);
 }
+
+export function requestRaw(baseUrl: string, url: string, method: core.HttpMethod, token: string): Promise<core.ApiResponse<string>> {
+    return core.request<string>(mainContext, baseUrl, url, method, token, undefined, undefined, undefined, undefined, undefined, 'raw');
+}

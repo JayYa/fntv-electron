@@ -94,6 +94,17 @@ function httpsAgent(rejectUnauthorized: boolean, ca: string[] | undefined, timeo
 
 const MAX_REDIRECTS = 5;
 
+function fnApiBody<T>(body: FnApiResponseData<T> | string): Partial<FnApiResponseData<T>> {
+    if (typeof body !== 'string') return body;
+    try {
+        return JSON.parse(body);
+    } catch {
+        return {};
+    }
+}
+
+export type ResponseExpectation = 'json' | 'raw';
+
 export function request<T = any>(
     context: RequestContext,
     baseUrl: string,
@@ -105,8 +116,9 @@ export function request<T = any>(
     axiosConfig?: Record<string, any>,
     timeout: number = DEFAULT_TIMEOUT,
     tryTimes: number = 5,
+    expect: ResponseExpectation = 'json',
 ): Promise<ApiResponse<T>> {
-    return followingRedirects<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, MAX_REDIRECTS);
+    return followingRedirects<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, expect, MAX_REDIRECTS);
 }
 
 async function followingRedirects<T>(
@@ -120,6 +132,7 @@ async function followingRedirects<T>(
     axiosConfig: Record<string, any> | undefined,
     timeout: number,
     tryTimes: number,
+    expect: ResponseExpectation,
     redirectsLeft: number,
 ): Promise<ApiResponse<T>> {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
@@ -147,6 +160,7 @@ async function followingRedirects<T>(
         maxRedirects: 0,
         validateStatus: (status: number) => status >= 200 && status < 400,
         httpsAgent: httpsAgent(!shouldIgnoreCert, context.ca, timeout),
+        ...(expect === 'raw' ? { responseType: 'text' as const } : {}),
         ...axiosConfig
     };
 
@@ -191,6 +205,7 @@ async function followingRedirects<T>(
                         axiosConfig,
                         timeout,
                         tryTimes,
+                        expect,
                         redirectsLeft - 1
                     );
 
@@ -202,14 +217,14 @@ async function followingRedirects<T>(
             }
 
             const contentType = response.headers['content-type'];
-            if (typeof contentType === 'string' && !contentType.includes('application/json')) {
-                return {
-                    success: true,
-                    data: response.data as any,
-                };
+            if (typeof contentType !== 'string' || !contentType.includes('application/json')) {
+                if (expect === 'raw') {
+                    return { success: true, data: response.data as any };
+                }
+                return { success: false, message: `响应不是 JSON（HTTP ${response.status}，Content-Type: ${contentType ?? '缺失'}）` };
             }
 
-            const res = response.data;
+            const res = fnApiBody<T>(response.data);
 
             if (res.code === 5000 && res.msg === 'invalid sign') {
                 if (attempt >= tryTimes) {
