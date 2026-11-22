@@ -106,10 +106,10 @@ export function request<T = any>(
     timeout: number = DEFAULT_TIMEOUT,
     tryTimes: number = 5,
 ): Promise<ApiResponse<T>> {
-    return send<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, MAX_REDIRECTS);
+    return followingRedirects<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, MAX_REDIRECTS);
 }
 
-async function send<T>(
+async function followingRedirects<T>(
     context: RequestContext,
     baseUrl: string,
     url: string,
@@ -180,7 +180,7 @@ async function send<T>(
                         newUrlPath = parsedUrl.pathname + parsedUrl.search;
                     }
 
-                    const recursiveResult = await send<T>(
+                    const recursiveResult = await followingRedirects<T>(
                         context,
                         newBaseUrl,
                         newUrlPath,
