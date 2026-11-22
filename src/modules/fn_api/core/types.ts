@@ -34,10 +34,12 @@ export interface Subtitle {
     name: string;
 }
 
+export type SubtitleDownloadStatus = 'downloaded' | 'skipped' | 'failed';
+
 export interface SubtitleDownloadResult {
     id: string;
     filePath: string;
-    success: boolean;
+    status: SubtitleDownloadStatus;
     error?: string;
 }
 

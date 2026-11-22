@@ -135,7 +135,7 @@ export class ApiService extends FnApiClient {
 
             if (fs.existsSync(filePath)) {
                 log.info(`⏭️  字幕文件已存在，跳过下载: ${filePath}`);
-                return Promise.resolve({ id, filePath, success: true } as types.SubtitleDownloadResult);
+                return Promise.resolve({ id, filePath, status: 'skipped' } as types.SubtitleDownloadResult);
             }
 
             return fn.requestRaw(this.baseURL, `/v/api/v1/subtitle/dl/${id}`, HttpMethod.GET, this.token)
@@ -144,11 +144,11 @@ export class ApiService extends FnApiClient {
                         return fs.promises.writeFile(filePath, response.data)
                             .then(() => {
                                 log.info(`✅ 字幕文件已下载到: ${filePath}`);
-                                return { id, filePath, success: true } as types.SubtitleDownloadResult;
+                                return { id, filePath, status: 'downloaded' } as types.SubtitleDownloadResult;
                             });
                     } else {
                         log.error(`❌ 服务端错误: ${response.message} (ID: ${id})`);
-                        return { id, filePath, success: false, error: `HTTP ${response.message}` } as types.SubtitleDownloadResult;
+                        return { id, filePath, status: 'failed', error: `HTTP ${response.message}` } as types.SubtitleDownloadResult;
                     }
                 })
                 .catch((error: any) => {
@@ -161,24 +161,20 @@ export class ApiService extends FnApiClient {
                         errorMsg = `请求错误: ${error.message}`;
                     }
                     log.error(`❌ ID ${id} 下载失败: ${errorMsg}`);
-                    return { id, filePath, success: false, error: errorMsg } as types.SubtitleDownloadResult;
+                    return { id, filePath, status: 'failed', error: errorMsg } as types.SubtitleDownloadResult;
                 });
         });
 
-        const results = await Promise.allSettled(downloadTasks);
+        const results = await Promise.all(downloadTasks);
 
         const successfulDownloads = results
-            .filter((result): result is PromiseFulfilledResult<types.SubtitleDownloadResult> =>
-                result.status === 'fulfilled' && result.value.success)
-            .map(result => result.value.filePath);
+            .filter(result => result.status !== 'failed')
+            .map(result => result.filePath);
 
-        const failedCount = results.length - successfulDownloads.length;
-        const skippedCount = subs.filter(sub => {
-            const safeName = (sub.name || sub.id).replace(/[^a-z0-9]/gi, '_');
-            const filePath = path.join(this.tempDir, `${safeName}.${sub.format || 'srt'}`);
-            return fs.existsSync(filePath);
-        }).length;
-        const downloadedCount = successfulDownloads.length - skippedCount;
+        const countOf = (status: types.SubtitleDownloadStatus) => results.filter(result => result.status === status).length;
+        const downloadedCount = countOf('downloaded');
+        const skippedCount = countOf('skipped');
+        const failedCount = countOf('failed');
 
         log.info('========================================');
         log.info('字幕下载摘要:');
