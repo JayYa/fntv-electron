@@ -195,8 +195,8 @@ importers:
         specifier: 24.19.2
         version: 24.19.2
       electron:
-        specifier: 45.3.3
-        version: 45.3.3(supports-color@7.2.0)
+        specifier: 45.4.1
+        version: 45.4.1(supports-color@7.2.0)
       electron-builder:
         specifier: 26.18.0
         version: 26.18.0(electron-builder-squirrel-windows@26.18.0)(supports-color@7.2.0)
@@ -210,8 +210,8 @@ importers:
         specifier: 5.5.0
         version: 5.5.0
       knip:
-        specifier: 6.45.1
-        version: 6.45.1
+        specifier: 6.46.1
+        version: 6.46.1
       playwright-core:
         specifier: 1.65.1
         version: 1.65.1
@@ -1324,8 +1324,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@45.3.3:
-    resolution: {integrity: sha512-YS01j/AMWGbPAfbXijkLOUJGFhmrIg6pf9An8+LzY1PIc5sjwqEcSMsEBXgUQiWw1lSfPCP7RpxbvkN1JQRD8A==}
+  electron@45.4.1:
+    resolution: {integrity: sha512-DjsJ/eQhovkjf1vYFFyh5GB8NMx+L5bdYaonvGOlWselg3DQ0fwIF0N/+2hrPsoS4whmmNswh21ym/8dgt1y5Q==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -1715,8 +1715,8 @@ packages:
   keyv@5.6.0:
     resolution: {integrity: sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw==}
 
-  knip@6.45.1:
-    resolution: {integrity: sha512-zp3zXKy2cZWiIttdlWU5fisKxVQaLSU6471ej0KGz1GdHdaHxpzTAO/LIyFNc3gU3v1W7LJaqvYumoO3l/u+6A==}
+  knip@6.46.1:
+    resolution: {integrity: sha512-5/ajqjZfmuv8O74+McrKBOSArKG6tsUgy6yJird36VZh9HiUq75qY4U39uqf9wjchEUOLrStuOZpFP057CZFRw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -3346,7 +3346,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@45.3.3(supports-color@7.2.0):
+  electron@45.4.1(supports-color@7.2.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.8
       '@electron/get': 5.1.0(supports-color@7.2.0)
@@ -3798,7 +3798,7 @@ snapshots:
     dependencies:
       '@keyv/serialize': 1.1.1
 
-  knip@6.45.1:
+  knip@6.46.1:
     dependencies:
       formatly: 0.11.4
       get-tsconfig: 4.14.3
