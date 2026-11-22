@@ -111,3 +111,67 @@ test('requests to an HTTPS NAS with the same TLS settings reuse one connection',
     await request(context(false), baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1');
     assert.equal(connections, 2);
 });
+
+async function redirectingNas(t, hops, finalResponses = [{ code: 0, msg: '', data: { ok: true } }]) {
+    const hits = { redirects: 0, final: 0 };
+    const server = http.createServer((req, res) => {
+        const left = Number(req.url.split('/').pop());
+        if (left > 0) {
+            hits.redirects += 1;
+            res.statusCode = 302;
+            res.setHeader('Location', `/hop/${left - 1}`);
+            res.end();
+            return;
+        }
+        const body = finalResponses[Math.min(hits.final, finalResponses.length - 1)];
+        hits.final += 1;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(body));
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn() {}, error() {} } };
+    const call = (tryTimes) => {
+        const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
+        return request(context, baseUrl, `/hop/${hops}`, HttpMethod.GET, 'token-1', undefined, undefined, undefined, 5000, tryTimes);
+    };
+    return { baseUrl, hits, call };
+}
+
+test('a request that must not be retried still follows a redirect to the NAS', async (t) => {
+    withoutElectron(t);
+    const nas = await redirectingNas(t, 1);
+
+    const result = await nas.call(0);
+
+    assert.deepEqual(result, { success: true, data: { ok: true }, moveUrl: nas.baseUrl });
+    assert.equal(nas.hits.final, 1);
+});
+
+test('a request follows up to 5 redirects and reports too many redirects beyond that', async (t) => {
+    withoutElectron(t);
+    const withinLimit = await redirectingNas(t, 5);
+    assert.equal((await withinLimit.call(5)).success, true);
+
+    const beyondLimit = await redirectingNas(t, 6);
+    const result = await beyondLimit.call(5);
+
+    assert.equal(result.success, false);
+    assert.match(result.message, /重定向次数过多/);
+    assert.equal(beyondLimit.hits.redirects, 6);
+    assert.equal(beyondLimit.hits.final, 0);
+});
+
+test('a redirect does not use up the retries for an invalid signature at the target', async (t) => {
+    withoutElectron(t);
+    const nas = await redirectingNas(t, 5, [
+        { code: 5000, msg: 'invalid sign', data: null },
+        { code: 0, msg: '', data: { ok: true } },
+    ]);
+
+    const result = await nas.call(1);
+
+    assert.equal(result.success, true);
+    assert.equal(nas.hits.final, 2);
+});
