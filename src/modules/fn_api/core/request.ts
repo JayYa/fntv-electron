@@ -92,7 +92,9 @@ function httpsAgent(rejectUnauthorized: boolean, ca: string[] | undefined, timeo
     return agent;
 }
 
-export async function request<T = any>(
+const MAX_REDIRECTS = 5;
+
+export function request<T = any>(
     context: RequestContext,
     baseUrl: string,
     url: string,
@@ -103,6 +105,22 @@ export async function request<T = any>(
     axiosConfig?: Record<string, any>,
     timeout: number = DEFAULT_TIMEOUT,
     tryTimes: number = 5,
+): Promise<ApiResponse<T>> {
+    return followingRedirects<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, MAX_REDIRECTS);
+}
+
+async function followingRedirects<T>(
+    context: RequestContext,
+    baseUrl: string,
+    url: string,
+    method: HttpMethod,
+    token: string,
+    data: any,
+    extraHeaders: Record<string, string> | undefined,
+    axiosConfig: Record<string, any> | undefined,
+    timeout: number,
+    tryTimes: number,
+    redirectsLeft: number,
 ): Promise<ApiResponse<T>> {
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
     const fullUrl = normalizedBaseUrl + url;
@@ -132,7 +150,7 @@ export async function request<T = any>(
         ...axiosConfig
     };
 
-    for (let attempt = 0; attempt <= tryTimes; attempt++) {
+    for (let attempt = 0; ; attempt++) {
         try {
             let response: AxiosResponse<FnApiResponseData<T>>;
 
@@ -149,6 +167,10 @@ export async function request<T = any>(
                 context.log.warn(`检测到重定向 (${response.status}) -> ${location}`);
 
                 if (location) {
+                    if (redirectsLeft <= 0) {
+                        return { success: false, message: `重定向次数过多（超过 ${MAX_REDIRECTS} 次）` };
+                    }
+
                     let newBaseUrl = normalizedBaseUrl;
                     let newUrlPath = location;
 
@@ -158,7 +180,7 @@ export async function request<T = any>(
                         newUrlPath = parsedUrl.pathname + parsedUrl.search;
                     }
 
-                    const recursiveResult = await request<T>(
+                    const recursiveResult = await followingRedirects<T>(
                         context,
                         newBaseUrl,
                         newUrlPath,
@@ -168,7 +190,8 @@ export async function request<T = any>(
                         extraHeaders,
                         axiosConfig,
                         timeout,
-                        tryTimes - 1
+                        tryTimes,
+                        redirectsLeft - 1
                     );
 
                     return {
@@ -235,9 +258,4 @@ export async function request<T = any>(
             await setTimeout(100);
         }
     }
-
-    return {
-        success: false,
-        message: '重试逻辑异常'
-    };
 }
