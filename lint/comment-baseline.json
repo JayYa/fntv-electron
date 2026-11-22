@@ -50,7 +50,6 @@
     "src/modules/fn_api/core/httpsPortMismatch.ts": 2,
     "src/modules/fn_api/core/request.ts": 36,
     "src/modules/fn_api/core/ttlCache.ts": 6,
-    "src/modules/fn_api/core/types.ts": 316,
     "src/modules/fn_api/request.ts": 1,
     "src/modules/fn_config/configFile.ts": 7,
     "src/modules/fn_config/cookie.ts": 12,
