@@ -12,9 +12,6 @@ import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
 import { platformBehavior } from '../public/platform';
 import { initQuitCoordinator, listenForSystemShutdown } from '../modules/quit/quitCoordinator';
 
-app.commandLine.appendSwitch('--lang', 'en-US');
-app.commandLine.appendSwitch('--disable-features', 'VizDisplayCompositor');
-
 let mainWindow: BrowserWindow | null = null;
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -62,8 +59,6 @@ if (!gotTheLock) {
             manageMainWindow(mainWindow);
 
             winctrl.setupFullScreenToggle(mainWindow);
-
-            winctrl.setupInputMethodDisable(mainWindow);
 
             winctrl.setupWindowShowEvents(mainWindow);
 
