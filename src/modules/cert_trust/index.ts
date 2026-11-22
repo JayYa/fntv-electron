@@ -4,14 +4,10 @@ import * as path from 'path';
 import log from '../logger';
 import { normalizeCertificateHost } from './host';
 
-// 内存缓存 - 存储已信任的域名/URL
 let trustedHostsCache: Set<string> | null = null;
 let cacheLoaded = false;
 const sessionTrustedHosts = new Set<string>();
 
-/**
- * 获取证书信任配置文件路径
- */
 function getTrustedHostsConfigPath(): string {
     const dir = app.getPath('userData');
     if (!fs.existsSync(dir)) {
@@ -20,9 +16,6 @@ function getTrustedHostsConfigPath(): string {
     return path.join(dir, 'trusted-hosts.json');
 }
 
-/**
- * 从文件加载信任列表到内存缓存
- */
 function loadTrustedHostsFromFile(): Set<string> {
     const configPath = getTrustedHostsConfigPath();
 
@@ -41,9 +34,6 @@ function loadTrustedHostsFromFile(): Set<string> {
     return new Set<string>();
 }
 
-/**
- * 保存信任列表到文件
- */
 function saveTrustedHostsToFile(trustedHosts: Set<string>): void {
     const configPath = getTrustedHostsConfigPath();
 
@@ -56,9 +46,6 @@ function saveTrustedHostsToFile(trustedHosts: Set<string>): void {
     }
 }
 
-/**
- * 获取内存中的信任列表（懒加载）
- */
 function getTrustedHostsCache(): Set<string> {
     if (!cacheLoaded || trustedHostsCache === null) {
         trustedHostsCache = loadTrustedHostsFromFile();
@@ -68,54 +55,32 @@ function getTrustedHostsCache(): Set<string> {
     return trustedHostsCache;
 }
 
-/**
- * 从URL中提取主机名和端口
- * @param url - 完整URL或主机:端口格式
- * @returns 标准化的主机名:端口
- */
 const normalizeHost = normalizeCertificateHost;
 
-/**
- * 检查主机是否已被信任
- * @param url - URL或主机名
- * @returns 是否已信任
- */
 export function isTrusted(url: string): boolean {
     const host = normalizeHost(url);
     const trustedHosts = getTrustedHostsCache();
     return sessionTrustedHosts.has(host) || trustedHosts.has(host);
 }
 
-/**
- * 添加信任的主机
- * @param url - URL或主机名
- */
 export function addTrustedHost(url: string): void {
     const host = normalizeHost(url);
     const trustedHosts = getTrustedHostsCache();
 
-    // 添加到内存缓存
     trustedHosts.add(host);
 
-    // 保存到文件
     saveTrustedHostsToFile(trustedHosts);
 
     log.info(`已添加信任主机: ${host}`);
 }
 
-/**
- * 移除信任的主机
- * @param url - URL或主机名
- */
 export function removeTrustedHost(url: string): void {
     const host = normalizeHost(url);
     const trustedHosts = getTrustedHostsCache();
 
-    // 从内存缓存中移除
     const deleted = trustedHosts.delete(host);
 
     if (deleted) {
-        // 保存到文件
         saveTrustedHostsToFile(trustedHosts);
         log.info(`已移除信任主机: ${host}`);
     } else {
@@ -123,61 +88,37 @@ export function removeTrustedHost(url: string): void {
     }
 }
 
-/**
- * 获取所有信任的主机
- * @returns 信任主机列表
- */
 export function getTrustedHosts(): string[] {
     const trustedHosts = getTrustedHostsCache();
     return Array.from(trustedHosts);
 }
 
-/**
- * 清空所有信任的主机
- */
 export function clearTrustedHosts(): void {
     const trustedHosts = getTrustedHostsCache();
 
-    // 清空内存缓存
     trustedHosts.clear();
 
-    // 保存到文件
     saveTrustedHostsToFile(trustedHosts);
 
     log.info('已清空所有信任主机');
 }
 
-/**
- * 重新加载信任列表（强制从文件重新读取）
- */
 export function reloadTrustedHosts(): void {
     cacheLoaded = false;
     trustedHostsCache = null;
-    getTrustedHostsCache(); // 触发重新加载
+    getTrustedHostsCache();
     log.info('已重新加载信任主机列表');
 }
 
-/**
- * 获取信任主机数量
- * @returns 信任主机的数量
- */
 export function getTrustedHostsCount(): number {
     const trustedHosts = getTrustedHostsCache();
     return trustedHosts.size;
 }
 
-/**
- * 检查缓存是否已加载
- * @returns 缓存是否已加载
- */
 export function isCacheLoaded(): boolean {
     return cacheLoaded;
 }
 
-/**
- * 批量添加信任主机
- * @param urls - URL列表
- */
 export function addTrustedHosts(urls: string[]): void {
     const trustedHosts = getTrustedHostsCache();
     let addedCount = 0;
@@ -191,7 +132,6 @@ export function addTrustedHosts(urls: string[]): void {
     }
 
     if (addedCount > 0) {
-        // 保存到文件
         saveTrustedHostsToFile(trustedHosts);
         log.info(`批量添加了 ${addedCount} 个信任主机`);
     } else {
@@ -199,10 +139,6 @@ export function addTrustedHosts(urls: string[]): void {
     }
 }
 
-/**
- * 批量移除信任主机
- * @param urls - URL列表
- */
 export function removeTrustedHosts(urls: string[]): void {
     const trustedHosts = getTrustedHostsCache();
     let removedCount = 0;
@@ -215,7 +151,6 @@ export function removeTrustedHosts(urls: string[]): void {
     }
 
     if (removedCount > 0) {
-        // 保存到文件
         saveTrustedHostsToFile(trustedHosts);
         log.info(`批量移除了 ${removedCount} 个信任主机`);
     } else {
@@ -223,13 +158,6 @@ export function removeTrustedHosts(urls: string[]): void {
     }
 }
 
-/**
- * 显示证书信任确认对话框
- * @param url - 相关URL
- * @param error - 错误信息
- * @param parentWindow - 父窗口
- * @returns 用户是否选择信任证书
- */
 export async function showCertificateTrustDialog(
     url: string,
     error: string,
@@ -245,7 +173,7 @@ export async function showCertificateTrustDialog(
                 message: '检测到不受信任的SSL证书',
                 detail: `域名: ${host}\n错误: ${error}\n\n此证书可能存在安全风险。您是否要信任此证书并继续访问？\n\n警告：只有在您确信该服务器是安全的情况下才选择信任。`,
                 buttons: ['信任证书', '取消'],
-                defaultId: 1, // 默认选择"取消"
+                defaultId: 1,
                 cancelId: 1,
                 checkboxLabel: '记住此证书',
                 checkboxChecked: false
@@ -256,17 +184,15 @@ export async function showCertificateTrustDialog(
                 message: '检测到不受信任的SSL证书',
                 detail: `域名: ${host}\n错误: ${error}\n\n此证书可能存在安全风险。您是否要信任此证书并继续访问？\n\n警告：只有在您确信该服务器是安全的情况下才选择信任。`,
                 buttons: ['信任证书', '取消'],
-                defaultId: 1, // 默认选择"取消"
+                defaultId: 1,
                 cancelId: 1,
                 checkboxLabel: '记住此证书',
                 checkboxChecked: false
             });
 
         if (result.response === 0) {
-            // 用户选择信任
             sessionTrustedHosts.add(host);
             if (result.checkboxChecked) {
-                // 记住选择，添加到信任列表
                 addTrustedHost(url);
             }
             log.info(`用户选择信任证书: ${host}, 记住选择: ${result.checkboxChecked}`);

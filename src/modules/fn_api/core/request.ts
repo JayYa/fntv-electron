@@ -6,17 +6,15 @@ import { isCertificateError } from './certificateError';
 import { composeCookieHeader } from './cookie';
 import { isHttpsPortMismatch } from './httpsPortMismatch';
 
-// 全局配置
 const api_key = 'NDzZTVxnRKP8Z0jXg1VAMonaG8akvh';
 const api_secret = '16CCEB3D-AB42-077D-36A1-F355324E4237';
 
-// 类型定义
 export interface ApiResponse<T = any> {
     success: boolean;
     data?: T;
     message?: string;
-    certificateError?: boolean; // 标识是否为证书错误
-    moveUrl?: string; // 重定向URL
+    certificateError?: boolean;
+    moveUrl?: string;
 }
 
 export interface FnApiResponseData<T = any> {
@@ -32,17 +30,14 @@ export enum HttpMethod {
     DELETE = 'delete'
 }
 
-// MD5哈希计算
 export function getMd5(text: string): string {
     return crypto.createHash('md5').update(text, 'utf8').digest('hex');
 }
 
-// 生成随机数字字符串
 export function generateRandomDigits(start: number = 100000, end: number = 1000000): string {
     return Math.floor(Math.random() * (end - start) + start).toString();
 }
 
-// 生成授权签名
 export function genFnAuthx(url: string, data?: any): string {
     const nonce = generateRandomDigits();
     const timestamp = Date.now();
@@ -62,25 +57,17 @@ export function genFnAuthx(url: string, data?: any): string {
     return `nonce=${nonce}&timestamp=${timestamp}&sign=${getMd5(signStr)}`;
 }
 
-// 默认超时时间（毫秒）
 export const DEFAULT_TIMEOUT = 10000;
 
 export type LogMethod = (message: string, ...args: any[]) => void;
 
-// 调用方所在进程提供的依赖。主进程查进程内的访问授权和证书信任；Proxy 用播放会话里的值。
-// 跟随重定向时按新的 baseUrl 再取一次。
 export interface RequestContext {
-    // 访问授权 Cookie，没有时返回空串。
     accessCookie(baseUrl: string): string;
-    // 是否跳过证书校验，即证书信任的结果。
     skipVerify(baseUrl: string): boolean;
     log: { warn: LogMethod; error: LogMethod; debug?: LogMethod };
-    // 校验证书用的 CA 列表，不传时用 Node 自带的。Proxy 传入加上系统证书库的列表。
     ca?: string[];
 }
 
-// keepAlive 的连接池按 TLS 设置复用，不每次请求新建：常驻的 Proxy 里新建不销毁会让空闲连接越积越多。
-// CA 列表按引用区分（Proxy 一直用同一个列表），列表不再被引用时连接池随之回收。
 const agentsWithoutCa = new Map<string, https.Agent>();
 const agentsByCa = new WeakMap<string[], Map<string, https.Agent>>();
 
@@ -105,7 +92,6 @@ function httpsAgent(rejectUnauthorized: boolean, ca: string[] | undefined, timeo
     return agent;
 }
 
-// API请求函数
 export async function request<T = any>(
     context: RequestContext,
     baseUrl: string,
@@ -114,7 +100,7 @@ export async function request<T = any>(
     token: string,
     data?: any,
     extraHeaders?: Record<string, string>,
-    axiosConfig?: Record<string, any>, // 外部传入的 axios 配置
+    axiosConfig?: Record<string, any>,
     timeout: number = DEFAULT_TIMEOUT,
     tryTimes: number = 5,
 ): Promise<ApiResponse<T>> {
@@ -122,7 +108,7 @@ export async function request<T = any>(
     const fullUrl = normalizedBaseUrl + url;
     if (method === HttpMethod.POST || method === HttpMethod.PUT) {
         data = data || {};
-        data["nonce"] = generateRandomDigits(); // POST/PUT请求添加随机数防重放
+        data["nonce"] = generateRandomDigits();
     }
 
     const authx = genFnAuthx(url, data);
@@ -135,15 +121,12 @@ export async function request<T = any>(
         "Cookie": composeCookieHeader(context.accessCookie(normalizedBaseUrl), extraHeaders?.Cookie),
     };
 
-    // 根据URL是否已被信任来决定是否验证证书
     const shouldIgnoreCert = context.skipVerify(normalizedBaseUrl);
 
     const config = {
         headers,
         timeout: timeout,
-        // 禁止 Axios 自动处理重定向，手动处理
         maxRedirects: 0,
-        // 允许 3xx 状态码进入 .then() 而不是 .catch()
         validateStatus: (status: number) => status >= 200 && status < 400,
         httpsAgent: httpsAgent(!shouldIgnoreCert, context.ca, timeout),
         ...axiosConfig
@@ -166,11 +149,9 @@ export async function request<T = any>(
                 context.log.warn(`检测到重定向 (${response.status}) -> ${location}`);
 
                 if (location) {
-                    // 1. 解析新地址
                     let newBaseUrl = normalizedBaseUrl;
                     let newUrlPath = location;
 
-                    // 如果是绝对路径 (http开头)，重新拆解 baseUrl 和 path
                     if (location.startsWith('http')) {
                         const parsedUrl = new URL(location);
                         newBaseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
@@ -197,18 +178,16 @@ export async function request<T = any>(
                 }
             }
 
-            // Axios 允许 header 值为多种类型；HTTP Content-Type 只按字符串处理。
             const contentType = response.headers['content-type'];
             if (typeof contentType === 'string' && !contentType.includes('application/json')) {
                 return {
                     success: true,
-                    data: response.data as any, // 直接返回原始数据
+                    data: response.data as any,
                 };
             }
 
             const res = response.data;
 
-            // 处理签名错误的重试逻辑
             if (res.code === 5000 && res.msg === 'invalid sign') {
                 if (attempt >= tryTimes) {
                     return {
@@ -218,13 +197,11 @@ export async function request<T = any>(
                 }
 
                 context.log.warn(`fn_api 请求时签名错误，重试中 attempt = ${attempt + 1}, path: ${url}`);
-                await setTimeout(100); // 等待100ms
-                continue; // 继续下一次循环
+                await setTimeout(100);
+                continue;
             }
 
-            // 处理业务错误
             if (res.code !== 0) {
-                // 注意：如果重定向返回 HTML，res.code 会是 undefined，这里要小心
                 context.log.error(`fn_api 请求失败`, res);
                 return { success: false, message: res.msg || `HTTP Error ${response.status}` };
             }
@@ -236,26 +213,21 @@ export async function request<T = any>(
 
         } catch (error: any) {
             const errorCode = error.code || 'UNKNOWN';
-            // 优先获取 error.message，因为 connection error 没有 response
             const errorMsg = error.message;
             const responseStatus = error.response?.status ?? '无响应';
 
             context.log.error(`请求异常: [${errorCode}] ${errorMsg} | HTTP: ${responseStatus} | path: ${url}`);
 
-            // 检查是否为证书验证错误且URL未被信任
             if (isCertificateError(error) && !context.skipVerify(normalizedBaseUrl)) {
                 context.log.warn(`检测到证书验证错误: code: ${errorCode}, msg: ${errorMsg}, path: ${url}`);
 
-                // 返回特殊的证书错误响应，让上层处理
                 return {
                     success: false,
                     message: errorMsg,
-                    // 添加一个特殊标识表示这是证书错误
                     certificateError: true
                 } as ApiResponse<T> & { certificateError?: boolean };
             }
 
-            // 最后一次尝试时返回错误。协议不匹配重试也不会变，不再尝试。
             if (attempt >= tryTimes || isHttpsPortMismatch(errorMsg)) {
                 return { success: false, message: errorMsg };
             }
@@ -264,7 +236,6 @@ export async function request<T = any>(
         }
     }
 
-    // 这行代码理论上不会执行到，但为了类型安全加上
     return {
         success: false,
         message: '重试逻辑异常'

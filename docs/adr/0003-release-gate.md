@@ -1,19 +1,22 @@
 # 发版门禁：冒烟测试全部通过才发布
 
-更新检查只看正式 Release，启动不了的安装包一旦公开就会提示给所有用户升级。所以合并 Release PR 后，`release.yml` 先建 draft Release 并打 tag，再调用 `build-and-smoke.yml` 三平台构建、5 个安装包跑冒烟测试；全部成功后 `publish` 核对安装包名和更新元数据，上传冒烟测试用过的那份 `<platform>-build` artifact，再把 Release 转为正式。GITHUB_TOKEN 创建的 Release 不触发其它 workflow，所以构建、冒烟测试和上传只能用 `needs` 接在同一个 workflow 里。这些依赖由 `tests/releaseGate.test.cjs` 读 workflow 文件检查。
+更新检查只看正式 Release，启动不了的安装包一旦公开就会提示给所有用户升级。所以合并 Release PR 后，`release.yml` 先建 draft Release 并打 tag，再调用 `build-and-smoke.yml` 三平台构建、5 个安装包跑冒烟测试；全部成功后 `publish` 核对安装包名和更新元数据，上传冒烟测试用过的那份 `<platform>-build` artifact，再把 Release 转为正式。GITHUB_TOKEN 创建的 Release 不触发其它 workflow，所以构建、冒烟测试和上传只能用 `needs` 接在同一个 workflow 里。这些依赖由 `tests/releaseGate.test.cjs` 读 workflow 文件检查，它还核对 workflow 里的平台、目标和安装包名与 `tests/smoke/targets.cjs` 一致，加平台时漏改哪一处都会失败。
+
+- `release.yml` 里只有一个调用 `build-and-smoke.yml` 的 job，没有直接调用 `build.yml` 的 job：后者构建的安装包没经过冒烟测试；同一次运行里调用两次会上传同名的 `<platform>-build`，`publish` 分不清是哪一份。
+- 手动触发 `release.yml` 只构建和冒烟测试，不发布：`release-please` 只在 push 时运行，手动触发时 `release_created` 为空，`publish` 跟着跳过。
 
 ## 更新元数据
 
 应用内更新从最新正式 Release 下载 `latest.yml`（Windows）、`latest-linux.yml`（Linux x64）和 `latest-linux-arm64.yml`（Linux arm64），按里面的文件名和 sha512 下载、校验安装包。Release 转为正式时缺其中一个，那个平台的客户端就查不到更新或更新失败，所以 `publish` 在 5 个安装包之外再核对这 3 个文件，缺一个就不发布。
 
-- 元数据由 electron-builder 按 `package.json` 的 `build.publish`（generic，地址是本仓库的 `releases/latest/download/`）生成；构建用 `--publish never`，只生成不上传。
+- 元数据由 electron-builder 按 `package.json` 的 `build.publish`（generic，地址是本仓库的 `releases/latest/download/`）生成；构建用 `--publish never`，只生成不上传。没有 publish 配置就不生成元数据。元数据里的 `url` 是相对文件名，客户端按 generic 地址拼出最新正式 Release 的下载链接。
 - `build.yml` 打包之后、上传 artifact 之前运行 `scripts/check-update-metadata.cjs`，核对 `latest.yml`（Windows）、`latest-linux.yml` 和 `latest-linux-arm64.yml`（Linux）里的文件名、size 和 sha512 与安装包一致，不一致就让构建失败。核对过的元数据和安装包一起放进 `<platform>-build` artifact，冒烟测试和发布用的都是这一份。不要在 `publish` 里重新生成或重新核对元数据，也不要另外构建。
 - Linux x64 和 arm64 分两次构建写到同一个 `release` 目录，文件名不同，互不覆盖。
 - macOS 的包没有 Developer ID 签名，不做应用内更新，继续手动更新，`latest-mac.yml` 不核对，上不上传都不影响门禁。
 
 ## Release PR
 
-release-please 在 push 到 `main` 时维护 Release PR，版本号和 `CHANGELOG.md` 只由它改。`release.yml` 不对 Release PR 构建。Release PR 由 GITHUB_TOKEN 开，会触发 `pull_request` workflow，但要维护者批准后才运行；它总会改 `package.json`，批准后 `smoke-test.yml` 测 5 个目标。合并前先批准并等这些检查通过。
+release-please 在 push 到 `main` 时维护 Release PR，版本号和 `CHANGELOG.md` 只由它改。`release.yml` 不对 Release PR 构建（2026-11-08 维护者决定），只在发版和手动触发时构建，构建的是 release-please 打 tag 的提交或当前提交。Release PR 由 GITHUB_TOKEN 开，会触发 `pull_request` workflow，但要维护者批准后才运行；它总会改 `package.json`，批准后 `smoke-test.yml` 测 5 个目标。合并前先批准并等这些检查通过。
 
 ## 只用 squash 合并
 

@@ -15,4 +15,6 @@ status: accepted
 ## 脱敏与 `NOFORMAT`
 
 - `LogLevel.NOFORMAT` 只省略时间戳和日志级别前缀（用于转发 Proxy 输出），但仍经过 `maskStringByPatterns` 脱敏，不能绕过脱敏直接落盘。
+- 脱敏总是开启（`maskingEnabled`），不随日志级别关闭：调试日志同样会写进持久化的日志文件。
+- IP 地址只保留前两段。匹配 IP 的正则不用 `\b`：URL 编码的 `%2F192.168.0.1` 里 `F` 和 `1` 之间没有词边界，改用前后不是数字或点的环视。
 - 脱敏过程按 fail-closed 处理：一旦脱敏抛出异常，返回 `[MASKING_ERROR: ...]` 而不是原始数据，避免敏感信息在异常路径泄漏。
