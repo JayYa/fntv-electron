@@ -1,6 +1,6 @@
 ---
 name: delete-comment
-description: Audit the code comments in a scope, move decision records into ADRs, file issues for excuses, delete them all and tighten the comment baseline.
+description: Audit the code comments in a scope, move decision records into ADRs, file issues for excuses and bugs found on the way, delete them all and tighten the comment baseline.
 disable-model-invocation: true
 ---
 
@@ -11,10 +11,11 @@ Code carries no comments (ADR-0007). `local/no-comments` (`lint/no-comments.mjs`
 ## 1. List the comments
 
 ```bash
-npx eslint --rule '{"local/no-comments": ["error", {"baseline": {}}]}' -f unix <scope>
+pnpm install --frozen-lockfile   # a fresh worktree has no node_modules
+pnpm exec eslint --rule '{"local/no-comments": ["error", {"baseline": {}}]}' <scope>
 ```
 
-Each line is one comment. Read every comment in its code, not from the list alone: whether a comment repeats the code or records something the code can't show depends on the code beside it. Directives (`eslint-*`, `global`, `exported`, `@ts-*`) are not counted and stay.
+Each `local/no-comments` line is one comment, listed under its file as `line:column`. Read every comment in its code, not from the list alone: whether a comment repeats the code or records something the code can't show depends on the code beside it. Directives (`eslint-*`, `global`, `exported`, `@ts-*`) are not counted and stay.
 
 ## 2. Classify every comment
 
@@ -31,14 +32,14 @@ A comment that is both an excuse and a decision record is an excuse: the issue c
 
 Read `docs/adr/` first and add to the ADR that already covers the area (ADR-0008 lint rules, ADR-0009 `scripts/`, ADR-0010 preload and login page, ADR-0011 platform facts); start a new numbered ADR only for an area none covers. Follow the existing ADR style: `status` frontmatter, Chinese prose, file names and identifiers in inline code, issue numbers kept. Group by topic, not by source file, and drop what is now a tautology once it sits next to related facts. If an ADR contradicts the comment, surface the conflict instead of picking one. Done when every decision record's content is findable in an ADR.
 
-## 4. File the excuses
+## 4. File the issues
 
-One issue per hacky implementation (several comments about the same workaround share an issue), on `JayYa/fntv-electron` as in `docs/agents/issue-tracker.md`, labelled `needs-triage`. The body names the files and functions, quotes the deleted comment, and says what a proper fix would remove. `gh` often times out here: before retrying a failed create, check with `gh issue list --search "<title>"`.
+One issue per hacky implementation (several comments about the same workaround share an issue), on `JayYa/fntv-electron` as in `docs/agents/issue-tracker.md`, labelled `needs-triage`. The body names the files and functions, quotes the deleted comment, and says what a proper fix would remove. Every bug or dead code you spotted while reading the scope gets its own issue the same way, with or without a comment beside it; the body names the files and functions, the evidence, and the proper fix. `gh` often times out here: before retrying a failed create, check with `gh issue list --search "<title>"`. Done when every problem the report mentions has an issue link.
 
 ## 5. Delete and tighten
 
 ```bash
-npx eslint --fix --rule '{"local/no-comments": ["error", {"baseline": {}, "autofix": true}]}' <scope>
+pnpm exec eslint --fix --rule '{"local/no-comments": ["error", {"baseline": {}, "autofix": true}]}' <scope>
 pnpm run comments:baseline
 ```
 
