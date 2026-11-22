@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
+import semver from 'semver';
 import { getAppDownloadProxyConfig } from '../fn_config/settings';
 import log from '../logger';
 import {
@@ -18,13 +19,6 @@ import { DownloadProgress, InAppUpdate } from './inAppUpdate';
 import { isPlaying, onPlaybackEnded } from '../playback/playbackState';
 import { onQuitStarted } from '../quit/quitCoordinator';
 import { currentArch, currentPlatform, inAppUpdateAvailability } from '../../public/platform';
-
-let semver: any;
-try {
-    semver = require('semver');
-} catch {
-    semver = null;
-}
 
 const UPDATE_REPOSITORY = { owner: 'JayYa', repo: 'fntv-electron' } as const;
 
@@ -194,27 +188,7 @@ export class UpdateChecker {
     }
 
     private isNewer(latestVersion: string): boolean {
-        if (semver) {
-            return semver.gt(latestVersion, this.currentVersion);
-        }
-        return this.compareVersions(latestVersion, this.currentVersion) > 0;
-    }
-
-    compareVersions(version1: string, version2: string): number {
-        const v1Parts = version1.split('.').map(Number);
-        const v2Parts = version2.split('.').map(Number);
-        
-        const maxLength = Math.max(v1Parts.length, v2Parts.length);
-        
-        for (let i = 0; i < maxLength; i++) {
-            const v1Part = v1Parts[i] || 0;
-            const v2Part = v2Parts[i] || 0;
-            
-            if (v1Part > v2Part) return 1;
-            if (v1Part < v2Part) return -1;
-        }
-        
-        return 0;
+        return semver.gt(latestVersion, this.currentVersion);
     }
 
     getDownloadUrl(assets: GitHubAsset[], version: string): string | null {

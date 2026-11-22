@@ -176,6 +176,9 @@ for (const [tagName, current, hasUpdate] of [
     ['v2.7.0', '2.7.0', false],
     ['v2.6.2', '2.7.0', false],
     ['v2.10.0', '2.9.0', true],
+    ['v2.7.0', '2.7.0-beta.1', true],
+    ['v2.7.0-beta.1', '2.7.0', false],
+    ['v2.7.0-beta.2', '2.7.0-beta.1', true],
 ]) {
     test(`release tag ${tagName} against installed ${current} reports hasUpdate ${hasUpdate}`, async (t) => {
         const { checker } = setupUpdateChecker(t, { version: current, respond: () => release(tagName) });
