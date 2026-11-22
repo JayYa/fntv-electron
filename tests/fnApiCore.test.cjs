@@ -244,3 +244,37 @@ test('a request expecting raw data still reports an fnAPI error answered as JSON
 
     assert.deepEqual(await nas.call('raw'), { success: false, message: 'token expired' });
 });
+
+test('following a redirect to another NAS address logs neither its host nor its port', async (t) => {
+    withoutElectron(t);
+    const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
+    const listen = async (handler) => {
+        const server = http.createServer(handler);
+        await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+        t.after(() => new Promise((resolve) => server.close(resolve)));
+        return server.address().port;
+    };
+    const targetPort = await listen((req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ code: 0, msg: '', data: { ok: true } }));
+    });
+    const target = `http://localhost:${targetPort}`;
+    const sourcePort = await listen((req, res) => {
+        res.statusCode = 302;
+        res.setHeader('Location', `${target}/v/api/v1/user/info?from=moved`);
+        res.end();
+    });
+    const logged = [];
+    const record = (...args) => logged.push(args.map(String).join(' '));
+    const context = { accessCookie: () => '', skipVerify: () => false, log: { warn: record, error: record } };
+
+    const result = await request(context, `http://127.0.0.1:${sourcePort}`, '/v/api/v1/user/info', HttpMethod.GET, 'token-1');
+
+    assert.deepEqual(result, { success: true, data: { ok: true }, moveUrl: target });
+    assert.ok(logged.length > 0, 'the redirect was not logged');
+    for (const line of logged) {
+        assert.doesNotMatch(line, /localhost/);
+        assert.doesNotMatch(line, new RegExp(String(targetPort)));
+        assert.doesNotMatch(line, /from=moved/);
+    }
+});

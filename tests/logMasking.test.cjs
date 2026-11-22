@@ -37,6 +37,12 @@ test('masks a host name inside a URL-encoded redirect_uri', () => {
     assert.doesNotMatch(masked, /mynas/);
 });
 
+test('masks a LAN host name in a URL that has a path', () => {
+    const masked = maskStringByPatterns('go http://nas.local:5666/v/api then http://fnnas/v');
+    assert.doesNotMatch(masked, /nas\.local/);
+    assert.doesNotMatch(masked, /fnnas/);
+});
+
 test('masks usernames in logged objects', () => {
     assert.doesNotMatch(JSON.stringify(maskSensitiveData({ username: 'someone-private' })), /someone-private/);
 });
