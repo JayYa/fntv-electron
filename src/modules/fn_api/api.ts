@@ -205,5 +205,3 @@ export class ApiService extends FnApiClient {
     getUserInfoCached = this.createCachedFunction(this.getUserInfo.bind(this), 'getUserInfo', 600);
 
 }
-
-export * from './core/types';
