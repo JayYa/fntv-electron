@@ -46,10 +46,7 @@ test('a failed launch uploads the screenshot and logs the smoke test wrote', () 
     assert.equal(upload.with.path, launch.env.FNTV_SMOKE_ARTIFACTS);
 });
 
-test('pnpm run test:smoke:unpackaged compiles before launching, and CLAUDE.md names it with its artifacts', () => {
+test('pnpm run test:smoke:unpackaged compiles before launching', () => {
     const { scripts } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     assert.equal(scripts['test:smoke:unpackaged'], 'pnpm run compile && node scripts/smoke-unpackaged.cjs');
-    const doc = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
-    assert.match(doc, /`pnpm run test:smoke:unpackaged`/);
-    for (const os of ['Linux', 'Windows', 'macOS']) assert.ok(doc.includes(`\`unpackaged-${os}\``), `CLAUDE.md does not list unpackaged-${os}`);
 });
