@@ -28,7 +28,6 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
     class FakeBrowserWindow extends EventEmitter {
         constructor() {
             super();
-            // 登录窗口最先创建，登录成功后才创建主窗口。
             if (oauthWindow) mainWindow = this;
             else oauthWindow = this;
             this.loaded = [];
@@ -102,7 +101,6 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
 
     useFakeElectron(t, electronMock);
 
-    // 假 NAS：用户信息接口接受任何 token，测试只看发给了谁、发了哪个 token。
     const originalAxiosGet = axios.get;
     axios.get = async (url, config) => {
         nasRequests.push({ url, token: config.headers.Authorization });

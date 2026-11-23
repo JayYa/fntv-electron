@@ -74,7 +74,6 @@
     "tests/eslintSafeStorageRules.test.cjs": 1,
     "tests/fileSize.test.cjs": 1,
     "tests/fnApiCore.test.cjs": 2,
-    "tests/fnIdLogin.test.cjs": 2,
     "tests/helpers/ciCache.cjs": 3,
     "tests/helpers/credentialConfig.cjs": 4,
     "tests/helpers/fakeDirectLink.cjs": 6,
