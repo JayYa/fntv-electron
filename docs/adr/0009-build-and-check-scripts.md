@@ -39,6 +39,18 @@ electron-builder 打包后，核对 `latest*.yml` 里的安装包文件名、siz
 
 CI 的 Electron 下载缓存。key 只取 `package.json` 里的版本号，安装依赖之前也能算出来；Electron zip 只对一种架构有用，key 带架构。缓存目录是 `@electron/get` 不传 `cacheRoot` 时的默认目录（`env-paths('electron').cache`），和 app-builder-lib 的 `defaultElectronGetCacheRoot` 相同。`@electron/get` 即使命中缓存，也每次联网下载 `SHASUMS256.txt` 校验，GitHub 504 时打包照样失败；app-builder-lib 26.18.0 会读缓存根目录下的 `SHASUMS256.txt-<版本>` 离线校验，所以打包前用 electron 包自带的 `checksums.json` 写这份文件。
 
+## CI 安装依赖和 workflow 的约定
+
+- `ci.yml` 和 `build.yml` 共用 composite action `.github/actions/install-dependencies`：两份各写一遍时 `build.yml` 漏改过一次（#143 只改了 `ci.yml`），Renovate PR #139 的构建因此失败。
+- Electron 二进制由安装依赖之后的单独步骤（`node node_modules/electron/install.js`）带缓存和重试下载（2026-11-09，PR #140、#139 遇到 504）。electron 42 起没有安装脚本，`index.js` 在二进制不在时自己运行 `install.js` 下载，只试一次，不重试；预先下载让测试和打包不走这条路径。electron 42 起也不读 `ELECTRON_SKIP_BINARY_DOWNLOAD`。electron 包重新加回安装脚本或去掉 `install.js` 时 `tests/ciElectronDownload.test.cjs` 失败，提醒重新核对下载步骤。下载步骤设 `DEBUG=@electron/get:*`，日志里能看到 `Cache hit` / `Cache miss`。
+- Electron 下载缓存是单步 `actions/cache`，job 结束时由 post 步骤保存（2026-11-14），key 见上文 `ci-download-cache.cjs`。
+- composite action 的步骤不支持 `timeout-minutes`，写了也不生效；其中的 `run` 步骤必须写 `shell`，Windows 上 bash 语法也靠它。
+- 第三方 action 固定到 commit SHA；本仓库的 action 和可复用 workflow 随提交一起变，不固定 SHA，但文件必须存在。
+- 提交信息、PR 标题、分支名可以带 shell 语法，直接展开进 `run` 会被执行，所以先放进 `env:`，再用 `"$VAR"` 读。
+- `ci.yml` 对任何 base 分支的 PR 都跑：堆叠 PR 的 base 不是 `main`。
+- `tests/standards.test.cjs` 运行文档里的“验证：”命令：grep 和 git grep 用退出码 0 和 1 表示有无结果，其它退出码说明命令本身坏了。Windows 上 PATH 里的 bash 可能是 WSL，所以用 Git 自带的。文档写“`<文件>.yml` 的 `<名字>`”时，名字是那个 workflow 的触发事件、job id 或 step 的 name，测试核对它存在。
+- 同一文件还核对 electron 的二进制解压完整：解压完才写 `path.txt`，曾经解压器在 Node 26 上读不出 zip 内容却以 0 退出，`dist` 里只剩空的 `locales`。按需下载时 `index.js` 先往 stdout 打下载信息，可执行文件路径在最后一行。
+
 ## `install-smoke-deps.cjs`
 
 冒烟测试 job 只装 `tests/smoke/` 用到的 npm 包，不跑完整的 `pnpm install`。版本和 integrity 取自 `pnpm-lock.yaml`，从 registry 下载锁定版本的 tarball，核对 sha512 后解压；只接受锁文件里没有依赖的包，`package.json` 里写的版本必须是锁文件里那个。不读 `.npmrc`（CI 上已删掉），本地要用镜像时设 `npm_config_registry`。临时目录放在 `node_modules` 下、和目标同盘：Git 自带的 GNU tar 把 `D:\…` 这样的盘符路径当成远程主机，只能给相对路径。

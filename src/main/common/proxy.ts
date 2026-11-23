@@ -1,5 +1,3 @@
-// Proxy 子进程的生命周期：用 utilityProcess 启动，等它回报就绪，意外退出时重启（ADR-0004、docs/external-runtime.md）。
-// 视频流量只在 Proxy 子进程和 MPV 之间，不经过主进程。
 import { app, dialog, utilityProcess, UtilityProcess } from 'electron';
 import * as path from 'node:path';
 import * as log from '../../modules/logger';
@@ -8,19 +6,16 @@ import { writeProxyLog } from '../../modules/proxy_service/log';
 import { removeLegacyProxySecret } from './legacyProxySecret';
 import { PlaybackSessionInput, ProxyControlClient, ProxyPlaybackSession } from './proxySession';
 
-// 编译后在 dest/modules/proxy_service/child.js，打包后在 app.asar 里的同一位置。
 const CHILD_ENTRY = path.join(__dirname, '..', '..', 'modules', 'proxy_service', 'child.js');
 const READY_TIMEOUT_MS = 10000;
 const RESTART_DELAY_MS = 3000;
 const MAX_RESTART_ATTEMPTS = 5;
-// 重启后连续运行这么久，重启次数清零。
 const RESTART_COUNT_RESET_MS = 60000;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
 interface RunningProxy {
     child: UtilityProcess;
     control: ProxyControlClient;
-    // Proxy 就绪时报告的实际端口，每次启动都可能不同。
     port: number;
 }
 
@@ -39,7 +34,6 @@ function launch(): Promise<RunningProxy> {
             reject(new Error(`Proxy 在 ${READY_TIMEOUT_MS / 1000} 秒内没有就绪`));
         }, READY_TIMEOUT_MS);
 
-        // 子进程自己的输出只有未捕获异常这类情况，日志走 IPC。
         child.stdout?.on('data', (data: Buffer) => log.info('[Proxy] stdout:', data.toString('utf8')));
         child.stderr?.on('data', (data: Buffer) => log.error('[Proxy] stderr:', data.toString('utf8')));
         child.on('message', (message: ProxyMessage) => {
@@ -79,13 +73,11 @@ function launch(): Promise<RunningProxy> {
 
 async function startOnce(): Promise<void> {
     running = await launch();
-    // 冒烟测试按原文解析这一行拿实际端口（tests/smoke/installer.smoke.cjs 的 PROXY_READY_PATTERN），改措辞要同步改那边。
     log.info(`Proxy 已就绪，端口 ${running.port}`);
     if (restartCountResetTimer) clearTimeout(restartCountResetTimer);
     restartCountResetTimer = setTimeout(() => { restartAttempts = 0; }, RESTART_COUNT_RESET_MS);
 }
 
-// Proxy 起不来时应用无法继续：弹窗说明，用户关掉弹窗后退出。
 async function showErrorAndQuit(title: string, message: string): Promise<void> {
     try {
         await dialog.showMessageBox({ type: 'error', title, message, buttons: ['退出应用'] });
@@ -112,7 +104,6 @@ async function restartAfterCrash(): Promise<void> {
     await showErrorAndQuit('应用即将退出', '飞牛影视的播放服务（Proxy）多次启动失败，无法继续运行。');
 }
 
-// 启动时调用一次。失败时弹窗说明并退出应用，同时抛出错误，调用方不再继续启动。
 export async function startProxyProcess(): Promise<void> {
     removeLegacyProxySecret(app.getPath('userData'), log);
     try {
@@ -125,7 +116,6 @@ export async function startProxyProcess(): Promise<void> {
     }
 }
 
-// Proxy 就绪前（包括崩溃后重启期间）调用会失败，不等待。
 export async function createPlaybackSession(input: PlaybackSessionInput): Promise<ProxyPlaybackSession> {
     const current = running;
     if (!current) throw new Error('Proxy 未运行');
@@ -133,7 +123,6 @@ export async function createPlaybackSession(input: PlaybackSessionInput): Promis
     return { session, port: current.port };
 }
 
-// 应用退出前调用。
 export async function shutdownProxyProcess(): Promise<void> {
     stopping = true;
     if (restartCountResetTimer) clearTimeout(restartCountResetTimer);

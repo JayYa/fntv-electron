@@ -4,10 +4,6 @@ import { request, HttpMethod } from '../../../modules/fn_api/request';
 import * as log from '../../../modules/logger';
 import type { GrantedBaseUrl } from '../../common/currentLogin';
 
-/**
- * handleFnIdLogin 和消息处理共用的东西。oauthWindow 和 authRequested 两边都会读写当前值，
- * 所以按 flow.xxx 读取，不要解构。
- */
 export interface FnIdOauthFlow {
     readonly oauthWindow: BrowserWindow | null;
     authRequested: boolean;
@@ -18,29 +14,23 @@ export interface FnIdOauthFlow {
     reject(reason: unknown): void;
 }
 
-/**
- * 创建一次登录用的 bridge 消息处理函数。
- */
 export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any) => Promise<void> {
     const { oauthSession, establishTargetSession, completeLogin, adoptOauthBaseUrl, reject } = flow;
     let baseUrl = '';
     let cookieString = '';
     let sysConfigLoaded = false;
 
-    // 处理从 WebView 收到的消息
     async function handleMessage(messageData: any) {
         try {
             const type = messageData.type;
             const url = messageData.url || '';
 
-            // 处理 XHR 拦截（获取 Cookie）
             if (type === 'XHR' && url.includes('/sac/rpcproxy/v1/new-user-guide/status')) {
                 const cookie = messageData.cookie;
                 if (cookie) {
                     cookieString = cookie;
                     log.info('[FN ID] 获取到 Cookie');
 
-                    // 获取 sysConfig
                     if (!sysConfigLoaded) {
                         sysConfigLoaded = true;
                         try {
@@ -53,9 +43,8 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                 }
             }
 
-            // 处理 SysConfig 响应（来自 WebView 内部 fetch）
             if (type === 'SysConfig') {
-                if (sysConfigLoaded && baseUrl) return; // 已处理过
+                if (sysConfigLoaded && baseUrl) return;
                 const body = messageData.body;
                 if (!body) return;
 
@@ -71,7 +60,6 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                     const appId = data.nas_oauth.app_id;
                     const pageOrigin = new URL(flow.oauthWindow!.webContents.getURL()).origin;
 
-                    // 确定 baseUrl
                     baseUrl = adoptOauthBaseUrl(data.nas_oauth.url || '', pageOrigin);
 
                     if (baseUrl && appId) {
@@ -80,7 +68,6 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                         const targetUrl = `${baseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
                         log.info('[FN ID] 跳转到 OAuth 授权页面');
 
-                        // 转发 Cookie 到新域名
                         if (cookieString) {
                             const domain = baseUrl.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
                             const cookies = cookieString.split(';');
@@ -96,7 +83,6 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                                     }).catch(() => { });
                                 }
                             }
-                            // 确保 mode=relay 被设置
                             await oauthSession.cookies.set({
                                 url: baseUrl,
                                 name: 'mode',
@@ -114,26 +100,16 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                 }
             }
 
-            // 处理 OAuth 授权码响应
             if (type === 'Response' && url.includes('/oauthapi/authorize')) {
                 if (flow.authRequested) return;
 
-                let code = messageData.code;
-                if (!code && messageData.body) {
-                    try {
-                        const bodyJson = JSON.parse(messageData.body);
-                        code = bodyJson.data?.code;
-                    } catch {
-                        // 响应体不是 JSON 时没有授权码，按未取到处理。
-                    }
-                }
+                const code = messageData.code || authorizationCodeFromBody(messageData.body);
 
                 if (code) {
                     flow.authRequested = true;
                     log.info('[FN ID] 获取到授权码，开始换取 token');
 
                     try {
-                        // 使用 baseUrl 创建 API 实例并换取 token
                         const target = await establishTargetSession(baseUrl);
                         baseUrl = target.baseUrl;
                         const fnapi = new ApiService(baseUrl);
@@ -165,18 +141,15 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
         }
     }
 
-    // 通过 API 获取 sys_config（作为备选方案）
     async function handleSysConfig(cookie: string) {
         if (baseUrl && sysConfigLoaded) return;
 
-        // 从当前 URL 获取 baseUrl
         const currentUrl = flow.oauthWindow?.webContents.getURL() || '';
         if (!currentUrl) return;
 
         const parsed = new URL(currentUrl);
         const currentBaseUrl = `${parsed.protocol}//${parsed.host}`;
 
-        // 使用获取到的 Cookie，通过 API 获取 sys_config
         const extraHeaders: Record<string, string> = { 'Cookie': cookie + '; mode=relay' };
 
         const configResponse = await request(
@@ -200,7 +173,6 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                 const targetUrl = `${targetBaseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
                 log.info('[FN ID] 通过 API 获取 OAuth 配置，跳转到授权页面');
 
-                // 转发 Cookie
                 const domain = targetBaseUrl.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
                 const cookies = cookie.split(';');
                 for (const c of cookies) {
@@ -230,4 +202,13 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
     }
 
     return handleMessage;
+}
+
+function authorizationCodeFromBody(body: unknown): string | undefined {
+    if (typeof body !== 'string' || !body) return undefined;
+    try {
+        return JSON.parse(body).data?.code;
+    } catch {
+        return undefined;
+    }
 }

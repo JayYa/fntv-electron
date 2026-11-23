@@ -14,21 +14,14 @@ const {
 } = require('./helpers/updateChecker.cjs');
 const { deferred, startPlaying } = require('./helpers/fakeQuitApp.cjs');
 
-// 系统关机、重启或注销时放弃「退出时安装」（#192）。关机信号：Windows 是主窗口的 session-end，
-// Linux 是 powerMonitor 的 shutdown。events 按发生顺序记下：MPV 停止、进度回传完成、关 Proxy、开始安装、销毁托盘、进程退出。
-
 const WIN_ASSETS = ['FNMedia_2.7.0_win_x64.exe', 'FNMedia_2.7.0_win_x64.exe.blockmap', 'latest.yml'];
 const LINUX_ASSETS = ['FNMedia_2.7.0_linux_x86_64.AppImage', 'latest-linux.yml'];
 const ABANDONED = /放弃这次退出时安装/;
 
-// Electron 发关机信号时带的事件对象；我们不调用 preventDefault，不推迟关机
 const shutdownEvent = (extra = {}) => ({ ...extra, preventDefault() { throw new Error('不该推迟关机'); } });
 
-// 新版本提示点「下载并安装」，下载完成框点 choice，其它弹框点取消按钮。
-// 像主进程入口那样启动退出协调，并在主窗口创建后监听关机信号（src/main/main.ts）
 function setup(t, choice, platform = 'win32') {
     simulateHost(t, platform, 'x64');
-    // Linux 上应用内更新只在可写目录里的 AppImage 运行时提供
     if (platform === 'linux') runAsAppImage(t, tempDir(t));
     const env = setupUpdateChecker(t, {
         respond: () => release('v2.7.0', platform === 'linux' ? LINUX_ASSETS : WIN_ASSETS),
@@ -49,7 +42,6 @@ function setup(t, choice, platform = 'win32') {
         playback,
         sessionEnd,
         powerShutdown,
-        // 两种关机信号都发一遍
         bothShutdownSignals() {
             sessionEnd();
             powerShutdown();
@@ -57,7 +49,6 @@ function setup(t, choice, platform = 'win32') {
     };
 }
 
-// 手动检查、下载完成、在下载完成框做出选择，等选择生效
 async function downloadAndChoose(env, chosen) {
     await env.checker.manualCheckForUpdates();
     await waitFor(() => env.updater.downloads === 1);
@@ -68,7 +59,6 @@ async function downloadAndChoose(env, chosen) {
 const installOnQuitChosen = (env) => () =>
     env.dialogs.some((d) => d.title === '新版本已下载') && env.updater.autoInstallOnAppQuit === true;
 
-// quitAndInstall 一调用（安装已经开始）就收到两种关机信号
 function shutdownRightAfterInstallStarts(env) {
     const quitAndInstall = env.updater.quitAndInstall.bind(env.updater);
     env.updater.quitAndInstall = (...args) => {
@@ -110,7 +100,6 @@ test('a shutdown signal arriving while the quit is waiting for the progress repo
     const report = deferred();
     startPlaying(env.playback, env.events, report.promise);
 
-    // Linux 关机时 SIGTERM 先让客户端开始退出也一样
     requestQuit(env.app);
     await settle();
     env.powerShutdown();
@@ -147,16 +136,13 @@ test('a shutdown signal after restart and install now has started changes nothin
 
 test('a shutdown signal without install on quit chosen has no effect', async (t) => {
     const env = setup(t, '稍后提醒');
-    // 还没下载
     env.bothShutdownSignals();
 
-    // 下载中：electron-updater 的 autoInstallOnAppQuit 这时临时开着，不去动它
     await env.checker.manualCheckForUpdates();
     await waitFor(() => env.updater.downloads === 1);
     env.bothShutdownSignals();
     assert.equal(env.updater.autoInstallOnAppQuit, true);
 
-    // 下载完成、选了「稍后提醒」
     env.updater.finishDownload();
     await waitFor(() => env.dialogs.some((d) => d.title === '新版本已下载'));
     const dialogs = env.dialogs.length;
@@ -174,7 +160,6 @@ test('after giving up the install on quit, download and install again offers bot
     await downloadAndChoose(env, installOnQuitChosen(env));
     env.sessionEnd();
 
-    // 关机被取消、客户端还开着时，再点「下载并安装」不重新下载，直接问安装方式
     await env.checker.manualCheckForUpdates();
     await waitFor(() => env.updater.autoInstallOnAppQuit === true);
 

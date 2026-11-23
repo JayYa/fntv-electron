@@ -25,17 +25,10 @@ interface LoginData {
     useHttps?: boolean;
 }
 
-/**
- * 构建 FN Connect URL
- * FN ID 归一化为 https://5ddd.com/{fnid}
- */
 function buildFnConnectUrl(fnId: string): string {
     return `https://5ddd.com/${fnId.trim()}`;
 }
 
-/**
- * 处理 FN ID OAuth 登录流程
- */
 export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply> {
     const fnId = loginData.domain.trim();
     const fnConnectUrl = buildFnConnectUrl(fnId);
@@ -49,22 +42,19 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
     let trust = createFnIdTrust(fnConnectUrl);
 
     try {
-        // 创建 OAuth 登录窗口
         oauthWindow = new BrowserWindow({
             width: 800,
             height: 600,
-            show: false, // Wait for ready-to-show
+            show: false,
             title: 'FN ID 登录',
             autoHideMenuBar: true,
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
-                // 每次登录使用临时隔离会话，避免旧 token 被误判为本次登录结果。
                 partition: `fnid-oauth-${Date.now()}`,
             }
         });
 
-        // 平滑显示
         oauthWindow.once('ready-to-show', () => {
             oauthWindow?.show();
         });
@@ -83,7 +73,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
 
         oauthWindow.webContents.on('will-navigate', guardNavigation);
         oauthWindow.webContents.on('will-redirect', (event) => {
-            // FN Connect 用隐藏 iframe 探测 NAS 地址，子框架的跳转不算窗口导航。
             if (event.isMainFrame) guardNavigation(event);
         });
         oauthWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -101,7 +90,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
             return verifyAccess(targetBaseUrl, accessCode);
         }
 
-        // 为 FN Connect 域名设置 mode=relay Cookie
         await oauthSession.cookies.set({
             url: fnConnectUrl,
             name: 'mode',
@@ -110,7 +98,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
             secure: true,
         });
 
-        // 注册 JS bridge 用于 WebView 与主进程通信
         oauthWindow.webContents.on('did-finish-load', async () => {
             if (!oauthWindow) return;
             const pageUrl = oauthWindow.webContents.getURL();
@@ -155,7 +142,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
             }
         });
 
-        // 创建一个 Promise 来等待登录完成
         const loginPromise = new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
                 reject(new Error('FN ID 登录超时（120秒）'));
@@ -189,7 +175,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
                 }
             }
 
-            // 只记 Cookie 的域，不记值。登录走不通时靠这行判断是不是误拒。
             function logIgnoredTokenCookies(domains: Array<string | undefined>): void {
                 log.info(
                     `[FN ID] 忽略目标范围外的登录 Cookie，Cookie 域: ${domains.join(', ')}，`
@@ -252,7 +237,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
                 });
             });
 
-            // NAS 报告的 OAuth 地址不可用时，留在当前页面的 origin。
             function adoptOauthBaseUrl(reportedUrl: string, pageOrigin: string): string {
                 if (!reportedUrl || reportedUrl === '://') return pageOrigin;
                 const next = resolveFnIdOauthTrust(reportedUrl, trust);
@@ -275,11 +259,9 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
                 reject,
             });
 
-            // 监听 console 消息（JS bridge）
             oauthWindow!.webContents.on('console-message', (details) => {
                 const { frame, message } = details;
                 if (message.startsWith('__FNTV_BRIDGE__:')) {
-                    // 任何页面都能打印这个前缀，只听 NAS 页面的主框架。
                     const webContents = oauthWindow?.webContents;
                     if (!webContents || frame !== webContents.mainFrame) return;
                     if (!isFnIdNasPage(webContents.getURL(), trust)) return;
@@ -294,7 +276,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
                 }
             });
 
-            // 窗口关闭时取消登录
             oauthWindow!.on('closed', () => {
                 oauthWindow = null;
                 clearTimeout(timeout);
@@ -304,13 +285,10 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
             });
         });
 
-        // 加载 FN Connect URL
         oauthWindow.loadURL(fnConnectUrl);
 
-        // 等待登录完成
         await loginPromise;
 
-        // 关闭 OAuth 窗口
         if (oauthWindow && !oauthWindow.isDestroyed()) {
             oauthWindow.close();
         }
@@ -320,7 +298,6 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
         const isLoginError = error instanceof LoginFailedError;
         log.error('[FN ID] 登录失败:', isLoginError ? error.reason : error);
 
-        // 关闭 OAuth 窗口
         if (oauthWindow && !oauthWindow.isDestroyed()) {
             oauthWindow.close();
         }

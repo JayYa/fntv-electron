@@ -46,3 +46,5 @@ status: accepted
 - Proxy 没有独立日志文件，其日志经 IPC 由主进程以 `[Proxy]` 前缀写入 `app.log`，测试结束时从中提取生成 `proxy.log`。退出后检查 Proxy 停止时，若前面的在线检查未能拿到端口则直接失败，不去探测猜测的端口。
 - `window-all-closed` 监听断言防止重复注册（#76）：Electron 在加载客户端代码前会在 `lib/browser/init.ts` 注册一个默认监听（仅当它是唯一监听时调用 `app.quit()`）。测试通过函数源码匹配 `listenerCount('window-all-closed')`（Electron 45 起事件名使用反引号）将其排除；认不出时不静默忽略而是计入客户端监听，宁可断言失败也不漏掉重复监听。
 - 主进程未捕获异常断言会等到启动后至少 8 秒再检查，覆盖启动 3 秒后的首次自动检查更新。
+- Proxy 的实际端口取自主进程写的“Proxy 已就绪，端口 N”这一行（`tests/smoke/probes.cjs` 的 `PROXY_READY_PATTERN` 按原文匹配），改 `src/main/common/proxy.ts` 的措辞要同步改那边。
+- 未打包模式的 Electron 可执行文件由 `scripts/smoke-unpackaged.cjs` 解析好，经 `FNTV_SMOKE_EXECUTABLE` 传给 `tests/smoke/launch.cjs`：安装包冒烟 job 只装 `playwright-core`（`scripts/install-smoke-deps.cjs`），`launch.cjs` 不能加载 electron 包。未打包时日志不随 HOME 隔离，启动前清空 `log/`，免得读到上一次运行的“Proxy 已就绪”和图标路径。
