@@ -71,7 +71,7 @@ export function addTrustedHost(url: string): void {
 
     saveTrustedHostsToFile(trustedHosts);
 
-    log.info(`已添加信任主机: ${host}`);
+    log.info('已添加信任主机');
 }
 
 export function removeTrustedHost(url: string): void {
@@ -82,9 +82,9 @@ export function removeTrustedHost(url: string): void {
 
     if (deleted) {
         saveTrustedHostsToFile(trustedHosts);
-        log.info(`已移除信任主机: ${host}`);
+        log.info('已移除信任主机');
     } else {
-        log.warn(`尝试移除不存在的信任主机: ${host}`);
+        log.warn('尝试移除不存在的信任主机');
     }
 }
 
@@ -195,10 +195,10 @@ export async function showCertificateTrustDialog(
             if (result.checkboxChecked) {
                 addTrustedHost(url);
             }
-            log.info(`用户选择信任证书: ${host}, 记住选择: ${result.checkboxChecked}`);
+            log.info(`用户选择信任证书，记住选择: ${result.checkboxChecked}`);
             return true;
         } else {
-            log.info(`用户取消信任证书: ${host}`);
+            log.info('用户取消信任证书');
             return false;
         }
     } catch (error) {
