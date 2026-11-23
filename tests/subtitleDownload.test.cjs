@@ -27,7 +27,7 @@ function summary(lines) {
 test('the subtitle download summary counts existing files as skipped, new files as downloaded and server errors as failed', async (t) => {
     const log = recordingLog();
     useFakeElectron(t, { app: { getPath: () => os.tmpdir() } });
-    useFakeModule(t, '../logger', { __esModule: true, default: log });
+    useFakeModule(t, '../logger', log);
     const { ApiService } = require('../dest/modules/fn_api/api.js');
 
     const server = http.createServer((req, res) => {
