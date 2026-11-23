@@ -85,6 +85,61 @@ test('a failed cached call is not cached, so an immediate retry asks the NAS aga
     assert.equal(requests, 2);
 });
 
+test('a cached call still in flight after 30 seconds is reused instead of asking the NAS again', async (t) => {
+    withoutElectron(t);
+    const { FnApiClient } = require(path.join(CORE_DIR, 'apiClient.js'));
+    const { TtlCache } = require(path.join(CORE_DIR, 'ttlCache.js'));
+
+    let now = 1_000_000;
+    let requests = 0;
+    let releaseFirst;
+    let firstArrived;
+    const arrival = new Promise((resolve) => { firstArrived = resolve; });
+    const answer = (res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ code: 0, msg: '', data: { list: ['video'] } }));
+    };
+    const server = http.createServer((req, res) => {
+        requests += 1;
+        if (requests > 1) return answer(res);
+        releaseFirst = () => answer(res);
+        firstArrived();
+    });
+    const baseUrl = `http://127.0.0.1:${await listen(t, server)}`;
+    const api = new FnApiClient(nasContext(), baseUrl, 'token-1', new TtlCache({ now: () => now }));
+
+    const first = api.getStreamListCached('item-1');
+    await arrival;
+    now += 31_000;
+    const second = api.getStreamListCached('item-1');
+    releaseFirst();
+    const results = await Promise.all([first, second]);
+
+    assert.equal(requests, 1);
+    assert.deepEqual(results[1], results[0]);
+});
+
+test('clients sharing one cache reuse a cached call another client has in flight', async (t) => {
+    withoutElectron(t);
+    const { FnApiClient } = require(path.join(CORE_DIR, 'apiClient.js'));
+    const { TtlCache } = require(path.join(CORE_DIR, 'ttlCache.js'));
+
+    let requests = 0;
+    const server = http.createServer((req, res) => {
+        requests += 1;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ code: 0, msg: '', data: { list: ['video'] } }));
+    });
+    const baseUrl = `http://127.0.0.1:${await listen(t, server)}`;
+    const cache = new TtlCache();
+    const client = () => new FnApiClient(nasContext(), baseUrl, 'token-1', cache);
+
+    const [first, second] = await Promise.all([client().getStreamListCached('item-1'), client().getStreamListCached('item-1')]);
+
+    assert.equal(requests, 1);
+    assert.deepEqual(second, first);
+});
+
 // 常驻的 Proxy 每次 NAS 调用都新建 keepAlive 连接池会让空闲连接越积越多：同样的 TLS 设置共用一个连接池。
 test('requests to an HTTPS NAS with the same TLS settings reuse one connection', async (t) => {
     withoutElectron(t);
