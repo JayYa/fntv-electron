@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import tseslint from 'typescript-eslint';
 import noComments from './lint/no-comments.mjs';
+import noNasAddressLog from './lint/no-nas-address-log.mjs';
 
 const COMMENT_BASELINE = JSON.parse(fs.readFileSync(new URL('./lint/comment-baseline.json', import.meta.url), 'utf8'));
 
@@ -116,7 +117,14 @@ const NO_SHUTDOWN_LISTENER = {
     message: `系统关机信号（session-end、powerMonitor 的 shutdown）只在 ${QUIT_COORDINATOR_FILE} 监听（listenForSystemShutdown），不要自己监听。`
 };
 
+const INTERCEPTOR_FILE = 'src/main/handlers/core/interceptor.ts';
+const NO_BEFORE_REQUEST_LISTENER = {
+    selector: "MemberExpression[property.name='onBeforeRequest']",
+    message: `同一个 session 上 webRequest.onBeforeRequest 只保留最后注册的监听器（#302），拦截器用 ${INTERCEPTOR_FILE} 的 registerBeforeRequest 注册。`
+};
+
 const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
+const SRC_RULE_SYNTAX = [...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER];
 
 const NO_ELECTRON = {
     name: 'electron',
@@ -152,11 +160,13 @@ export default [
             sourceType: 'module'
         },
         plugins: {
-            '@typescript-eslint': tseslint.plugin
+            '@typescript-eslint': tseslint.plugin,
+            nas: { rules: { 'no-address-log': noNasAddressLog } }
         },
         rules: {
             ...sharedRules,
-            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
+            'nas/no-address-log': 'error',
+            'no-restricted-syntax': ['error', ...SRC_RULE_SYNTAX, NO_BEFORE_REQUEST_LISTENER],
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
         }
     },
@@ -169,7 +179,13 @@ export default [
     {
         files: [QUIT_COORDINATOR_FILE],
         rules: {
-            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX]
+            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_REQUEST_LISTENER]
+        }
+    },
+    {
+        files: [INTERCEPTOR_FILE],
+        rules: {
+            'no-restricted-syntax': ['error', ...SRC_RULE_SYNTAX]
         }
     },
     {
@@ -193,7 +209,7 @@ export default [
     {
         files: [PLATFORM_INDEX_FILE],
         rules: {
-            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...PLATFORM_BRANCH_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER],
+            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...PLATFORM_BRANCH_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER, NO_BEFORE_REQUEST_LISTENER],
             'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
         }
     },

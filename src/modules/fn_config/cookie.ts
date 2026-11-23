@@ -9,7 +9,7 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
     }
 
     if (!domain || typeof domain !== 'string' || !domain.startsWith('http')) {
-        log.warn('无效的域名格式:', domain);
+        log.warn('无效的域名格式，跳过恢复 cookies');
         return false;
     }
 
@@ -23,7 +23,7 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
         log.info('已保存的登录状态验证通过');
     }
 
-    log.info('从配置中恢复 cookies, domain:', domain);
+    log.info('从配置中恢复 cookies');
 
     const ses = session.fromPartition('persist:fntv');
     try {

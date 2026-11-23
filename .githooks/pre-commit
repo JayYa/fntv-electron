@@ -1,2 +1,5 @@
 #!/bin/sh
-exec node scripts/check-file-size.cjs
+status=0
+node scripts/check-file-size.cjs || status=1
+node scripts/lint-staged.cjs || status=1
+exit $status
