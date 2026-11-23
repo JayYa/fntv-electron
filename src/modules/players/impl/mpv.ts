@@ -25,7 +25,6 @@ export class MpvPlayer implements Player {
     private throttleInterval: number = 15000;
     private playlistItems: PlayItem[] = [];
     private playlistFilePath: string = '';
-    private stopRequested = false;
 
     constructor(config: Config) {
         this.config = {
@@ -49,7 +48,6 @@ export class MpvPlayer implements Player {
     }
 
     async playList(infos: PlayItem[], pos: number): Promise<boolean> {
-        this.stopRequested = false;
         try {
             const mpvArgs = [...this.config.extraArgs];
 
@@ -60,13 +58,7 @@ export class MpvPlayer implements Player {
                 socket: this.ipcSocket.path,
             };
 
-            const mpvInstance = new NodeMpv(mpvOptions, mpvArgs);
-            if (this.stopRequested) {
-                this.removeIpcSocket();
-                this.handleExit(0);
-                return false;
-            }
-            this.mpvInstance = mpvInstance;
+            this.mpvInstance = new NodeMpv(mpvOptions, mpvArgs);
 
             this.setupEventListeners();
 
@@ -412,7 +404,6 @@ export class MpvPlayer implements Player {
 
             this.handleExit(0);
         } else {
-            this.stopRequested = true;
             this.cleanupPlaylistFile();
         }
     }
