@@ -2,12 +2,12 @@
 
 ## 运行
 
-- `pnpm test`：编译到 `dest/` 后运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`，并加 `--test-timeout=30000`，和 `pnpm test` 一致。
+- `pnpm test`：编译到 `dest/`，用 `node node_modules/electron/install.js` 装好 Electron 二进制，再运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`，并加 `--test-timeout=30000`，和 `pnpm test` 一致。
 - `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还会被 `readdirSync` 加载。
 
 ### `Electron failed to install correctly`
 
-`tests/accessCodeSession.test.cjs` 在加载时报这个错，说明第一次 `require('electron')` 时按需下载或解压 Electron 二进制失败。这是环境问题，多半是网络。运行 `node node_modules/electron/install.js` 重新下载，看它的报错；镜像用 `ELECTRON_MIRROR` 环境变量。`node_modules/electron/path.txt` 存在、`dist/version` 和包版本一致才算解压完成。
+单独运行的测试（例如 `tests/accessCodeSession.test.cjs`）在加载时报这个错，说明第一次 `require('electron')` 时按需下载或解压 Electron 二进制失败。`pnpm test` 在运行测试前已经装好二进制，那里装不上时报的是 `install.js` 自己的错误。这是环境问题，多半是网络。运行 `node node_modules/electron/install.js` 重新下载，看它的报错；镜像用 `ELECTRON_MIRROR` 环境变量。`node_modules/electron/path.txt` 存在、`dist/version` 和包版本一致才算解压完成。
 
 ## `tests/*.test.cjs` 写法
 
