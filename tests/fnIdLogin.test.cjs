@@ -302,6 +302,9 @@ test('an authorization code the NAS refuses fails the login and logs the refusal
     assert.equal(result.ok, false);
     assert.match(result.error.message, /授权码已过期/);
     const refusal = errors.find((line) => line.includes('授权失败'));
+    assert.ok(refusal, errors.join('
+'));
     assert.match(refusal, /授权码已过期/);
-    assert.doesNotMatch(refusal, /nas\.example\.com|5667/);
+    const { hostname, port } = new URL(NAS);
+    assert.ok(!refusal.includes(hostname) && !refusal.includes(port), refusal);
 });
