@@ -1,7 +1,3 @@
-// 同步中途退出（断电、被杀）之后下次启动补完，结果和一次跑完相同。
-// 每个场景在用户配置里直接造出退出时会留下的磁盘状态：暂存目录 `.fntv-sync-*` 里半写的文件、
-// 建了一半的新插件目录、`target.json` 标记的目录替换（docs/external-runtime.md“用户配置同步”）、移开的旧目录、
-// 写进暂存但还没到位的安装记录。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,12 +13,10 @@ function half(text) {
     return text.slice(0, Math.ceil(text.length / 2));
 }
 
-// tree 里 dir 下的文件，路径去掉 dir 前缀。
 function inside(tree, dir) {
     return Object.fromEntries(Object.entries(subtree(tree, dir)).map(([file, content]) => [file.slice(dir.length + 1), content]));
 }
 
-// 第 n 个暂存项是一次目录替换：new 是建好的新目录，marked 时写了 target.json，movedOld 时旧目录已移进 old。
 function swap(user, n, dir, { fresh, marked = true, movedOld = false }) {
     const swapDir = path.join(user, STAGING, String(n));
     fs.mkdirSync(swapDir, { recursive: true });
@@ -31,13 +25,11 @@ function swap(user, n, dir, { fresh, marked = true, movedOld = false }) {
     if (movedOld) fs.renameSync(path.join(user, ...dir.split('/')), path.join(swapDir, 'old'));
 }
 
-// 用户配置里的 dir 已整体换成新版。
 function replaced(user, ref, dir) {
     fs.rmSync(path.join(user, ...dir.split('/')), { recursive: true, force: true });
     writeTree(path.join(user, ...dir.split('/')), inside(ref.after, dir));
 }
 
-// 除了安装记录，所有文件都已是新版（含删掉归档不再带的文件）。
 function everythingButRecord(user, ref) {
     for (const name of fs.readdirSync(user)) {
         if (name !== STAGING) fs.rmSync(path.join(user, name), { recursive: true, force: true });

@@ -39,3 +39,9 @@ status: accepted
 - 凭据回复按请求配对：连点历史或用户改了表单后，迟到的回复直接丢弃；用户动过表单后以用户输入为准。解不开的凭据回复里是空值，表单留空让用户手动输入。
 - FN ID 的判定只有一份（`src/public/fnId.ts`，不依赖 electron 和 Node 内置模块）：主进程直接导入，登录页经 preload 桥的 `electronAPI.isFnId` 同步调用。FN ID 会拼进 `https://5ddd.com/{fnId}`，只放行不改变 URL 结构的字符（6 到 30 位字母、数字、`_`、`-`）。FN Connect 页面的规则更严（小写字母开头，只含小写字母、数字和单个连字符），但那些规则是逐步加的，老 FN ID 可能不满足，这里不跟进，由 FN Connect 页面自己提示。
 - 应用更新下载加速地址留空时发空值，由主进程用默认地址；主进程下发的 `proxyUrl` 已回退到默认地址，保存后重新读取，回显实际生效的地址。
+
+## 主进程 IPC 处理器（`src/main/handlers/`）
+
+- `ipcMain.on` 的处理器抛错会变成主进程未捕获异常，`ipcMain.handle` 的错误由 Electron 转给调用方。所以 `registerHandler` 给 `on` 的处理器包一层，错误只记日志；`handle` 的处理器记日志后照常抛出。async 处理器 `await` 之前的部分仍是同步执行的，同样包在里面。
+- 播放请求的凭据只取自主进程的当前登录，不信任远程页面传进来的 token。
+- preload 启动后报告自己加载的插件，主进程记一行进程号、沙箱状态和插件列表，手工冒烟靠这条判断沙箱和插件。`osSandboxed` 是系统层面的实际状态，Electron 只在 Windows 和 macOS 上提供。

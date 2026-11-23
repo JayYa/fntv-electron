@@ -1,9 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// MPV 归档根目录里的清单，形状是和 fntv-mpv-config 的契约（spec #219“清单”一节）。
-
-/** 客户端认识的清单格式版本。不在其中的清单一律不用来同步。 */
 export const SUPPORTED_MANIFEST_FORMAT_VERSIONS: readonly number[] = [1];
 
 export const MANIFEST_FILE_NAME = 'fntv-manifest.json';
@@ -11,11 +8,9 @@ export const MANIFEST_FILE_NAME = 'fntv-manifest.json';
 export type ManifestFileRole = 'managed' | 'config' | 'seed';
 
 export interface ManifestFile {
-    /** 相对便携配置，正斜杠。 */
     path: string;
     sha256: string;
     role: ManifestFileRole;
-    /** 这个路径在历史归档里出现过的全部哈希，含本次。 */
     knownHashes: string[];
 }
 
@@ -32,7 +27,6 @@ export interface FntvManifest {
 
 export type ManifestProblem = 'manifest-missing' | 'manifest-unsupported' | 'manifest-invalid';
 
-/** 清单问题写进日志的说法：同步跳过和能力检查共用。 */
 export const MANIFEST_PROBLEM_TEXT: Readonly<Record<ManifestProblem, string>> = {
     'manifest-missing': 'MPV 归档清单缺失',
     'manifest-unsupported': 'MPV 归档清单格式版本不受支持',
@@ -43,7 +37,6 @@ export type ManifestReadResult =
     | { ok: true; manifest: FntvManifest }
     | { ok: false; reason: ManifestProblem; detail: string };
 
-/** 清单在归档根目录，也就是便携配置的上一级（`third_party/fntv-mpv/fntv-manifest.json`）。 */
 export function resolveManifestPath(portableConfigDir: string): string {
     return path.join(path.dirname(portableConfigDir), MANIFEST_FILE_NAME);
 }
@@ -85,7 +78,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const SHA256 = /^[0-9a-f]{64}$/;
 const ROLES: readonly string[] = ['managed', 'config', 'seed'];
 
-// 只接受便携配置内部的相对路径：清单说了算写哪里，不能让它指到用户配置外面。
 function isSafeRelativePath(value: unknown): value is string {
     if (typeof value !== 'string' || value === '' || value.includes('\\') || value.startsWith('/')) {
         return false;

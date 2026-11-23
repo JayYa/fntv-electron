@@ -36,6 +36,8 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 - `window-all-closed` 只有 `main.ts` 一处监听（#76）。不在退出途中时主窗口的 `close` 被拦下改为隐藏，这个事件很少发生；`app.quit()` 关掉所有窗口时 Electron 直接退出，不发这个事件（Electron `shell/browser/browser.cc` 的 `Browser::OnWindowAllClosed`）。
 - 托盘「设置 MPV 播放器路径」的文件对话框传入当前路径所在目录作 `defaultPath`：Electron 43 起不传 `defaultPath` 时总从「下载」目录开始，系统不再记住上次的目录。
 - Windows 上 `app.getPath('appData')` 可能失败，这时托盘的「打开 MPV 用户配置目录」项不可用，托盘和启动照常。
+- 主窗口图标从 `build/` 读：打包后 `build/` 在 `app.asar` 里（`package.json` 的 `files`），`nativeImage` 能直接读 asar 内的文件。
+- 主窗口关掉拼写检查，避免和输入法冲突。
 
 ## 凭据
 
@@ -55,3 +57,10 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 
 - 同一个 session 上 `webRequest.onBeforeRequest` 只保留最后注册的监听器，后注册的顶掉前面的，不报错（在本仓库的 Electron 里实测，#302）。lint 只允许 `interceptor.ts` 调用它（ADR-0008）。
 - 过滤规则 `urls` 连查询串一起匹配：`*://*/v/login` 不匹配 `/v/login?redirect=…`，路径匹配区分大小写（实测，#302）。
+
+## 文件系统
+
+`tests/mpvConfigSyncFailure.test.cjs` 用真实的文件系统条件让同步写入失败，各平台能用的条件不同：
+
+- Windows：目录里有打开的文件时不能 rename 这个目录；rename 不能覆盖只读文件。
+- POSIX：打开的文件不影响 rename，只读文件也能被 rename 覆盖，只有把所在目录设为只读才拦得住。root 不受目录权限限制，以 root 运行时这些条件都不成立。

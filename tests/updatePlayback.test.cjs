@@ -12,7 +12,6 @@ const {
 
 const WIN_ASSETS = ['FNMedia_2.7.0_win_x64.exe', 'FNMedia_2.7.0_win_x64.exe.blockmap', 'latest.yml'];
 
-// 按弹框标题点按钮：clicks 是 { 标题: 按钮文字 }，没列出的弹框点取消按钮
 function clicking(clicks) {
     return (options) => {
         const label = clicks[options.title];
@@ -30,7 +29,6 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
-// 加载更新检查，并取同一份播放状态模块（setupUpdateChecker 清了 dest/ 的缓存）
 function setup(t, options = {}) {
     simulateHost(t, 'win32', 'x64');
     const env = setupUpdateChecker(t, { respond: () => release('v2.7.0', WIN_ASSETS), ...options });
@@ -38,7 +36,6 @@ function setup(t, options = {}) {
     return { ...env, playback };
 }
 
-// 模拟媒体播放插件：开始一次播放，stop() 时 MPV 退出并开始回传进度，回传由 report 控制
 function startPlaying(playback, report = Promise.resolve()) {
     const session = playback.beginPlayback();
     const player = {
@@ -62,7 +59,6 @@ test('the startup check holds the new version dialog while MPV is playing and sh
     const { session } = startPlaying(playback);
 
     await checker.autoCheckForUpdates();
-    // 断言提示没有弹出，没有可等的条件
     await settle();
     assert.deepEqual(dialogs, []);
 
@@ -110,18 +106,15 @@ test('quitting while MPV is playing drops the held dialog, even though the quit 
     assert.deepEqual(dialogs, []);
 });
 
-// 新版本提示点「下载并安装」，下载完成框点 choice
 function setupDownload(t, choice) {
     return setup(t, { dialogResponse: clicking({ 发现新版本: '下载并安装', 新版本已下载: choice }) });
 }
 
-// 手动检查并开始下载，等下载真正开始
 async function startDownload(env) {
     await env.checker.manualCheckForUpdates();
     await waitFor(() => env.updater.downloads === 1);
 }
 
-// 让进行中的下载完成，等下载完成框按 setupDownload 的选择点掉、选择生效（chosen() 为真）
 async function downloadAndChoose(env, chosen) {
     env.updater.finishDownload();
     await waitFor(chosen);
@@ -134,7 +127,6 @@ test('restart and install now stops playback and waits for the progress report b
 
     await startDownload(env);
     await downloadAndChoose(env, () => player.stops === 1);
-    // 断言回传完成前没有安装，没有可等的条件
     await settle();
     assert.deepEqual(env.updater.installs, []);
 
@@ -152,7 +144,6 @@ test('restart and install now still installs 5 seconds after stopping when the p
     await startDownload(env);
     await downloadAndChoose(env, () => player.stops === 1);
     t.mock.timers.tick(4999);
-    // 断言超时前没有安装，没有可等的条件
     await settle();
     assert.deepEqual(env.updater.installs, []);
 

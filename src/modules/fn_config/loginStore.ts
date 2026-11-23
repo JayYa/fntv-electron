@@ -35,7 +35,6 @@ interface LoginState {
     history?: HistoryEntry[];
 }
 
-/** 当前登录。读出来 token 为空表示已退出登录或凭据解不开。 */
 export interface SavedLogin {
     domain: string;
     account: string;
@@ -165,10 +164,6 @@ function transaction(access: CredentialAccess, change: (state: LoginState) => Ch
     });
 }
 
-/**
- * 读取当前登录，必要时把旧格式凭据迁移到安全存储；文件不存在或损坏时返回 null。
- * 迁移失败不影响本次读取，旧值留在磁盘上，下次读取时重试。
- */
 export function readCurrentLogin(): Promise<SavedLogin | null> {
     return serialize(async () => {
         const state = await load('open');
@@ -220,23 +215,14 @@ function writeLogin(login: SavedLogin, history: NewHistoryEntry | null): Promise
     }).then(() => undefined);
 }
 
-/**
- * 保存当前登录。新凭据总是重新加密：安全存储不可用时抛错，文件不变。解不开的旧 token 和访问码
- * 被这次的值替换，所以 token 不能为空，退出登录用 clearToken。
- */
 export function saveCurrentLogin(login: SavedLogin): Promise<void> {
     return writeLogin(login, null);
 }
 
-/** 和 saveCurrentLogin 一样，并在同一次写入里加进登录历史（去重、最多 5 条）；两者要么都写上，要么都没写。 */
 export function saveNewLogin(login: SavedLogin, historyEntry: NewHistoryEntry): Promise<void> {
     return writeLogin(login, historyEntry);
 }
 
-/**
- * 退出登录：清空 token，保留账号、地址、访问码和 HTTPS 设置。token 本身解不开时原样留着，
- * 由用户之后的登录替换。没有可清的内容时不写文件，返回 false。
- */
 export function clearToken(): Promise<boolean> {
     return transaction('open', (state) => {
         if (!state.found || !(tokenUnlessAccessCodeSealed(state.credentials) || state.domain)) return 'unchanged';
@@ -248,7 +234,6 @@ export function clearToken(): Promise<boolean> {
     }).then(change => change === 'write');
 }
 
-/** 登录历史列表，不解密、不含凭据。读盘失败时抛出。 */
 export function listHistory(): HistoryListing[] {
     return historyOf(readConfigFile()).map(item => ({
         domain: item.domain,
@@ -257,7 +242,6 @@ export function listHistory(): HistoryListing[] {
     }));
 }
 
-/** 一条登录历史的凭据。找不到或解不开时读出来是空值，由用户手动输入。 */
 export function historyCredentials(key: HistoryKey): Promise<{ password: string; accessCode: string }> {
     return serialize(async () => {
         const history = historyOf(readConfigFile());
@@ -268,7 +252,6 @@ export function historyCredentials(key: HistoryKey): Promise<{ password: string;
     });
 }
 
-/** 删除一条登录历史，不影响当前登录。没有这一条时返回 false。 */
 export function removeHistory(key: HistoryKey): Promise<boolean> {
     return transaction('sealed', (state) => {
         const history = state.history ?? [];
@@ -279,7 +262,6 @@ export function removeHistory(key: HistoryKey): Promise<boolean> {
     }).then(change => change === 'write');
 }
 
-/** 清空登录历史，不影响当前登录。 */
 export function clearHistory(): Promise<void> {
     return transaction('sealed', (state) => {
         state.history = [];

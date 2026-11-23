@@ -8,11 +8,7 @@ const { lines, stub, tempDir } = require('./helpers/ciCache.cjs');
 const { assertArchivePinsConsistent, pinnedArchive, PIN_FILES } = require('./helpers/mpvArchivePins.cjs');
 const { archiveFromRelease, isNewerTag, run } = require('../scripts/update-mpv-archive.cjs');
 
-// 自动升级 MPV 归档（2026-11-14）：scripts/update-mpv-archive.cjs 从 Release API 取资产名和 digest，
-// 改 mpv-archive.json、README.md、docs/external-runtime.md；update-mpv-archive.yml 定时运行它并开 PR。
-
 const NEW_TAG = 'fntv-mpv-v20261201_093000';
-// 资产名故意和 tag 的时间不同：脚本必须用 API 给的名字，不能按 tag 推算。
 const NEW_ASSET = 'mpv-package-20261201_013012.zip';
 const NEW_SHA = 'ab'.repeat(32);
 
@@ -20,7 +16,6 @@ function release(tag = NEW_TAG, assets = [{ name: NEW_ASSET, digest: `sha256:${N
     return { tag_name: tag, assets: [{ name: 'notes.txt', digest: `sha256:${'0'.repeat(64)}` }, ...assets] };
 }
 
-// 仓库三处文件的临时副本。
 function copyRepo(t) {
     const dir = tempDir(t, 'fntv-mpv-update-');
     for (const file of PIN_FILES) {
@@ -65,8 +60,6 @@ test('a newer release is pinned in mpv-archive.json, README and docs, and the pi
     assertArchivePinsConsistent(dir);
     assert.deepEqual(outputs, { updated: 'true', 'previous-tag': before.tag, tag: NEW_TAG, asset: NEW_ASSET, sha256: NEW_SHA });
 
-    // 只换这三个值，mpv-archive.json 其余部分不动。
-    // 改动的文件都不在 .github/workflows 下：GITHUB_TOKEN 推不了改 workflow 的提交（2026-11-14 实际失败过）。
     assert.ok(PIN_FILES.every(file => !file.startsWith('.github/workflows/')), PIN_FILES.join(', '));
     const lineDiff = (a, b) => a.split('\n').filter((line, i) => line !== b.split('\n')[i]);
     assert.equal(lineDiff(fs.readFileSync(path.join(root, PIN_FILES[0]), 'utf8'), snapshot(dir)[0]).length, 3);
@@ -124,7 +117,6 @@ test('tags compare by their timestamp', () => {
     assert.equal(isNewerTag('fntv-mpv-v20251231_235959', 'fntv-mpv-v20261110_224319'), false);
 });
 
-// workflow：定时加手动，只从 main 运行，tag 经 env 传给脚本，开 PR 用 GITHUB_TOKEN。
 function updateJob() {
     return workflow('update-mpv-archive.yml').jobs.update;
 }
@@ -147,12 +139,10 @@ test('update-mpv-archive.yml runs on a schedule and by hand, from main, with the
     assert.equal(pr.env.GH_TOKEN, '${{ github.token }}');
 });
 
-// 升级 PR 只改 PIN_FILES，Smoke Test 要因为它们触发，才会用新归档构建并测试安装包。
 test('the smoke test runs on a PR that changes the pinned MPV archive', () => {
     assert.ok(workflow('smoke-test.yml').on.pull_request.paths.includes(PIN_FILES[0]));
 });
 
-// 用桩 git 和 gh 运行开 PR 的步骤。openPr 是 gh pr list 返回的 PR 号，sameFiles 表示远端分支上三处文件已经一样。
 function runPrStep(t, { openPr = '', sameFiles = false } = {}) {
     const dir = tempDir(t, 'fntv-mpv-pr-');
     const bin = path.join(dir, 'bin');
@@ -190,7 +180,6 @@ test('an open PR is updated in place, and not pushed again when it already pins 
     assert.ok(edited.some(call => call.startsWith('pr edit 42')), edited.join('\n'));
     assert.ok(!edited.some(call => call.startsWith('pr create')));
 
-    // 每次推送都要维护者重新批准 CI，内容没变就不推。
     const skipped = runPrStep(t, { openPr: '42', sameFiles: true }).calls;
     assert.ok(!skipped.some(call => call.startsWith('push') || call.startsWith('commit') || call.startsWith('pr edit')), skipped.join('\n'));
 });

@@ -11,12 +11,8 @@ const {
 } = require('./helpers/updateChecker.cjs');
 const { deferred, startPlaying } = require('./helpers/fakeQuitApp.cjs');
 
-// 应用内更新的两种安装方式和退出收尾（src/modules/quit/quitCoordinator.ts）怎么配合。
-// events 按发生顺序记下：MPV 停止、进度回传完成、关 Proxy、开始安装、销毁托盘、进程退出。
-
 const WIN_ASSETS = ['FNMedia_2.7.0_win_x64.exe', 'FNMedia_2.7.0_win_x64.exe.blockmap', 'latest.yml'];
 
-// 新版本提示点「下载并安装」，下载完成框点 choice，其它弹框点取消按钮
 function setup(t, choice) {
     simulateHost(t, 'win32', 'x64');
     const env = setupUpdateChecker(t, {
@@ -32,7 +28,6 @@ function setup(t, choice) {
     return { ...env, playback };
 }
 
-// 手动检查、下载完成、在下载完成框做出选择，等选择生效
 async function downloadAndChoose(env, chosen) {
     await env.checker.manualCheckForUpdates();
     await waitFor(() => env.updater.downloads === 1);
@@ -40,7 +35,6 @@ async function downloadAndChoose(env, chosen) {
     await waitFor(chosen);
 }
 
-// 下载完成框弹出前 autoInstallOnAppQuit 已关掉，选了「退出时安装」才再打开
 const installOnQuitChosen = (env) => () =>
     env.dialogs.some((d) => d.title === '新版本已下载') && env.updater.autoInstallOnAppQuit === true;
 
@@ -56,11 +50,9 @@ test('install on quit stops playback and waits for the progress report, closes t
 
     report.resolve();
     await waitFor(() => env.app.exited);
-    // 安装发起的退出直接放行，不再停播放、关 Proxy；托盘到这时才销毁
     assert.deepEqual(env.events, [
         'mpv stopped', 'progress reported', 'proxy closing', 'proxy closed', 'install started', 'tray destroyed', 'exited',
     ]);
-    // 不再自动重启客户端，和 electron-updater 自己退出时安装的参数一样
     assert.deepEqual(env.updater.installs, [{ isSilent: true, isForceRunAfter: false }]);
 });
 
@@ -95,7 +87,6 @@ test('restart and install now is not held back, and still closes the Proxy and d
     report.resolve();
     await waitFor(() => env.app.exited);
 
-    // 安装前自己停了播放；安装发起的退出放行（不等 Proxy 关完），只关一次 Proxy
     assert.deepEqual(env.events.filter((event) => event !== 'proxy closed'), [
         'mpv stopped', 'progress reported', 'install started', 'proxy closing', 'tray destroyed', 'exited',
     ]);

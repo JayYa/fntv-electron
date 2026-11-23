@@ -1,5 +1,3 @@
-// 同步中途失败：用真实的文件系统条件让写入失败，失败后插件目录不半新半旧、安装记录不变、不留暂存目录，
-// 条件消失后下次启动补完，结果和一次跑完相同。中途退出（断电）见 mpvConfigSyncResume.test.cjs。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -10,11 +8,8 @@ const {
 } = require('./helpers/mpvUpgradeScenario.cjs');
 
 const isWindows = process.platform === 'win32';
-// POSIX 上 root 不受目录权限限制，只读目录拦不住写入。
 const posixRoot = !isWindows && process.getuid() === 0;
 
-// Windows：目录里有打开的文件时不能 rename 这个目录，在弹幕插件目录打开一个文件（uosc 已换完才轮到它）。
-// POSIX：打开的文件不影响 rename，把 scripts 设为只读，第一个插件目录就移不开。
 function blockPluginDirectoryMove(user) {
     if (isWindows) {
         const fd = fs.openSync(path.join(user, 'scripts', 'uosc_danmaku', 'api.lua'), 'r');
@@ -25,7 +20,6 @@ function blockPluginDirectoryMove(user) {
     return () => fs.chmodSync(scripts, 0o755);
 }
 
-// Windows：rename 不能覆盖只读文件。POSIX：只读文件可以被 rename 覆盖，把所在目录设为只读。
 function blockConfigReplace(user) {
     const target = isWindows ? path.join(user, 'script-opts', 'uosc.conf') : path.join(user, 'script-opts');
     fs.chmodSync(target, isWindows ? 0o444 : 0o555);
@@ -79,7 +73,6 @@ test('a config file that cannot be replaced fails the sync after the plugin dire
     }
 
     const tree = assertFailedCleanly(failed, user, reference);
-    // 托管目录先于单个文件同步：失败时它们已整体是新版，下次启动不再动。
     for (const dir of MANAGED_DIRS) assert.deepEqual(subtree(tree, dir), subtree(reference.after, dir), dir);
     assert.equal(tree['script-opts/uosc.conf'], reference.before['script-opts/uosc.conf']);
     assertRetryFinishes(v2, user, reference);

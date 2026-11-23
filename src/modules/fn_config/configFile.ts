@@ -27,7 +27,6 @@ function isObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// 顶层不是对象的 JSON 和语法错误一样算损坏，读取和备份判定都走 SyntaxError 这条路。
 export function parseConfig(text: string): StoredConfig {
     const stored: unknown = JSON.parse(text);
     if (!isObject(stored)) throw new SyntaxError('配置顶层不是对象');
@@ -42,7 +41,6 @@ function hasUnusableHistory(stored: { history?: unknown }): boolean {
     return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
 }
 
-/** history 里能用的条目；history 缺失或为 null 时是 undefined，写回时这个字段被去掉。 */
 export function usableHistory(stored: StoredConfig): StoredHistoryItem[] | undefined {
     const historyUnusable = hasUnusableHistory(stored);
     if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
@@ -57,7 +55,6 @@ function getConfigPath(): string {
     return path.join(dir, 'config.json');
 }
 
-/** 文件不存在或内容损坏时返回 null；其它读取错误照常抛出。 */
 export function readConfigFile(): StoredConfig | null {
     const p = getConfigPath();
     if (!fs.existsSync(p)) return null;
@@ -73,7 +70,6 @@ export function writeConfigFile(stored: StoredConfig): void {
     replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
-// 这样的文件读出来会丢内容，被替换前要留底。
 function isDamaged(configPath: string): boolean {
     if (!fs.existsSync(configPath)) return false;
     const text = fs.readFileSync(configPath, 'utf-8');
@@ -84,7 +80,6 @@ function isDamaged(configPath: string): boolean {
     }
 }
 
-// 用复制而不是改名：写入失败时 config.json 还在。备份含密文，只记文件名。
 function backupConfig(configPath: string): void {
     const prefix = `${path.basename(configPath)}.corrupt-`;
     for (let stamp = Date.now(); ; stamp++) {
@@ -101,12 +96,10 @@ function backupConfig(configPath: string): void {
         const backups = fs.readdirSync(dir).filter(name => name.startsWith(prefix)).sort();
         backups.slice(0, -CONFIG_BACKUP_LIMIT).forEach(name => fs.rmSync(path.join(dir, name)));
     } catch {
-        // 备份已经落盘，清理旧备份失败不影响这次写入。
         warnOnce('清理旧配置备份失败');
     }
 }
 
-// 先写完临时文件再备份：写不下去时不占备份名额。rename 之前 config.json 始终是旧内容。
 function replaceConfig(configPath: string, content: string): void {
     const tempPath = `${configPath}.tmp`;
     const mode = fs.existsSync(configPath) ? fs.statSync(configPath).mode : undefined;

@@ -8,7 +8,6 @@ const { MEDIA, startProxy, get, sessionInput } = require('./helpers/proxyService
 
 const TLS_DIR = path.join(__dirname, 'fixtures', 'tls');
 
-// 假 NAS 把 item-1 的播放源说成直链媒体，直链指向假网盘。
 async function directLinkSetup(t, streamOptions = {}, driveOptions = {}) {
     const drive = await startFakeDirectLink(t, { media: MEDIA, ...driveOptions });
     const nas = await startFakeFnMedia(t, {
@@ -39,7 +38,6 @@ test('cloud direct fetches the direct link itself with Range and without the NAS
     assert.equal(upstream.headers.host, new URL(drive.origin).host);
 });
 
-// Go 的 TestApplyPlaybackCookieKeepsNasGrantOutOfCloudDirect，改为走 HTTP。
 test('cloud direct sends the direct link cookies joined, without the access grant or mode=relay', async (t) => {
     const { drive, nas } = await directLinkSetup(t, { cookies: ['provider=cloud', 'sid=1', 'provider=cloud'] });
     const { service } = await startProxy(t);
@@ -50,7 +48,6 @@ test('cloud direct sends the direct link cookies joined, without the access gran
     assert.equal(drive.requests[0].headers.cookie, 'provider=cloud; sid=1; provider=cloud');
 });
 
-// Go 的 TestApplyPlaybackCookieClearsCookiesWhenCloudProvidesNone；Go 仍会转发 MPV 的 Cookie 和 Authorization，这里不照搬（U-05）。
 test('cloud direct without direct link cookies sends no cookie and no authorization from MPV', async (t) => {
     const { drive, nas } = await directLinkSetup(t, { cookies: [] });
     const { service } = await startProxy(t);
@@ -72,7 +69,6 @@ test('cloud direct without direct link cookies sends no cookie and no authorizat
     assert.equal(headers['if-none-match'], '"v1"');
 });
 
-// 流信息的 UA 对所有直连网盘生效，不只 115（U-09，照搬 Go）。
 test('cloud direct uses the first non-blank stream user agent for any cloud type, else keeps the MPV one', async (t) => {
     const cases = [
         [{ cloudType: 1, userAgents: ['  ', ' pan-ua/1.0 ', 'second'] }, 'pan-ua/1.0'],
@@ -91,7 +87,6 @@ test('cloud direct uses the first non-blank stream user agent for any cloud type
     }
 });
 
-// 测试 CA 不在 Node 自带和系统的证书库里；会话的 skipVerify 只对 NAS 生效。
 test('cloud direct verifies the direct link certificate even when the session skips verification', async (t) => {
     const tls = { key: fs.readFileSync(path.join(TLS_DIR, 'nas-key.pem')), cert: fs.readFileSync(path.join(TLS_DIR, 'nas.pem')) };
     const { drive, nas } = await directLinkSetup(t, {}, { tls });
@@ -105,7 +100,6 @@ test('cloud direct verifies the direct link certificate even when the session sk
     assert.equal(drive.requests.length, 0);
 });
 
-// Go 的 TestApplyPlaybackCookieUsesNasGrantForLocalMedia，改为走 HTTP。
 test('NAS relay sends direct link media through the NAS with the token and the access grant only', async (t) => {
     const { drive, nas } = await directLinkSetup(t, { cloudType: 3, cookies: ['provider=cloud'], userAgents: ['pan-ua/1.0'] });
     const { service } = await startProxy(t);
@@ -155,7 +149,6 @@ test('cloud direct always uses the first direct link, whatever the sourceIndex',
     assert.equal(JSON.parse(nas.requests.find((r) => r.path === '/v/api/v1/stream').body).media_guid, 'media-1');
 });
 
-// WebDAV 这类直链把账号写在 URL 里。MPV 的 Authorization 不转发（U-05），所以总是补 Basic 认证。
 test('cloud direct turns userinfo in the direct link into Basic authorization', async (t) => {
     const drive = await startFakeDirectLink(t, { media: MEDIA });
     const { host } = new URL(drive.origin);
@@ -175,7 +168,6 @@ test('cloud direct turns userinfo in the direct link into Basic authorization', 
     assert.equal(upstream.rawPath, '/dav/file.mkv');
 });
 
-// Go 的 details 是错误串，带完整直链和签名；这里不照搬（U-10）。
 test('a network error on the direct link is not retried and the error details do not contain the direct link', async (t) => {
     const { drive, nas } = await directLinkSetup(t, {}, { handler: (req) => req.socket.destroy() });
     const { service } = await startProxy(t);
@@ -227,7 +219,6 @@ test('a 416 from the direct link for bytes=0- is retried once without Range', as
     assert.equal(drive.requests[1].headers.cookie, 'provider=cloud');
 });
 
-// Go 把解码后的 path 重新编码，%2F 会变成 /（U-15）。签名直链要原样，这里不照搬。
 test('cloud direct keeps the encoded path and the query of the direct link as they are', async (t) => {
     const drive = await startFakeDirectLink(t, { media: MEDIA });
     const nas = await startFakeFnMedia(t, {
