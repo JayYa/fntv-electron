@@ -174,6 +174,19 @@ test('password login saves the current login and history, then opens the web UI'
     assert.deepEqual(world.mainWindow().loaded.urls, [`${NAS}/v`]);
 });
 
+test('password login logs the established login without the NAS address', async (t) => {
+    const world = setup(t, { loginResponses: [ok({ token: 'new-token' })] });
+    const infos = [];
+    t.mock.method(require('../dest/modules/logger/index.js'), 'info', (...args) => infos.push(args.join(' ')));
+
+    assert.deepEqual(await world.login(), { ok: true });
+
+    const established = infos.find((line) => line.includes('已建立当前登录'));
+    assert.ok(established, infos.join(' | '));
+    const { hostname, port } = new URL(NAS);
+    assert.ok(!established.includes(hostname) && !established.includes(port), established);
+});
+
 test('password login keeps the path of an address served under a subpath', async (t) => {
     const world = setup(t, { loginResponses: [ok({ token: 'new-token' })] });
 
