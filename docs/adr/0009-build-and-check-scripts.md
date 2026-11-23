@@ -23,6 +23,10 @@ status: accepted
 
 agent 写的文件不能超过 `MAX_TOKENS`，超过 `WARN_TOKENS` 时提醒但不拦。不受限的文件在 `.gitattributes` 标 `-agent-authored`，二进制文件跳过。默认（pre-commit）检查暂存区里新增、修改、重命名的文件，读暂存内容和暂存区的 `.gitattributes`；`--base <ref>`（CI）检查 HEAD 相对合并基点改动的文件，读 HEAD 的内容，并输出 GitHub annotation。`check-attr --source` 要求 git 2.40 及以上。
 
+## `lint-staged.cjs`
+
+pre-commit 钩子先跑 `check-file-size.cjs`，再跑它，两个都跑完、任一失败就拒绝提交。它对暂存区里新增、修改、重命名、且在 `package.json` 的 `lint` 脚本路径内的 `.ts/.js/.cjs/.mjs` 文件，用 ESLint 检查暂存的内容（不是工作区），所以解析错误和 lint 违规在提交时就拦下，不用等 `pnpm run check`。不跑测试：全量测试要一分多钟，留给 check 和 CI（`tests/lintStaged.test.cjs`）。
+
 ## `check-commit-message.cjs`
 
 检查提交信息（commit-msg 钩子，读文件第一行有效内容）和 PR 标题（`-` 从 stdin 读）是否符合 Conventional Commits。git 自己生成的标题和 `rebase --autosquash` 的标记放行。
