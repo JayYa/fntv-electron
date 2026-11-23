@@ -47,6 +47,7 @@ CI 的 Electron 下载缓存。key 只取 `package.json` 里的版本号，安�
 
 - `ci.yml` 和 `build.yml` 共用 composite action `.github/actions/install-dependencies`：两份各写一遍时 `build.yml` 漏改过一次（#143 只改了 `ci.yml`），Renovate PR #139 的构建因此失败。
 - Electron 二进制由安装依赖之后的单独步骤（`node node_modules/electron/install.js`）带缓存和重试下载（2026-11-09，PR #140、#139 遇到 504）。electron 42 起没有安装脚本，`index.js` 在二进制不在时自己运行 `install.js` 下载，只试一次，不重试；预先下载让测试和打包不走这条路径。electron 42 起也不读 `ELECTRON_SKIP_BINARY_DOWNLOAD`。electron 包重新加回安装脚本或去掉 `install.js` 时 `tests/ciElectronDownload.test.cjs` 失败，提醒重新核对下载步骤。下载步骤设 `DEBUG=@electron/get:*`，日志里能看到 `Cache hit` / `Cache miss`。
+- `pnpm test` 在 `node --test` 之前也运行一次 `install.js`（#314）：测试文件各在一个进程里并行跑，几个进程同时 `require('electron')` 时各自解压到同一个 `dist`，Windows 上先解压完的进程启动 `electron.exe` 时别的进程还在写，报 `EBUSY`。二进制已装好时 `install.js` 立即退出，不联网。
 - Electron 下载缓存是单步 `actions/cache`，job 结束时由 post 步骤保存（2026-11-14），key 见上文 `ci-download-cache.cjs`。
 - composite action 的步骤不支持 `timeout-minutes`，写了也不生效；其中的 `run` 步骤必须写 `shell`，Windows 上 bash 语法也靠它。
 - 第三方 action 固定到 commit SHA；本仓库的 action 和可复用 workflow 随提交一起变，不固定 SHA，但文件必须存在。

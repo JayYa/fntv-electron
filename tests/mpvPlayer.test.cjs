@@ -209,3 +209,57 @@ test('playList emits an error and returns false when setting playlist-pos fails'
     assert.equal(ok, false);
     assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'invalid playlist-pos' } }]);
 });
+
+class StoppedWhileCreatedNodeMpv extends RunningNodeMpv {
+    static onCreate = null;
+    static started = 0;
+    constructor() {
+        super();
+        StoppedWhileCreatedNodeMpv.onCreate?.();
+    }
+    start() {
+        StoppedWhileCreatedNodeMpv.started += 1;
+        return super.start();
+    }
+}
+
+test('a stop before the MPV instance exists ends the playback run without waiting for the stop timeout', async (t) => {
+    const ply = useFakeNodeMpv(t, StoppedWhileCreatedNodeMpv);
+    const playbackState = require('../dest/modules/playback/playbackState.js');
+    t.after(() => { StoppedWhileCreatedNodeMpv.onCreate = null; StoppedWhileCreatedNodeMpv.started = 0; });
+    const run = playbackState.beginPlayback();
+    const events = [];
+    const player = new ply.MpvPlayer(playerConfig({
+        onEvent: (type) => {
+            events.push(type);
+            if (type === ply.EventType.EXIT) void run.ended();
+        },
+    }));
+    let stopped;
+    StoppedWhileCreatedNodeMpv.onCreate = () => {
+        StoppedWhileCreatedNodeMpv.onCreate = null;
+        const begun = Date.now();
+        stopped = playbackState.stopPlaybackAndWait().then(() => Date.now() - begun);
+    };
+
+    assert.equal(await run.start(player, () => player.playList([playItem], 0)), false);
+
+    assert.ok(await stopped < 1000, 'stopPlaybackAndWait waited for its timeout');
+    assert.equal(playbackState.isPlaying(), false);
+    assert.deepEqual(events, [ply.EventType.EXIT]);
+    assert.equal(StoppedWhileCreatedNodeMpv.started, 0);
+});
+
+test('a stop before the MPV instance exists does not stop the next playList', async (t) => {
+    const ply = useFakeNodeMpv(t, StoppedWhileCreatedNodeMpv);
+    const player = new ply.MpvPlayer(playerConfig());
+    t.after(() => { StoppedWhileCreatedNodeMpv.onCreate = null; StoppedWhileCreatedNodeMpv.started = 0; player.stop(); });
+    StoppedWhileCreatedNodeMpv.onCreate = () => {
+        StoppedWhileCreatedNodeMpv.onCreate = null;
+        player.stop();
+    };
+    await player.playList([playItem], 0);
+
+    assert.equal(await player.playList([playItem], 0), true);
+    assert.equal(player.isPlaying(), true);
+});

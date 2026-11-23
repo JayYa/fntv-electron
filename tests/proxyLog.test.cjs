@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
 
 const logModule = path.resolve(__dirname, '../dest/modules/proxy_service/log.js');
 const loggerModule = path.resolve(__dirname, '../dest/modules/logger/logger.js');
@@ -20,7 +21,7 @@ const logger = new Logger();
 const log = ipcLog((message) => writeProxyLog(logger, structuredClone(message)));
 log[${JSON.stringify(level)}](${JSON.stringify(message)}, ...${args});`;
     const result = spawnSync(process.execPath, ['-e', script], { cwd: dir, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
+    assertExitedCleanly(result);
     return fs.readFileSync(path.join(dir, 'log', 'app.log'), 'utf8');
 }
 

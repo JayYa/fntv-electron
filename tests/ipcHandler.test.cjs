@@ -35,6 +35,7 @@ function setupIpc(t) {
         logText: () => fs.readFileSync(path.join(testRoot, 'log', 'app.log'), 'utf8'),
         loadIpcHandler: () => require('../dest/main/handlers/core/ipcHandler.js'),
         loadConfigPlugin: () => require('../dest/main/handlers/plugins/config.js'),
+        loadLoggerPlugin: () => require('../dest/main/handlers/plugins/logger.js'),
     };
 }
 
@@ -116,4 +117,45 @@ test('handlers still receive their arguments and run synchronously', (t) => {
     ipcMain.emit('sync-channel', fakeEvent(), 'a', 2);
 
     assert.deepEqual(seen, [['a', 2]]);
+});
+
+test('registering a channel twice throws and keeps the first handler', (t) => {
+    const { ipcMain, loadIpcHandler } = setupIpc(t);
+    const { registerHandler } = loadIpcHandler();
+    const seen = [];
+    registerHandler('twice-channel', () => seen.push('first'));
+
+    assert.throws(() => registerHandler('twice-channel', () => seen.push('second')), /twice-channel.*already registered/);
+    ipcMain.emit('twice-channel', fakeEvent());
+
+    assert.deepEqual(seen, ['first']);
+});
+
+for (const [level, name] of [['debug', 'DEBUG'], ['info', 'INFO'], ['warn', 'WARN'], ['error', 'ERROR'], ['verbose', 'INFO']]) {
+    test(`a renderer log-message at level ${level} is written as ${name} with the Renderer prefix`, async (t) => {
+        const { invoke, logText, loadLoggerPlugin } = setupIpc(t);
+        loadLoggerPlugin().init();
+
+        await invoke('log-message', level, `${level} from the page`);
+
+        assert.ok(logText().includes(`[${name}] [Renderer] ${level} from the page`), logText());
+    });
+}
+
+test('a renderer log-message the logger cannot write reports its level and error to the console, without its arguments', async (t) => {
+    const { invoke, logText, loadLoggerPlugin } = setupIpc(t);
+    loadLoggerPlugin().init();
+    const consoleError = t.mock.method(console, 'error', () => {});
+    const cyclic = { name: 'cyclic' };
+    cyclic.self = cyclic;
+    await invoke('log-message', 'info', 'written before');
+
+    await invoke('log-message', 'warn', 'cannot serialize', cyclic);
+
+    const [call] = consoleError.mock.calls;
+    assert.ok(call, 'nothing written to the console');
+    assert.ok(call.arguments.includes('warn'), String(call.arguments));
+    assert.ok(call.arguments.some(arg => /circular/.test(arg)), String(call.arguments));
+    assert.ok(!call.arguments.includes('cannot serialize') && !call.arguments.includes(cyclic), 'renderer arguments reached the console unmasked');
+    assert.doesNotMatch(logText(), /cannot serialize/);
 });
