@@ -201,6 +201,14 @@ test('every script that produces dest also bundles the preload', () => {
     assert.match(scripts.watch, /build-preload\.cjs --watch/);
 });
 
+test('pnpm test installs the electron binary before the test files run in parallel', () => {
+    const { scripts } = JSON.parse(read('package.json'));
+    const install = scripts.test.indexOf('node node_modules/electron/install.js');
+
+    assert.notEqual(install, -1, scripts.test);
+    assert.ok(install < scripts.test.indexOf('node --test'), scripts.test);
+});
+
 test('workflow steps and jobs named in the standards documents exist', () => {
     const yaml = require('js-yaml');
     const references = [];
