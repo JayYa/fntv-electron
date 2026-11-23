@@ -91,7 +91,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                         if (!authResponse || !authResponse.success || !authResponse.data?.token) {
                             const msg = authResponse?.message || '换取 token 失败';
 
-                            log.error(`[FN ID] ${baseUrl} 授权失败: ${msg}`);
+                            log.error(`[FN ID] 授权失败: ${msg}`);
 
                             setAuthRequested(false);
                             reject(new Error(msg));
