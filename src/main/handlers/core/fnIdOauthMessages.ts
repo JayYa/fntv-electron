@@ -153,10 +153,10 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
         }
     }
 
-    async function redirectToOauth(targetBaseUrl: string, appId: string, cookie: string): Promise<void> {
-        if (cookie) {
+    async function redirectToOauth(targetBaseUrl: string, appId: string, cookieHeader: string): Promise<void> {
+        if (cookieHeader) {
             const domain = new URL(targetBaseUrl).hostname;
-            for (const pair of cookie.split(';')) {
+            for (const pair of cookieHeader.split(';')) {
                 const parts = pair.trim().split('=');
                 if (parts.length < 2) continue;
                 await setCookie({ url: targetBaseUrl, name: parts[0].trim(), value: parts.slice(1).join('=').trim(), path: '/', domain });
