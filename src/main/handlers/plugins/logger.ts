@@ -11,12 +11,12 @@ const writers: Record<LogLevel, (message: string, ...args: any[]) => void> = {
     error: log.error,
 };
 
-function handleLogMessage(event: IpcMainInvokeEvent, level: LogLevel, ...args: any[]): void {
-    const write = Object.hasOwn(writers, level) ? writers[level] : log.info;
+function handleLogMessage(event: IpcMainInvokeEvent, level: string, ...args: any[]): void {
+    const write = Object.hasOwn(writers, level) ? writers[level as LogLevel] : log.info;
     try {
         write('[Renderer]', ...args);
     } catch (error) {
-        console.error('渲染进程日志写不进日志器:', level, ...args, error);
+        console.error('渲染进程日志写不进日志器:', level, error instanceof Error ? error.message : String(error));
     }
 }
 

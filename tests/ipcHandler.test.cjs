@@ -142,7 +142,7 @@ for (const [level, name] of [['debug', 'DEBUG'], ['info', 'INFO'], ['warn', 'WAR
     });
 }
 
-test('a renderer log-message the logger cannot write goes to the console instead of the logger', async (t) => {
+test('a renderer log-message the logger cannot write reports its level and error to the console, without its arguments', async (t) => {
     const { invoke, logText, loadLoggerPlugin } = setupIpc(t);
     loadLoggerPlugin().init();
     const consoleError = t.mock.method(console, 'error', () => {});
@@ -155,6 +155,7 @@ test('a renderer log-message the logger cannot write goes to the console instead
     const [call] = consoleError.mock.calls;
     assert.ok(call, 'nothing written to the console');
     assert.ok(call.arguments.includes('warn'), String(call.arguments));
-    assert.ok(call.arguments.some(arg => arg instanceof TypeError && /circular/.test(arg.message)), String(call.arguments));
-    assert.doesNotMatch(logText(), /cannot serialize|日志记录失败/);
+    assert.ok(call.arguments.some(arg => /circular/.test(arg)), String(call.arguments));
+    assert.ok(!call.arguments.includes('cannot serialize') && !call.arguments.includes(cyclic), 'renderer arguments reached the console unmasked');
+    assert.doesNotMatch(logText(), /cannot serialize/);
 });
