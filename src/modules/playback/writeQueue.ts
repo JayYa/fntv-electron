@@ -1,4 +1,4 @@
-import log from '../logger';
+import * as log from '../logger';
 
 /**
  * 写入的种类：

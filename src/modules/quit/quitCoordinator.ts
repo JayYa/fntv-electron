@@ -1,5 +1,5 @@
 import { app, powerMonitor, type BrowserWindow } from 'electron';
-import log from '../logger';
+import * as log from '../logger';
 import { stopPlaybackAndWait } from '../playback/playbackState';
 
 export interface QuitSteps {

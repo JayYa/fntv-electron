@@ -1,6 +1,6 @@
 import { app, dialog, shell } from 'electron';
 import { autoUpdater, ProgressInfo } from 'electron-updater';
-import log from '../logger';
+import * as log from '../logger';
 import { isPlaying, stopPlaybackAndWait } from '../playback/playbackState';
 import { provideInstallOnQuit, quitForInstall, type ShutdownSignal } from '../quit/quitCoordinator';
 

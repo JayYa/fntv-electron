@@ -5,7 +5,7 @@
  * 只有媒体播放插件通过 beginPlayback 开始一次播放（playback run），播放模块（play.ts）结束它；其它模块只读取、订阅或停止播放。
  */
 
-import log from '../logger';
+import * as log from '../logger';
 
 /** 能停止的播放器。停止后播放器要报告退出，播放模块随之调用 ended。 */
 interface StoppablePlayer {

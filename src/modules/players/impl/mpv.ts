@@ -11,7 +11,7 @@ import {
     PlayItem,
     Player,
 } from '../types';
-import log from '../../logger';
+import * as log from '../../logger';
 import { MpvIpcSocket } from '../../../public/platform';
 import { createPlaybackIpcSocket, removePlaybackIpcSocket } from './mpvIpcSocket';
 import NodeMpv, { TimePosition } from 'node-mpv-2';

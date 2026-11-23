@@ -1,5 +1,5 @@
 import { session } from 'electron';
-import log from '../logger';
+import * as log from '../logger';
 import { ApiService } from '../fn_api/api';
 
 export async function restoreCookies(domain: string, token: string, isLogin: boolean = false): Promise<boolean> {
