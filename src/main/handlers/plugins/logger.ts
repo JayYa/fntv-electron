@@ -16,6 +16,7 @@ function handleLogMessage(event: IpcMainInvokeEvent, level: string, ...args: any
     try {
         write('[Renderer]', ...args);
     } catch (error) {
+        // eslint-disable-next-line no-restricted-globals -- 日志器自己抛错，只能写控制台；只写级别和错误，不写未脱敏的参数
         console.error('渲染进程日志写不进日志器:', level, error instanceof Error ? error.message : String(error));
     }
 }

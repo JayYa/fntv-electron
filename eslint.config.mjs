@@ -126,6 +126,12 @@ const NO_BEFORE_REQUEST_LISTENER = {
 const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
 const SRC_RULE_SYNTAX = [...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER];
 
+const LOGGER_DIR = 'src/modules/logger';
+const NO_CONSOLE = {
+    name: 'console',
+    message: `日志写进 ${LOGGER_DIR} 的日志器，它按 ADR-0014 脱敏；console 绕过脱敏，CI 启动失败时 stdout 还会上传成 artifact。`
+};
+
 const NO_ELECTRON = {
     name: 'electron',
     message: 'fn_api/core 和 Proxy 服务不能引用 electron，依赖由调用方通过参数传入。'
@@ -166,8 +172,15 @@ export default [
         rules: {
             ...sharedRules,
             'nas/no-address-log': 'error',
+            'no-restricted-globals': ['error', NO_CONSOLE],
             'no-restricted-syntax': ['error', ...SRC_RULE_SYNTAX, NO_BEFORE_REQUEST_LISTENER],
             'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
+        }
+    },
+    {
+        files: [`${LOGGER_DIR}/**/*.ts`, 'src/preload/core/logger.ts'],
+        rules: {
+            'no-restricted-globals': 'off'
         }
     },
     {
