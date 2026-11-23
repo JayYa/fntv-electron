@@ -79,6 +79,7 @@ test('masks the address after a url key however the key is written', () => {
         'url: http://nas.local:5666/x',
         "{ url: 'http://fnnas/x' }",
         'playUrl: http://fnnas/x',
+        'playURL: nas.local:5666',
         'baseUrl=nas.local:5666',
     ]) {
         const masked = maskStringByPatterns(text);

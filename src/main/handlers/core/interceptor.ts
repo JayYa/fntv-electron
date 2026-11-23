@@ -37,7 +37,7 @@ class SessionInterceptorManager {
         log.info('Session 拦截管理器已初始化');
     }
 
-    registerBeforeRequest(filter: WebRequestFilter, handler: BeforeRequestHandler, name: string = 'unknown'): void {
+    registerBeforeRequest(filter: WebRequestFilter, handler: BeforeRequestHandler, name: string): void {
         this.beforeRequest.push({ filter, handler, name });
         log.info(`已注册 beforeRequest 拦截器: ${name}`);
     }
