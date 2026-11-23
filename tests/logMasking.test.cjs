@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
 const { maskStringByPatterns, maskSensitiveData } = require('../dest/modules/logger/masking.js');
 const { describeFnIdPageForLog } = require('../dest/main/handlers/core/fnIdTrust.js');
 
@@ -15,7 +16,7 @@ function writeNoformat(t, message) {
     const script = `const { Logger } = require(${JSON.stringify(loggerModule)});
 new Logger().noformat(${JSON.stringify(message)});`;
     const result = spawnSync(process.execPath, ['-e', script], { cwd: dir, encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr);
+    assertExitedCleanly(result);
     return fs.readFileSync(path.join(dir, 'log', 'app.log'), 'utf8');
 }
 

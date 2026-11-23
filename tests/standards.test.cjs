@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
+const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
 
 const root = path.resolve(__dirname, '..');
 const workflowDir = path.join(root, '.github', 'workflows');
@@ -156,14 +157,14 @@ test('original author attribution stays in the package, README and login page', 
 test('pnpm uses the hoisted node linker', () => {
     const result = spawnSync('pnpm config get nodeLinker', { cwd: root, encoding: 'utf8', shell: true });
 
-    assert.equal(result.status, 0, result.stderr);
+    assertExitedCleanly(result);
     assert.equal(result.stdout.trim(), 'hoisted');
 });
 
 test('electron finished extracting its binary', () => {
     const electronDir = path.join(root, 'node_modules', 'electron');
     const resolved = spawnSync(process.execPath, ['-p', "require('electron')"], { cwd: root, encoding: 'utf8' });
-    assert.equal(resolved.status, 0, resolved.stderr);
+    assertExitedCleanly(resolved);
     const executable = resolved.stdout.trim().split(/\r?\n/).pop();
     assert.ok(fs.existsSync(path.join(electronDir, 'path.txt')), 'path.txt missing');
     assert.ok(fs.existsSync(executable), `${executable} missing`);

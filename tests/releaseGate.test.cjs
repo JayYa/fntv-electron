@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const { TARGETS } = require('./smoke/targets.cjs');
 const { asList, root, runStep, workflow } = require('./helpers/workflowSteps.cjs');
+const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
 const { UPDATE_FEED_URL, UPDATE_METADATA } = require('./helpers/updateFeed.cjs');
 
 const BUILD_AND_SMOKE = './.github/workflows/build-and-smoke.yml';
@@ -12,7 +13,7 @@ const BUILD = './.github/workflows/build.yml';
 
 function runStepOutputs(t, job, stepId, env) {
     const result = runStep(t, job, step => step.id === stepId, env);
-    assert.equal(result.status, 0, result.stderr);
+    assertExitedCleanly(result);
     return result.outputs;
 }
 
