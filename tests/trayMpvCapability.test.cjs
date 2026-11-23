@@ -57,14 +57,14 @@ test('plugins that miss a required capability show a status in the tray and log 
 
     const status = app.settingsLabels().filter((label) => label?.startsWith(STATUS_PREFIX));
     assert.equal(status.length, 1);
-    assert.match(app.logText(), /ERROR.*smart-skip\.origin-from-play-url.*需要 1.*未提供/);
+    assert.match(app.logText(), /ERROR.*smart-skip\.origin-from-play-url \(需要 1，未提供\)/);
 });
 
 test('the status disappears once the installed plugins provide every required capability', async (t) => {
     const app = setup(t);
     await app.start({ 'smart-skip.origin-from-play-url': 0 });
     assert.ok(app.settingsLabels().some((label) => label?.startsWith(STATUS_PREFIX)));
-    assert.match(app.logText(), /ERROR.*smart-skip\.origin-from-play-url.*需要 1.*当前 0/);
+    assert.match(app.logText(), /ERROR.*smart-skip\.origin-from-play-url \(需要 1，当前 0\)/);
 
     await app.start({ 'smart-skip.origin-from-play-url': 1 });
     assert.ok(!app.settingsLabels().some((label) => label?.startsWith(STATUS_PREFIX)));

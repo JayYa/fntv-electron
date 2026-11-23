@@ -23,7 +23,7 @@ export function unmetCapabilities(provides: Readonly<Record<string, number>>): U
 }
 
 export function describeUnmetCapability({ name, required, provided }: UnmetCapability): string {
-    return `${name}, 需要 ${required}, ${provided === undefined ? '未提供' : `当前 ${provided}`}`;
+    return `${name} (需要 ${required}，${provided === undefined ? '未提供' : `当前 ${provided}`})`;
 }
 
 export type CapabilitySource = 'install-record' | 'manifest';
