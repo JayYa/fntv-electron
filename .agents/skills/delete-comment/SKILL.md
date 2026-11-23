@@ -23,10 +23,10 @@ Each `local/no-comments` line is one comment, listed under its file as `line:col
 | --- | --- | --- |
 | Tautology | The code beside it already says this. | Delete. |
 | Stale | It names code, versions, paths or behaviour that no longer match the repo. Check with `git grep` before calling it current. | Delete. |
-| Excuse | It justifies a workaround, a known gap, hand-kept duplication, a timeout fallback, "left to review", "not handled here". | Delete, and file an issue to fix the implementation. |
+| Excuse | It admits a gap the current code can hit: a workaround, a known bug, hand-kept duplication, a timeout fallback, "left to review", "not handled here". | Delete, and file an issue to fix the implementation. |
 | Decision record | It records a non-obvious choice, an external fact (a server's markup, an upstream tool's behaviour, an OS limit), a constraint or the reason a simpler option was rejected. | Move into an ADR, then delete. |
 
-A comment that is both an excuse and a decision record is an excuse: the issue carries the reasoning. Done when every comment in the scope has exactly one class.
+A comment that is both an excuse and a decision record is an excuse: the issue carries the reasoning. A **constraint** the current code satisfies ("X must happen before Y, or Z times out") is a decision record, even when it names a failure: trace the code path, and only call it an excuse if the failure can happen today. If no test pins the constraint, name the missing test in the ADR. Done when every comment in the scope has exactly one class.
 
 ## 3. Move the decision records
 
