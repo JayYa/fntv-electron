@@ -35,6 +35,7 @@ function setupIpc(t) {
         logText: () => fs.readFileSync(path.join(testRoot, 'log', 'app.log'), 'utf8'),
         loadIpcHandler: () => require('../dest/main/handlers/core/ipcHandler.js'),
         loadConfigPlugin: () => require('../dest/main/handlers/plugins/config.js'),
+        loadLoggerPlugin: () => require('../dest/main/handlers/plugins/logger.js'),
     };
 }
 
@@ -128,4 +129,32 @@ test('registering a channel twice throws and keeps the first handler', (t) => {
     ipcMain.emit('twice-channel', fakeEvent());
 
     assert.deepEqual(seen, ['first']);
+});
+
+for (const [level, name] of [['debug', 'DEBUG'], ['info', 'INFO'], ['warn', 'WARN'], ['error', 'ERROR'], ['verbose', 'INFO']]) {
+    test(`a renderer log-message at level ${level} is written as ${name} with the Renderer prefix`, async (t) => {
+        const { invoke, logText, loadLoggerPlugin } = setupIpc(t);
+        loadLoggerPlugin().init();
+
+        await invoke('log-message', level, `${level} from the page`);
+
+        assert.ok(logText().includes(`[${name}] [Renderer] ${level} from the page`), logText());
+    });
+}
+
+test('a renderer log-message the logger cannot write goes to the console instead of the logger', async (t) => {
+    const { invoke, logText, loadLoggerPlugin } = setupIpc(t);
+    loadLoggerPlugin().init();
+    const consoleError = t.mock.method(console, 'error', () => {});
+    const cyclic = { name: 'cyclic' };
+    cyclic.self = cyclic;
+    await invoke('log-message', 'info', 'written before');
+
+    await invoke('log-message', 'warn', 'cannot serialize', cyclic);
+
+    const [call] = consoleError.mock.calls;
+    assert.ok(call, 'nothing written to the console');
+    assert.ok(call.arguments.includes('warn'), String(call.arguments));
+    assert.ok(call.arguments.some(arg => arg instanceof TypeError && /circular/.test(arg.message)), String(call.arguments));
+    assert.doesNotMatch(logText(), /cannot serialize|日志记录失败/);
 });

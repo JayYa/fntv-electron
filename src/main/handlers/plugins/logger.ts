@@ -4,27 +4,19 @@ import * as log from '../../../modules/logger';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+const writers: Record<LogLevel, (message: string, ...args: any[]) => void> = {
+    debug: log.debug,
+    info: log.info,
+    warn: log.warn,
+    error: log.error,
+};
+
 function handleLogMessage(event: IpcMainInvokeEvent, level: LogLevel, ...args: any[]): void {
+    const write = Object.hasOwn(writers, level) ? writers[level] : log.info;
     try {
-        switch (level) {
-            case 'debug':
-                log.debug('[Renderer]', ...args);
-                break;
-            case 'info':
-                log.info('[Renderer]', ...args);
-                break;
-            case 'warn':
-                log.warn('[Renderer]', ...args);
-                break;
-            case 'error':
-                log.error('[Renderer]', ...args);
-                break;
-            default:
-                log.info('[Renderer]', ...args);
-        }
+        write('[Renderer]', ...args);
     } catch (error) {
-        log.error('日志记录失败:', error);
-        log.info('[Renderer]', level, ...args);
+        console.error('渲染进程日志写不进日志器:', level, ...args, error);
     }
 }
 
