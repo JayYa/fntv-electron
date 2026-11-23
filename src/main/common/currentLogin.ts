@@ -137,7 +137,7 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
             await loginStore.saveCurrentLogin(login);
         }
 
-        log.info('已建立当前登录，进入网页端, domain:', baseUrl);
+        log.info('已建立当前登录，进入网页端');
         void Promise.resolve(windowForWebUi().loadURL(`${baseUrl}/v`)).catch((error: unknown) => {
             log.error('加载网页端失败:', error);
         });
