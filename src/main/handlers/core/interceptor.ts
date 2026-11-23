@@ -12,37 +12,21 @@ interface BeforeRequestInterceptor {
     name: string;
 }
 
-const ANY_SCHEME = new Set(['http:', 'https:', 'ws:', 'wss:']);
-const DEFAULT_PORT: Record<string, string> = { 'http:': '80', 'https:': '443', 'ws:': '80', 'wss:': '443' };
+const SCHEMES: Record<string, string[]> = { '*': ['http:', 'https:'], http: ['http:'], https: ['https:'] };
 
 function globRegExp(glob: string): RegExp {
     const source = glob.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*');
     return new RegExp(`^${source}$`);
 }
 
-function hostMatches(hostPattern: string, hostname: string): boolean {
-    if (hostPattern === '*') return true;
-    if (hostPattern.startsWith('*.')) {
-        const domain = hostPattern.slice(2);
-        return hostname === domain || hostname.endsWith(`.${domain}`);
-    }
-    return hostname === hostPattern;
-}
-
 function urlPatternMatcher(pattern: string): UrlMatcher {
-    const parts = /^([a-z*]+):\/\/([^/]*?)(?::(\d+|\*))?(\/.*)$/i.exec(pattern);
-    if (!parts) {
-        log.error(`无法解析的拦截 URL 模式: ${pattern}`);
-        return () => false;
-    }
-    const [, scheme, host, port, path] = parts;
-    const protocol = `${scheme.toLowerCase()}:`;
-    const hostPattern = host.toLowerCase();
+    const parts = /^(\*|https?):\/\/([^/:]+)(\/.*)$/.exec(pattern);
+    if (!parts) throw new Error(`无法解析的拦截 URL 模式: ${pattern}`);
+    const [, scheme, host, path] = parts;
     const pathPattern = globRegExp(path);
     return (url) =>
-        (scheme === '*' ? ANY_SCHEME.has(url.protocol) : url.protocol === protocol) &&
-        hostMatches(hostPattern, url.hostname) &&
-        (!port || port === '*' || (url.port || DEFAULT_PORT[url.protocol]) === port) &&
+        SCHEMES[scheme].includes(url.protocol) &&
+        (host === '*' || url.hostname === host.toLowerCase()) &&
         pathPattern.test(url.pathname + url.search);
 }
 

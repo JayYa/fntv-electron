@@ -114,3 +114,8 @@ test('the login plugin ends the login when the web app opens the login, welcome 
     }
     assert.deepEqual(ended, leaving.map(() => mainWindow));
 });
+
+test('registering a URL pattern the manager cannot match fails at once', (t) => {
+    const { interceptor } = setup(t);
+    assert.throws(() => interceptor.registerBeforeRequest({ urls: ['<all_urls>'] }, () => {}, 'all'), /<all_urls>/);
+});
