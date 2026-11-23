@@ -1,12 +1,13 @@
-import { BrowserWindow, Session } from 'electron';
+import { BrowserWindow, CookiesSetDetails, Session } from 'electron';
 import { ApiService } from '../../../modules/fn_api/api';
 import { request, HttpMethod } from '../../../modules/fn_api/request';
 import * as log from '../../../modules/logger';
 import type { GrantedBaseUrl } from '../../common/currentLogin';
 
 export interface FnIdOauthFlow {
-    readonly oauthWindow: BrowserWindow | null;
-    authRequested: boolean;
+    oauthWindow(): BrowserWindow | null;
+    authRequested(): boolean;
+    setAuthRequested(requested: boolean): void;
     oauthSession: Session;
     establishTargetSession(targetBaseUrl: string): Promise<GrantedBaseUrl>;
     completeLogin(token: string, target: GrantedBaseUrl): Promise<void>;
@@ -15,7 +16,7 @@ export interface FnIdOauthFlow {
 }
 
 export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any) => Promise<void> {
-    const { oauthSession, establishTargetSession, completeLogin, adoptOauthBaseUrl, reject } = flow;
+    const { oauthWindow, authRequested, setAuthRequested, oauthSession, establishTargetSession, completeLogin, adoptOauthBaseUrl, reject } = flow;
     let baseUrl = '';
     let cookieString = '';
     let sysConfigLoaded = false;
@@ -58,42 +59,14 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
                     if (!data || !data.nas_oauth) return;
 
                     const appId = data.nas_oauth.app_id;
-                    const pageOrigin = new URL(flow.oauthWindow!.webContents.getURL()).origin;
+                    const pageOrigin = new URL(oauthWindow()!.webContents.getURL()).origin;
 
                     baseUrl = adoptOauthBaseUrl(data.nas_oauth.url || '', pageOrigin);
 
                     if (baseUrl && appId) {
                         sysConfigLoaded = true;
-                        const redirectUri = `${baseUrl}/v/oauth/result`;
-                        const targetUrl = `${baseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
                         log.info('[FN ID] 跳转到 OAuth 授权页面');
-
-                        if (cookieString) {
-                            const domain = baseUrl.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
-                            const cookies = cookieString.split(';');
-                            for (const c of cookies) {
-                                const parts = c.trim().split('=');
-                                if (parts.length >= 2) {
-                                    await oauthSession.cookies.set({
-                                        url: baseUrl,
-                                        name: parts[0].trim(),
-                                        value: parts.slice(1).join('=').trim(),
-                                        path: '/',
-                                        domain: domain,
-                                    }).catch(() => { });
-                                }
-                            }
-                            await oauthSession.cookies.set({
-                                url: baseUrl,
-                                name: 'mode',
-                                value: 'relay',
-                                path: '/',
-                            }).catch(() => { });
-                        }
-
-                        if (flow.oauthWindow) {
-                            flow.oauthWindow.loadURL(targetUrl);
-                        }
+                        await redirectToOauth(baseUrl, appId, cookieString);
                     }
                 } catch (err) {
                     log.error('[FN ID] 解析 SysConfig 失败:', err);
@@ -101,12 +74,12 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
             }
 
             if (type === 'Response' && url.includes('/oauthapi/authorize')) {
-                if (flow.authRequested) return;
+                if (authRequested()) return;
 
                 const code = messageData.code || authorizationCodeFromBody(messageData.body);
 
                 if (code) {
-                    flow.authRequested = true;
+                    setAuthRequested(true);
                     log.info('[FN ID] 获取到授权码，开始换取 token');
 
                     try {
@@ -120,7 +93,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
 
                             log.error(`[FN ID] ${baseUrl} 授权失败: ${msg}`);
 
-                            flow.authRequested = false;
+                            setAuthRequested(false);
                             reject(new Error(msg));
                             return;
                         }
@@ -130,7 +103,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
 
                         await completeLogin(token, target);
                     } catch (err) {
-                        flow.authRequested = false;
+                        setAuthRequested(false);
                         log.error('[FN ID] Token 交换失败:', err);
                         reject(err);
                     }
@@ -144,7 +117,7 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
     async function handleSysConfig(cookie: string) {
         if (baseUrl && sysConfigLoaded) return;
 
-        const currentUrl = flow.oauthWindow?.webContents.getURL() || '';
+        const currentUrl = oauthWindow()?.webContents.getURL() || '';
         if (!currentUrl) return;
 
         const parsed = new URL(currentUrl);
@@ -165,40 +138,34 @@ export function createFnIdMessageHandler(flow: FnIdOauthFlow): (messageData: any
             const data = configResponse.data as any;
             const oauth = data.nas_oauth;
             if (oauth && oauth.app_id) {
-                const targetBaseUrl = adoptOauthBaseUrl(oauth.url || '', currentBaseUrl);
-                baseUrl = targetBaseUrl;
-
-                const appId = oauth.app_id;
-                const redirectUri = `${targetBaseUrl}/v/oauth/result`;
-                const targetUrl = `${targetBaseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+                baseUrl = adoptOauthBaseUrl(oauth.url || '', currentBaseUrl);
                 log.info('[FN ID] 通过 API 获取 OAuth 配置，跳转到授权页面');
-
-                const domain = targetBaseUrl.replace(/^https?:\/\//, '').split(':')[0].split('/')[0];
-                const cookies = cookie.split(';');
-                for (const c of cookies) {
-                    const parts = c.trim().split('=');
-                    if (parts.length >= 2) {
-                        await oauthSession.cookies.set({
-                            url: targetBaseUrl,
-                            name: parts[0].trim(),
-                            value: parts.slice(1).join('=').trim(),
-                            path: '/',
-                            domain: domain,
-                        }).catch(() => { });
-                    }
-                }
-                await oauthSession.cookies.set({
-                    url: targetBaseUrl,
-                    name: 'mode',
-                    value: 'relay',
-                    path: '/',
-                }).catch(() => { });
-
-                if (flow.oauthWindow) {
-                    flow.oauthWindow.loadURL(targetUrl);
-                }
+                await redirectToOauth(baseUrl, oauth.app_id, cookie);
             }
         }
+    }
+
+    async function setCookie(cookie: CookiesSetDetails): Promise<void> {
+        try {
+            await oauthSession.cookies.set(cookie);
+        } catch (err) {
+            log.warn(`[FN ID] 设置 Cookie ${cookie.name} 失败:`, err instanceof Error ? err.message : String(err));
+        }
+    }
+
+    async function redirectToOauth(targetBaseUrl: string, appId: string, cookie: string): Promise<void> {
+        if (cookie) {
+            const domain = new URL(targetBaseUrl).hostname;
+            for (const pair of cookie.split(';')) {
+                const parts = pair.trim().split('=');
+                if (parts.length < 2) continue;
+                await setCookie({ url: targetBaseUrl, name: parts[0].trim(), value: parts.slice(1).join('=').trim(), path: '/', domain });
+            }
+            await setCookie({ url: targetBaseUrl, name: 'mode', value: 'relay', path: '/' });
+        }
+
+        const redirectUri = `${targetBaseUrl}/v/oauth/result`;
+        oauthWindow()?.loadURL(`${targetBaseUrl}/signin?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`);
     }
 
     return handleMessage;
