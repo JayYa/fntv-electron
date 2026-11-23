@@ -284,3 +284,24 @@ test('treats only URL-safe 6 to 30 character input as an FN ID', () => {
         assert.equal(isFnId(value), false, value);
     }
 });
+
+test('an authorization code the NAS refuses fails the login and logs the refusal without the NAS address', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad(`${NAS}/v`);
+    await login.bridge(sysConfig(NAS));
+
+    const { ApiService } = require('../dest/modules/fn_api/api.js');
+    t.mock.method(ApiService.prototype, 'auth', async () => ({ success: false, message: '授权码已过期' }));
+    const errors = [];
+    t.mock.method(require('../dest/modules/logger/index.js'), 'error', (...args) => errors.push(args.join(' ')));
+    await login.bridge({ type: 'Response', url: `${NAS}/oauthapi/authorize`, code: 'auth-code' });
+
+    const result = await login.finished;
+    assert.equal(result.ok, false);
+    assert.match(result.error.message, /授权码已过期/);
+    const refusal = errors.find((line) => line.includes('授权失败'));
+    assert.match(refusal, /授权码已过期/);
+    assert.doesNotMatch(refusal, /nas\.example\.com|5667/);
+});
