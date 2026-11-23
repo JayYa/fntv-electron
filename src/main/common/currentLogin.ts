@@ -47,10 +47,6 @@ function accessCodeFailure(error: AccessCodeVerificationError): LoginFailedError
         });
 }
 
-/**
- * 访问码验证通过后的 NAS 地址，只能由 verifyAccess 得到。访问授权本身留在 accessGrant 里；
- * 这里记着访问码，是为了授权被清空后能重新验证，并在保存当前登录时写入。
- */
 export class GrantedBaseUrl {
     private constructor(
         readonly baseUrl: string,
@@ -69,7 +65,6 @@ export class GrantedBaseUrl {
         }
     }
 
-    /** 访问授权已被之后的验证或结束当前登录清掉时，重新验证一次。 */
     current(): Promise<GrantedBaseUrl> {
         const { baseUrl, cookie } = this.grant;
         return getAccessCookieHeader(baseUrl) === cookie
@@ -78,7 +73,6 @@ export class GrantedBaseUrl {
     }
 }
 
-/** 验证访问码，失败时抛出 LoginFailedError。 */
 export const verifyAccess = (baseUrl: string, accessCode: string): Promise<GrantedBaseUrl> =>
     GrantedBaseUrl.verify(baseUrl, accessCode);
 
@@ -97,7 +91,6 @@ function unexpectedFailure(error: unknown): LoginResult {
         : fail('unexpected', { title: '连接失败', message: '无法连接到服务器，请检查域名是否正确或网络连接是否正常。' });
 }
 
-/** 还没验证访问码的地址，或 verifyAccess 已经验证过的地址。 */
 export type LoginAccess = GrantedBaseUrl | { baseUrl: string; accessCode: string };
 
 interface LoginSteps {
@@ -152,7 +145,6 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
 export interface NewLogin {
     access: LoginAccess;
     account: string;
-    /** 已经拿到的 token，或用验证后的地址换取 token。 */
     token: string | ((baseUrl: string) => Promise<IssuedToken>);
     history: loginStore.NewHistoryEntry;
 }
@@ -177,7 +169,6 @@ export interface SavedLogin {
 
 const END_LOGIN_TIMEOUT_MS = 5000;
 
-/** 清空 token、访问授权和会话 Cookie，再显示登录页；清理最多等 5 秒，失败只记日志。 */
 export async function endCurrentLogin(window: LoginWindow): Promise<void> {
     log.info('结束当前登录，清空 token、访问授权和 Cookie');
     clearAccessGrants();

@@ -11,11 +11,6 @@ import { isFnId } from '../../../public/fnId';
 import { handleFnIdLogin } from './fnid_login';
 import { establishNewLogin, type IssuedToken, type LoginReply } from '../../common/currentLogin';
 
-/**
- * 用户认证插件
- * 处理登录、配置管理、历史记录等功能
- */
-
 interface LoginData {
     domain: string;
     username: string;
@@ -31,11 +26,9 @@ interface HistoryItem {
 
 let fnIdLoginInProgress = false;
 
-// 获取配置处理
 async function handleGetConfig(event: IpcMainEvent): Promise<void> {
     try {
         const login = await loginStore.readCurrentLogin();
-        // 这里按字段白名单发送：密码、访问码和 token 都不进列表数据，凭据走下面的按需频道。
         event.reply('config-data', {
             config: {
                 account: login?.account,
@@ -51,7 +44,6 @@ async function handleGetConfig(event: IpcMainEvent): Promise<void> {
     }
 }
 
-// 按需读取一条历史记录的凭据，明文只回给本地登录页。回复带上域名和账号，登录页靠它丢弃连点时迟到的回复。
 async function handleGetHistoryCredentials(event: IpcMainEvent, request?: Partial<HistoryItem>): Promise<void> {
     if (!isLoginPage(event)) {
         log.warn('拒绝了非登录页的历史凭据请求');
@@ -80,7 +72,6 @@ async function handleGetCurrentAccessCode(event: IpcMainEvent): Promise<void> {
     }
 }
 
-// 清除历史记录处理
 async function handleClearHistory(event: IpcMainEvent): Promise<void> {
     try {
         await loginStore.clearHistory();
@@ -90,7 +81,6 @@ async function handleClearHistory(event: IpcMainEvent): Promise<void> {
     }
 }
 
-// 删除单个历史记录处理
 async function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }: HistoryItem): Promise<void> {
     try {
         const success = await loginStore.removeHistory({ domain, account });
@@ -163,7 +153,6 @@ async function handleLogin(_event: IpcMainInvokeEvent, loginData: LoginData): Pr
         };
     }
 
-    // FN ID 登录分支
     if (isFnId(loginData.domain)) {
         if (fnIdLoginInProgress) {
             return {
@@ -200,7 +189,6 @@ async function handleLogin(_event: IpcMainInvokeEvent, loginData: LoginData): Pr
     return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
 
-// 注册认证相关处理器
 function init(): void {
     registerHandler('get-config', handleGetConfig);
     registerHandler('get-history-credentials', handleGetHistoryCredentials);

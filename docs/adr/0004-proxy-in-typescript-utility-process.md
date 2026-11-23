@@ -42,3 +42,9 @@ Proxy 原来是单独打包的 Go 可执行文件，构建要装 Go 工具链、
   - 网盘忽略 Range、从第 0 字节返回 200 时，跳过起点之前的字节，按 206 返回（U-03）。上游提前结束时断开到 MPV 的连接，让它知道没拿够。
   - 206 响应去掉逐跳头和 `Set-Cookie`（U-14）。
   - 用空闲超时代替 Go 的 60 秒总超时（U-06）：收响应头和 body 期间都算，低速但持续有数据时不断开，默认 60 秒。
+- 115 限流的定时器可能比 `Date.now()` 早 1 毫秒触发，没到放行时刻就再等一轮。
+- 透明转发（`forward.ts`）：只转发白名单里的 MPV 请求头，MPV 的 Cookie、Authorization 不转发，改了（U-05）；转发目标给的头覆盖白名单头，NAS 的 Authorization 和访问授权 Cookie 就这样带上。逐跳头和 `Connection` 里列出的头不转发。上游以 416 拒绝初始的开放 Range（`bytes=0-`）时去掉 Range 重试一次。出错时响应的 `details` 只给错误码，不含上游 URL，改了（U-10）：Go 的 `details` 是错误串，带完整直链和签名。直链的已编码路径和 query 原样转发，改了（U-15）：Go 把解码后的 path 重新编码，`%2F` 会变成 `/`，签名直链要原样。日志只记方法、路径和 Range，不记主机：NAS 路径下就是完整 NAS 地址（`CODING_STANDARDS.md`）。
+- 直链媒体（`directLink.ts`）：`cloud_storage_info` 非空且有直链时才算直链媒体，否则按 NAS 本地播放源处理；直链固定取第一个，不随 `sourceIndex` 或清晰度变化。`CLOUD_TYPE_115`、`CLOUD_TYPE_QUARK` 特殊处理，其余网盘透明转发。直连时 Cookie 用 `; ` 连接流信息里的全部 Cookie，不去重、不加 `mode=relay`，不带 NAS 的 Authorization 和访问授权 Cookie；UA 取流信息里第一个 trim 后非空的，对所有直连网盘生效，覆盖 MPV 的 UA（U-09）。直连总是校验证书，会话的 `skipVerify` 只对 NAS 生效。WebDAV 这类直链把账号写在 URL 里：改成 Basic 认证并从 URL 里去掉；MPV 的 Authorization 不转发，所以有账号时总是补上。解析不了的 URL 原样交给转发报错。NAS 中转的直链媒体走 NAS，只带 token 和访问授权。
+- `/api/v1/playvideo`：`sourceIndex` 同 Go 的 `strconv.ParseInt(s, 10, 32)`，缺省或空串按 0，越界或为负时退回第 0 个。流信息请求里的 `ip` 是 `sha1(account)` 的前 16 字节按 UUID 格式写出（Go 的 `StringToUUID`），账号为空时是全 0 的 UUID。
+- `/api/v1/skipinfo`：成功返回 `{code:0,msg:"success"}`，失败 `{code:1000,msg}`。GET 不走缓存，每次取 NAS 上的最新值。POST 先解析 body 再看 query，顺序同 Go；body 按 Go 的 `encoding/json` 解到 `{guid, skipStart, skipEnd}`：键名不分大小写，`null` 当作没写，多余字段忽略，类型不对或时间点不是整数时报错。时间点不做范围检查，负数也原样写给 NAS（G-161-07）。
+- 两个路由的 query 都只读 `session`（playvideo 还有 `sourceIndex`），query 不覆盖路径参数，body 里的 `session` 也当作多余字段，改了（U-13，不照搬 gin）。

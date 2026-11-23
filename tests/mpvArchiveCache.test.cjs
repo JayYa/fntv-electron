@@ -7,7 +7,6 @@ const path = require('node:path');
 const { assertRestoreAndSave, posixPath, root, runStep, workflow } = require('./helpers/workflowSteps.cjs');
 const { assertArchivePinsConsistent } = require('./helpers/mpvArchivePins.cjs');
 
-// MPV 归档按 sha256 缓存：换版本时 key 跟着变，命中缓存也要校验，不通过就重新下载。
 function mpvArchiveSteps() {
     const job = workflow('build.yml').jobs.build;
     const cache = job.steps.find(step => step.id === 'mpv-archive-cache');
@@ -16,7 +15,6 @@ function mpvArchiveSteps() {
     return { job, cache, download, save };
 }
 
-// 在临时目录里放好缓存的压缩包，用桩代替 curl 和 unzip 运行下载步骤，返回桩被调用的记录。
 function runMpvDownload(t, archive, sha256) {
     const { job } = mpvArchiveSteps();
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-mpv-archive-'));
@@ -51,7 +49,6 @@ test('the MPV archive cache key changes with the archive sha256', () => {
     assert.match(download.run, /\$RUNNER_TEMP\/mpv-archive\/mpv-config\.zip/);
 });
 
-// 固定值不写在 build.yml 的 env：GITHUB_TOKEN 推不了改 workflow 的提交，update-mpv-archive.yml 开不了 PR。
 function runReadPinned(t, pinned) {
     const { job } = mpvArchiveSteps();
     assert.equal(job.env?.MPV_CONFIG_SHA256, undefined, 'build.yml pins the MPV archive in its env again');
@@ -86,7 +83,6 @@ test('build.yml rejects an mpv-archive.json with a bad sha256 or unsafe values',
 });
 
 test('the MPV archive is cached as soon as it is downloaded and verified', () => {
-    // 后面的构建失败也要保住已下载的压缩包。
     const { job, cache, download, save } = mpvArchiveSteps();
     assertRestoreAndSave(job, cache, save, download);
 });
@@ -101,13 +97,10 @@ test('a cached MPV archive is verified and used without downloading', t => {
 
 test('a cached MPV archive that fails verification is downloaded again', t => {
     const { result, calls } = runMpvDownload(t, Buffer.from('corrupted archive'), '0'.repeat(64));
-    // 桩 curl 不写文件，重新下载后的校验失败，步骤也要失败。
     assert.notEqual(result.status, 0);
     assert.deepEqual(calls, ['curl']);
 });
 
-// 升级归档时 mpv-archive.json 是唯一来源，README 的准备步骤和 docs/external-runtime.md 都要跟着改
-//（scripts/update-mpv-archive.cjs 一起改，tests/mpvArchiveUpdate.test.cjs）。
 test('README and docs/external-runtime.md pin the same MPV archive as mpv-archive.json', () => {
     assertArchivePinsConsistent(root);
 });

@@ -17,12 +17,6 @@ import { isPlayRequest } from '../../../modules/playback/playRequest';
 import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
 import * as playbackState from '../../../modules/playback/playbackState';
 
-/**
-* 媒体播放插件：把网页端的播放请求交给播放模块（src/modules/playback/play.ts），
-* 并提供它要的当前登录、Proxy、MPV 和窗口。
-*/
-
-// 找不到 MPV 时提示用户。只有 macOS 和 Linux 会找不到：Windows 总有附带 MPV。
 function getPlayerOrNotify(): MpvPlayer | undefined {
     const player = getCurrentMpvPlayer();
     if (player) {
@@ -35,10 +29,8 @@ function getPlayerOrNotify(): MpvPlayer | undefined {
     return undefined;
 }
 
-// 刷新窗口
 async function refreshWindow(): Promise<void> {
     const currentURL = getMainWindow().webContents.getURL() || '';
-    // 如果是资源库页面则不刷新
     if (checkLibraryPageUrl(currentURL)) {
         return;
     }
@@ -54,7 +46,6 @@ async function connect(): ReturnType<PlayDeps['connect']> {
     }
     const { domain, token, account } = login;
 
-    // 播放凭据只取自主进程安全配置，不信任远程页面传入的 token。
     const fnapi = new fn.ApiService(domain, token);
 
     return {
@@ -87,7 +78,6 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
         `--volume=${settings.getMpvVolume()}`,
     ];
     if (mpv.bundled) {
-        // 附带 MPV 旁边有 portable_config；显式指向用户目录，避免状态写入安装目录。
         extraArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 
@@ -124,7 +114,6 @@ async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<
     await play(request, run);
 }
 
-// 注册媒体播放处理器。退出时停止播放、等进度回传由退出协调做（src/modules/quit/quitCoordinator.ts）
 function init(): void {
     registerHandler('play-movie', handlePlayMovie);
 }

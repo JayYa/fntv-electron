@@ -7,10 +7,6 @@ const { posixPath, runStep, workflow } = require('./helpers/workflowSteps.cjs');
 const { lines, stub, tempDir, writeProject } = require('./helpers/ciCache.cjs');
 const downloads = require('../scripts/ci-download-cache.cjs');
 
-// build.yml 打包阶段的下载（2026-11-09，Renovate PR #139 的 504）：打包命令遇到下载错误时整体重跑。
-// 打包下载缓存在 2026-11-14 删掉（run 43585290276 对比 43560322186，不命中只多 10 到 14 秒），
-// 只留 install-dependencies 的 Electron 下载缓存和 MPV 归档缓存（tests/mpvArchiveCache.test.cjs）。
-
 const root = path.resolve(__dirname, '..');
 const CACHE_DIRS = ['~/.cache/electron', '~/Library/Caches/electron', '~/AppData/Local/electron/Cache'];
 const LINUX = { os: 'Linux', arch: 'X64' };
@@ -39,7 +35,6 @@ test('cache keys come from the pinned Electron version and the runner architectu
     writeProject(dir, { builder: '26.99.0', lock: '  app-builder-lib@26.99.0:\n  esbuild@0.99.0:\n' });
     assert.deepEqual(downloads.cacheKeys(LINUX, dir), keys);
     assert.equal(downloads.cacheKeys({ os: 'macOS', arch: 'ARM64' }, dir)['electron-key'], 'electron-macOS-ARM64-38.8.6');
-    // Electron zip 只对一种架构有用，key 带架构。
     assert.equal(downloads.cacheKeys({ os: 'Linux', arch: 'ARM64' }, dir)['electron-key'], 'electron-Linux-ARM64-38.8.6');
 });
 
@@ -49,7 +44,6 @@ test('cache keys refuse version ranges and a missing runner', t => {
     assert.throws(() => downloads.cacheKeys(LINUX, dir), /electron must be pinned/);
     assert.throws(() => downloads.cacheKeys(undefined, dir), /RUNNER_OS/);
     assert.throws(() => downloads.cacheKeys({ os: 'Linux' }, dir), /RUNNER_ARCH/);
-    // 仓库自己的 package.json 要能算出 key（Renovate 的 rangeStrategy 是 pin）。
     assert.match(downloads.cacheKeys(LINUX, root)['electron-key'], /^electron-Linux-X64-\d/);
 });
 
@@ -63,7 +57,6 @@ test('seeding writes SHASUMS256.txt for the installed Electron version', t => {
     const { file, version } = downloads.seedChecksums(cacheRoot, path.join(electron, 'checksums.json'));
     assert.equal(version, '38.8.6');
     assert.equal(path.basename(file), 'SHASUMS256.txt-38.8.6');
-    // app-builder-lib 的 parseChecksumFile 认 `<sha256> *<文件名>`。
     assert.equal(fs.readFileSync(file, 'utf8'), `${'a'.repeat(64)} *electron-v38.8.6-linux-x64.zip\n`);
     fs.writeFileSync(path.join(electron, 'checksums.json'), '{}');
     assert.throws(() => downloads.seedChecksums(cacheRoot, path.join(electron, 'checksums.json')), /no checksums/);
@@ -77,7 +70,6 @@ test('the Electron cache root matches the directories the workflows cache', () =
     assert.equal(downloads.electronCacheRoot('win32', home, {}), expand(CACHE_DIRS[2]));
 });
 
-// 用桩 pnpm 运行打包步骤：前 failures 次输出 error 后失败。
 function runBuild(t, failures, error) {
     const dir = tempDir(t, 'fntv-build-retry-');
     const bin = path.join(dir, 'bin');

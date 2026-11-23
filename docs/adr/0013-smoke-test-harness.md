@@ -48,3 +48,5 @@ status: accepted
 - 主进程未捕获异常断言会等到启动后至少 8 秒再检查，覆盖启动 3 秒后的首次自动检查更新。
 - Proxy 的实际端口取自主进程写的“Proxy 已就绪，端口 N”这一行（`tests/smoke/probes.cjs` 的 `PROXY_READY_PATTERN` 按原文匹配），改 `src/main/common/proxy.ts` 的措辞要同步改那边。
 - 未打包模式的 Electron 可执行文件由 `scripts/smoke-unpackaged.cjs` 解析好，经 `FNTV_SMOKE_EXECUTABLE` 传给 `tests/smoke/launch.cjs`：安装包冒烟 job 只装 `playwright-core`（`scripts/install-smoke-deps.cjs`），`launch.cjs` 不能加载 electron 包。未打包时日志不随 HOME 隔离，启动前清空 `log/`，免得读到上一次运行的“Proxy 已就绪”和图标路径。
+- 主窗口图标能否加载由冒烟测试检查：主进程启动时记一行“主窗口图标: <路径>”，测试从这行读出路径（`tests/smoke/installer.smoke.cjs`）。
+- 本机按用户装过的正式客户端，卸载注册表项名是 `b80d411a-9a19-5c6b-8319-e74d5c792871`（在装有 2.7.1 的 Windows 上用 `reg query` 看到的值），`tests/smokeTargets.test.cjs` 用它当作已装的客户端，核对本地拒绝安装；本地构建改了 `appId`（`tests/smoke/README.md` 的“在本地跑”），GUID 不同，碰不到已装的客户端。

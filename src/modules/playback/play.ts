@@ -11,10 +11,8 @@ export type PlayApi = Pick<ApiService,
     'getPlayInfo' | 'getPlayInfoCached' | 'getEpisodeList' | 'getItemList'
     | 'savePlayRecord' | 'setWatched' | 'getVideoUrl' | 'getSubtitle' | 'downloadSubtitle'>;
 
-/** 给这次播放列表建好的 Proxy 播放会话：按播放项（和播放源）给出播放地址。 */
 export type PlaybackUrl = (itemGuid: string, sourceIndex?: number) => string;
 
-/** 交给播放器的业务部分；MPV 程序路径、参数和音量由调用方补上。 */
 export type PlayerOptions = {
     onEvent: EventHandler;
     resumePosition: (item: PlayItem) => number;
@@ -22,22 +20,14 @@ export type PlayerOptions = {
 };
 
 export interface PlayDeps {
-    /** 按当前登录连上飞牛影视服务；没有有效的当前登录时抛错。 */
     connect(): Promise<{
         fnapi: PlayApi;
         openProxySession(itemGuids: string[]): Promise<PlaybackUrl>;
     }>;
-    /** 创建播放器；找不到 MPV 时返回 undefined（调用方负责提示用户）。 */
     launchPlayer(options: PlayerOptions): Player | undefined;
-    /** MPV 异常退出后调用，例如刷新网页端。 */
     onAbnormalExit(): Promise<void>;
 }
 
-/**
- * 返回 play(request, run)：按播放请求开始这次播放，返回时已开始播放或已结束。
- * 无论成败都会结束 run：没开始播放时立即结束，开始了就在 MPV 退出、进度回传完成后结束。
- * 播放请求要先经 isPlayRequest 校验。
- */
 export function createPlay(deps: PlayDeps): (request: PlayRequest, run: PlaybackRun) => Promise<void> {
     return async (request, run) => {
         let started = false;
@@ -272,7 +262,6 @@ function isAbnormalExit(event: PlayExitData): boolean {
     return event.code !== 0;
 }
 
-// 异常退出不写最终播放进度，不能取代排队的进度回传
 function exitWriteKind(event: PlayExitData): WriteKind {
     return isAbnormalExit(event) ? 'other' : 'final';
 }

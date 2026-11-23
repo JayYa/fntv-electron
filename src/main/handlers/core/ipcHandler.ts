@@ -15,8 +15,6 @@ interface HandlerInfo {
 
 const handlers = new Map<string, HandlerInfo>();
 
-// ipcMain.on 的处理器抛错会变成主进程未捕获异常，handle 的错误由 Electron 转给调用方。
-// await 之前的部分仍是同步执行的。
 function guardHandler(channel: string, handler: IpcHandler): IpcHandler {
     return async (event, ...args) => {
         try {
@@ -38,12 +36,6 @@ function guardInvokeHandler(channel: string, handler: IpcInvokeHandler): IpcInvo
     };
 }
 
-/**
- * 注册 IPC 处理器
- * @param channel - IPC 通道名称
- * @param handler - 处理函数
- * @param options - 选项配置
- */
 function registerHandler(channel: string, handler: IpcHandler | IpcInvokeHandler, options: HandlerOptions = {}): void {
     if (handlers.has(channel)) {
         throw new Error(`Handler for channel "${channel}" already registered`);
@@ -51,7 +43,6 @@ function registerHandler(channel: string, handler: IpcHandler | IpcInvokeHandler
     
     handlers.set(channel, { handler, options });
     
-    // 根据选项决定使用 handle 还是 on
     if (options.useHandle) {
         ipcMain.handle(channel, guardInvokeHandler(channel, handler as IpcInvokeHandler));
     } else {
@@ -59,10 +50,6 @@ function registerHandler(channel: string, handler: IpcHandler | IpcInvokeHandler
     }
 }
 
-/**
- * 移除 IPC 处理器
- * @param channel - IPC 通道名称
- */
 function removeHandler(channel: string): void {
     if (handlers.has(channel)) {
         ipcMain.removeAllListeners(channel);
@@ -70,16 +57,10 @@ function removeHandler(channel: string): void {
     }
 }
 
-/**
- * 获取所有已注册的处理器
- */
 function getRegisteredHandlers(): string[] {
     return Array.from(handlers.keys());
 }
 
-/**
- * 清除所有处理器
- */
 function clearAllHandlers(): void {
     handlers.forEach((_, channel) => {
         ipcMain.removeAllListeners(channel);

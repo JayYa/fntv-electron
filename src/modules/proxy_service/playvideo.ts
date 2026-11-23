@@ -1,4 +1,3 @@
-// GET /api/v1/playvideo/:itemGuid?session=…&sourceIndex=…：按播放源选流，转发视频流。
 import * as crypto from 'node:crypto';
 import type * as http from 'node:http';
 import { composeCookieHeader } from '../fn_api/core/cookie';
@@ -13,9 +12,7 @@ import { SessionApiDeps, sessionApiClient } from './sessionApiClient';
 
 export type PlayVideoDeps = SessionApiDeps & {
     sessions: PlaybackSessionStore;
-    // 115 直连的限流，所有会话共用。
     limiter115: RateLimiter;
-    // 夸克的文件元信息，按直链 URL 缓存，所有会话共用。
     quarkMetaCache: TtlCache<FileMeta>;
     quarkIdleTimeoutMs: number;
 };
@@ -23,7 +20,6 @@ export type PlayVideoDeps = SessionApiDeps & {
 const INT32_MIN = -(2 ** 31);
 const INT32_MAX = 2 ** 31 - 1;
 
-// 与 Go 的 strconv.ParseInt(s, 10, 32) 一致；缺省或空串按 0。
 function parseSourceIndex(value: string | null): number | undefined {
     if (value === null || value === '') return 0;
     if (!/^[+-]?\d+$/.test(value)) return undefined;
@@ -31,7 +27,6 @@ function parseSourceIndex(value: string | null): number | undefined {
     return parsed >= INT32_MIN && parsed <= INT32_MAX ? parsed : undefined;
 }
 
-// 流信息请求里的 ip：sha1(account) 的前 16 字节按 UUID 格式写出，与 Go 的 StringToUUID 一致。
 function stringToUuid(value: string): string {
     if (!value) return '00000000-0000-0000-0000-000000000000';
     const hex = crypto.createHash('sha1').update(value, 'utf8').digest('hex').slice(0, 32);
@@ -45,7 +40,6 @@ export async function handlePlayVideo(
     query: URLSearchParams,
     deps: PlayVideoDeps,
 ): Promise<void> {
-    // 只读 query 里的 session 和 sourceIndex，query 不覆盖路径参数（U-13，不照搬 gin）。
     const sessionId = query.get('session') ?? '';
     const sourceIndex = parseSourceIndex(query.get('sourceIndex'));
     if (!sessionId || sourceIndex === undefined) {
@@ -70,7 +64,6 @@ export async function handlePlayVideo(
         return;
     }
 
-    // 越界或为负时退回第 0 个，与 Go 版一致。
     const mediaGuid = sourceIndex > 0 && sourceIndex < videoStreams.length
         ? videoStreams[sourceIndex].media_guid
         : videoStreams[0].media_guid;
@@ -85,7 +78,6 @@ export async function handlePlayVideo(
     const directLink = stream.data ? directLinkOf(stream.data) : undefined;
     if (directLink && !session.useNasLocal) {
         deps.log.info(`启用云存储直连: type=${directLink.cloudType}`);
-        // 115 和夸克的特殊处理按 directLink.cloudType 在这里分支，其余网盘透明转发。
         if (directLink.cloudType === CLOUD_TYPE_QUARK) {
             deps.log.info(`开始转发 | 模式: 夸克分片 | itemGuid: ${itemGuid}`);
             await forwardQuark(req, res, cloudDirectTarget(directLink, deps.ca), directLink.url, {
@@ -101,7 +93,6 @@ export async function handlePlayVideo(
         return;
     }
 
-    // NAS 本地播放源，以及 NAS 中转的直链媒体。
     deps.log.info(`开始转发 | 模式: NAS | itemGuid: ${itemGuid}`);
     await forward(req, res, {
         url: api.getVideoUrl(mediaGuid),

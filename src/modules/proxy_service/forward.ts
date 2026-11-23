@@ -1,11 +1,9 @@
-// 透明转发：把 MPV 的请求转给上游，流式返回响应。
 import type * as http from 'node:http';
 import { pipeline } from 'node:stream';
 import type { ProxyLog } from './log';
 import { abortWhenMpvLeaves, sendJson } from './respond';
 import { openUpstream } from './upstream';
 
-// 从 MPV 请求转给上游的头。不在这里的头（Cookie、Authorization 等）不转发（U-05，不照搬 Go）。
 const PASSTHROUGH_HEADERS = [
     'user-agent',
     'accept',
@@ -19,7 +17,6 @@ const PASSTHROUGH_HEADERS = [
     'if-none-match',
 ];
 
-// 不能转发的逐跳头，Connection 里列出的头也一样。
 const HOP_BY_HOP_HEADERS = new Set([
     'connection',
     'keep-alive',
@@ -36,7 +33,6 @@ const RESPONSE_HEADER_TIMEOUT_MS = 120 * 1000;
 
 export interface ForwardTarget {
     url: string;
-    // 覆盖白名单头，例如 NAS 的 Authorization 和 Cookie。
     headers: Record<string, string>;
     skipVerify: boolean;
     ca: string[];
@@ -102,13 +98,11 @@ export async function forward(
     const headers: Record<string, string> = { ...passthroughHeaders(req), ...target.headers, 'x-forwarded-for': '127.0.0.1' };
     const method = req.method || 'GET';
     const { pathname } = targetUrl;
-    // 不记主机：NAS 路径下就是完整 NAS 地址（CODING_STANDARDS）。
     log.info(`转发请求 method=${method} path=${pathname} range=${headers.range ?? ''}`);
 
     let upstream: http.IncomingMessage;
     try {
         upstream = await sendUpstream(target, headers, method, controller.signal);
-        // 上游拒绝初始的开放 Range 时，去掉 Range 重试一次，与 Go 版一致。
         if (upstream.statusCode === 416 && headers.range === 'bytes=0-') {
             upstream.resume();
             const retryHeaders = { ...headers };
@@ -121,7 +115,6 @@ export async function forward(
         if (controller.signal.aborted) return;
         log.debug(`转发错误: ${error?.code ?? ''}`);
         if (!res.headersSent) {
-            // 错误详情只给错误码，不含上游 URL（U-10，不照搬 Go）。
             sendJson(res, 500, { error: 'Proxy error', details: error?.code || 'upstream request failed' });
         }
         return;

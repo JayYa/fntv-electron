@@ -24,7 +24,6 @@ test('quark returns the bytes of the original file for any range, at most 10MiB 
     const { drive, play } = await quarkSetup(t);
     const total = FILE.length;
     const cases = [
-        // [MPV 的 Range, 期望的起点, 期望的终点]
         [undefined, 0, 10 * MIB - 1],
         ['bytes=0-', 0, 10 * MIB - 1],
         ['bytes=12345-', 12345, 12345 + 10 * MIB - 1],
@@ -45,7 +44,6 @@ test('quark returns the bytes of the original file for any range, at most 10MiB 
     }
 });
 
-// Go 只缓存成功的元信息，键是整个直链 URL。
 test('quark asks the drive for the file size once per direct link, and again after a failure', async (t) => {
     let failMeta = true;
     const { drive, play } = await quarkSetup(t, {
@@ -149,7 +147,6 @@ test('quark turns userinfo in the direct link into Basic authorization', async (
     }
 });
 
-// Go 的缓存键是原始直链 URL：同一路径、账号不同的两个直链各取一次元信息。
 test('quark asks again for the file size when only the account in the direct link differs', async (t) => {
     const drive = await startFakeDirectLink(t, { media: FILE });
     const { host } = new URL(drive.origin);
@@ -182,11 +179,9 @@ test('quark answers an unsupported range or a start past the end with the Go 416
         assert.equal(response.headers['content-type'], 'application/json; charset=utf-8', range);
         assert.deepEqual(JSON.parse(response.body.toString()), { error: 'Range not satisfiable' }, range);
     }
-    // 只有第一次取了元信息，之后都命中缓存，也没有取数据。
     assert.deepEqual(drive.requests.map((r) => r.headers.range), ['bytes=0-0']);
 });
 
-// Go 不理会小于起点的终点，照样从起点取最多 10MiB。
 test('quark ignores an end before the start, like Go', async (t) => {
     const { play } = await quarkSetup(t);
 
@@ -207,7 +202,6 @@ test('quark shares the cached file size across playback sessions', async (t) => 
     assert.deepEqual(drive.requests.map((r) => r.headers.range), ['bytes=0-0', 'bytes=0-9', 'bytes=10-19']);
 });
 
-// Go 没有分片并发上限也没有预取：每个 MPV 请求各对应一次取数据，同时进行。
 test('quark fetches concurrent MPV requests from the drive at the same time, one fetch each', async (t) => {
     let active = 0;
     let peak = 0;
@@ -253,7 +247,6 @@ test('quark stops fetching from the drive when MPV disconnects', async (t) => {
     await closed;
 });
 
-// 测试 CA 不在 Node 自带和系统的证书库里；会话的 skipVerify 只对 NAS 生效。
 test('quark verifies the direct link certificate even when the session skips verification', async (t) => {
     const tlsDir = path.join(__dirname, 'fixtures', 'tls');
     const tls = { key: fs.readFileSync(path.join(tlsDir, 'nas-key.pem')), cert: fs.readFileSync(path.join(tlsDir, 'nas.pem')) };

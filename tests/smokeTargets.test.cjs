@@ -18,7 +18,6 @@ function touch(file) {
 }
 
 test('each macOS smoke target picks the dmg of its own architecture from the macOS build', t => {
-    // build:mac 一次产出两个 dmg 和各自的 blockmap（package.json 的 artifactName）。
     const release = tempDir(t);
     for (const name of [
         'FNMedia_2.7.1_mac_x64.dmg',
@@ -34,7 +33,6 @@ test('each macOS smoke target picks the dmg of its own architecture from the mac
 });
 
 test('the executable to launch is the one inside the .app at the root of the mounted dmg', t => {
-    // dmg 根目录有 .app 和指向 /Applications 的链接（package.json 的 dmg.contents）。
     const volume = tempDir(t);
     touch(path.join(volume, '飞牛影视.app', 'Contents', 'MacOS', '飞牛影视'));
     touch(path.join(volume, '飞牛影视.app', 'Contents', 'Info.plist'));
@@ -51,7 +49,6 @@ test('a mounted dmg without exactly one .app is reported with what it contains',
 });
 
 test('each Linux smoke target picks the AppImage of its own architecture from the Linux build', t => {
-    // build:linux 一次产出两个 AppImage，x64 的文件名架构是 x86_64（package.json 的 artifactName）。
     const release = tempDir(t);
     for (const name of [
         'FNMedia_2.7.1_linux_x86_64.AppImage',
@@ -66,7 +63,6 @@ test('each Linux smoke target picks the AppImage of its own architecture from th
     assert.equal(findInstaller(resolveTarget('linux-arm64'), release), path.join(release, 'FNMedia_2.7.1_linux_arm64.AppImage'));
 });
 
-// 本机按用户装过的客户端，卸载注册表项名是 appId 生成的 GUID（在装有 2.7.1 的 Windows 上用 reg query 看到的值）。
 const INSTALLED_CLIENT_KEY = 'b80d411a-9a19-5c6b-8319-e74d5c792871';
 
 test('a local Windows smoke test refuses to install over a client already installed with the same appId', () => {
@@ -82,7 +78,6 @@ test('a local Windows smoke test refuses to install over a client already instal
 
 test('a Windows smoke test installs when no client with the same appId is installed, on CI, or when explicitly allowed', () => {
     const installed = key => key === INSTALLED_CLIENT_KEY;
-    // 本地构建改了 appId（tests/smoke/README.md 的“在本地跑”），GUID 不同，不会碰到已装的客户端。
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: {}, appId: 'com.qiaokes.fntv.smoketest', isInstalled: installed }));
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: { CI: 'true' }, appId: 'com.qiaokes.fntv', isInstalled: installed }));
     assert.doesNotThrow(() => checkWindowsInstallAllowed({ env: { FNTV_SMOKE_ALLOW_INSTALL: '1' }, appId: 'com.qiaokes.fntv', isInstalled: installed }));
@@ -99,8 +94,6 @@ test('every smoke target names the workflow platform it is built on', () => {
     });
 });
 
-// 日志器曾在 userData 改到 ~/.fntv 之前取目录，日志落进 Electron 默认的 userData（#87）。冒烟测试要能看出
-// 这个差别，所以每个目标的 Electron 默认 userData 都要是 ~/.fntv 以外的目录。
 test('every POSIX smoke target keeps logs in ~/.fntv/logs, apart from the Electron default userData', () => {
     const home = path.join(os.tmpdir(), 'fntv-smoke-home');
     const defaults = {
@@ -122,8 +115,6 @@ test('every POSIX smoke target keeps logs in ~/.fntv/logs, apart from the Electr
 });
 
 test('the Windows smoke test on CI runs against the real profile so the Electron default userData is a separate directory', () => {
-    // app.getPath('home') 在 Windows 上不认 USERPROFILE，带 --user-data-dir 时 Electron 默认 userData
-    // 又和 ~/.fntv 是同一个目录，看不出日志写错了地方。CI 机器是一次性的，直接用真实的用户目录。
     const env = { CI: 'true', USERPROFILE: 'C:\Users\runneradmin', APPDATA: 'C:\Users\runneradmin\AppData\Roaming' };
     const isolation = resolveTarget('win32-x64', env).isolation(path.join(os.tmpdir(), 'fntv-smoke-home'));
     assert.deepEqual(isolation, {
@@ -141,7 +132,6 @@ test('a local Windows smoke test keeps user data in the temporary home through -
     assert.deepEqual(isolation, {
         userDataDir: path.join(home, '.fntv'),
         logDir: path.join(home, '.fntv', 'logs'),
-        // Electron 跟着 --user-data-dir 改 userData，默认目录和 ~/.fntv 重合，这条检查在本地做不了。
         electronUserDataDir: null,
         args: [`--user-data-dir=${path.join(home, '.fntv')}`],
         realProfile: false,

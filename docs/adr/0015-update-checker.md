@@ -11,6 +11,8 @@ status: accepted
 - 优先请求 GitHub Releases API；当仓库尚未发布任何 Release 时 GitHub 返回 404，视为“暂无更新”而非检查失败。
 - API 请求使用指数退避重试，但只重试网络错误和 5xx，4xx 原样抛出：4xx 在几秒内不会恢复，重试只会白白消耗 GitHub API 额度。
 - 触发限流时将恢复时间 `rateLimitedUntil` 记在内存中，恢复前不再请求 API。API 失败或处于限流期时，回退到请求 GitHub Release 页面的重定向拿最新 tag（`fetchLatestTagFromReleasePage`），再按构建命名规则（`expectedAssetName`）拼出安装包链接。
+- 未认证的 GitHub API 每个出口 IP 每小时 60 次，NAT、代理和 VPN 后面的请求共用额度。未认证时带 `If-None-Match` 得到 304 也会扣额度（2026-11-07 实测），所以不做条件请求。限流响应拿不到恢复时间时按一小时窗口估算。`releases/latest` 页面不走 API 限流：请求时不跟随重定向，从 `Location` 取 tag。
+- 更新提示框是原生对话框，只能显示纯文本，也不能滚动，正文过长会把按钮挤出屏幕，所以 Release 正文转成纯文本并限制行数和字数。release-please 的版本标题是 `## [2.7.0](compare 链接) (日期)`，首个版本没有 compare 链接；条目开头的 `**scope:** `、条目末尾的 `([abc1234](commit 链接))`、`([#12](issue 链接))`，以及提交正文 `Closes #12` 生成的 `, closes [#12](链接)` 都去掉。
 
 ## 下载加速中转
 
@@ -48,6 +50,7 @@ status: accepted
 - 每一步失败都记日志后继续，客户端不会卡在退不出去。
 - 「立即重启安装」引发的退出（`quitForInstall`）直接放行：拦下会让安装作废。它照常关 Proxy、销毁托盘，但不等 Proxy 关完；它和收尾共用同一次关闭。安装程序没启动时恢复原状，之后的退出按普通退出处理。收尾期间「立即重启安装」接手了退出时，收尾不再往下走。
 - 系统关机、重启或注销：Windows 是主窗口的 `session-end`（`WM_ENDSESSION`），这种退出不发 `before-quit`，收尾和安装都不会运行；Linux 是 `powerMonitor` 的 `shutdown`，随后 SIGTERM 按普通退出收尾（注销只有 SIGTERM，分不出来，照常安装）。macOS 关机时也发 `shutdown`，但 macOS 没有应用内更新，收到后什么都不做。收到后放弃这次「退出时安装」，不调用 `preventDefault`，不推迟关机。监听在主窗口创建后注册，要在 app ready 之后：那之前不能用 `powerMonitor`。
+- `stopPlaybackAndWait` 从调用起最多等 5 秒，覆盖停止 MPV 和进度回传：回传请求单个最长约 1 分钟，最多三个，安装和退出等不了这么久。超时后记 warn 并照常返回，不改播放状态，回传在后台继续，完成后照常通知 `onPlaybackEnded`。正在启动播放时调用会取消启动。
 
 ## 测试替身（`tests/helpers/updateChecker.cjs`）
 

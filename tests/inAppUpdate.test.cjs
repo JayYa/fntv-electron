@@ -12,7 +12,6 @@ const {
 const WIN_ASSETS = ['FNMedia_2.7.0_win_x64.exe', 'FNMedia_2.7.0_win_x64.exe.blockmap', 'latest.yml'];
 const FEED = 'https://github.com/JayYa/fntv-electron/releases/latest/download/';
 
-// 按弹框标题点按钮：clicks 是 { 标题: 按钮文字 }，没列出的弹框点取消按钮
 function clicking(clicks) {
     return (options) => {
         const label = clicks[options.title];
@@ -47,7 +46,6 @@ for (const [platform, arch] of [['darwin', 'arm64']]) {
         });
 
         await checker.manualCheckForUpdates();
-        // 断言没有开始下载，没有可等的条件
         await settle();
 
         assert.deepEqual(dialogs[0].buttons, ['立即下载', '查看详情', '稍后提醒']);
@@ -110,7 +108,6 @@ test('checking again while downloading does not start a second download', async 
     await waitFor(() => updater.downloads === 1);
     updater.progress(42.7);
     await checker.manualCheckForUpdates();
-    // 断言没有第二次下载，没有可等的条件
     await settle();
 
     assert.equal(updater.downloads, 1);
@@ -204,9 +201,7 @@ test('install on quit leaves the client running and installs when it quits', asy
     await checker.manualCheckForUpdates();
     await waitFor(() => updater.downloads === 1);
     updater.finishDownload();
-    // 下载完成框弹出前 autoInstallOnAppQuit 已关掉，选了「退出时安装」才再打开
     await waitFor(() => dialogs.length === 2 && updater.autoInstallOnAppQuit === true);
-    // 断言没有立即安装，没有可等的条件
     await settle();
 
     assert.deepEqual(updater.installs, []);
@@ -226,7 +221,6 @@ test('closing the downloaded dialog installs nothing and the next check asks aga
     await waitFor(() => updater.downloads === 1);
     updater.finishDownload();
     await waitFor(() => downloadedDialogs === 1);
-    // 断言关掉之后既没安装、也没改成退出时安装，没有可等的条件
     await settle();
     assert.deepEqual(updater.installs, []);
     assert.equal(updater.autoInstallOnAppQuit, false);
@@ -237,7 +231,6 @@ test('closing the downloaded dialog installs nothing and the next check asks aga
 });
 
 test('a downloaded update is not installed on quit until the user chooses so', async (t) => {
-    // 下载完成框一直开着，看这时退出会不会安装
     let answer;
     const click = clicking({ 发现新版本: '下载并安装' });
     const { checker, dialogs, updater } = setupWindows(t, {
@@ -303,7 +296,6 @@ test('a failed install offers the Release page for a manual update', async (t) =
 });
 
 test('a failed restart-and-install after choosing install on quit leaves nothing to install on quit', async (t) => {
-    // 先选「退出时安装」，再检查一次改选「立即重启安装」，安装失败。electron-updater 不能在退出时自己装：那条路径不先停 MPV
     let downloadedDialogs = 0;
     const { checker, updater } = setupWindows(t, {
         dialogResponse: (options) => {
@@ -329,7 +321,6 @@ test('remind me later neither downloads nor opens anything', async (t) => {
     const { checker, dialogs, opened, updater } = setupWindows(t, { dialogResponse: clicking({ 发现新版本: '稍后提醒' }) });
 
     await checker.manualCheckForUpdates();
-    // 断言什么都没发生，没有可等的条件
     await settle();
 
     assert.equal(dialogs.length, 1);
