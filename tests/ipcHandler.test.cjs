@@ -117,3 +117,15 @@ test('handlers still receive their arguments and run synchronously', (t) => {
 
     assert.deepEqual(seen, [['a', 2]]);
 });
+
+test('registering a channel twice throws and keeps the first handler', (t) => {
+    const { ipcMain, loadIpcHandler } = setupIpc(t);
+    const { registerHandler } = loadIpcHandler();
+    const seen = [];
+    registerHandler('twice-channel', () => seen.push('first'));
+
+    assert.throws(() => registerHandler('twice-channel', () => seen.push('second')), /twice-channel.*already registered/);
+    ipcMain.emit('twice-channel', fakeEvent());
+
+    assert.deepEqual(seen, ['first']);
+});
