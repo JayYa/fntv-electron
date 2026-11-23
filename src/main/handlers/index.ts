@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getInstance as getInterceptor } from './core/interceptor';
+import { interceptor } from './core/interceptor';
 import { initAppHooks } from './core/appHook';
 import * as log from '../../modules/logger';
 
@@ -46,7 +46,6 @@ function loadPlugins(): void {
  * 注册所有插件
  */
 function registerAllPlugins(): void {
-    const interceptor = getInterceptor();
     interceptor.init('persist:fntv');
     // 加载所有插件
     loadPlugins();
