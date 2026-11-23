@@ -9,8 +9,6 @@ const axios = require('axios');
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/JayYa/fntv-electron/releases/latest';
 const LATEST_RELEASE_PAGE = 'https://github.com/JayYa/fntv-electron/releases/latest';
 
-// 替换 electron-updater 的 autoUpdater。只记录公开方法的调用和收到的 feed；
-// 下载由测试推进：progress(percent)、finishDownload()、failDownload(error)，出错时和真实的一样先发 error 事件再 reject。
 class FakeAutoUpdater extends EventEmitter {
     constructor({ app, events }) {
         super();
@@ -23,7 +21,6 @@ class FakeAutoUpdater extends EventEmitter {
         this.checkResult = { isUpdateAvailable: true, updateInfo: { version: '2.7.0' } };
         this.pendingDownload = null;
         this.installError = null;
-        // 客户端的 app 和测试共用的事件记录
         this.app = app;
         this.events = events;
     }
@@ -49,8 +46,6 @@ class FakeAutoUpdater extends EventEmitter {
         this.pendingDownload.reject(error);
     }
 
-    // 和 electron-updater 的 BaseUpdater 一样：安装程序启动成功就在下一轮 app.quit()；
-    // 启动前就失败（installError）时同步发 error 事件，不退出
     quitAndInstall(isSilent, isForceRunAfter) {
         this.installs.push({ isSilent, isForceRunAfter });
         this.events.push('install started');
@@ -64,7 +59,6 @@ class FakeAutoUpdater extends EventEmitter {
 
 const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 
-// 等到 condition() 为真，超时就失败。要断言的事会发生时用它。
 async function waitFor(condition, timeoutMs = 2000) {
     const deadline = Date.now() + timeoutMs;
     while (!condition()) {
@@ -75,18 +69,12 @@ async function waitFor(condition, timeoutMs = 2000) {
     }
 }
 
-// 让更新流程里已排队的回调跑完。只用于断言某事「没有发生」：这时没有可等的条件，
-// 只能给它足够的机会发生。20 轮远多于流程里最长的 await 链（约 6 层）。
 async function settle() {
     for (let i = 0; i < 20; i += 1) {
         await nextTurn();
     }
 }
 
-// 加载编译后的 updateChecker，替换 electron、electron-updater 和 axios.get。
-// respond(url, config) 返回 axios 响应或抛出错误；
-// dialogResponse 是对话框点击的按钮序号，也可以是 (options) => 序号，按弹框内容决定点哪个；
-// 返回 Promise 时弹框一直开着，直到它完成。
 function setupUpdateChecker(t, { respond, version = '2.6.2', config = { downloadProxyEnabled: false }, dialogResponse = 2, isPackaged = true }) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-update-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
@@ -96,11 +84,9 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
     const dialogs = [];
     const opened = [];
     const events = [];
-    // app.quit() 像 Electron 那样发 before-quit（tests/helpers/fakeQuitApp.cjs），测试用 requestQuit(app) 模拟用户退出
     const electronMock = {
         app: createQuittingApp(events, {
             isPackaged,
-            // 未打包时日志写在 getAppPath()/log
             getAppPath() { return testRoot; },
             getVersion() { return version; },
             getPath(name) { return paths[name]; },
@@ -117,7 +103,6 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
             openExternal(url) { opened.push(url); },
         },
         safeStorage: {},
-        // Linux 和 macOS 关机时发 shutdown（测试里用 emit 模拟；macOS 没有应用内更新）
         powerMonitor: new EventEmitter(),
     };
     const updater = new FakeAutoUpdater({ app: electronMock.app, events });
@@ -139,7 +124,6 @@ function setupUpdateChecker(t, { respond, version = '2.6.2', config = { download
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
-    // 打包后日志写在 userData（~/.fntv）/logs；未打包时写在 getAppPath()/log
     const logFile = isPackaged ? path.join(paths.userData, 'logs', 'app.log') : path.join(testRoot, 'log', 'app.log');
     const logText = () => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
 
@@ -192,13 +176,11 @@ function simulateHost(t, platform, arch) {
     });
 }
 
-// 模拟以 AppImage 运行：APPIMAGE 指向 dir 里的 AppImage；appImageDir 为 undefined 时模拟解包后运行
 function runAsAppImage(t, appImageDir) {
     const original = process.env.APPIMAGE;
     if (appImageDir === undefined) {
         delete process.env.APPIMAGE;
     } else {
-        // 客户端按 Linux 路径取目录，Windows 主机上也用正斜杠拼，fs 照样认
         process.env.APPIMAGE = `${appImageDir.split(path.sep).join('/')}/FNMedia_2.6.2_linux_x86_64.AppImage`;
     }
     t.after(() => {
@@ -210,7 +192,6 @@ function runAsAppImage(t, appImageDir) {
     });
 }
 
-// 放 AppImage 的临时目录，测试结束时删掉（测试可能把它改成只读，先恢复权限）
 function tempDir(t) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-appimage-'));
     t.after(() => {

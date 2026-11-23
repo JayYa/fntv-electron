@@ -11,35 +11,21 @@ import {
 import { type FntvManifest, type ManifestFile, type ManifestProblem, readManifest } from './manifest';
 import { cleanupLeftoverStaging, PENDING_UPDATE_SUFFIX, removePath, resolveRelative, sha256File, Staging } from './stagedWrites';
 
-// 按清单把便携配置同步到用户配置（规则见 docs/external-runtime.md“用户配置同步”和 spec #219）。
-
 export type MpvFileAction =
-    /** 当前内容已等于新版，不动。 */
     | 'unchanged'
-    /** 缺失，补上。 */
     | 'added'
-    /** 用户没改过，换成新版。 */
     | 'replaced'
-    /** 托管文件被用户改过，照样覆盖，不备份。 */
     | 'overwrote-modified'
-    /** 用户改过的配置，原文件不动，新版写到 `<文件>.fntv-new`。 */
     | 'wrote-fntv-new'
-    /** 保留用户的文件，原因见 reason。 */
     | 'kept'
-    /** 归档删掉的托管文件，用户没改过，删除。 */
     | 'removed';
 
 export interface MpvFileSyncEntry {
-    /** 相对用户配置，正斜杠。 */
     path: string;
     action: MpvFileAction;
     reason?: string;
 }
 
-/**
- * 待合并的冲突：本次写了 `.fntv-new`，或上次写的 `.fntv-new` 还在。sha256 是新版（`.fntv-new` 内容）的哈希，
- * 确认冲突时连同路径记下。
- */
 export interface MpvConfigConflict {
     path: string;
     sha256: string;
@@ -52,7 +38,6 @@ export type MpvConfigSyncResult =
     | {
         status: 'synced';
         archiveVersion: string;
-        /** 同步前用户配置里有没有安装记录。没有时是首次迁移（或全新安装）。 */
         hadInstallRecord: boolean;
         files: MpvFileSyncEntry[];
         conflicts: MpvConfigConflict[];
@@ -68,7 +53,6 @@ export interface MpvConfigSyncInput {
     platform: NodeJS.Platform;
 }
 
-// realpath 消掉 `..`、尾部分隔符、符号链接，Windows 上还统一大小写。不存在的目录不可能是已存在的来源。
 function isSameDirectory(existingDir: string, otherDir: string): boolean {
     if (!fs.existsSync(otherDir)) return false;
     return fs.realpathSync.native(existingDir) === fs.realpathSync.native(otherDir);
@@ -79,11 +63,9 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
     if (!fs.existsSync(portableConfigDir)) {
         return { status: 'failed', error: new Error(`Portable config directory not found: ${portableConfigDir}`), files: [] };
     }
-    // 用户配置就是便携配置时，同步从没往这里写过，没有要清理的暂存目录。
     if (isSameDirectory(portableConfigDir, mpvConfigDir)) {
         return { status: 'skipped', reason: 'same-directory', detail: mpvConfigDir };
     }
-    // 读清单之前清理：清单缺失或版本不认识时不同步，但上次中途退出时移开的插件目录要放回去。
     try {
         cleanupLeftoverStaging(mpvConfigDir);
     } catch (error) {
@@ -100,11 +82,16 @@ export function synchronizeMpvConfig(input: MpvConfigSyncInput): MpvConfigSyncRe
     } catch (error) {
         return { status: 'failed', error: asError(error), files: run.entries };
     } finally {
-        try {
-            run.dispose();
-        } catch {
-            // 删不掉本次的暂存目录不影响结果：下次启动先清理残留的暂存目录。
-        }
+        disposeLeavingStagingForNextStart(run);
+    }
+}
+
+function disposeLeavingStagingForNextStart(run: SyncRun): boolean {
+    try {
+        run.dispose();
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -112,10 +99,8 @@ function asError(error: unknown): Error {
     return error instanceof Error ? error : new Error(String(error));
 }
 
-/** 用户配置里一个清单文件的状态：已是新版、缺失、没改过、改过。 */
 type FileState = 'unchanged' | 'missing' | 'unmodified' | 'modified';
 
-/** 写入新版（托管文件改过也照写）时记的动作。 */
 function overwriteAction(state: FileState): MpvFileAction {
     const actions: Record<FileState, MpvFileAction> = {
         unchanged: 'unchanged',
@@ -189,7 +174,6 @@ class SyncRun {
         return this.record?.files[relative];
     }
 
-    // 当前内容和新版、记录比：“没改过”按单个文件判断，这个文件有记录看是否等于记录值，没有记录看是否在历史哈希里。
     private stateOf(current: string | undefined, file: ManifestFile): FileState {
         if (current === file.sha256) return 'unchanged';
         if (current === undefined) return 'missing';
@@ -230,17 +214,14 @@ class SyncRun {
             remember();
             return add(overwriteAction(state));
         }
-        // config，用户改过。
         const newFile = `${target}${PENDING_UPDATE_SUFFIX}`;
         if (this.recorded(file.path)?.sha256 === file.sha256) {
             remember();
-            // 上次写的 .fntv-new 还在：仍是待合并的冲突，提示没关掉就退出时下次启动再弹（#223）。
             if (sha256File(newFile) === file.sha256) this.conflicts.push({ path: file.path, sha256: file.sha256 });
             return add('kept', 'modified, archive version unchanged since last sync');
         }
         if (file.path === 'mpv.conf' && !this.recorded(file.path)
             && platformBehavior(this.input.platform).treatsUnknownMpvConfAsUserOwned) {
-            // 不记录：下次仍按“没有记录”判断，系统 MPV 用户的 mpv.conf 一直归用户。
             return add('kept', 'user-owned mpv.conf without install record');
         }
         if (sha256File(newFile) !== file.sha256) this.install(file, newFile);
@@ -249,14 +230,12 @@ class SyncRun {
         return add('wrote-fntv-new');
     }
 
-    // 记录里有、新清单没有的文件，或清单 obsolete 里的文件，是否可以删（哈希等于记录值；没有记录时按 obsolete）。
     private removable(relative: string, current: string): boolean {
         const recorded = this.recorded(relative);
         if (recorded) return recorded.role !== 'config' && current === recorded.sha256;
         return this.obsoleteHashes.get(relative)?.includes(current) ?? false;
     }
 
-    // 返回这个目录下清单列出的文件。
     private syncManagedDir(dir: string): string[] {
         const prefix = `${dir}/`;
         const files = this.manifest.files.filter(file => file.path.startsWith(prefix));

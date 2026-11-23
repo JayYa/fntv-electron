@@ -6,7 +6,6 @@ const { execFileSync, spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const workflowDir = path.join(root, '.github', 'workflows');
-// 写着规则、“验证：”命令或 workflow 名的文档。
 const standardsDocs = [
     'CODING_STANDARDS.md',
     'TESTING_STANDARDS.md',
@@ -20,7 +19,6 @@ function read(relativePath) {
 
 const actionDir = path.join(root, '.github', 'actions');
 
-// workflow 和本仓库的 composite action（.github/actions/<名字>/action.yml）按同样的规则检查。
 function workflows() {
     const files = [
         ...fs.readdirSync(workflowDir).filter(name => /\.ya?ml$/.test(name)).map(name => path.join(workflowDir, name)),
@@ -36,7 +34,6 @@ function isComment(line) {
     return line.trimStart().startsWith('#');
 }
 
-// Windows 上 PATH 里的 bash 可能是 WSL，这里用 Git 自带的。
 function posixShell() {
     if (process.platform !== 'win32') return { file: 'bash', prefix: '' };
     const gitCore = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim();
@@ -51,7 +48,6 @@ function runInShell(command) {
     return spawnSync(shell.file, ['-c', shell.prefix + command], { cwd: root, encoding: 'utf8' });
 }
 
-// grep 和 git grep 用 0 和 1 表示有无结果，其它退出码说明命令本身坏了。
 function commandWorks(result) {
     return result.status === 0 || result.status === 1;
 }
@@ -74,7 +70,6 @@ test('third-party actions are pinned to a commit SHA with a version comment', ()
 
     assert.ok(actions.length > 0, 'no actions found in workflows');
     for (const { name, line } of actions) {
-        // 本仓库的可复用 workflow 随提交一起变，不固定 SHA，但文件必须存在。
         const local = line.match(/uses: \.\/(\S+)$/);
         if (local) {
             assert.ok(fs.existsSync(path.join(root, local[1])), `${name}: ${line}`);
@@ -120,7 +115,6 @@ test('workflows do not use untrusted refs, the latest release or secrets', () =>
     }
 });
 
-// 提交信息、PR 标题、分支名可以带 shell 语法，直接展开进 run 会被执行。先放进 env:，再用 "$VAR" 读。
 test('run scripts read event payloads and branch names through env', () => {
     const yaml = require('js-yaml');
     const untrusted = /\$\{\{[^}]*github\.(event|head_ref)/;
@@ -136,7 +130,6 @@ test('run scripts read event payloads and branch names through env', () => {
 });
 
 test('ci.yml runs for pull requests against any base branch', () => {
-    // 堆叠 PR 的 base 不是 main，也要跑。
     const yaml = require('js-yaml');
     const parsed = yaml.load(read('.github/workflows/ci.yml'));
     assert.ok('pull_request' in parsed.on, 'ci.yml has no pull_request trigger');
@@ -168,12 +161,9 @@ test('pnpm uses the hoisted node linker', () => {
 });
 
 test('electron finished extracting its binary', () => {
-    // electron 42 起 pnpm install 不下载二进制，第一次 require('electron') 时按需下载并解压，解压完才写 path.txt。
-    // 曾经解压器在 Node 26 上读不出 zip 内容却以 0 退出，dist 里只剩空的 locales，这里核对可执行文件和版本都在。
     const electronDir = path.join(root, 'node_modules', 'electron');
     const resolved = spawnSync(process.execPath, ['-p', "require('electron')"], { cwd: root, encoding: 'utf8' });
     assert.equal(resolved.status, 0, resolved.stderr);
-    // 按需下载时 index.js 先往 stdout 打下载信息，路径在最后一行。
     const executable = resolved.stdout.trim().split(/\r?\n/).pop();
     assert.ok(fs.existsSync(path.join(electronDir, 'path.txt')), 'path.txt missing');
     assert.ok(fs.existsSync(executable), `${executable} missing`);
@@ -182,14 +172,12 @@ test('electron finished extracting its binary', () => {
 });
 
 test('a verification command with a broken regex is reported as broken', () => {
-    // 46340cc 写进文档的就是这条命令。
     const result = runInShell("git grep -n -E '(alert|confirm|prompt)(' -- src resource");
 
     assert.equal(commandWorks(result), false);
 });
 
 test('standards documents contain no control characters', () => {
-    // 反斜杠转义被写成过控制字符，肉眼看不出（CODING_STANDARDS.md 里的 \b，冒烟测试说明里的 %APPDATA%\fntv）。
     for (const doc of standardsDocs) {
         assert.doesNotMatch(read(doc), /[\u0000-\u0008\u000B-\u001F]/, doc);
     }
@@ -214,7 +202,6 @@ test('every script that produces dest also bundles the preload', () => {
 });
 
 test('workflow steps and jobs named in the standards documents exist', () => {
-    // 文档写“`<文件>.yml` 的 `<名字>`”时，名字是那个 workflow 的触发事件、job id 或 step 的 name。
     const yaml = require('js-yaml');
     const references = [];
     for (const doc of standardsDocs) {
@@ -234,8 +221,6 @@ test('workflow steps and jobs named in the standards documents exist', () => {
     }
 });
 
-// electron-builder 的 extraFiles 把仓库里的 from 复制到安装目录的 to。这里只认本仓库用的两种写法：
-// 单个文件（没有 filter），或目录加 filter ["**/*"]。返回源文件在安装目录里的相对路径，没带上时返回 undefined。
 function packagedPath(extraFiles, source) {
     for (const { from, to, filter } of extraFiles) {
         if (from === source && filter === undefined) return to;
@@ -245,7 +230,6 @@ function packagedPath(extraFiles, source) {
     return undefined;
 }
 
-// 清单在便携配置的上一级（resolveManifestPath），同步和启动时的能力检查都从那里读（#221）。
 test('every platform packages the MPV archive manifest next to the portable config', () => {
     const { build } = JSON.parse(read('package.json'));
     const portable = 'third_party/fntv-mpv/portable_config';
@@ -270,9 +254,6 @@ test('build.yml checks the pinned MPV archive manifest after compiling and befor
     assert.ok(index('Check MPV archive manifest') < index('Build application'));
 });
 
-// CI 经 pnpm run check 跑 knip、文件大小检查等，见 tests/checkCommand.test.cjs。
-
-// Proxy 改用 TypeScript 后（ADR-0004），构建和 CI 只要 Node 和 pnpm。
 test('the repository has no Go code and neither builds nor CI install or run Go', () => {
     const tracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n');
     assert.deepEqual(tracked.filter(file => /(^|\/)go\.(mod|sum)$|\.go$/.test(file)), []);

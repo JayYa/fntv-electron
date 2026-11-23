@@ -26,5 +26,6 @@ status: accepted
 - 调用方声明期望的响应类型：默认 JSON，字幕下载（`subtitle/dl`）用原始数据（`requestRaw`）。期望 JSON 时只认 `Content-Type` 含 `application/json` 的响应，类型不对或缺失都按失败返回，消息里带状态码和实际的 `Content-Type`，不带响应体：网关或反向代理的 HTML 错误页不能算成功，也不能整页写进日志。期望原始数据时按文本读取响应体（axios 默认会把能解析成 JSON 的响应体转成对象），但 `Content-Type` 是 JSON 的响应仍按 fnAPI 的 `{ code, msg, data }` 处理，token 失效之类的业务错误不会被当成字幕内容（#279）。
 - 端口和协议不匹配（`isHttpsPortMismatch`）的错误不重试，重试结果不会变。
 - 调用方所在进程通过 `RequestContext` 提供依赖：主进程查进程内的访问授权和证书信任，Proxy 用播放会话里的值；`ca` 不传时用 Node 自带的 CA，Proxy 传入加上系统证书库的列表。
+- `ApiClient` 带缓存的调用只缓存成功结果，与 Go 版一致：抛错和 `success` 为 `false`（NAS 返回非 0 的 `code`、网络错误等）都不缓存。
 - HTTPS 的 keepAlive 连接池按 TLS 设置（是否校验证书、超时）复用，不每次请求新建：常驻的 Proxy 里新建不销毁会让空闲连接越积越多。带 CA 列表的连接池按列表的引用区分（Proxy 一直用同一个列表），列表不再被引用时连接池随之回收。
 - 证书错误按 Node/OpenSSL 的错误码识别（`core/certificateError.ts`），只在这个地址未被信任时作为 `certificateError` 返回给上层弹窗；读取信任列表和弹窗依赖 Electron，在 `cert_trust`（见 ADR-0008）。

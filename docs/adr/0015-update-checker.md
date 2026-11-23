@@ -39,3 +39,17 @@ status: accepted
 - 系统关机、重启或注销时放弃「退出时安装」（维护者决定不在关机时尽力安装，#192），回到「已下载、未选安装方式」，下次点「下载并安装」时 `electron-updater` 复用已下载的安装包。安装已经开始或没选「退出时安装」时不受影响。
 - 下载阶段的错误会让 `downloadUpdate()` 失败，在那里处理；安装阶段（`quitAndInstall` 启动安装程序失败）只有 `error` 事件，所以总要监听它，没有监听时 `EventEmitter` 会把 error 抛出去。
 - Linux：`electron-updater` 安装时先删掉旧 AppImage。旧文件名里有 x.y.z 三段数字时，新文件用新版本的文件名，指向旧文件名的快捷方式会失效，并发 `appimage-filename-updated` 事件（只记日志，用户该怎么做见 README 的 Linux 安装说明）；没有时沿用原文件名，不发。
+
+## 退出协调（`src/modules/quit/quitCoordinator.ts`）
+
+用户发起的退出（托盘菜单、菜单栏、`app.quit()`）先被拦下，按顺序收尾：停止播放并等这次退出的进度回传（`stopPlaybackAndWait` 自带超时）；关闭 Proxy 并等它关完；用户选了「退出时安装」就交给应用内更新（它发起退出），否则重新发起退出。
+
+- 收尾之后的退出直接放行，这时才调用 `onQuitReleased`（销毁托盘），收尾期间托盘图标还在。收尾期间再请求退出照样拦下，不重复收尾。
+- 每一步失败都记日志后继续，客户端不会卡在退不出去。
+- 「立即重启安装」引发的退出（`quitForInstall`）直接放行：拦下会让安装作废。它照常关 Proxy、销毁托盘，但不等 Proxy 关完；它和收尾共用同一次关闭。安装程序没启动时恢复原状，之后的退出按普通退出处理。收尾期间「立即重启安装」接手了退出时，收尾不再往下走。
+- 系统关机、重启或注销：Windows 是主窗口的 `session-end`（`WM_ENDSESSION`），这种退出不发 `before-quit`，收尾和安装都不会运行；Linux 是 `powerMonitor` 的 `shutdown`，随后 SIGTERM 按普通退出收尾（注销只有 SIGTERM，分不出来，照常安装）。macOS 关机时也发 `shutdown`，但 macOS 没有应用内更新，收到后什么都不做。收到后放弃这次「退出时安装」，不调用 `preventDefault`，不推迟关机。监听在主窗口创建后注册，要在 app ready 之后：那之前不能用 `powerMonitor`。
+
+## 测试替身（`tests/helpers/updateChecker.cjs`）
+
+- 假的 `autoUpdater` 照 `electron-updater` 的行为：下载出错时先发 `error` 事件再 reject；`quitAndInstall` 启动安装程序成功就在下一轮 `app.quit()`，启动前就失败时同步发 `error` 事件、不退出（`BaseUpdater`）。假的 `app.quit()` 像 Electron 那样发 `before-quit`（`tests/helpers/fakeQuitApp.cjs`）。
+- 断言某事会发生时用 `waitFor` 等条件成立。断言某事“没有发生”时没有可等的条件，`settle()` 让已排队的回调跑 20 轮，远多于更新流程里最长的 await 链（约 6 层）。
