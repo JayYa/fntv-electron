@@ -249,9 +249,9 @@ export async function handleFnIdLogin(loginData: LoginData): Promise<LoginReply>
             }
 
             const handleMessage = createFnIdMessageHandler({
-                get oauthWindow() { return oauthWindow; },
-                get authRequested() { return authRequested; },
-                set authRequested(value) { authRequested = value; },
+                oauthWindow: () => oauthWindow,
+                authRequested: () => authRequested,
+                setAuthRequested: (requested) => { authRequested = requested; },
                 oauthSession,
                 establishTargetSession,
                 completeLogin,

@@ -46,3 +46,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 - 安装包名按 `package.json` 的 `artifactName`（`FNMedia_${version}_${os}_${arch}.${ext}`）拼，没有这个架构的包时是 `null`。Linux 给 x64 的架构名是 `x86_64`（以 v2.7.0 的真实资产核对）。
 - 应用内更新只用于打包后的 Windows（NSIS）和 Linux（AppImage）。macOS 的包没有 Developer ID 签名，装不了自动下载的更新。不能更新时原因写进日志，提示框改回手动更新的按钮。
 - Linux：electron-updater 删掉 `APPIMAGE` 指向的文件，把新 AppImage 移到同一目录，所以要以 AppImage 运行（解包后运行时没有 `APPIMAGE`），并且这个目录可写。
+
+## Cookie 域
+
+- `session.cookies.set` 的 `domain` 对 IPv6 字面量地址要带方括号，即 `new URL(url).hostname` 的原样（`[fd00::1]`）。去掉方括号（`fd00::1`）或截断（`[fd00`）都会被拒，报 `invalid Domain attribute`（在本仓库的 Electron 里实测，#297）。
