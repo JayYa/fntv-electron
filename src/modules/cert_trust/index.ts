@@ -1,7 +1,7 @@
 import { dialog, BrowserWindow, app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import log from '../logger';
+import * as log from '../logger';
 import { normalizeCertificateHost } from './host';
 
 let trustedHostsCache: Set<string> | null = null;

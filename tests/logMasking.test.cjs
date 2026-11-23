@@ -71,3 +71,24 @@ test('logged page paths drop the query string and keep hash routes', () => {
     assert.equal(describeFnIdPageForLog('http://nas/#/login?state=secret', 'some-fnid'), '/#/login');
     assert.equal(describeFnIdPageForLog('not a url', 'some-fnid'), '(无效地址)');
 });
+
+test('masks the address after a url key however the key is written', () => {
+    for (const text of [
+        '"url":"http://192.168.1.2:5666/x"',
+        'url=http://192.168.1.2:5666/x',
+        'url: http://nas.local:5666/x',
+        "{ url: 'http://fnnas/x' }",
+        'playUrl: http://fnnas/x',
+        'playURL: nas.local:5666',
+        'baseUrl=nas.local:5666',
+    ]) {
+        const masked = maskStringByPatterns(text);
+        assert.doesNotMatch(masked, /1\.2:|nas\.local|fnnas/, `${text} => ${masked}`);
+    }
+});
+
+test('keeps text where url is only the end of a longer word', () => {
+    for (const text of ['smart-skip.origin-from-play-url (需要 1，当前 0)', 'playurl 已启用', 'curl 已启用']) {
+        assert.equal(maskStringByPatterns(text), text);
+    }
+});

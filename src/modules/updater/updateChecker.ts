@@ -3,7 +3,7 @@ import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
 import semver from 'semver';
 import { getAppDownloadProxyConfig } from '../fn_config/settings';
-import log from '../logger';
+import * as log from '../logger';
 import {
     assetDownloadUrl,
     describeGitHubError,

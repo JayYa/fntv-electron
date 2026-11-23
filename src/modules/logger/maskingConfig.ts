@@ -71,7 +71,8 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
         patterns: [
             /domain['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
             /host['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
-            /url['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
+            /(?<![\w.-])url['"]?\s*[:=]\s*['"]?([^'",\s}]+)['"]?/gi,
+            /(?<=[a-z])U(?:rl|RL)['"]?\s*[:=]\s*['"]?([^'",\s}]+)['"]?/g,
             /server['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
             /endpoint['":\s]*['"]*([^'",\s}]+)['"]*?/gi,
             /(https?:\/\/[^\s'"<>]+)/gi,

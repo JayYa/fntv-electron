@@ -34,13 +34,13 @@ test('a pinned archive whose manifest is supported and provides every required c
 test('the build fails when the manifest does not provide a capability the client requires', (t) => {
     const { status, output } = check(t, { provides: {} });
     assert.equal(status, 1, output);
-    assert.match(output, /smart-skip\.origin-from-play-url, 需要 1, 未提供/);
+    assert.match(output, /smart-skip\.origin-from-play-url \(需要 1，未提供\)/);
 });
 
 test('the build fails when the manifest provides a required capability at a lower version', (t) => {
     const { status, output } = check(t, { provides: { 'smart-skip.origin-from-play-url': 0 } });
     assert.equal(status, 1, output);
-    assert.match(output, /smart-skip\.origin-from-play-url, 需要 1, 当前 0/);
+    assert.match(output, /smart-skip\.origin-from-play-url \(需要 1，当前 0\)/);
 });
 
 test('the build fails when the manifest formatVersion is not supported by the client', (t) => {

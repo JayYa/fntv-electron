@@ -1,5 +1,5 @@
 import { session } from 'electron';
-import log from '../logger';
+import * as log from '../logger';
 import { ApiService } from '../fn_api/api';
 
 export async function restoreCookies(domain: string, token: string, isLogin: boolean = false): Promise<boolean> {
@@ -29,9 +29,7 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
     try {
         const isHttps = domain.startsWith('https://');
 
-        await ses.cookies.remove(domain, 'Trim-MC-token')
-
-        await new Promise<void>(resolve => setTimeout(resolve, 100));
+        await ses.cookies.remove(domain, 'Trim-MC-token');
 
         await ses.cookies.set({
             url: domain,

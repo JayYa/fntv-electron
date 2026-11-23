@@ -1,7 +1,7 @@
 import type { ApiService } from '../fn_api/api';
 import type { ItemListRequest, PlayInfo, PlayListItem, PlayRecord } from '../fn_api/core/types';
 import { EventData, EventHandler, EventType, Player, PlayErrorData, PlayExitData, PlayItem, PlayStatusData } from '../players/types';
-import log from '../logger';
+import * as log from '../logger';
 import { isNearEnd, resumePosition } from './nearEnd';
 import type { PlayRequest } from './playRequest';
 import type { PlaybackRun } from './playbackState';

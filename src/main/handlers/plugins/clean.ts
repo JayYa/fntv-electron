@@ -1,5 +1,5 @@
 import { Session } from 'electron';
-import { getInstance as getInterceptor } from '../core/interceptor';
+import { interceptor } from '../core/interceptor';
 import * as log from '../../../modules/logger';
 
 /**
@@ -32,8 +32,7 @@ function setupCacheManagement(ses: Session): void {
 
 function init(): void {
     // 初始化 session 和缓存管理
-    const interceptorManager = getInterceptor();
-    const ses = interceptorManager.getSession();
+    const ses = interceptor.getSession();
     if (ses) {
         setupCacheManagement(ses);
     }

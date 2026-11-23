@@ -5,17 +5,30 @@ import * as types from './types';
 
 type CacheOptions = { ttl?: number, forceRefresh?: boolean };
 
+const inFlightByCache = new WeakMap<TtlCache, Map<string, Promise<ApiResponse>>>();
+
+function inFlightFor(cache: TtlCache): Map<string, Promise<ApiResponse>> {
+    let inFlight = inFlightByCache.get(cache);
+    if (!inFlight) {
+        inFlight = new Map();
+        inFlightByCache.set(cache, inFlight);
+    }
+    return inFlight;
+}
+
 export class FnApiClient {
     protected readonly baseURL: string;
     protected readonly token: string;
     protected readonly context: RequestContext;
     private readonly cache: TtlCache;
+    private readonly inFlight: Map<string, Promise<ApiResponse>>;
 
     constructor(context: RequestContext, baseURL: string, token: string, cache: TtlCache) {
         this.context = context;
         this.baseURL = baseURL.replace(/\/+$/, '');
         this.token = token;
         this.cache = cache;
+        this.inFlight = inFlightFor(cache);
     }
 
     getBaseURL(): string {
@@ -47,26 +60,22 @@ export class FnApiClient {
                 return Promise.resolve(cached);
             }
 
-            const cachePromiseKey = `promise_${key}`;
-            const existingPromise = this.cache.get(cachePromiseKey) as Promise<any> | undefined;
-
+            const existingPromise = this.inFlight.get(key);
             if (existingPromise) {
                 this.context.log.debug?.(`复用进行中的请求: ${name}`);
                 return existingPromise;
             }
 
             const promise = fn(...args).then(result => {
-                this.cache.del(cachePromiseKey);
                 if (!result.success) return result;
                 this.cache.set(key, result, options.ttl);
                 this.context.log.debug?.(`缓存设置: ${name}, TTL: ${options.ttl}s`);
                 return result;
-            }).catch(error => {
-                this.cache.del(cachePromiseKey);
-                throw error;
+            }).finally(() => {
+                this.inFlight.delete(key);
             });
 
-            this.cache.set(cachePromiseKey, promise, 30);
+            this.inFlight.set(key, promise);
             return promise;
         }) as any;
     }

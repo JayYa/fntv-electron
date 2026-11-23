@@ -1,7 +1,7 @@
 import { OnBeforeRequestListenerDetails } from 'electron';
 import { endCurrentLogin } from '../../common/currentLogin';
 import { getMainWindow } from '../../common/mainwin';
-import { getInstance as getInterceptor } from '../core/interceptor';
+import { interceptor } from '../core/interceptor';
 import * as log from '../../../modules/logger';
 
 function handleLeaveRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
@@ -17,9 +17,7 @@ function handleLeaveRequest(details: OnBeforeRequestListenerDetails, callback: (
 }
 
 function init(): void {
-    const interceptorManager = getInterceptor();
-
-    interceptorManager.registerBeforeRequest(
+    interceptor.registerBeforeRequest(
         {
             urls: [
                 'http://*/v/login',
@@ -32,7 +30,7 @@ function init(): void {
         'login-interceptor'
     );
 
-    interceptorManager.registerBeforeRequest(
+    interceptor.registerBeforeRequest(
         {
             urls: [
                 'http://*/v/api/v1/user/logout',

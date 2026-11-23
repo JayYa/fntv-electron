@@ -1,52 +1,21 @@
-import { logger, LogLevel } from './logger';
+import { logger } from './logger';
 
-type LogMethod = (message: string, ...args: any[]) => void;
-
-interface ILogger {
-    debug: LogMethod;
-    info: LogMethod;
-    warn: LogMethod;
-    error: LogMethod;
-    noformat(message: string): void;
-    log: LogMethod;
-    d: LogMethod;
-    i: LogMethod;
-    w: LogMethod;
-    e: LogMethod;
-    logError(message: string, error?: any, ...extraArgs: any[]): void;
-    getLogger(): typeof logger;
-    setLogLevel(level: LogLevel): void;
-    getLogFile(): string;
-    getLogDir(): string;
+export function debug(message: string, ...args: any[]): void {
+    logger.debug(message, ...args);
 }
 
-const loggerInterface: ILogger = {
-    debug: (message: string, ...args: any[]) => logger.debug(message, ...args),
-    info: (message: string, ...args: any[]) => logger.info(message, ...args),
-    warn: (message: string, ...args: any[]) => logger.warn(message, ...args),
-    error: (message: string, ...args: any[]) => logger.error(message, ...args),
-    noformat: (message: string) => logger.noformat(message),
-    log: (message: string, ...args: any[]) => logger.info(message, ...args),
-    
-    getLogger: () => logger,
-    
-    setLogLevel: (level: LogLevel) => logger.setLogLevel(level),
-    
-    getLogFile: () => logger.getCurrentLogFile(),
-    getLogDir: () => logger.getLogDir(),
-    
-    d: (message: string, ...args: any[]) => logger.debug(message, ...args),
-    i: (message: string, ...args: any[]) => logger.info(message, ...args),
-    w: (message: string, ...args: any[]) => logger.warn(message, ...args),
-    e: (message: string, ...args: any[]) => logger.error(message, ...args),
-    
-    logError: (message: string, error?: any, ...extraArgs: any[]) => {
-        if (error instanceof Error) {
-            logger.error(message, error, ...extraArgs);
-        } else {
-            logger.error(message, error, ...extraArgs);
-        }
-    }
-};
+export function info(message: string, ...args: any[]): void {
+    logger.info(message, ...args);
+}
 
-export = loggerInterface;
+export function warn(message: string, ...args: any[]): void {
+    logger.warn(message, ...args);
+}
+
+export function error(message: string, ...args: any[]): void {
+    logger.error(message, ...args);
+}
+
+export function getLogFile(): string {
+    return logger.getCurrentLogFile();
+}

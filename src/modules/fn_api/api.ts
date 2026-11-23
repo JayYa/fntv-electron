@@ -3,7 +3,7 @@ import { HttpMethod } from "./request";
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
-import log from '../logger';
+import * as log from '../logger';
 import * as types from './core/types';
 import { TtlCache } from './core/ttlCache';
 import { FnApiClient } from './core/apiClient';
