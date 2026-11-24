@@ -129,6 +129,7 @@ test('MPV exiting on its own reports its exit code once, with its IPC socket fil
         assert.equal(await startWithin(mpv), 'started');
         exit(spawned[0], code, signal);
         spawned[0].emit('exit', code, signal);
+        await waitUntil(() => reported.length > 0);
         await delay(20);
 
         assert.deepEqual(reported, [exited(expected)]);
