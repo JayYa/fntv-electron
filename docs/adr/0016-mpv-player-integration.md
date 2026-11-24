@@ -33,6 +33,8 @@ status: accepted
 - `quit()` 先摘掉子进程的 `close` 监听，所以 `stop()` 之后库不会再发 `quit`；`stop()` 自己发出 EXIT。
 - `start()` 成功后加载播放列表失败时，`playList` 先退出 MPV 再返回 false，不发 EXIT。
 - `start()` 还没完成时被 `stop()` 的播放器已经发过 EXIT；`start()` 随后完成时 `playList` 退出这个 MPV 并返回 false。
+- 库的 `start()` 原本只等 stdout 的 `Listening to IPC socket` 和 observe socket 的 idle，子进程在这之前退出时永远不兑现；子进程的 `error` 和两条连接的 `error` 也没人监听，会成为未捕获异常。`patches/` 里给 `start()` 补上：从 spawn 到启动完成期间，子进程 `exit`、子进程 `error`、连接 `error` 都让 `start()` reject，并断开连接、摘掉 stdout 监听。`playList` 按初始化失败处理：发 ERROR，返回 false，不发 EXIT。
+- `start()` 没有完成时库的主连接没连上，`quit()` 发不出 `quit` 命令（向没连上的 socket 写入还会抛出未捕获的 `ERR_SOCKET_CLOSED`），所以这时退出 MPV 直接 kill 子进程；`start()` 完成后 `quit()` 失败也退而 kill。kill 时 Unix socket 文件等子进程 `exit` 后再删，`kill()` 失败时当场删；还没 spawn 时什么都不做，socket 文件留给之后退出或 kill 这个 MPV 时删。`quit()` 会摘掉子进程的 `error` 监听，所以 kill 前重新挂上，`kill()` 发不出信号时不成为未捕获异常。
 - 崩溃或未知退出码时 MPV 进程已经退出，当场删除 Unix socket 文件（ADR-0011）；`stop()` 仍等 `quit()` 返回后再删。
 
 ## `node-mpv-2` 的连接（`tests/mpvIpc.test.cjs`）

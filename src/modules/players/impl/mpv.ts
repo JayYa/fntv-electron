@@ -355,9 +355,12 @@ export class MpvPlayer implements Player {
         });
     }
 
+    private childProcessOf(mpv: NodeMpv | null): ChildProcess | undefined {
+        return (mpv as unknown as { mpvPlayer?: ChildProcess } | null)?.mpvPlayer;
+    }
+
     private watchProcessClose(): void {
-        const mpvProcess = (this.mpvInstance as unknown as { mpvPlayer?: ChildProcess } | null)?.mpvPlayer;
-        mpvProcess?.once('close', (code: number | null) => {
+        this.childProcessOf(this.mpvInstance)?.once('close', (code: number | null) => {
             this.removeIpcSocket();
             this.handleExit(typeof code === 'number' ? code : 1);
         });
@@ -416,18 +419,32 @@ export class MpvPlayer implements Player {
 
     private quitMpv(mpv: NodeMpv | null): void {
         if (!mpv) return;
-        try {
-            mpv.quit().catch((error: any) => {
-                if (this.config.debug) {
-                    log.debug('停止播放时出错:', error);
-                }
-            }).finally(() => {
-                this.removeIpcSocket();
-            });
-        } catch (error) {
+        if (!mpv.isRunning()) {
+            this.killMpv(mpv);
+            return;
+        }
+        mpv.quit().then(() => {
+            this.removeIpcSocket();
+        }, (error: unknown) => {
             if (this.config.debug) {
-                log.debug('停止播放异常:', error);
+                log.debug('停止播放时出错:', error);
             }
+            this.killMpv(mpv);
+        });
+    }
+
+    private killMpv(mpv: NodeMpv): void {
+        const mpvProcess = this.childProcessOf(mpv);
+        if (!mpvProcess) return;
+        if (mpvProcess.exitCode !== null || mpvProcess.signalCode !== null) {
+            this.removeIpcSocket();
+            return;
+        }
+        mpvProcess.on('error', (error) => log.warn('结束 MPV 进程失败:', error.message));
+        mpvProcess.once('exit', () => this.removeIpcSocket());
+        if (!mpvProcess.kill()) {
+            log.warn('结束 MPV 进程失败');
+            this.removeIpcSocket();
         }
     }
 
