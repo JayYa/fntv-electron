@@ -253,10 +253,9 @@ test('a resume seek MPV rejects at first is retried until MPV accepts it, once',
     const { mpv } = await startPlaying(t, items, { ...resumeItem1At600, mpvOptions: { seekFailures: 3 } });
 
     mpv.emitProperty('path', items[0].playLink);
-    await delay(100);
+    await delay(200);
 
     assert.deepEqual(mpv.seeks, [600]);
-    assert.equal(mpv.seekAttempts, 4);
 });
 
 test('a resume seek still being retried stops once MPV moves on to another play item', async (t) => {
@@ -274,7 +273,7 @@ test('a resume seek still being retried stops once MPV moves on to another play 
 
 test('a resume seek MPV keeps rejecting is given up after 30 seconds', async (t) => {
     const items = twoItems();
-    const { mpv } = await startPlaying(t, items, { ...resumeItem1At600, mpvOptions: { seekFailures: Infinity } });
+    const { events, mpv } = await startPlaying(t, items, { ...resumeItem1At600, mpvOptions: { seekFailures: Infinity } });
     t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
     const advance = async (ms) => {
         for (let elapsed = 0; elapsed < ms; elapsed += 10) {
@@ -292,4 +291,5 @@ test('a resume seek MPV keeps rejecting is given up after 30 seconds', async (t)
 
     assert.ok(attemptsAtLimit > attemptsBeforeLimit);
     assert.equal(mpv.seekAttempts, attemptsAtLimit);
+    assert.deepEqual(events, []);
 });

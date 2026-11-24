@@ -87,10 +87,12 @@ class FakeMpvProcess {
     }
 
     seekTo(seconds) {
-        if (this.delivering()) this.seekAttempts++;
-        if (this.delivering() && this.seekFailures > 0) {
-            this.seekFailures--;
-            return Promise.reject(new Error('property unavailable'));
+        if (this.delivering()) {
+            this.seekAttempts++;
+            if (this.seekFailures > 0) {
+                this.seekFailures--;
+                return Promise.reject(new Error('property unavailable'));
+            }
         }
         return this.command(() => this.seeks.push(seconds));
     }

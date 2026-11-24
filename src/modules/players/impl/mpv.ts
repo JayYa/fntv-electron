@@ -27,7 +27,7 @@ export class MpvPlayer implements Player {
     private playlistFilePath: string = '';
     private stopRequested = false;
     private abandoned = false;
-    private itemStarts = 0;
+    private itemGeneration = 0;
 
     constructor(config: Config) {
         this.config = {
@@ -179,7 +179,7 @@ export class MpvPlayer implements Player {
     }
 
     private startItem(mpv: MpvProcess, mpvPath: string): void {
-        const itemStart = ++this.itemStarts;
+        const generation = ++this.itemGeneration;
         const currentItem = this.findItem(mpvPath);
         if (!currentItem) {
             log.debug('path changed: 不是播放列表里的播放项:', mpvPath);
@@ -192,7 +192,7 @@ export class MpvPlayer implements Player {
 
         const position = this.config.resumePosition(currentItem);
         if (position > 0) {
-            void this.seekWithRetry(mpv, position, itemStart);
+            void this.seekWithRetry(mpv, position, generation);
         }
 
         this.config.loadSubtitles(currentItem.itemGuid)
@@ -216,11 +216,11 @@ export class MpvPlayer implements Player {
         this.emitEvent(EventType.PROGRESS, st);
     }
 
-    private async seekWithRetry(mpv: MpvProcess, position: number, itemStart: number): Promise<void> {
+    private async seekWithRetry(mpv: MpvProcess, position: number, generation: number): Promise<void> {
         const deadline = Date.now() + SEEK_TIMEOUT_MS;
         for (let attempt = 0; ; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, SEEK_RETRY_DELAY_MS));
-            if (this.process !== mpv || this.stopRequested || this.itemStarts !== itemStart) {
+            if (this.process !== mpv || this.stopRequested || this.itemGeneration !== generation) {
                 return;
             }
             try {

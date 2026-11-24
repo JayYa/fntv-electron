@@ -66,8 +66,8 @@ async function connect(): ReturnType<PlayDeps['connect']> {
 }
 
 function launchPlayer(options: PlayerOptions): ply.Player | undefined {
-    const mpv = getProgramOrNotify();
-    if (!mpv) {
+    const program = getProgramOrNotify();
+    if (!program) {
         return undefined;
     }
 
@@ -77,13 +77,13 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
         '--network-timeout=180',
         `--volume=${settings.getMpvVolume()}`,
     ];
-    if (mpv.bundled) {
+    if (program.bundled) {
         extraArgs.push(`--config-dir=${getMpvConfigDir()}`);
     }
 
     return new ply.MpvPlayer({
         ...options,
-        createMpvProcess: ply.mpvProcessFactory({ binary: mpv.path, args: extraArgs, debug: true }),
+        createMpvProcess: ply.mpvProcessFactory({ binary: program.path, args: extraArgs, debug: true }),
         onVolumeChange: settings.setMpvVolume,
     });
 }
