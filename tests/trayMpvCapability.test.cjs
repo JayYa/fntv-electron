@@ -1,4 +1,3 @@
-// 启动同步后插件能力不满足 requires 时，托盘“设置”子菜单显示状态、日志记 ERROR（#224）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,7 +8,6 @@ const { writeArchive, tempRoot } = require('./helpers/mpvManifestFixture.cjs');
 const STATUS_PREFIX = 'MPV 插件需要更新';
 const FILES = { 'mpv.conf': 'include="~~/fntv/defaults.conf"\n', 'scripts/smart_skip/main.lua': 'skip' };
 
-// 未打包的应用：便携配置在 <appPath>/third_party/fntv-mpv/portable_config，用户配置由 MPV_HOME 指到临时目录。
 function setup(t) {
     const testRoot = tempRoot(t, 'tray-caps');
     const paths = { home: testRoot, appData: path.join(testRoot, 'AppData'), userData: path.join(testRoot, '.fntv') };
@@ -39,7 +37,6 @@ function setup(t) {
     });
 
     return {
-        // 模拟一次启动：装好这个归档，跑 MPV 配置插件，再建托盘。
         async start(provides) {
             fs.rmSync(path.join(testRoot, 'third_party'), { recursive: true, force: true });
             writeArchive(path.join(testRoot, 'third_party'), 'fntv-mpv', { files: FILES, provides });

@@ -2,8 +2,8 @@ import * as crypto from 'crypto';
 import { safeStorage } from 'electron';
 import { platformBehavior } from '../../public/platform';
 
-const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
-const IV = Buffer.alloc(16, 0); // Initialization vector
+const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H';
+const IV = Buffer.alloc(16, 0);
 const SAFE_STORAGE_PREFIX = 'safe-storage:v1:';
 
 export type LegacyFormat = 'plaintext' | 'legacyPassword';
@@ -20,7 +20,6 @@ export function sealedCredential(stored: string): Credential {
     return stored ? { sealed: stored } : NO_CREDENTIAL;
 }
 
-// 仅用于读取旧版本固定密钥加密的密码。
 function decryptLegacyPassword(encrypted: string): string {
     const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), IV);
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
@@ -28,7 +27,6 @@ function decryptLegacyPassword(encrypted: string): string {
     return decrypted;
 }
 
-/** 解开一个磁盘值；解不开时得到 sealed。 */
 export async function openCredential(stored: string, legacy: LegacyFormat): Promise<Credential> {
     if (!stored) return NO_CREDENTIAL;
     if (!stored.startsWith(SAFE_STORAGE_PREFIX)) {
@@ -61,10 +59,6 @@ async function isEncryptionAvailable(): Promise<boolean> {
     }
 }
 
-/**
- * 加密这些明文，返回明文到磁盘值。没有要加密的明文时不检查存储；
- * 存储不可用或只有 basic_text 时抛错，一个都不加密。
- */
 export async function encryptAll(plaintexts: Iterable<string>): Promise<Map<string, string>> {
     const unique = new Set(plaintexts);
     const encrypted = new Map<string, string>();
@@ -81,7 +75,6 @@ export async function encryptAll(plaintexts: Iterable<string>): Promise<Map<stri
     return encrypted;
 }
 
-/** 写回磁盘的值。要加密的明文必须已在 encrypted 里。 */
 export function storedValueOf(credential: Credential, encrypted: Map<string, string>): string {
     if ('sealed' in credential) return credential.sealed;
     if (credential.stored !== undefined) return credential.stored;

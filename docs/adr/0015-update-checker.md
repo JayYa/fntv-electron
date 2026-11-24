@@ -12,7 +12,7 @@ status: accepted
 - API 请求使用指数退避重试，但只重试网络错误和 5xx，4xx 原样抛出：4xx 在几秒内不会恢复，重试只会白白消耗 GitHub API 额度。
 - 触发限流时将恢复时间 `rateLimitedUntil` 记在内存中，恢复前不再请求 API。API 失败或处于限流期时，回退到请求 GitHub Release 页面的重定向拿最新 tag（`fetchLatestTagFromReleasePage`），再按构建命名规则（`expectedAssetName`）拼出安装包链接。
 - 未认证的 GitHub API 每个出口 IP 每小时 60 次，NAT、代理和 VPN 后面的请求共用额度。未认证时带 `If-None-Match` 得到 304 也会扣额度（2026-11-07 实测），所以不做条件请求。限流响应拿不到恢复时间时按一小时窗口估算。`releases/latest` 页面不走 API 限流：请求时不跟随重定向，从 `Location` 取 tag。
-- 更新提示框是原生对话框，只能显示纯文本，也不能滚动，正文过长会把按钮挤出屏幕，所以 Release 正文转成纯文本并限制行数和字数。release-please 的版本标题是 `## [2.7.0](compare 链接) (日期)`，首个版本没有 compare 链接；条目开头的 `**scope:** `、条目末尾的 `([abc1234](commit 链接))`、`([#12](issue 链接))`，以及提交正文 `Closes #12` 生成的 `, closes [#12](链接)` 都去掉。
+- 更新提示框是原生对话框，只能显示纯文本，也不能滚动，正文过长会把按钮挤出屏幕，所以 Release 正文转成纯文本并限制行数和字数。release-please 的版本标题是 `## [2.7.0](compare 链接) (日期)`，首个版本没有 compare 链接；条目开头的 `**scope:** `、条目末尾的 `([abc1234](commit 链接))`、`([#12](issue 链接))`，以及提交正文 `Closes #12` 生成的 `, closes [#12](链接)` 都去掉。测试（`tests/releaseNotes.test.cjs`）的格式取自 googleapis/release-please v17.11.0 等 Release，分区标题换成本仓库 `release-please-config.json` 的中文分区；另用 v2.7.0 的真实 Release 正文（`tests/fixtures/release-v2.7.0.md`，取自 `gh api repos/JayYa/fntv-electron/releases/tags/v2.7.0` 的 `body`）。`tests/updateChecker.test.cjs` 的安装包名取自 2.6.2 在 Release Build（actions/runs/41963636062）里的真实产物，版本号换成 2.7.0。
 
 ## 下载加速中转
 

@@ -24,7 +24,6 @@ function rateLimited(status = 403) {
     });
 }
 
-// 真实的 axios 默认跟随重定向，拿到的是 200 的 HTML；只有关掉重定向才看得到 Location
 function releasePageRedirect(tagName) {
     return (config) => {
         if (config?.maxRedirects !== 0) {

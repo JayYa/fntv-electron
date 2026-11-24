@@ -1,11 +1,3 @@
-/**
- * 生成注入 WebView 的 JavaScript 脚本，不含任何凭据
- * 功能：
- * 1. Hook XHR 和 Fetch，拦截 /oauthapi/authorize 响应获取 code
- * 2. 拦截 /sac/rpcproxy/v1/new-user-guide/status 获取 Cookie
- * 3. 在 /signin 页面自动点击授权按钮
- * 4. 在非 /login 页面获取 sys_config
- */
 export function getInjectionScript(): string {
     return `
         (function() {
@@ -159,9 +151,6 @@ export function getInjectionScript(): string {
     `;
 }
 
-/**
- * 主进程判断页面和脚本执行之间页面可能已经换了，所以脚本先核对 origin 再读取凭据。
- */
 export function getLoginAutofillScript(username: string, password: string, pageUrl: string): string {
     const page = new URL(pageUrl);
     return `

@@ -1,4 +1,3 @@
-// 按清单同步用户配置：全新安装、已有用户（无记录 / 有记录）、用户改过文件。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -106,7 +105,6 @@ test('a second sync of the same archive changes nothing on disk and reports ever
 
     assert.equal(result.hadInstallRecord, true);
     assert.deepEqual(readTree(user), before);
-    // .fntv-new 还在，冲突照样报出来；是否提示由已确认的冲突决定（mergePrompt）。
     assert.deepEqual(result.conflicts, [{ path: 'input.conf', sha256: sha256(V1['input.conf']) }]);
     assert.equal(actionsOf(result)['input.conf'], 'kept');
     assert.ok(result.files.filter(e => e.path !== 'input.conf' && e.path !== 'danmaku-history.json')
@@ -126,7 +124,6 @@ test('with a record, files equal to the recorded hash are replaced and user edit
     const root = tempRoot(t, 'record');
     const user = path.join(root, 'user');
     sync(writeArchive(root, 'v1', { files: V1 }), user);
-    // 用户改了 input.conf（v2 也改了）、托管的 defaults.conf，以及 mpv.conf（v2 没改）。
     writeTree(user, {
         'input.conf': 'mine\n',
         'mpv.conf': `${V1['mpv.conf']}volume=50\n`,

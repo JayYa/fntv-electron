@@ -6,7 +6,6 @@ const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const CONSTANTS = path.resolve(__dirname, '../dest/public/constants.js');
 
-// 按给定的 --user-data-dir 启动参数加载 constants，返回 USER_DATA_PATH。
 function userDataPathWith(t, userDataDir) {
     const home = path.join(os.tmpdir(), 'fntv-home');
     const electron = {
@@ -30,6 +29,5 @@ test('an absolute --user-data-dir is used as the user data directory', t => {
 });
 
 test('a relative --user-data-dir is resolved against the working directory like Chromium does', t => {
-    // app.setPath 只接受绝对路径，原样传下去时启动就会失败。
     assert.equal(userDataPathWith(t, path.join('portable', 'data')).value, path.resolve('portable', 'data'));
 });

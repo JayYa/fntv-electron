@@ -7,9 +7,6 @@ const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const LINUX_MPV_LOCATIONS = ['/usr/bin/mpv', '/usr/local/bin/mpv', '/snap/bin/mpv', '/usr/games/mpv', '/opt/mpv/bin/mpv'];
 
-// 用假的 electron 加载 tray.js，截下每次 setContextMenu 收到的菜单模板。
-// MPV_HOME 指向临时目录，用户配置目录在三个平台上都落在这里，不碰本机真实的 mpv 配置。
-// appDataError 让 app.getPath('appData') 抛这个错，像 Windows 上 USERPROFILE 指向的目录下没有 AppData\Roaming 时那样。
 function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appDataError = '' } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-tray-'));
     const mpvHome = path.join(testRoot, 'mpv-home');
@@ -59,7 +56,6 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
     process.env.MPV_HOME = mpvHome;
     let trayModule;
     t.after(() => {
-        // 先停掉托盘对用户配置目录的监视，再删目录。
         trayModule?.destroyTray();
         if (originalMpvHome === undefined) delete process.env.MPV_HOME;
         else process.env.MPV_HOME = originalMpvHome;
@@ -72,7 +68,6 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
         assert.ok(found, `菜单里没有以“${prefix}”开头的项`);
         return found;
     };
-    // 菜单项的 click 不等待菜单重建，这里等到下一份菜单出现。
     const clickAndWaitForMenu = async (prefix) => {
         const count = menus.length;
         await item(prefix).click();
@@ -188,7 +183,6 @@ test('when the MPV config folder cannot be determined the tray still opens and s
 const PENDING_ITEM = 'MPV 配置有';
 const pendingItem = (tray) => tray.settingsItems().find((entry) => entry.label?.startsWith(PENDING_ITEM));
 
-// 托盘监视用户配置目录，.fntv-new 删掉后自己重建菜单；等到菜单里没有这一项为止。
 async function waitForPendingItemToGo(tray) {
     for (let i = 0; i < 100 && pendingItem(tray); i++) {
         await new Promise((resolve) => setTimeout(resolve, 50));

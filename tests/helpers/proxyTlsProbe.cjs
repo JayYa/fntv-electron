@@ -1,5 +1,3 @@
-// 在单独的进程里启动 HTTPS 假 NAS 和 Proxy 服务，取一次流，把 MPV 收到的状态码打印到 stdout。
-// 系统证书库在进程启动后读取一次，所以要验证系统证书时用环境变量（如 SSL_CERT_FILE）启动这个脚本。
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');

@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-// IPC 处理器只能经 registerHandler 注册（eslint.config.mjs）。
 const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 
 async function messagesFor(code, filePath) {

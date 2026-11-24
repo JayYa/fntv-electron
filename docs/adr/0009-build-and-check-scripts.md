@@ -61,7 +61,7 @@ CI 的 Electron 下载缓存。key 只取 `package.json` 里的版本号，安�
 - `build.yml` 的打包命令遇到下载错误时整体重跑（2026-11-09，Renovate PR #139 遇到 504）。
 - 打包下载缓存（`packaging-*`）和预热它的 `cache-warm.yml` 在 2026-11-14 删掉：run 43585290276 对比 43560322186，不命中只多 10 到 14 秒。只留 `install-dependencies` 的 Electron 下载缓存和 MPV 归档缓存。
 - `ci-download-cache.cjs` 写的 `SHASUMS256.txt-<版本>` 每行是 `<sha256> *<文件名>`，这是 app-builder-lib 的 `parseChecksumFile` 认的格式。Electron key 从仓库自己的 `package.json` 算得出来，因为 Renovate 的 `rangeStrategy` 是 `pin`，版本号是精确值。
-- MPV 归档按 sha256 缓存：换版本时 key 跟着变，命中缓存也要校验，不通过就重新下载。恢复和保存分成两步，后面的构建失败也保住已下载的压缩包。
+- MPV 归档按 sha256 缓存：换版本时 key 跟着变，命中缓存也要校验，不通过就重新下载。恢复和保存分成两步，后面的构建失败也保住已下载的压缩包。保存只在未命中时运行，紧跟在产生缓存内容的步骤后面；两步都不能让构建失败（`tests/helpers/workflowSteps.cjs` 的 `assertRestoreAndSave`）。
 - `ci.yml` 也在 push 到 `main` 时跑：PR #207 和 #209 各自的 CI 都通过，合在一起后 `main` 上 7 项测试失败，到 #210 才发现（2026-11-14）。push 上没有 PR 的 base 提交，文件大小检查只在 PR 上跑，由 `test` job 的 `Run checks` 按事件开关。`main` 上的 pnpm store 和 Electron 下载缓存由 push 到 `main` 的 `ci.yml` 存；`cache-cleanup.yml` 在 PR 关闭时删掉这个 PR 的缓存（2026-11-10）。
 - `update-mpv-archive.yml` 定时加手动触发，只从 `main` 运行，tag 经 `env` 传给脚本，用 GITHUB_TOKEN 开 PR。改的文件都不在 `.github/workflows` 下：GITHUB_TOKEN 推不了改 workflow 的提交（2026-11-14 实际失败过）。远端分支上三处文件已经一样时不推：每次推送都要维护者重新批准 CI。PR 改了这些文件时 Smoke Test（`smoke-test.yml`）也会触发，升级 PR 因此用新归档构建并测试安装包。
 

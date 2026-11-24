@@ -1,7 +1,6 @@
 import type * as http from 'node:http';
 import type { Readable } from 'node:stream';
 
-// 与 gin 的 c.JSON 相同的响应头。
 export function sendJson(res: http.ServerResponse, status: number, body: unknown, headers: http.OutgoingHttpHeaders = {}): void {
     const payload = Buffer.from(JSON.stringify(body), 'utf8');
     res.writeHead(status, {
@@ -12,7 +11,6 @@ export function sendJson(res: http.ServerResponse, status: number, body: unknown
     res.end(payload);
 }
 
-// MPV 在响应写完之前断开时触发 abort，用来取消上游请求。
 export function abortWhenMpvLeaves(res: http.ServerResponse): AbortController {
     const controller = new AbortController();
     res.on('close', () => {
@@ -21,7 +19,6 @@ export function abortWhenMpvLeaves(res: http.ServerResponse): AbortController {
     return controller;
 }
 
-// 读完整个 body。
 export function readBody(stream: Readable): Promise<Buffer> {
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];

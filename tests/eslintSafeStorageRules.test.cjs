@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-// safeStorage 的同步方法在 Electron 46 删除，lint 拦住新增调用（eslint.config.mjs）。
 const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 
 async function messagesFor(code) {

@@ -1,5 +1,3 @@
-// 访问授权 Cookie 和其它 Cookie 拼成一个请求头。主进程和 Proxy 共用这一个实现。
-
 function cookieParts(values: Array<string | undefined>): string[] {
     const result: string[] = [];
     const names = new Set<string>();

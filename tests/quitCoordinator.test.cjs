@@ -7,9 +7,6 @@ const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { settle, waitFor } = require('./helpers/updateChecker.cjs');
 const { createQuittingApp, deferred, requestQuit, startPlaying, startQuitCoordinator } = require('./helpers/fakeQuitApp.cjs');
 
-// 退出协调（src/modules/quit/quitCoordinator.ts）的普通退出。events 按发生顺序记下：
-// MPV 停止、进度回传完成、关 Proxy、销毁托盘、进程退出。
-// 加载退出协调模块，Proxy 和托盘换成记录事件的假收尾，播放状态用真的模块
 function setup(t, { closeProxy } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-quit-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
@@ -79,7 +76,6 @@ test('quitting again during the cleanup is held back and does not repeat the cle
 
     requestQuit(env.app);
     await settle();
-    // 托盘菜单再点一次退出
     assert.equal(requestQuit(env.app).defaultPrevented, true);
     await settle();
     assert.equal(env.app.exited, false);

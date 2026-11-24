@@ -9,8 +9,6 @@ const LOGIN_DIR = path.join(__dirname, '..', '..', 'resource', 'login');
 
 const readLoginFile = (name) => fs.readFileSync(path.join(LOGIN_DIR, name), 'utf8');
 
-// 文件列表取自 index.html 的引用，还要和目录内容一致。新文件没接进页面或测试读漏时在这里失败，
-// 不会让 doesNotMatch 对着空内容通过。
 function referencedFiles(tagPattern, extension) {
     const names = [...readLoginFile('index.html').matchAll(tagPattern)].map(([, name]) => name);
     const onDisk = fs.readdirSync(LOGIN_DIR).filter((name) => name.endsWith(extension));
@@ -25,7 +23,6 @@ function loginPageStyles() {
         .join('\n');
 }
 
-// 按页面加载顺序返回每个脚本，要模拟真实加载时逐个运行，不要拼起来：拼接后函数提升会盖住顺序问题。
 function loginPageScripts() {
     return referencedFiles(/<script src="\.\/([^"]+)"/g, '.js')
         .map((name) => ({ name, source: readLoginFile(name) }));
@@ -82,7 +79,6 @@ function createElement(focusTracker = { focus() {} }) {
     return element;
 }
 
-// 用假 DOM 跑登录页真实的脚本，主进程这一侧由测试扮演。
 function openLoginPage() {
     const focusTracker = {
         focus(element) {

@@ -6,7 +6,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
-// 真实报错：Electron 的 BoringSSL 用大写错误名，Node 的 OpenSSL 用小写短语。
 const ELECTRON_ERROR = 'write EPROTO 115584:error:100000f7:SSL routines:OPENSSL_internal:WRONG_VERSION_NUMBER:..\..\third_party\boringssl\src\ssl\tls_record.cc:127:\n';
 const NODE_ERROR = 'write EPROTO E84B0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:openssl\ssl\record\methods\tlsany_meth.c:78:\n';
 
@@ -26,7 +25,6 @@ test('does not treat other failures as HTTPS reaching an HTTP port', () => {
     assert.equal(isHttpsPortMismatch(undefined), false);
 });
 
-// 用假 ipcMain 跑真实的 auth.init()，请求打到本机真实的 HTTP 服务。
 function setupLogin(t, onConnection = () => {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-https-port-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };

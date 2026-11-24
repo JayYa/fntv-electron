@@ -73,7 +73,6 @@ test('when the installed AppImage gets a new file name the new path is logged', 
 
     await checker.manualCheckForUpdates();
     await waitFor(() => updater.downloads === 1);
-    // AppImage 文件名带版本号时，electron-updater 安装时换成新文件名并发这个事件
     updater.emit('appimage-filename-updated', newPath);
 
     const lines = logText().split('\n').filter((line) => line.includes(newPath));
@@ -81,7 +80,6 @@ test('when the installed AppImage gets a new file name the new path is logged', 
     assert.match(lines[0], /\bINFO\b/);
 });
 
-// Windows 上目录的只读属性不影响写入，造不出不可写的目录；root 能写任何目录。这条由 CI 的 Linux 和 macOS 验证。
 const cannotMakeReadOnlyDir = process.platform === 'win32' || process.getuid?.() === 0;
 
 test('a Linux AppImage in a read-only directory keeps the manual download buttons and opens the AppImage link', { skip: cannotMakeReadOnlyDir }, async (t) => {

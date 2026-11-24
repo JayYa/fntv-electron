@@ -1,4 +1,3 @@
-// 主进程经 IPC 让 Proxy 创建播放会话。utilityProcess 的通道换成直接调用，两端都用编译产物。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -8,7 +7,6 @@ const { SERVICE_DIR, MEDIA, startProxy, get, sessionInput } = require('./helpers
 const { handleControlRequest } = require(path.join(SERVICE_DIR, 'control.js'));
 const { ProxyControlClient } = require('../dest/main/common/proxySession.js');
 
-// 主进程发出的消息交给 Proxy 子进程的处理函数，回复异步送回主进程，和 IPC 一样经过结构化克隆。
 function connect(service) {
     const sent = [];
     const client = new ProxyControlClient((message) => {

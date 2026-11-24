@@ -1,5 +1,3 @@
-// 同步中途失败、中途退出的测试共用的升级场景：已有用户 v1 装过（有记录），改了 input.conf，
-// 在弹幕插件目录放了自己的文件，现在升级到 v2。
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -33,7 +31,6 @@ const V2 = {
 const MANAGED_DIRS = ['scripts/uosc', 'scripts/uosc_danmaku', 'scripts/smart_skip'];
 const RECORD = 'fntv/installed.json';
 
-// 每个场景一个独立目录，归档名相同，安装记录才能和参照逐字节比较。场景从同一份模板复制，省掉每次装 v1。
 function prepare(root, name) {
     const template = path.join(root, 'template');
     if (!fs.existsSync(template)) {
@@ -61,7 +58,6 @@ function syncV2(v2, user) {
     return synchronizeMpvConfig({ ...v2, mpvConfigDir: user, platform: 'win32' });
 }
 
-// 一次跑完的升级：before 是升级前的用户配置，after 是升级后的。
 function referenceRun(root) {
     const { user, v2 } = prepare(root, 'reference');
     const before = readTree(user);
@@ -83,7 +79,6 @@ function isDeepEqual(a, b) {
     }
 }
 
-// 托管目录要么整体是旧版，要么整体是新版，不会半新半旧。
 function assertWholeManagedDirs(tree, reference, label) {
     for (const dir of MANAGED_DIRS) {
         const actual = subtree(tree, dir);

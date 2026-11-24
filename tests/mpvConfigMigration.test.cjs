@@ -1,4 +1,3 @@
-// 便携配置和附带 MPV 的定位、同目录判断、同步结果写进日志的样子。按清单同步的规则见 mpvConfigSync*.test.cjs。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

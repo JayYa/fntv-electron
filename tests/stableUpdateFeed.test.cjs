@@ -5,9 +5,6 @@ const path = require('node:path');
 
 const { UPDATE_FEED_URL, UPDATE_METADATA } = require('./helpers/updateFeed.cjs');
 
-// 更新源地址和 3 个更新元数据文件名写进了已发的客户端。这里把 CODING_STANDARDS.md「稳定标识」表里登记的值、
-// package.json 的 publish 地址和客户端代码里的更新源钉在一起；release.yml 核对的文件名由 releaseGate.test.cjs 钉住。
-
 const root = path.resolve(__dirname, '..');
 const read = (...segments) => fs.readFileSync(path.join(root, ...segments), 'utf8');
 

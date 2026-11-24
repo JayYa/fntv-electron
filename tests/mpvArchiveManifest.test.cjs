@@ -1,6 +1,3 @@
-// 构建期清单断言（#221）：固定的 MPV 归档解压后，scripts/check-mpv-manifest.cjs 读归档根目录的清单，
-// 清单读不出、formatVersion 不受支持、archiveVersion 不是固定的 tag，或 provides 不满足客户端的 requires 时
-// 让构建失败。build.yml 在打包前运行它（步骤顺序和安装包带上清单见 tests/standards.test.cjs）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -14,7 +11,6 @@ const TAG = 'fntv-mpv-v20261114_235035';
 const FILES = { 'mpv.conf': 'include="~~/fntv/defaults.conf"\nprofile=fntv-defaults\n', 'scripts/smart_skip/main.lua': 'skip' };
 const PROVIDES = { 'smart-skip.origin-from-play-url': 1 };
 
-// 在临时目录里造一份解压好的归档和 mpv-archive.json，运行脚本。
 function check(t, { name = TAG, provides = PROVIDES, formatVersion = 1, pinnedTag = TAG, manifest = true } = {}) {
     const dir = tempRoot(t, 'manifest-check');
     const archive = writeArchive(dir, name, { files: FILES, provides, formatVersion });

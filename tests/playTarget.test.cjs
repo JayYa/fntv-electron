@@ -27,7 +27,6 @@ test('supports prefixed and UUID identifiers without accepting unrelated pages',
 });
 
 test('extracts item guid from tv and season routes via explicit route markers', () => {
-    // 使用非 hex 标识，确保命中的是显式路由匹配而不是 32 位 hex 兜底
     const opaque = 'series-id-42';
     assert.equal(extractItemGuidFromUrl(`https://nas.local/v/tv/${opaque}`), opaque);
     assert.equal(extractItemGuidFromUrl(`https://nas.local/v/tv/season/${opaque}`), opaque);

@@ -43,7 +43,6 @@ test('Linux updates in app only when running as an AppImage in a writable direct
         assert.equal(result.available, available, label);
         if (!available) {
             assert.ok(result.reason.length > 0, label);
-            // 原因写进日志，AppImage 路径里可能有系统用户名
             assert.ok(!result.reason.includes('/home/user'), `${label}: ${result.reason}`);
         }
         if (appImagePath !== undefined) {
@@ -103,12 +102,10 @@ test('Linux uses the exit mode, a PNG window icon, restores on tray click and re
     assert.equal(behavior.quitsWhenAllWindowsClosed, true);
     assert.equal(behavior.hasDock, false);
     assert.equal(behavior.titleBar, 'frameless');
-    // Electron 的 nativeImage 只在 Windows 上读 ICO，其它平台读 PNG（#74）。
     assert.equal(behavior.windowIcon, 'icon.png');
     assert.deepEqual(behavior.tray, {
         showWindowLabel: '显示主窗口',
         quitLabel: '退出',
-        // Linux 上用户激活托盘图标时发 click，没有 double-click（#75）。
         restoreEvent: 'click',
         icon: { file: 'icon.png', template: false },
     });
@@ -185,7 +182,6 @@ test('the standard MPV config wins over ~/.mpv when both exist, and Windows neve
     assert.equal(mpvUserConfigDir('win32', windowsDirs, {}, undefined, fs.existsSync, noFiles), 'D:\\Profiles\\me\\Roaming\\mpv');
 });
 
-// Windows 路径要在 Windows 上才能对应到真实目录。
 const onWindowsHost = { skip: process.platform !== 'win32' && 'Windows paths only resolve on a Windows host' };
 
 test('a user-chosen mpv.exe with portable_config next to it reads only that folder', onWindowsHost, t => {

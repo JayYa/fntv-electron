@@ -1,4 +1,3 @@
-// 主进程的 fn_api 请求：访问授权查进程内的 accessGrant，证书信任查 cert_trust。
 import * as log from '../logger';
 import { isTrusted } from '../cert_trust';
 import { getAccessCookieHeader } from './accessGrant';

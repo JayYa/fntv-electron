@@ -7,7 +7,6 @@ const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { openLoginPage } = require('./helpers/loginPage.cjs');
 
-// 在临时 userData 里加载编译后的配置模块和配置 IPC 插件；storedConfig 为 undefined 时不建 config.json
 function setupMain(t, storedConfig) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-download-proxy-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
@@ -41,7 +40,6 @@ function setupMain(t, storedConfig) {
     };
 }
 
-// 打开登录页，把它发出的应用更新下载加速请求交给主进程的配置插件，回复再送回页面
 function openConnectedLoginPage(ipcMain) {
     const page = openLoginPage();
     let delivered = 0;

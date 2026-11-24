@@ -1,4 +1,3 @@
-// 按清单同步用户配置：删除归档删掉的文件、托管目录里的用户文件、整体跳过、macOS/Linux 的 mpv.conf 例外。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -153,7 +152,6 @@ for (const platform of ['darwin', 'linux']) {
         assert.equal(tree['mpv.conf.fntv-new'], undefined);
         assert.equal(tree['fntv/defaults.conf'], 'volume=100\n');
 
-        // 下次（仍没有 mpv.conf 的记录）也一样，不会因为有了安装记录就开始提示。
         const again = sync(writeArchive(root, 'v2', { files: { ...files, 'mpv.conf': 'include v2\n' } }), user, platform);
         assert.equal(actionsOf(again)['mpv.conf'], 'kept');
         assert.equal(readTree(user)['mpv.conf.fntv-new'], undefined);

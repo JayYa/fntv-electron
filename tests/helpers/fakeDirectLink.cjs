@@ -1,10 +1,7 @@
-// 假的网盘直链服务：按 Range 提供媒体字节，记录收到的请求和时间。
-// 另提供假飞牛影视服务的流信息处理器，让它把播放源说成直链媒体。
 const http = require('node:http');
 const https = require('node:https');
 const { serveBytes, json, ok } = require('./fakeFnMedia.cjs');
 
-// handler 优先，用来模拟失败或特殊响应。
 async function startFakeDirectLink(t, { media, handler, tls } = {}) {
     const requests = [];
     const listener = (req, res) => {
@@ -23,7 +20,6 @@ async function startFakeDirectLink(t, { media, handler, tls } = {}) {
     return { origin: `${scheme}://127.0.0.1:${server.address().port}`, requests };
 }
 
-// 流信息：cloudType 为 null 时 cloud_storage_info 为 null；urls 为空时没有直链。
 function directLinkStream({ urls, cloudType = 1, cookies = [], userAgents = [] }) {
     return (req, res) => json(res, ok({
         header: { 'User-Agent': userAgents, Cookie: cookies },
@@ -32,7 +28,6 @@ function directLinkStream({ urls, cloudType = 1, cookies = [], userAgents = [] }
     }));
 }
 
-// 忽略 Range 的网盘：总是 200 返回整个文件。
 function ignoringRange(media) {
     return (req, res) => {
         res.setHeader('Content-Type', 'video/x-matroska');
@@ -41,7 +36,6 @@ function ignoringRange(media) {
     };
 }
 
-// 低速网盘：先发响应头，再每隔 intervalMs 发 chunkSize 字节；stallAfter 字节后不再发送也不结束。
 function slowly(media, { chunkSize, intervalMs, stallAfter = Infinity, headerDelayMs = 0 }) {
     return (req, res) => {
         const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');

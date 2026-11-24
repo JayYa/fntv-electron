@@ -142,7 +142,6 @@ function commit(dir, message) {
     git(dir, 'commit', '-q', '--no-verify', '-m', message);
 }
 
-// 模拟 PR：main 是 base，feature 分支是 head。
 function createPullRequest(t, baseFiles) {
     const dir = createRepo(t);
     git(dir, 'checkout', '-q', '-b', 'main');

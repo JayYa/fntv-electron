@@ -1,14 +1,9 @@
 import { PENDING_UPDATE_SUFFIX } from './stagedWrites';
 import type { MpvConfigConflict, MpvConfigSyncResult } from './sync';
 
-// 待合并更新的提示（#223）：同步结果里还没确认过的冲突弹一次，关掉即记为已确认（安装记录 acknowledgedConflicts）。
-// 同一文件的新版哈希变了算新冲突，重新提示。
-
 export interface MergePrompt {
     show: boolean;
-    /** 要列出、关闭后要记为已确认的冲突。 */
     conflicts: MpvConfigConflict[];
-    /** 没有安装记录时发现的冲突：一次性迁移的文案。 */
     migration: boolean;
 }
 

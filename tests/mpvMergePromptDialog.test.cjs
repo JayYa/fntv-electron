@@ -1,4 +1,3 @@
-// 启动时的待合并更新对话框（#223）：用户改过 input.conf，启动同步后弹一次；关掉记为已确认，没关就退出则下次再弹。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -14,8 +13,6 @@ const FILES = {
     'scripts/uosc_danmaku/main.lua': 'VERSION = "2.0.0"',
 };
 
-// 一个“启动”：在同一个临时目录上加载 mpvConfig 插件并 init。dialogResponses 按顺序回答对话框，
-// 'never' 表示用户没关对话框（Promise 不 resolve），模拟直接退出客户端。
 function setupApp(t, root) {
     const userDir = path.join(root, 'mpv-home');
     const paths = { home: root, appData: path.join(root, 'AppData'), userData: path.join(root, '.fntv') };
@@ -69,7 +66,6 @@ test('a modified input.conf is prompted once and not again after the user closes
     const launch = setup(t);
     const first = launch(t, 1);
     assert.equal(first.messageBoxes.length, 1);
-    // 非模态：不挂在任何窗口上。
     assert.equal(first.messageBoxes[0].length, 1);
     const [options] = first.messageBoxes[0];
     assert.deepEqual(options.buttons, ['打开配置目录', '知道了']);

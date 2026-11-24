@@ -144,8 +144,6 @@ export async function establishAccessCodeSession(
 ): Promise<AccessCodeSessionResult> {
     const initialUrl = parseBaseUrl(baseUrl);
     const normalizedCode = accessCode.trim();
-    // The app has a single active login. Drop grants from previous attempts,
-    // including origins discovered through an earlier port redirect.
     clearAccessGrants();
     if (!normalizedCode) {
         return { baseUrl: initialUrl.origin, cookie: '' };

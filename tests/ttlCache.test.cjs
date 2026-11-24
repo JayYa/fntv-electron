@@ -73,7 +73,6 @@ test('get returns the stored object itself', () => {
 });
 
 test('a pending promise is shared until it settles and is deleted', async () => {
-    // ApiService 用同一个缓存存进行中的请求（promise_<key>，30 秒），请求失败时删掉，不缓存失败。
     const clock = fakeClock();
     const cache = new TtlCache({ defaultTtl: 300, now: clock.now });
     let reject;

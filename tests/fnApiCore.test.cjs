@@ -140,7 +140,6 @@ test('clients sharing one cache reuse a cached call another client has in flight
     assert.deepEqual(second, first);
 });
 
-// 常驻的 Proxy 每次 NAS 调用都新建 keepAlive 连接池会让空闲连接越积越多：同样的 TLS 设置共用一个连接池。
 test('requests to an HTTPS NAS with the same TLS settings reuse one connection', async (t) => {
     withoutElectron(t);
     const { request, HttpMethod } = require(path.join(CORE_DIR, 'request.js'));
@@ -163,7 +162,6 @@ test('requests to an HTTPS NAS with the same TLS settings reuse one connection',
     }
     assert.equal(connections, 1);
 
-    // 校验证书的请求不能用跳过校验时建立的连接。
     await request(context(false), baseUrl, '/v/api/v1/user/info', HttpMethod.GET, 'token-1');
     assert.equal(connections, 2);
 });

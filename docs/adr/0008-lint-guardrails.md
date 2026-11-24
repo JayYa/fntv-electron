@@ -17,5 +17,5 @@ status: accepted
 - **`fn_api/core` 和 Proxy 服务不加载 `electron`**：`fn_api/core` 由主进程和 Proxy 共用，Proxy 服务运行在 `utilityProcess` 里。logger、`cert_trust` 和 `fn_api` 的主进程层会间接加载 electron，所以 core 只引用 Node 内置模块、npm 包和 core 本身，Proxy 服务另外只能引用 `fn_api/core`；日志和证书信任由调用方传入（`tests/eslintElectronFreeRules.test.cjs`）。
 - **`webRequest.onBeforeRequest` 只在 `src/main/handlers/core/interceptor.ts` 调用**：同一个 session 上只保留最后注册的监听器（ADR-0011），各插件经 `registerBeforeRequest` 注册，由一个监听器分发（#302，`tests/eslintWebRequestRules.test.cjs`）。
 - **日志调用不写 NAS 地址**（`lint/no-nas-address-log.mjs`，规则 `nas/no-address-log`）：`log`、`logger`、`*Logger` 的 `debug`/`info`/`warn`/`error` 调用里，参数（模板字符串插值、`+` 拼接、对象属性值、成员属性）出现名为 `baseUrl`、`origin`、`host`、`hostname`、`domain` 或以 `BaseUrl`、`Origin`、`Host`、`Hostname`、`Domain` 结尾的标识符时报错。规则按名字判断：先放进别的名字的变量、比较结果（`targetOrigin !== null`）和函数调用的参数（`maskDomain(domain)`、`describeOriginChange(...)`）都不拦，由审查兜底（#293、#305、#308，`tests/eslintNasAddressLogRules.test.cjs`）。
-- **测试里替换 `require` 的模块用 `tests/helpers/fakeElectron.cjs`**，不直接改 `Module._load`。
+- **测试里替换 `require` 的模块用 `tests/helpers/fakeElectron.cjs`**，不直接改 `Module._load`。`t.after` 按注册顺序执行，各个替身各自保存再恢复原值会把先装的替身恢复回去，所以 `fakeElectron.cjs` 记下全部替身，最后一个撤掉时才恢复 `Module._load` 和 `process.platform`。
 - **登录页脚本按经典 `<script>` 解析**（`sourceType: 'script'`），不是模块（`CODING_STANDARDS.md`）。

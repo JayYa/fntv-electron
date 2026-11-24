@@ -1,8 +1,6 @@
 import { MANIFEST_PROBLEM_TEXT } from './manifest';
 import type { MpvConfigSyncResult, MpvFileAction } from './sync';
 
-// 同步结果写进日志的样子：按文件列出动作，未变的文件只计数（#219 用户故事 34）。
-
 export interface MpvConfigSyncLogLine {
     level: 'info' | 'warn' | 'error';
     message: string;
@@ -21,7 +19,6 @@ const ACTION_LABELS: Record<Exclude<MpvFileAction, 'unchanged'>, string> = {
 export function mpvConfigSyncLogLines(result: MpvConfigSyncResult, mpvConfigDir: string): MpvConfigSyncLogLine[] {
     if (result.status === 'skipped') {
         if (result.reason === 'same-directory') {
-            // 自选 mpv 就是附带的 mpv：它读的就是来源目录，改了会随安装包升级被覆盖。
             return [{ level: 'warn', message: `MPV 配置目录就是便携配置，跳过同步: ${mpvConfigDir}` }];
         }
         return [{ level: 'error', message: `${MANIFEST_PROBLEM_TEXT[result.reason]}，跳过同步，用户配置未改动: ${result.detail}` }];

@@ -4,8 +4,6 @@ const { formatReleaseNotes } = require('../dest/modules/updater/releaseNotes.js'
 
 const REPO = 'https://github.com/JayYa/fntv-electron';
 
-// release-please 17 生成的 Release 说明格式，取自 googleapis/release-please 的 v17.11.0 等 Release，
-// 分区标题换成本仓库 release-please-config.json 的中文分区。
 const RELEASE_BODY = [
     `## [2.7.0](${REPO}/compare/v2.6.2...v2.7.0) (2026-11-07)`,
     '',
@@ -91,7 +89,6 @@ test('a few very long lines are cut at 1300 characters and point to the release 
     assert.equal(hint, TRUNCATION_HINT);
 });
 
-// v2.7.0 的真实 Release 正文，取自 `gh api repos/JayYa/fntv-electron/releases/tags/v2.7.0` 的 `body`。
 const V2_7_0_BODY = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures', 'release-v2.7.0.md'), 'utf8');
 
 test('the real v2.7.0 notes show all 14 items without truncation', () => {

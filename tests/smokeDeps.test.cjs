@@ -8,8 +8,6 @@ const path = require('node:path');
 const { SMOKE_PACKAGES, assertIntegrity, assertPinned, lockedPackage, tarballUrl } = require('../scripts/install-smoke-deps.cjs');
 const { workflow } = require('./helpers/workflowSteps.cjs');
 
-// 冒烟测试 job 不跑完整的 pnpm install，只装 tests/smoke/ 用到的包，版本和 integrity 取自锁文件（2026-11-10）。
-
 const root = path.resolve(__dirname, '..');
 const lockfile = fs.readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8');
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -30,7 +28,6 @@ test('the smoke job installs only the locked smoke test packages, without pnpm',
     const install = steps.find(step => step.name === 'Install dependencies');
     assert.equal(install.run, 'node scripts/install-smoke-deps.cjs');
     assert.ok(steps.indexOf(install) < steps.findIndex(step => step.name === 'Run smoke test'));
-    // 改了安装脚本的 PR 也要跑冒烟测试。
     assert.ok(workflow('smoke-test.yml').on.pull_request.paths.includes('scripts/install-smoke-deps.cjs'));
 });
 

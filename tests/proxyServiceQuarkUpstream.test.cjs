@@ -1,11 +1,9 @@
-// 夸克：网盘的各种响应（忽略 Range、其它状态码、网络错误、低速和停顿）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { serveBytes } = require('./helpers/fakeFnMedia.cjs');
 const { ignoringRange, slowly } = require('./helpers/fakeDirectLink.cjs');
 const { MIB, FILE, quarkSetup, sizeThen } = require('./helpers/quark.cjs');
 
-// Go 把 200 的 body 从第 0 字节开始当成起点处的字节，这里修掉（U-03）。
 test('quark returns the right bytes when the drive ignores Range and answers 200', async (t) => {
     const { play } = await quarkSetup(t, { handler: sizeThen(ignoringRange(FILE)) });
     const cases = [['bytes=0-99', 0, 99], ['bytes=5000000-5000099', 5000000, 5000099], [`bytes=${12 * MIB}-`, 12 * MIB, 22 * MIB - 1]];
@@ -50,7 +48,6 @@ test('quark answers 502 when the drive fails before sending headers', async (t) 
     assert.equal(drive.requests.length, 2);
 });
 
-// Go 把网盘的全部响应头原样转给 MPV，这里去掉逐跳头和 Set-Cookie（U-14）。
 test('quark passes the drive response headers to MPV without hop-by-hop headers or Set-Cookie', async (t) => {
     const { play } = await quarkSetup(t, {
         handler: sizeThen((req, res) => serveBytes(req, res, FILE, {
@@ -71,11 +68,9 @@ test('quark passes the drive response headers to MPV without hop-by-hop headers 
     assert.equal(response.headers['cache-control'], 'private');
     assert.equal(response.headers['content-type'], 'video/mp4');
     for (const name of ['set-cookie', 'x-hop']) assert.equal(response.headers[name], undefined, name);
-    // Node 服务器自己会给 MPV 写 Keep-Alive，只要不是网盘的那个值。
     assert.notEqual(response.headers['keep-alive'], 'timeout=99');
 });
 
-// Go 的 60 秒总超时连 body 一起算，低速时 10MiB 会被中途切断；这里改为空闲超时（U-06）。测试把空闲超时缩短到 300 毫秒。
 test('quark keeps a slow but steady transfer going past the idle timeout', async (t) => {
     const { play } = await quarkSetup(t, { handler: sizeThen(slowly(FILE, { chunkSize: 64 * 1024, intervalMs: 100 })) }, {}, { quarkIdleTimeoutMs: 300 });
     const started = Date.now();
