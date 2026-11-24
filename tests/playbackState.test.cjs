@@ -1,11 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {
-    beginPlayback,
-    isPlaying,
-    onPlaybackEnded,
-    stopPlaybackAndWait,
-} =require('../dest/modules/playback/playbackState.js');
+const playback = require('../dest/modules/playback/playbackState.js');
+const { isPlaying, onPlaybackEnded, runPlayback, stopPlaybackAndWait } = playback;
+const { beginRun } = require('./helpers/playbackRun.cjs');
 const log = require('../dest/modules/logger/index.js');
 
 function deferred() {
@@ -19,7 +16,7 @@ const settle = () => new Promise(setImmediate);
 test('playback counts as playing from start request until it ends', () => {
     assert.equal(isPlaying(), false);
 
-    const session = beginPlayback();
+    const session = beginRun(playback);
     assert.equal(isPlaying(), true);
 
     session.ended();
@@ -27,12 +24,12 @@ test('playback counts as playing from start request until it ends', () => {
 });
 
 test('a second playback cannot begin while one is starting or playing, but can while the last one is still reporting', async () => {
-    const first = beginPlayback();
-    assert.equal(beginPlayback(), null);
+    const first = beginRun(playback);
+    assert.equal(beginRun(playback), null);
 
     const report = deferred();
     first.ended(report.promise);
-    const second = beginPlayback();
+    const second = beginRun(playback);
     assert.notEqual(second, null);
 
     second.ended();
@@ -40,11 +37,58 @@ test('a second playback cannot begin while one is starting or playing, but can w
     await settle();
 });
 
+test('a play request while a playback is running is refused without starting anything', async () => {
+    const first = beginRun(playback);
+    const calls = [];
+
+    assert.equal(await runPlayback(async () => { calls.push('body'); }), false);
+    assert.deepEqual(calls, []);
+
+    first.ended();
+    await settle();
+});
+
+test('a playback that finishes starting without starting a player ends by itself', async (t) => {
+    const notified = [];
+    t.after(onPlaybackEnded(() => notified.push('ended')));
+
+    assert.equal(await runPlayback(async () => {}), true);
+    await settle();
+
+    assert.equal(isPlaying(), false);
+    assert.deepEqual(notified, ['ended']);
+});
+
+test('a playback whose player fails to play ends by itself', async () => {
+    await runPlayback(async (run) => {
+        await run.start({ stop: () => {} }, () => Promise.resolve(false));
+    });
+
+    assert.equal(isPlaying(), false);
+});
+
+test('a playback whose start throws ends by itself and passes the error on', async () => {
+    await assert.rejects(runPlayback(async () => { throw new Error('no login'); }), /no login/);
+
+    assert.equal(isPlaying(), false);
+});
+
+test('a playback whose player started keeps playing after starting finishes', async () => {
+    let session;
+    await runPlayback(async (run) => {
+        session = run;
+        await run.start({ stop: () => {} }, () => Promise.resolve(true));
+    });
+
+    assert.equal(isPlaying(), true);
+    session.ended();
+});
+
 test('subscribers are notified once the exit progress report has finished', async (t) => {
     const notified = [];
     t.after(onPlaybackEnded(() => notified.push('ended')));
 
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const report = deferred();
     session.ended(report.promise);
 
@@ -61,7 +105,7 @@ test('a playback that ends twice notifies subscribers only once', async (t) => {
     const notified = [];
     t.after(onPlaybackEnded(() => notified.push('ended')));
 
-    const session = beginPlayback();
+    const session = beginRun(playback);
     session.ended();
     session.ended();
     await settle();
@@ -74,7 +118,7 @@ test('unsubscribed listeners are not notified', async () => {
     const unsubscribe = onPlaybackEnded(() => notified.push('ended'));
     unsubscribe();
 
-    beginPlayback().ended();
+    beginRun(playback).ended();
     await settle();
 
     assert.deepEqual(notified, []);
@@ -84,10 +128,10 @@ test('subscribers are not notified while a newer playback is still running', asy
     const notified = [];
     t.after(onPlaybackEnded(() => notified.push('ended')));
 
-    const first = beginPlayback();
+    const first = beginRun(playback);
     const report = deferred();
     first.ended(report.promise);
-    const second = beginPlayback();
+    const second = beginRun(playback);
     report.resolve();
     await settle();
     assert.deepEqual(notified, []);
@@ -110,7 +154,7 @@ test('stopping without a playback returns immediately', async () => {
 });
 
 test('starting a playback plays within the same call and returns what play returns', async () => {
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const calls = [];
     const started = session.start({ stop: () => {} }, () => {
         calls.push('play');
@@ -124,7 +168,7 @@ test('starting a playback plays within the same call and returns what play retur
 });
 
 test('a stop after starting stops the player that was started', async () => {
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const stops = [];
     void session.start({ stop: () => { stops.push('stop'); session.ended(); } }, () => new Promise(() => {}));
 
@@ -135,7 +179,7 @@ test('a stop after starting stops the player that was started', async () => {
 });
 
 test('stopping a playback stops the player and waits for the exit progress report', async () => {
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const report = deferred();
     const player = { stop: () => session.ended(report.promise) };
     assert.equal(await session.start(player, () => Promise.resolve(true)), true);
@@ -151,7 +195,7 @@ test('stopping a playback stops the player and waits for the exit progress repor
 });
 
 test('stopping while the player has already exited waits for the pending exit report', async () => {
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const report = deferred();
     session.ended(report.promise);
 
@@ -165,7 +209,7 @@ test('stopping while the player has already exited waits for the pending exit re
 });
 
 test('stopping while playback is still starting cancels the start', async () => {
-    const session = beginPlayback();
+    const session = beginRun(playback);
 
     const stopped = trackSettled(stopPlaybackAndWait());
     const calls = [];
@@ -183,7 +227,7 @@ test('stopping while playback is still starting cancels the start', async () => 
 });
 
 test('starting a playback that has already ended does not play', async () => {
-    const session = beginPlayback();
+    const session = beginRun(playback);
     session.ended();
 
     const calls = [];
@@ -205,7 +249,7 @@ const warnings = (warn) => warn.mock.calls.map((call) => call.arguments.join(' '
 
 test('stopping gives up waiting after 5 seconds when the exit progress report never finishes', async (t) => {
     const warn = useFakeClockAndCaptureWarnings(t);
-    const session = beginPlayback();
+    const session = beginRun(playback);
     session.start({ stop: () => session.ended(new Promise(() => {})) }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());
@@ -219,12 +263,11 @@ test('stopping gives up waiting after 5 seconds when the exit progress report ne
     assert.equal(stopped.settled, true);
     assert.equal(warnings(warn).length, 1);
     assert.match(warnings(warn)[0], /等进度回传超时，继续/);
-    assert.match(warnings(warn)[0], /hasEnded=true/);
 });
 
 test('stopping returns with the exit progress report when it finishes in time, without a timeout warning', async (t) => {
     const warn = useFakeClockAndCaptureWarnings(t);
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const report = deferred();
     session.start({ stop: () => session.ended(report.promise) }, () => Promise.resolve(true));
 
@@ -239,27 +282,55 @@ test('stopping returns with the exit progress report when it finishes in time, w
     assert.deepEqual(warnings(warn), []);
 });
 
-test('stopping gives up after 5 seconds when the started player never reports its exit', async (t) => {
+test('a playback whose player never reports its exit ends 5 seconds after the stop', async (t) => {
     const warn = useFakeClockAndCaptureWarnings(t);
-    const session = beginPlayback();
+    const notified = [];
+    t.after(onPlaybackEnded(() => notified.push('ended')));
+    const session = beginRun(playback);
     session.start({ stop: () => {} }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());
-    t.mock.timers.tick(5000);
+    t.mock.timers.tick(4999);
     await settle();
+    assert.equal(isPlaying(), true);
 
-    assert.equal(stopped.settled, true);
-    assert.equal(warnings(warn).length, 1);
-    assert.match(warnings(warn)[0], /hasEnded=false/);
-    session.ended();
+    t.mock.timers.tick(1);
     await settle();
+    assert.equal(stopped.settled, true);
+    assert.equal(isPlaying(), false);
+    assert.deepEqual(notified, ['ended']);
+    assert.equal(warnings(warn).length, 1);
+    assert.match(warnings(warn)[0], /强制结束/);
+});
+
+test('a late exit from a player whose playback was ended after the stop does not touch the next playback', async (t) => {
+    useFakeClockAndCaptureWarnings(t);
+    const notified = [];
+    const stale = beginRun(playback);
+    stale.start({ stop: () => {} }, () => Promise.resolve(true));
+    const stopped = stopPlaybackAndWait();
+    t.mock.timers.tick(5000);
+    await stopped;
+
+    const next = beginRun(playback);
+    assert.notEqual(next, null);
+    t.after(onPlaybackEnded(() => notified.push('ended')));
+
+    await stale.ended();
+    await settle();
+    assert.equal(isPlaying(), true);
+    assert.deepEqual(notified, []);
+
+    next.ended();
+    await settle();
+    assert.deepEqual(notified, ['ended']);
 });
 
 test('a progress report that finishes after the stop timed out still notifies subscribers', async (t) => {
     useFakeClockAndCaptureWarnings(t);
     const notified = [];
     t.after(onPlaybackEnded(() => notified.push('ended')));
-    const session = beginPlayback();
+    const session = beginRun(playback);
     const report = deferred();
     session.start({ stop: () => session.ended(report.promise) }, () => Promise.resolve(true));
 

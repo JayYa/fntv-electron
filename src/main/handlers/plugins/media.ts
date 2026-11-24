@@ -105,13 +105,10 @@ async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<
         return;
     }
 
-    const run = playbackState.beginPlayback();
-    if (!run) {
+    const accepted = await playbackState.runPlayback((run) => play(request, run));
+    if (!accepted) {
         log.warn('播放器正在启动或播放，忽略重复播放请求');
-        return;
     }
-
-    await play(request, run);
 }
 
 function init(): void {

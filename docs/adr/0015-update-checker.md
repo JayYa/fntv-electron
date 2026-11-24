@@ -50,7 +50,7 @@ status: accepted
 - 每一步失败都记日志后继续，客户端不会卡在退不出去。
 - 「立即重启安装」引发的退出（`quitForInstall`）直接放行：拦下会让安装作废。它照常关 Proxy、销毁托盘，但不等 Proxy 关完；它和收尾共用同一次关闭。安装程序没启动时恢复原状，之后的退出按普通退出处理。收尾期间「立即重启安装」接手了退出时，收尾不再往下走。
 - 系统关机、重启或注销：Windows 是主窗口的 `session-end`（`WM_ENDSESSION`），这种退出不发 `before-quit`，收尾和安装都不会运行；Linux 是 `powerMonitor` 的 `shutdown`，随后 SIGTERM 按普通退出收尾（注销只有 SIGTERM，分不出来，照常安装）。macOS 关机时也发 `shutdown`，但 macOS 没有应用内更新，收到后什么都不做。收到后放弃这次「退出时安装」，不调用 `preventDefault`，不推迟关机。监听在主窗口创建后注册，要在 app ready 之后：那之前不能用 `powerMonitor`。
-- `stopPlaybackAndWait` 从调用起最多等 5 秒，覆盖停止 MPV 和进度回传：回传请求单个最长约 1 分钟，最多三个，安装和退出等不了这么久。超时后记 warn 并照常返回，不改播放状态，回传在后台继续，完成后照常通知 `onPlaybackEnded`。正在启动播放时调用会取消启动。这依赖 `MpvPlayer.playList` 在第一个 `await` 之前就建好 `NodeMpv` 实例，`stop()` 才有实例可停；在建实例之前加 `await`，启动期间的停止就只能等到超时。`tests/mpvPlayer.test.cjs` 的 `stopping right after playList is called, before it settles, reports the player exit` 钉住这一点。
+- `stopPlaybackAndWait` 从调用起最多等 5 秒，覆盖停止 MPV 和进度回传：回传请求单个最长约 1 分钟，最多三个，安装和退出等不了这么久。超时时播放器还没报出退出，就强制结束这次播放：立刻通知 `onPlaybackEnded`，之后可以开始下一次播放，这个播放器迟到的退出只把进度回传排进写入队列，不再改播放状态。播放器已报出退出、只是回传没写完时，记 warn 并照常返回，回传在后台继续，完成后照常通知 `onPlaybackEnded`。正在启动播放时调用会取消启动。这依赖 `MpvPlayer.playList` 在第一个 `await` 之前就建好 `NodeMpv` 实例，`stop()` 才有实例可停；在建实例之前加 `await`，启动期间的停止就只能等到超时。`tests/mpvPlayer.test.cjs` 的 `stopping right after playList is called, before it settles, reports the player exit` 钉住这一点。
 
 ## 测试替身（`tests/helpers/updateChecker.cjs`）
 

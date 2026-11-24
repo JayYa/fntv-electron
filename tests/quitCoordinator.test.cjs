@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { beginRun } = require('./helpers/playbackRun.cjs');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -88,7 +89,7 @@ test('quitting again during the cleanup is held back and does not repeat the cle
 test('a failing cleanup step is logged and the remaining steps still run until the client quits', async (t) => {
     const env = setup(t, { closeProxy: () => Promise.reject(new Error('proxy hung')) });
     t.mock.method(require('../dest/modules/logger/index.js'), 'error', () => {});
-    const session = env.playback.beginPlayback();
+    const session = beginRun(env.playback);
     void session.start({ stop() { throw new Error('mpv ipc closed'); } }, async () => true);
     env.quit.onQuitStarted(() => { throw new Error('listener failed'); });
 

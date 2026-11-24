@@ -93,7 +93,7 @@ function setup(t, { fnMedia = fakeFnMedia(), mpvFound = true, connect } = {}) {
         },
         onAbnormalExit: async () => { world.abnormalExits += 1; },
     });
-    world.play = (request) => play({ sourceIndex: 0, ...request }, playbackState.beginPlayback());
+    world.play = (request) => playbackState.runPlayback((run) => play({ sourceIndex: 0, ...request }, run));
     t.after(() => playbackState.stopPlaybackAndWait());
     return world;
 }
@@ -357,6 +357,23 @@ test('an abnormal MPV exit hands over to the caller without reporting progress',
     assert.equal(world.abnormalExits, 1);
     assert.deepEqual(world.fnMedia.writes, []);
     assert.equal(playbackState.isPlaying(), false);
+});
+
+test('a player that never reports its exit after a stop does not block the next play request', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    t.mock.method(require('../dest/modules/logger/index.js'), 'warn', () => {});
+    const world = setup(t);
+    await world.play({ id: 'ep-2' });
+    world.players[0].stop = () => {};
+
+    const stopped = playbackState.stopPlaybackAndWait();
+    t.mock.timers.tick(5000);
+    await stopped;
+    t.mock.timers.reset();
+
+    assert.equal(await world.play({ id: 'ep-2' }), true);
+    assert.equal(world.players.length, 2);
+    assert.equal(playbackState.isPlaying(), true);
 });
 
 test('the playback run ends right away when MPV is not found or play info is unavailable', async (t) => {

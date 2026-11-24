@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
+const { beginRun } = require('./playbackRun.cjs');
 
 function createQuittingApp(events, extra = {}) {
     return Object.assign(new EventEmitter(), {
@@ -39,7 +40,7 @@ function startQuitCoordinator(events, { closeProxy } = {}) {
 }
 
 function startPlaying(playback, events, report = Promise.resolve()) {
-    const session = playback.beginPlayback();
+    const session = beginRun(playback);
     let played = false;
     void session.start({
         stop() {
