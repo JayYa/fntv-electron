@@ -1,9 +1,6 @@
-import fs from 'node:fs';
 import tseslint from 'typescript-eslint';
 import noComments from './lint/no-comments.mjs';
 import noNasAddressLog from './lint/no-nas-address-log.mjs';
-
-const COMMENT_BASELINE = JSON.parse(fs.readFileSync(new URL('./lint/comment-baseline.json', import.meta.url), 'utf8'));
 
 const sharedRules = {
     eqeqeq: 'error',
@@ -150,7 +147,7 @@ export default [
             local: { rules: { 'no-comments': noComments } }
         },
         rules: {
-            'local/no-comments': ['error', { baseline: COMMENT_BASELINE }]
+            'local/no-comments': 'error'
         }
     },
     {

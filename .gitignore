@@ -21,3 +21,4 @@ docs/*
 !docs/external-runtime.md
 !docs/mpv-archive-contract.md
 smoke-artifacts
+.claude/worktrees

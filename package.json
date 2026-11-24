@@ -9,7 +9,6 @@
         "compile": "pnpm run clean && tsc && pnpm run build:preload",
         "build:preload": "node scripts/build-preload.cjs",
         "lint": "eslint src resource/login tests scripts lint eslint.config.mjs",
-        "comments:baseline": "node scripts/update-comment-baseline.cjs",
         "knip": "knip",
         "check": "node scripts/check.cjs",
         "prepare": "git config core.hooksPath .githooks",
