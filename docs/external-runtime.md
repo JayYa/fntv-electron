@@ -25,7 +25,7 @@
 
 - `设置 MPV 播放器路径 (<路径>)` 总是显示上面算出的路径，找不到时显示 `(未找到)`。
 - `打开 MPV 用户配置目录 (<路径>)` 显示按当前设置算出的用户配置目录，也就是下次播放时 MPV 读的目录。目录不存在时只弹提示，不创建：空目录会让下次同步按首次初始化处理。`shell.openPath` 失败时弹错误框并记 ERROR 日志。
-- `MPV 配置有 N 个待合并的更新` 只在上面这个目录里有 `*.fntv-new`（不算 `.fntv-sync-*` 里的）时显示，点击打开目录。托盘递归监视这个目录（`src/main/common/mpvConfigSync/pendingUpdates.ts`），`.fntv-new` 增删后约 200 毫秒重建菜单，删完这一项就消失。
+- `MPV 配置有 N 个待合并的更新` 只在上面这个目录里有 `*.fntv-new`（不算 `.fntv-sync-*` 里的）时显示，点击打开目录。托盘递归监视这个目录（`src/main/common/mpvConfigSync/pendingUpdates.ts`），`.fntv-new` 增删后约 200 毫秒重建菜单，删完这一项就消失。开始监视后约 200 毫秒还会再重建一次，补上监视生效前发生的增删。
 
 ## MPV 归档
 
