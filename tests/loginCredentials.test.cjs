@@ -31,7 +31,6 @@ const SECOND_LOGIN = {
 };
 const SECRETS = /saved-token|saved-access-code|first-password|first-access-code|second-password|second-access-code/;
 
-// 用假 ipcMain 跑真实的 auth.init()，页面和主进程之间只经过 send 和 event.reply。
 function setupAuth(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-login-credentials-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };

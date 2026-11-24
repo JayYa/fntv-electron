@@ -30,5 +30,5 @@ status: accepted
 
 ## Consequences
 
-- 第一轮（引入这条规则的 PR）删光了 `eslint.config.mjs`、`scripts/`、`src/public/`、`src/preload/`、`resource/login/` 的注释，决策记录迁进 ADR-0008 到 ADR-0011；`src/main/`、`src/modules/` 和 `tests/` 留在基线里，用 `/delete-comment` 分批处理。
+- 第一轮（引入这条规则的 PR）删光了 `eslint.config.mjs`、`scripts/`、`src/public/`、`src/preload/`、`resource/login/` 的注释，决策记录迁进 ADR-0008 到 ADR-0011；`src/main/`、`src/modules/` 和 `tests/` 留在基线里，用 `/delete-comment` 分批处理。之后几轮分批删完，2026-11-24 基线降到 0，所有文件都不能再有注释。
 - YAML、shell 和 Markdown 里的注释不在这条规则范围内。

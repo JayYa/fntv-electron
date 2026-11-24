@@ -8,9 +8,6 @@ const { posixPath, root, runStep, workflow } = require('./helpers/workflowSteps.
 const { lines, stub, tempDir } = require('./helpers/ciCache.cjs');
 const check = require('../scripts/check.cjs');
 
-// pnpm run check 是改完代码后的验证入口，本地和 ci.yml 跑同一条命令（2026-11-14）。
-// 分支保护只要求 ci.yml 的 Check，它汇总所有必需 job 的结果。
-
 function commands(steps) {
     return steps.map(step => step.skipped ? `${step.name}: skipped` : `${step.name}: ${[path.basename(step.file), ...step.args].join(' ')}`);
 }
@@ -170,7 +167,6 @@ test('a long failure detail is cut and points to check.log', async () => {
     assert.doesNotMatch(text, /line 60\n/);
 });
 
-// 在临时目录里运行 ci.yml 的 Run checks，pnpm 换成记录参数的桩。
 function runChecks(t, fileSize) {
     const dir = tempDir(t, 'fntv-ci-check-');
     const bin = path.join(dir, 'bin');
@@ -188,12 +184,10 @@ function runChecks(t, fileSize) {
 test('ci.yml runs pnpm run check, with the file size check only on the Linux cell of a pull request', t => {
     const job = workflow('ci.yml').jobs.test;
     assert.deepEqual(job.strategy.matrix.os, ['ubuntu-latest', 'windows-latest', 'macos-latest']);
-    // 只调用 pnpm run check，不再单独写 lint、knip、测试的步骤。
     for (const script of ['lint', 'knip', 'test']) {
         assert.ok(!job.steps.some(step => new RegExp(`pnpm (run )?${script}\\b`).test(step.run ?? '')), `ci.yml runs ${script} outside pnpm run check`);
     }
     assert.equal(workflow('ci.yml').jobs['file-size'], undefined, 'the file size check is part of pnpm run check');
-    // PR 上检出的是合并提交，HEAD^1 是 base；文件大小检查要拿到它。
     const checkout = job.steps.find(step => /^actions\/checkout@/.test(step.uses ?? ''));
     assert.equal(checkout.with['fetch-depth'], 2);
     const run = job.steps.find(step => step.name === 'Run checks');

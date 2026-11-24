@@ -1,4 +1,3 @@
-// 待合并更新的提示：同步结果加已确认的冲突 -> 是否弹窗、列哪些文件、用哪种文案（#223）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { mergePrompt, mergePromptText } = require('../dest/main/common/mpvConfigSync/mergePrompt.js');
@@ -54,7 +53,6 @@ test('conflicts found without an install record use the one-time migration wordi
     const migration = mergePromptText(prompt);
     assert.match(migration.detail, /一次性迁移/);
     assert.ok(migration.detail.includes('input.conf.fntv-new'));
-    // 两种合并方式都要讲到：把改动搬到新文件，或者保留自己的、删掉 .fntv-new。
     assert.match(migration.detail, /搬/);
     assert.match(migration.detail, /删掉/);
 

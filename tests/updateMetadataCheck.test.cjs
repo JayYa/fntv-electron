@@ -7,16 +7,12 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const yaml = require('js-yaml');
 
-// scripts/check-update-metadata.cjs 在构建 workflow 里打包之后运行，核对 latest*.yml 记录的安装包
-// 文件名、size 和 sha512 与输出目录里的实际文件一致。这里用临时目录里的小假安装包运行它。
-
 const SCRIPT = path.resolve(__dirname, '..', 'scripts', 'check-update-metadata.cjs');
 const INSTALLER = 'FNMedia_9.9.9_win_x64.exe';
 const CONTENT = Buffer.from('fake installer');
 
 const sha512Of = buffer => crypto.createHash('sha512').update(buffer).digest('base64');
 
-// electron-builder 生成的 latest.yml 的结构，overrides 改掉其中的字段。
 function metadataFor(name, content, overrides = {}) {
     const entry = { url: name, sha512: sha512Of(content), size: content.length, ...overrides.entry };
     return {

@@ -15,7 +15,7 @@
 ## 契约
 
 - 访问码先去除首尾空白。空访问码不验证、不产生授权，登录流程保持原样。
-- 每次验证都先清空已有授权，因为应用同时只有一个登录。
+- 每次验证都先清空已有授权，包括之前经端口跳转发现的 origin，因为应用同时只有一个登录。
 - 重定向只允许同主机，不允许 HTTPS 降级到 HTTP，最多 5 次，整个请求 10 秒超时。这防止访问码被发到其它主机，同时支持常见的 80 到 5666 端口跳转。
 - `401`、`403`、`429` 视为访问码被拒绝，用户看到“访问码错误”。其它非 2xx、网络错误，以及 2xx 但没有拿到 Cookie，都按网络失败处理，和账号密码错误区分开。
 - Cookie 由 `composeCookieHeader` 结构化组合，`mode=relay` 只出现一次。主进程和 Proxy 共用这一个实现（`src/modules/fn_api/core/cookie.ts`）。
@@ -30,9 +30,9 @@ FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离�
 
 页面信任判断的细节（`fnIdTrust.ts`、`fnIdOauthWindow.ts`）：
 
-- FN Connect 返回的 NAS 地址可能是局域网 IP、公网 IP、DDNS 或中继，无法预先列白名单，所以按上面的“第一个地址”确认目标，之后只有这个 origin 能拿到凭据。`5ddd.com/{fnId}` 路径下的页面视同 NAS 页面（`fnConnect.ts`）。
+- FN Connect 返回的 NAS 地址可能是局域网 IP、公网 IP、DDNS 或中继，无法预先列白名单，所以按上面的“第一个地址”确认目标，之后只有这个 origin 能拿到凭据。`5ddd.com/{fnId}` 路径下的页面视同 NAS 页面（`fnConnect.ts`）。FN Connect 停在 `5ddd.com/{fnId}` 时，API 的 base URL 要保留 FN ID 这段路径（`resolveFnConnectBaseUrl`）。
 - FN Connect 只认 HTTPS 的 `5ddd.com`、`www.5ddd.com` 和 `check.fnos.net`：离开这些页面后的第一个地址会被确认为目标，明文页面的跳转可以被篡改。`check.fnos.net` 是旧版 NAS 的探测页，它的 HTTP 地址因此被拒绝，旧版 NAS 不再支持 FN ID 登录（#57）。FN Connect 页脚的外链（`fnnas.com` 等）不是 NAS 地址。
-- NAS 页面能运行拦截脚本、填写访问码、向主进程发消息；其中只有登录页能填写明文密码。
+- NAS 页面能运行拦截脚本、填写访问码、向主进程发消息；其中只有登录页能填写明文密码。主进程判断页面和脚本执行之间页面可能已经换了，所以自动填写脚本（`getLoginAutofillScript`，`fnIdScripts.ts`）先核对 origin 再读取凭据。
 - FN Connect 的地址选择页用 `target="_blank"` 打开 NAS，这种弹窗改在当前窗口继续，其它弹窗一律拒绝。FN Connect 用隐藏 iframe 探测 NAS 地址，子框架的跳转不算窗口导航，只有主框架的 `will-redirect` 按导航规则检查。
 - 页面经 `console-message` 的 `__FNTV_BRIDGE__:` 前缀给主进程发消息。任何页面都能打印这个前缀，所以只听 NAS 页面的主框架。
 - 每次登录用新的临时分区（`fnid-oauth-<时间戳>`），旧 token 不会被当成本次登录的结果。分区里确认目标前只认中继页的 Cookie，确认后只认目标 NAS 的 Cookie。中继页不看 Cookie 的路径：真实中继没有验证过，路径猜错会让中继登录失败。确认目标后中继的 Cookie 不再可用：它不是目标 NAS 的 token，放弃后还能走 OAuth。取到的 token 还要过 NAS 的用户信息接口，这里只排除其它站点的 Cookie。
@@ -41,6 +41,8 @@ FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离�
 ## 存储与暴露范围
 
 - 当前配置和历史里的访问码都由 `safeStorage` 加密。没有 `accessCode` 的旧历史记录读出来是空值。
+- 加密（`src/modules/fn_config/credentialCrypto.ts` 的 `encryptAll`）没有要加密的明文时不检查安全存储；存储不可用或只有 `basic_text` 时抛错，一个都不加密。写回磁盘的值（`storedValueOf`）要求要加密的明文已在 `encryptAll` 的结果里。
+- Electron 45 的同步 API 写的密文格式是 `safe-storage:v1:` 加 `encryptString` 结果的 base64，`tests/helpers/credentialConfig.cjs` 按这个格式造旧密文。
 - 当前访问码解不开时，`readCurrentLogin` 连同 token 一起按未登录返回，启动回到登录页，不跳过网关。两者的密文都保留，密钥恢复后还能用。
 - 访问码不进日志、URL、命令行参数和环境变量，也不出现在 Proxy 响应里。派生的 Cookie 不出现在播放会话 URL 里。
 - `config-data` 不含密码、访问码和 token。当前配置只带 `hasAccessCode` 布尔值，`history` 只带 `domain`、`account` 和 `useHttps`。

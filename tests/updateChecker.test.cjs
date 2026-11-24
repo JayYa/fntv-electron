@@ -80,7 +80,6 @@ test('Linux x64 picks the x86_64 AppImage even when arm64 is listed first', asyn
     assert.equal(await downloadFileName(t, [LINUX_ARM64, LINUX_X86_64]), LINUX_X86_64);
 });
 
-// 发版产物里 Linux x64 叫 x86_64（v2.7.2 的 Release 核对过），不认 x64
 test('Linux x64 ignores an AppImage named x64', async (t) => {
     simulateHost(t, 'linux', 'x64');
 
@@ -119,7 +118,6 @@ test('Linux arm64 rejects names that end in AppImage without the .AppImage exten
     ]), null);
 });
 
-// 2.6.2 在 Release Build（actions/runs/41963636062）里的真实产物名，版本号换成 2.7.0。
 const PUBLISHED_ASSETS = [
     'FNMedia_2.7.0_linux_arm64.AppImage',
     'FNMedia_2.7.0_linux_x86_64.AppImage',

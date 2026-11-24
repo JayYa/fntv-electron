@@ -1,4 +1,3 @@
-// 从 Go 版升级的用户目录里留有 proxy-secret，启动时删掉（ADR-0004）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -30,10 +29,8 @@ test('startup without a legacy proxy secret file does nothing', (t) => {
     assert.deepEqual(fs.readdirSync(directory), []);
 });
 
-// Windows 上文件被占用时删除会失败（EPERM、EBUSY），启动不能因此中断。
 test('a legacy proxy secret that cannot be deleted is logged and startup continues', (t) => {
     const directory = userDataDir(t);
-    // 同名的非空目录让删除必然失败。
     fs.mkdirSync(path.join(directory, 'proxy-secret'));
     fs.writeFileSync(path.join(directory, 'proxy-secret', 'locked'), '');
     const warnings = [];

@@ -1,4 +1,3 @@
-// Proxy 子进程的日志经 IPC 交给主进程的 logger 写，按字段名的脱敏要和主进程里一样生效。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -10,7 +9,6 @@ const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
 const logModule = path.resolve(__dirname, '../dest/modules/proxy_service/log.js');
 const loggerModule = path.resolve(__dirname, '../dest/modules/logger/logger.js');
 
-// 在子进程里：Proxy 一侧记一条日志，消息经结构化克隆（与 IPC 一样）后由主进程一侧写进 log/app.log。
 function logThroughIpc(t, level, message, args) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-proxy-log-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

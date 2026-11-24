@@ -8,18 +8,10 @@ export function unmaximizeWindow(mainWindow: BrowserWindow): void {
     if (mainWindow) mainWindow.unmaximize();
 }
 
-/**
- * 设置窗口为全屏
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
 export function setFullScreen(mainWindow: BrowserWindow): void {
     if (mainWindow) mainWindow.maximize();
 }
 
-/**
- * 设置全屏切换
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
 export function setupFullScreenToggle(mainWindow: BrowserWindow): void {
     mainWindow.webContents.on('before-input-event', (event, input) => {
         if (input.type === 'keyDown' && input.key === 'F11') {
@@ -33,10 +25,6 @@ export function setupFullScreenToggle(mainWindow: BrowserWindow): void {
     });
 }
 
-/**
- * 设置窗口显示事件
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
 export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
     mainWindow.once('ready-to-show', () => {
         if (shouldStartMaximized()) mainWindow.maximize();
@@ -44,12 +32,7 @@ export function setupWindowShowEvents(mainWindow: BrowserWindow): void {
     });
 }
 
-/**
- * 设置 cookie 恢复
- * @param {Electron.BrowserWindow} mainWindow - 主窗口实例
- */
 export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<void> {
-    // 从配置中恢复 cookie
     let savedLogin;
     try {
         savedLogin = await readCurrentLogin();

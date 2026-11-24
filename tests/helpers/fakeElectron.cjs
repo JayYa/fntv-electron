@@ -9,8 +9,6 @@ function clearCompiledModules() {
         .forEach((id) => delete require.cache[id]);
 }
 
-// t.after 按注册顺序执行，各自保存再恢复原值会把先装的替身恢复回去。
-// 所以替身记在这里，最后一个撤掉时才恢复 Module._load 和 process.platform。
 const ORIGINAL_LOAD = Module._load;
 const ORIGINAL_PLATFORM = Object.getOwnPropertyDescriptor(process, 'platform');
 const active = [];
@@ -36,16 +34,10 @@ function replaceModule(t, name, load) {
     clearCompiledModules();
 }
 
-/** 让 require(name) 返回 replacement，例如 node-mpv-2 的替身。 */
 function useFakeModule(t, name, replacement) {
     replaceModule(t, name, () => replacement);
 }
 
-/**
- * 让 require('electron') 返回 electronMock。
- * platform 给出时同时改写 process.platform，模拟在该平台上运行（src/public/platform/index.ts 每次调用都读它）。
- * 只放这个测试用到的 Electron API；各平台分支用到的 API 都要有（TESTING_STANDARDS.md）。
- */
 function useFakeElectron(t, electronMock, { platform } = {}) {
     useFakeModule(t, 'electron', electronMock);
     if (platform) {
@@ -53,10 +45,6 @@ function useFakeElectron(t, electronMock, { platform } = {}) {
     }
 }
 
-/**
- * 模拟没有 electron 的普通 Node 进程（Proxy 的 utilityProcess）：require('electron') 抛错。
- * 返回的数组记下每次尝试加载 electron 的文件，测试断言它为空。
- */
 function withoutElectron(t) {
     const requested = [];
     replaceModule(t, 'electron', (parent) => {

@@ -1,5 +1,3 @@
-// HTTPS 连到 HTTP 端口时，服务器回的明文不是 TLS 记录。
-// Electron 的 BoringSSL 写 WRONG_VERSION_NUMBER，Node 的 OpenSSL 写 wrong version number。
 const WRONG_VERSION_NUMBER = /wrong[_ ]version[_ ]number/i;
 
 export function isHttpsPortMismatch(rawMessage: string | undefined): boolean {

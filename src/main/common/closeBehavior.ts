@@ -80,7 +80,6 @@ async function handleClose(window: BrowserWindow): Promise<void> {
     }
 }
 
-/** 主窗口创建后调用（macOS 的 activate 重建窗口时再调用）：接管它的 close，之后显示主窗口都指它。 */
 export function manageMainWindow(window: BrowserWindow): void {
     mainWindow = window;
     window.on('close', (event) => {
@@ -90,7 +89,6 @@ export function manageMainWindow(window: BrowserWindow): void {
     });
 }
 
-/** 托盘创建后提供弹托盘气泡的方法，隐藏提示用托盘气泡的平台（Windows）靠它提示。 */
 export function provideTrayBalloon(show: (content: string) => void): void {
     showTrayBalloon = show;
 }

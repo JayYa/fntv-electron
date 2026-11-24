@@ -1,4 +1,3 @@
-// 播放会话：一次播放期间的短期授权，只允许取创建时列出的播放项。规则与 Go 版一致。
 import * as crypto from 'node:crypto';
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -33,7 +32,6 @@ interface Entry {
 export class PlaybackSessionStore {
     private readonly sessions = new Map<string, Entry>();
 
-    // 入参不合法时抛错，错误信息与 Go 版相同。
     create(input: PlaybackSessionInput): string {
         const itemGuids = Array.isArray(input.itemGuids) ? input.itemGuids : [];
         if (!input.token || !input.account || !input.domain || itemGuids.length === 0) {
@@ -72,7 +70,6 @@ export class PlaybackSessionStore {
         return id;
     }
 
-    // 会话不存在、已过期或不含这个播放项时返回 undefined；成功时有效期顺延 24 小时。
     resolve(id: string, itemGuid: string): PlaybackSession | undefined {
         const entry = this.sessions.get(id);
         if (!entry || Date.now() > entry.expiresAt) {

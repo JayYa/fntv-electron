@@ -44,7 +44,6 @@ test('the bundled preload requires nothing but electron', () => {
     const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
 
     assert.match(bundle, /require\("electron"\)/);
-    // 把允许的调用去掉后不能再出现 require，esbuild 的 __require 也算。
     assert.doesNotMatch(bundle.replaceAll('require("electron")', ''), /require/);
 });
 

@@ -1,4 +1,3 @@
-// MPV 配置同步测试的夹具：在临时目录里造便携配置、清单和用户配置，读回目录内容。
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -16,7 +15,6 @@ function roleOf(file) {
 
 const MANAGED_DIRS = ['scripts/uosc', 'scripts/uosc_danmaku', 'scripts/smart_skip'];
 
-// files: 路径 -> 内容；history: 路径 -> 历史归档里出现过的其它内容；obsolete: 路径 -> 以前发过的内容列表。
 function writeArchive(root, name, { files, history = {}, obsolete = {}, formatVersion = 1, provides = {} }) {
     const archiveDir = path.join(root, name);
     const portable = path.join(archiveDir, 'portable_config');
@@ -51,7 +49,6 @@ function writeTree(dir, files) {
     }
 }
 
-// 目录内容：相对路径（正斜杠）-> 文本内容，排好序，便于 deepEqual。
 function readTree(dir) {
     const result = {};
     if (!fs.existsSync(dir)) return result;

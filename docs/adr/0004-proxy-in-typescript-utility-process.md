@@ -8,6 +8,10 @@ Proxy 原来是单独打包的 Go 可执行文件，构建要装 Go 工具链、
 
 客户端和 Proxy 之间的控制（创建播放会话、确认就绪）走 `parentPort` IPC，HTTP 只保留 MPV 取流用的 `/api/v1/playvideo` 和 `/api/v1/skipinfo`。Proxy 随客户端退出，不会再变成孤儿进程，所以 Proxy 密钥、`proxy-secret` 文件、`/health` 和孤儿复用都删掉。这一条取代 ADR-0001 的“Proxy 密钥持久化”。
 
+从 Go 版升级的用户目录里留着 `proxy-secret`，启动时删掉（`src/main/common/legacyProxySecret.ts`）；删不掉（例如 Windows 上文件被占用，`EPERM`、`EBUSY`）只记日志，TS 版用不到这个文件，不影响启动，下次启动再删。
+
+子进程（`child.ts`）只转发 `parentPort` 的消息、回报启动结果和日志。监听失败时它报 `startFailed`（带错误码），由主进程结束这个进程。播放会话只在创建它的那个 Proxy 子进程里有效，所以主进程拿到的会话 ID 和该进程的端口一起返回（`ProxyPlaybackSession`，`src/main/common/proxySession.ts`）。
+
 端口仍固定为 `127.0.0.1:22345`，因为 MPV 归档里的 `smart_skip` 插件把这个地址写死了。
 
 ## Considered Options
@@ -47,4 +51,9 @@ Proxy 原来是单独打包的 Go 可执行文件，构建要装 Go 工具链、
 - 直链媒体（`directLink.ts`）：`cloud_storage_info` 非空且有直链时才算直链媒体，否则按 NAS 本地播放源处理；直链固定取第一个，不随 `sourceIndex` 或清晰度变化。`CLOUD_TYPE_115`、`CLOUD_TYPE_QUARK` 特殊处理，其余网盘透明转发。直连时 Cookie 用 `; ` 连接流信息里的全部 Cookie，不去重、不加 `mode=relay`，不带 NAS 的 Authorization 和访问授权 Cookie；UA 取流信息里第一个 trim 后非空的，对所有直连网盘生效，覆盖 MPV 的 UA（U-09）。直连总是校验证书，会话的 `skipVerify` 只对 NAS 生效。WebDAV 这类直链把账号写在 URL 里：改成 Basic 认证并从 URL 里去掉；MPV 的 Authorization 不转发，所以有账号时总是补上。解析不了的 URL 原样交给转发报错。NAS 中转的直链媒体走 NAS，只带 token 和访问授权。
 - `/api/v1/playvideo`：`sourceIndex` 同 Go 的 `strconv.ParseInt(s, 10, 32)`，缺省或空串按 0，越界或为负时退回第 0 个。流信息请求里的 `ip` 是 `sha1(account)` 的前 16 字节按 UUID 格式写出（Go 的 `StringToUUID`），账号为空时是全 0 的 UUID。
 - `/api/v1/skipinfo`：成功返回 `{code:0,msg:"success"}`，失败 `{code:1000,msg}`。GET 不走缓存，每次取 NAS 上的最新值。POST 先解析 body 再看 query，顺序同 Go；body 按 Go 的 `encoding/json` 解到 `{guid, skipStart, skipEnd}`：键名不分大小写，`null` 当作没写，多余字段忽略，类型不对或时间点不是整数时报错。时间点不做范围检查，负数也原样写给 NAS（G-161-07）。
+- 播放会话（`playbackSessions.ts`）：入参不合法时的错误信息同 Go 版；每次取用成功后有效期顺延 24 小时。
+- JSON 响应的响应头同 gin 的 `c.JSON`（`respond.ts`）。
+- 上游请求（`upstream.ts`）每个单独建连接（`agent: false`），同 Go 版。`openUpstream` 返回还没 `end()` 的请求，调用方设好超时和事件后再 `end()`。
+- Node 的 HTTP 服务器自己会给 MPV 写 `Keep-Alive`，夸克去掉逐跳头只保证这个头不是网盘给的值。
+- 校验证书用 Node 自带的 CA 加上操作系统证书库，改了（U-17，`caCertificates.ts`）：Go 版用系统证书库，装在系统里的私有 CA 签发的 NAS 证书在 Go 版能过，这里也要能过。Node 只在进程启动后读一次系统证书库，所以 `tests/proxyServiceTls.test.cjs` 在新进程里运行 `tests/helpers/proxyTlsProbe.cjs`，证书经环境变量传入。只有 Linux 能用 `SSL_CERT_FILE` 在测试里装入私有 CA；Windows 和 macOS 要改系统设置，不测。
 - 两个路由的 query 都只读 `session`（playvideo 还有 `sourceIndex`），query 不覆盖路径参数，body 里的 `session` 也当作多余字段，改了（U-13，不照搬 gin）。

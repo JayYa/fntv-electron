@@ -1,4 +1,3 @@
-// 假的飞牛影视服务：返回流列表和流信息，按 Range 提供媒体字节，记录收到的请求。
 const http = require('node:http');
 const https = require('node:https');
 
@@ -19,7 +18,6 @@ function readBody(req) {
     });
 }
 
-// 按单段 Range 返回 206，没有 Range 返回 200。
 function serveBytes(req, res, bytes, extraHeaders = {}) {
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Accept-Ranges', 'bytes');
@@ -44,8 +42,6 @@ function serveBytes(req, res, bytes, extraHeaders = {}) {
     res.end(bytes.subarray(start, end + 1));
 }
 
-// media: { [mediaGuid]: Buffer }；streams: { [itemGuid]: mediaGuid[] }；playInfo: { [itemGuid]: 播放信息 }。
-// handlers 里的同名处理器优先，用来模拟失败或特殊响应。
 async function startFakeFnMedia(t, { media = {}, streams = {}, playInfo = {}, handlers = {}, tls } = {}) {
     const requests = [];
     const listener = async (req, res) => {

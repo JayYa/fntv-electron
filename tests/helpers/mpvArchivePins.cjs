@@ -2,12 +2,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// 升级归档时 mpv-archive.json 是唯一来源（build.yml 从它读），README 的准备步骤和 docs/external-runtime.md
-// 都要跟着改。tests/mpvArchiveCache.test.cjs 用它检查仓库本身，tests/mpvArchiveUpdate.test.cjs 用它检查
-// scripts/update-mpv-archive.cjs 改过的临时副本。这里自己读文件，不用脚本的解析。
-
-// 三处文件相对仓库根目录的路径，测试复制临时副本时也用。都不在 .github/workflows 下：
-// GITHUB_TOKEN 推不了改 workflow 的提交，update-mpv-archive.yml 会开不了 PR（2026-11-14 实际失败过）。
 const PIN_FILES = ['mpv-archive.json', 'README.md', 'docs/external-runtime.md'];
 
 function pinnedArchive(root) {

@@ -5,7 +5,6 @@ const os = require('node:os');
 const path = require('node:path');
 const { ESLint } = require('eslint');
 
-// before-quit 和系统关机信号只在退出协调模块里监听，其它模块向它注册（eslint.config.mjs）。
 const eslint = new ESLint({ cwd: path.join(__dirname, '..'), overrideConfig: { rules: { 'local/no-comments': 'off' } } });
 const COORDINATOR = 'src/modules/quit/quitCoordinator.ts';
 
@@ -40,7 +39,6 @@ test('lint allows other app events outside the quit coordinator', async () => {
     assert.deepEqual(await messagesFor(code), []);
 });
 
-// 系统关机信号也只在退出协调模块监听（#192）
 const forbiddenShutdown = {
     'win.on session-end': "declare const win: Electron.BrowserWindow;\nwin.on('session-end', () => {});\n",
     'win.once session-end as a template literal': 'declare const win: Electron.BrowserWindow;\nwin.once(`session-end`, () => {});\n',

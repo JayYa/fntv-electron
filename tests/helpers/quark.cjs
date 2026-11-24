@@ -1,13 +1,10 @@
-// 夸克测试共用：假 NAS 把 item-1 说成夸克直链媒体，直链指向假网盘。
 const { startFakeFnMedia, serveBytes } = require('./fakeFnMedia.cjs');
 const { startFakeDirectLink, directLinkStream } = require('./fakeDirectLink.cjs');
 const { startProxy, get, sessionInput } = require('./proxyService.cjs');
 
 const MIB = 1024 * 1024;
-// 比两个 10MiB 分片还大，用来测跨分片边界和末尾。
 const FILE = Buffer.from(Array.from({ length: 25 * MIB + 123 }, (_, index) => (index * 7 + (index >> 12)) % 256));
 
-// 夸克是 type 4。
 async function quarkSetup(t, driveOptions = {}, streamOptions = {}, proxyOptions = {}) {
     const drive = await startFakeDirectLink(t, { media: FILE, ...driveOptions });
     const nas = await startFakeFnMedia(t, {
@@ -20,7 +17,6 @@ async function quarkSetup(t, driveOptions = {}, streamOptions = {}, proxyOptions
     return { drive, nas, service, logs, play };
 }
 
-// 元信息照常是 206，取数据时网盘忽略 Range 返回整个文件。
 function sizeThen(handler) {
     return (req, res) => (req.headers.range === 'bytes=0-0' ? serveBytes(req, res, FILE) : handler(req, res));
 }

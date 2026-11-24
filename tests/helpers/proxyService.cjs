@@ -1,4 +1,3 @@
-// Proxy 服务测试共用：在进程内启动服务，像 MPV 那样发请求。
 const http = require('node:http');
 const path = require('node:path');
 
@@ -6,7 +5,6 @@ const SERVICE_DIR = path.join(__dirname, '..', '..', 'dest', 'modules', 'proxy_s
 
 const MEDIA = Buffer.from(Array.from({ length: 4096 }, (_, index) => index % 251));
 
-// 其余选项覆盖服务的默认值，例如夸克的空闲超时。
 async function startProxy(t, { rateLimitIntervalMs = 5, ...options } = {}) {
     const { startProxyService } = require(SERVICE_DIR);
     const logs = [];
@@ -34,7 +32,6 @@ function get(service, requestPath, headers = {}, method = 'GET', body = undefine
     });
 }
 
-// 像 smart_skip 那样 POST，body 是字符串时原样发送。
 function post(service, requestPath, body) {
     const payload = typeof body === 'string' ? body : JSON.stringify(body);
     return get(service, requestPath, { 'Content-Type': 'application/json' }, 'POST', payload);

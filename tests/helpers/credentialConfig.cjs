@@ -11,7 +11,6 @@ function legacyEncrypt(value) {
     return cipher.update(value, 'utf8', 'hex') + cipher.final('hex');
 }
 
-// Electron 45 写入的格式：safeStorage.encryptString 的结果，base64 后加前缀。
 function syncFormatCiphertext(plaintext) {
     return `safe-storage:v1:${Buffer.from(`protected:${plaintext}`, 'utf8').toString('base64')}`;
 }
@@ -23,11 +22,8 @@ function removedSyncApi(name) {
 function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailable = true } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-credentials-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
-    // 放进这个集合的明文解密时抛错，模拟密钥环锁定或换了机器；清空即密钥恢复。
     const undecryptable = new Set();
-    // 放进这个集合的明文解密时要求重新加密，模拟密钥轮换。
     const reEncrypt = new Set();
-    // 非空时加密要等它 resolve，用来在加密途中插入别的操作。
     let encryptionGate = null;
     const holdEncryption = () => {
         let release;

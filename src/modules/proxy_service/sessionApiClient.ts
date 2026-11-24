@@ -1,4 +1,3 @@
-// 用播放会话里的 NAS 地址、token 和访问授权 Cookie 访问飞牛 API。
 import { FnApiClient } from '../fn_api/core/apiClient';
 import type { RequestContext } from '../fn_api/core/request';
 import type { TtlCache } from '../fn_api/core/ttlCache';

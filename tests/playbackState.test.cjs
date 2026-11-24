@@ -196,7 +196,6 @@ test('starting a playback that has already ended does not play', async () => {
     assert.deepEqual(calls, []);
 });
 
-// 换成假时钟并记下 warn 日志，不真等超时
 function useFakeClockAndCaptureWarnings(t) {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     return t.mock.method(log, 'warn', () => {});
@@ -243,7 +242,6 @@ test('stopping returns with the exit progress report when it finishes in time, w
 test('stopping gives up after 5 seconds when the started player never reports its exit', async (t) => {
     const warn = useFakeClockAndCaptureWarnings(t);
     const session = beginPlayback();
-    // MPV 实例还没建好时 stop() 不发退出事件（#190）
     session.start({ stop: () => {} }, () => Promise.resolve(true));
 
     const stopped = trackSettled(stopPlaybackAndWait());

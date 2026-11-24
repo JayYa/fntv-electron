@@ -8,12 +8,12 @@ status: accepted
 
 - 沙箱里不能读目录，也不能 `require` 相对路径，插件只能在 `src/preload/index.ts` 静态导入，新增插件时加一行，保持字母序（和原来 `readdirSync` 的加载顺序一致）。静态导入先于 `index.ts` 的语句执行，注册钩子时插件都已加载。
 - 登录页的桥（`loginPageApi.ts`）排在插件之前导入：插件顶层出错时登录页仍可用（`tests/preloadBundle.test.cjs`）。
-- 沙箱里没有 `shell`，打开外部链接走 IPC，地址和来源由主进程校验（`src/main/handlers/plugins/externalLink.ts`）。
+- 沙箱里没有 `shell`，打开外部链接走 IPC，地址和来源由主进程校验（`src/main/handlers/plugins/externalLink.ts`）。被拒的地址不写进日志：它由页面传入。
 - macOS 的窗口按钮由系统绘制（`hiddenInset`），标题栏插件只保留透明拖动区域；其它平台用页面里的自定义窗口控制按钮。
 
 ## MPV 接管网页端播放
 
-只有用户明确启用 MPV 时才接管；读取设置失败时保留网页端原生播放。播放请求只在从头播放时带 `restart` 标志，默认载荷和既有契约一致。
+只有用户明确启用 MPV 时才接管；读取设置失败时保留网页端原生播放。播放请求只在从头播放时带 `restart` 标志，默认载荷和既有契约一致。`restart` 让主进程清除服务端进度，并从 0 秒拉起播放器。
 
 ### 详情页 URL
 
@@ -37,6 +37,8 @@ status: accepted
 ## 登录页
 
 - 凭据回复按请求配对：连点历史或用户改了表单后，迟到的回复直接丢弃；用户动过表单后以用户输入为准。解不开的凭据回复里是空值，表单留空让用户手动输入。
+- 主进程用 `isLoginPage`（`src/main/common/loginPage.ts`）自己再查一次 `senderFrame` 是不是登录页：preload 的 `file:` 判断在渲染进程里。路径用 `path.relative` 比较，它在 Windows 上不区分大小写，盘符写法不同也算同一个文件。
+- 测试（`tests/helpers/loginPage.cjs`）用假 DOM 跑登录页真实的脚本。文件列表取自 `index.html` 的引用，还要和目录内容一致：新文件没接进页面或测试读漏时在这里失败，不会让 `doesNotMatch` 对着空内容通过。脚本按页面加载顺序逐个运行，不拼起来：拼接后函数提升会盖住顺序问题。
 - FN ID 的判定只有一份（`src/public/fnId.ts`，不依赖 electron 和 Node 内置模块）：主进程直接导入，登录页经 preload 桥的 `electronAPI.isFnId` 同步调用。FN ID 会拼进 `https://5ddd.com/{fnId}`，只放行不改变 URL 结构的字符（6 到 30 位字母、数字、`_`、`-`）。FN Connect 页面的规则更严（小写字母开头，只含小写字母、数字和单个连字符），但那些规则是逐步加的，老 FN ID 可能不满足，这里不跟进，由 FN Connect 页面自己提示。
 - 应用更新下载加速地址留空时发空值，由主进程用默认地址；主进程下发的 `proxyUrl` 已回退到默认地址，保存后重新读取，回显实际生效的地址。
 

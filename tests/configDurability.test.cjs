@@ -117,7 +117,6 @@ test('healthy writes keep the file format and leave no extra files', async (t) =
     assert.deepEqual(fs.readdirSync(userData), ['config.json']);
 });
 
-// Windows 没有 POSIX 权限位，chmod 只能切换只读，statSync 的 mode 不反映 0o600。
 test('rewriting the config keeps its file permissions', { skip: process.platform === 'win32' }, async (t) => {
     const { config, configPath } = setupConfig(t);
     config.setMpvVolume(33);

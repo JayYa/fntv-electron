@@ -21,3 +21,4 @@ status: accepted
 - `url` 键的规则只认独立的 `url`（前面不是字母、数字、`_`、`-`、`.`）和驼峰键的 `Url`/`URL` 结尾（`playUrl`、`baseURL`），后面要跟 `:` 或 `=`。以前任何以 `url` 结尾的词都算，mpv 能力名 `smart-skip.origin-from-play-url` 后面的文字会被遮掉（#296）。
 - 脱敏过程按 fail-closed 处理：一旦脱敏抛出异常，返回 `[MASKING_ERROR: ...]` 而不是原始数据，避免敏感信息在异常路径泄漏。
 - 渲染进程报告的页面地址只记协议和主机：路径和查询串可能带 token。
+- Proxy 子进程的日志（`src/modules/proxy_service/log.ts` 的 `ipcLog`）不在子进程里拼成字符串，参数原样经 IPC 交给主进程的 logger 格式化，按字段名的脱敏才能生效（`tests/proxyLog.test.cjs`）。参数要经结构化克隆：`Error` 换成带 `name`、`message`、`code` 的普通对象，克隆不了的值（函数等）转成字符串。

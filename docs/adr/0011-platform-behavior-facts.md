@@ -8,7 +8,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 
 ## 用户数据目录
 
-默认 `~/.fntv`（`CODING_STANDARDS.md` 的稳定标识）。启动参数带 `--user-data-dir` 时改用它：冒烟测试靠它把用户数据放进临时目录，Windows 上 `app.getPath('home')` 不认 `USERPROFILE`。这是 Chromium 自己的开关，Electron 在 JS 运行前就把 `userData` 改到同一目录，所以不能改名。日志器在 `app.setPath` 之前加载，直接读 `USER_DATA_PATH`（#87）。相对路径按工作目录转成绝对路径，和 Chromium 一致。
+默认 `~/.fntv`（`CODING_STANDARDS.md` 的稳定标识）。启动参数带 `--user-data-dir` 时改用它：冒烟测试靠它把用户数据放进临时目录，Windows 上 `app.getPath('home')` 不认 `USERPROFILE`。这是 Chromium 自己的开关，Electron 在 JS 运行前就把 `userData` 改到同一目录，所以不能改名。日志器在 `app.setPath` 之前加载，直接读 `USER_DATA_PATH`（#87）。相对路径按工作目录转成绝对路径，和 Chromium 一致：`app.setPath` 只接受绝对路径，原样传下去时启动就会失败。
 
 ## MPV 配置目录（#77，`docs/external-runtime.md`）
 
@@ -46,7 +46,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 ## 安装包和应用内更新
 
 - 安装包名按 `package.json` 的 `artifactName`（`FNMedia_${version}_${os}_${arch}.${ext}`）拼，没有这个架构的包时是 `null`。Linux 给 x64 的架构名是 `x86_64`（以 v2.7.0 的真实资产核对）。
-- 应用内更新只用于打包后的 Windows（NSIS）和 Linux（AppImage）。macOS 的包没有 Developer ID 签名，装不了自动下载的更新。不能更新时原因写进日志，提示框改回手动更新的按钮。
+- 应用内更新只用于打包后的 Windows（NSIS）和 Linux（AppImage）。macOS 的包没有 Developer ID 签名，装不了自动下载的更新。不能更新时原因写进日志，提示框改回手动更新的按钮。原因里不写 AppImage 路径，路径里可能有系统用户名。
 - Linux：electron-updater 删掉 `APPIMAGE` 指向的文件，把新 AppImage 移到同一目录，所以要以 AppImage 运行（解包后运行时没有 `APPIMAGE`），并且这个目录可写。
 
 ## Cookie 域
@@ -64,3 +64,8 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 
 - Windows：目录里有打开的文件时不能 rename 这个目录；rename 不能覆盖只读文件。
 - POSIX：打开的文件不影响 rename，只读文件也能被 rename 覆盖，只有把所在目录设为只读才拦得住。root 不受目录权限限制，以 root 运行时这些条件都不成立。
+
+其它测试的平台限制：
+
+- Windows 没有 POSIX 权限位：`chmod` 只能切换只读，`statSync` 的 mode 不反映 `0o600`，配置文件保留权限的测试只在 POSIX 上跑（`tests/configDurability.test.cjs`）。
+- Windows 上目录的只读属性不影响写入，造不出不可写的目录；root 能写任何目录。只读目录里的 AppImage 由 CI 的 Linux 和 macOS 验证（`tests/inAppUpdateLinux.test.cjs`）。

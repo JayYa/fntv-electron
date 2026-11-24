@@ -7,8 +7,6 @@ const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const LOGGER = path.resolve(__dirname, '../dest/modules/logger/logger.js');
 
-// 模拟打包后的客户端在 config.ts 调 app.setPath('userData', ~/.fntv) 之前加载日志器：
-// 这时 app.getPath('userData') 还是 Electron 默认的目录（Linux 上是 ~/.config/fntv）。
 function loadPackagedLogger(t) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-log-home-'));
     const electronDefault = path.join(home, '.config', 'fntv');

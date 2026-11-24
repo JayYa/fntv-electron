@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const { setTimeout: delay } = require('node:timers/promises');
 const { useFakeModule } = require('./helpers/fakeElectron.cjs');
 
-// 替身 NodeMpv：start() 一直不返回，模拟 MPV 还在启动；quit() 立即完成
 class FakeNodeMpv {
     on() {}
     start() { return new Promise(() => {}); }
@@ -39,7 +38,6 @@ class RunningNodeMpv {
     getFilename() { return Promise.resolve(this.path); }
 }
 
-// 让 require('node-mpv-2') 返回替身，不真启动 MPV；之后加载的播放器模块拿到替身
 function useFakeNodeMpv(t, NodeMpvClass = FakeNodeMpv) {
     useFakeModule(t, 'node-mpv-2', NodeMpvClass);
     return require('../dest/modules/players/index.js');

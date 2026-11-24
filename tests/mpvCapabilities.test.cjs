@@ -1,4 +1,3 @@
-// 启动时检查用户配置里装上的插件是否满足客户端的 requires（#224，契约见 docs/mpv-archive-contract.md“能力”一节）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
@@ -7,13 +6,11 @@ const { checkMpvCapabilities, MPV_REQUIRED_CAPABILITIES } = require('../dest/mai
 const { writeArchive, tempRoot } = require('./helpers/mpvManifestFixture.cjs');
 
 const FILES = { 'mpv.conf': 'include="~~/fntv/defaults.conf"\n', 'scripts/smart_skip/main.lua': 'skip' };
-// 客户端实际要求的能力；不满足的清单从它改出来。
 const [[NAME, VERSION]] = Object.entries(MPV_REQUIRED_CAPABILITIES);
 const SATISFYING = { ...MPV_REQUIRED_CAPABILITIES, 'danmaku.extra': 3 };
 const { [NAME]: _dropped, ...WITHOUT_NAME } = MPV_REQUIRED_CAPABILITIES;
 const ALL_MISSING = Object.entries(MPV_REQUIRED_CAPABILITIES).map(([name, required]) => ({ name, required }));
 
-// 用真的同步装一次，让安装记录里的 provides 来自清单。
 function installed(t, provides) {
     const root = tempRoot(t, 'caps');
     const archive = writeArchive(root, 'v1', { files: FILES, provides });

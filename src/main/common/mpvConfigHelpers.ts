@@ -1,7 +1,5 @@
 import * as path from 'path';
 
-// 同步本身在 ./mpvConfigSync/sync.ts（按 MPV 归档清单同步）。
-
 interface PortableConfigPaths {
     appPath: string;
     isPackaged: boolean;
