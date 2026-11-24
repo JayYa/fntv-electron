@@ -29,7 +29,11 @@ function fakeIpcRenderer({ mpvPlayback }) {
                 listeners.set(channel, [...(listeners.get(channel) ?? []), listener]);
             },
             once(channel, listener) {
-                listeners.set(channel, [...(listeners.get(channel) ?? []), listener]);
+                const once = (...args) => {
+                    removeListener(channel, once);
+                    listener(...args);
+                };
+                listeners.set(channel, [...(listeners.get(channel) ?? []), once]);
             },
             off: removeListener,
             removeListener,
@@ -98,6 +102,7 @@ async function openWebUiPage(t, { url, html, mpvPlayback = true }) {
             return clicks;
         },
         pointerDown: selector => dispatch(selector, new window.PointerEvent('pointerdown', { bubbles: true, cancelable: true })),
+        pointerCancel: selector => dispatch(selector, new window.PointerEvent('pointercancel', { bubbles: true })),
         pointerUp: selector => dispatch(selector, new window.PointerEvent('pointerup', { bubbles: true, cancelable: true })),
         click: selector => dispatch(selector, new window.MouseEvent('click', { bubbles: true, cancelable: true })),
         press(selector, key, { repeat = false } = {}) {

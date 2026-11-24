@@ -174,7 +174,10 @@ export function detailMainButtonEntry(): PlayEntry & { recognize(): void } {
             mainButton = findDetailPlayButton();
             if (mainButton) logger.info('详情页播放键已接管');
         },
-        find: (target) => (mainButton?.contains(target) ? mainButton : null),
+        find(target) {
+            if (!mainButton?.contains(target)) return null;
+            return mainButton.dataset.customPlay === 'true' ? null : mainButton;
+        },
         ready: () => true,
         take(button) {
             if (isDisabledButton(button)) return null;

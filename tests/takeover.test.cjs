@@ -43,6 +43,26 @@ test('pressing one card play button and releasing over another plays nothing', a
     assert.deepEqual(page.plays(), []);
 });
 
+test('a press cancelled by the browser plays nothing', async t => {
+    const page = await openWebUiPage(t, { url: HOME, html: CARDS });
+
+    page.pointerDown('#play-movie');
+    page.pointerCancel('#play-movie');
+    page.pointerUp('#play-movie');
+
+    assert.deepEqual(page.plays(), []);
+});
+
+test('Escape while holding a card play button does not cancel the press', async t => {
+    const page = await openWebUiPage(t, { url: HOME, html: CARDS });
+
+    page.pointerDown('#play-movie');
+    page.press('#play-movie', 'Escape');
+    page.pointerUp('#play-movie');
+
+    assert.deepEqual(page.plays(), [{ id: MOVIE, sourceIndex: 0 }]);
+});
+
 test('Enter and Space on a card play button play it, held-key repeats do not', async t => {
     const page = await openWebUiPage(t, { url: HOME, html: CARDS });
 
@@ -123,6 +143,17 @@ test('a detail page main button that is still loading plays nothing', async t =>
 
     assert.deepEqual(page.plays(), []);
     assert.equal(nativeClicks.length, 0);
+});
+
+test('a detail page main button marked as a custom play button stays with the web UI', async t => {
+    const custom = ACTION_ROW.replace('<button id="main"', '<button id="main" data-custom-play="true"');
+    const page = await openWebUiPage(t, { url: SHOW_PAGE, html: custom });
+    const nativeClicks = page.nativeClicks('#main');
+
+    page.tap('#main');
+
+    assert.deepEqual(page.plays(), []);
+    assert.equal(nativeClicks.length, 1);
 });
 
 test('other elements in the detail page action row stay with the web UI', async t => {
@@ -209,8 +240,8 @@ test('after Escape or a press outside the menu its items stay with the web UI', 
         forget(page);
         page.tap('#continue');
 
-        assert.deepEqual(page.plays(), []);
-        assert.equal(nativeClicks.length, 1);
+        assert.deepEqual(page.plays(), [], forget.toString());
+        assert.equal(nativeClicks.length, 1, forget.toString());
     }
 });
 

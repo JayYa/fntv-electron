@@ -36,7 +36,7 @@ function suppressNative(event: Event): void {
 }
 
 function interceptPlayEntries(entries: PlayEntry[]): void {
-    let pressed: HTMLElement | null = null;
+    let pressed: Hit | null = null;
     let handled: HTMLElement | null = null;
 
     function locate(target: EventTarget | null): Hit | null {
@@ -66,13 +66,13 @@ function interceptPlayEntries(entries: PlayEntry[]): void {
         }
         if (!hit.entry.ready()) return;
 
-        pressed = hit.element;
+        pressed = hit;
         suppressNative(event);
     }
 
     function handlePointerUp(event: PointerEvent): void {
         const hit = locate(event.target);
-        const shouldPlay = Boolean(hit && hit.element === pressed);
+        const shouldPlay = Boolean(hit && hit.element === pressed?.element);
         pressed = null;
         if (!hit || !hit.entry.ready()) return;
 
@@ -104,7 +104,7 @@ function interceptPlayEntries(entries: PlayEntry[]): void {
 
     function handleKeyDown(event: KeyboardEvent): void {
         if (event.key === 'Escape') {
-            pressed = null;
+            if (pressed?.entry.cancel) pressed = null;
             for (const entry of entries) entry.cancel?.();
             return;
         }
