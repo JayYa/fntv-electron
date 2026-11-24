@@ -162,6 +162,10 @@ _Avoid_: 打包的 mpv、内置 mpv
 用户自己指定的 MPV 程序；指定后优先于附带 MPV 和自动查找。
 _Avoid_: 自定义 mpv、外部 mpv
 
+**MPV 进程 (MpvProcess)**：
+客户端为一次播放启动的那一个 MPV。启动成功后，它的退出只报一次；报出退出时，MPV 已经不在运行，它的 IPC socket 文件也已删掉。客户端自己让它停下的算正常退出。
+_Avoid_: MPV 实例、播放器进程
+
 **便携配置 (portable config)**：
 MPV 归档里的默认配置，是同步到用户配置的来源。
 _Avoid_: 默认配置、内置配置
