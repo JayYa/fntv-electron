@@ -32,9 +32,13 @@ export type PlayErrorData = {
     message: string;
 }
 
-export type EventData = PlayStatusData | PlayExitData | PlayErrorData;
+export type PlayerEvent =
+    | [type: EventType.PROGRESS, data: PlayStatusData]
+    | [type: EventType.ITEM_END, data: PlayStatusData]
+    | [type: EventType.ERROR, data: PlayErrorData]
+    | [type: EventType.EXIT, data: PlayExitData];
 
-export type EventHandler = (type: EventType, data: EventData) => void;
+export type EventHandler = (...event: PlayerEvent) => void;
 
 export type Config = {
     playerPath: string;
@@ -49,5 +53,4 @@ export type Config = {
 export interface Player {
     playList(items: PlayItem[], pos: number): Promise<boolean>;
     stop(): void;
-    isPlaying(): boolean;
 }

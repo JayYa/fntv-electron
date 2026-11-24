@@ -4,13 +4,13 @@ import * as os from 'os';
 import type { ChildProcess } from 'child_process';
 import {
     Config,
-    EventData,
     PlayStatusData,
     EventType,
     PlayErrorData,
     PlayExitData,
     PlayItem,
     Player,
+    PlayerEvent,
 } from '../types';
 import * as log from '../../logger';
 import { MpvIpcSocket } from '../../../public/platform';
@@ -45,9 +45,9 @@ export class MpvPlayer implements Player {
         this.globalStatus = { ...status };
     }
 
-    private emitEvent(type: EventType, event: EventData): void {
+    private emitEvent(...event: PlayerEvent): void {
         if (this.finished) return;
-        this.config.onEvent(type, event);
+        this.config.onEvent(...event);
     }
 
     async playList(infos: PlayItem[], pos: number): Promise<boolean> {
@@ -439,9 +439,5 @@ export class MpvPlayer implements Player {
         } else {
             this.cleanupPlaylistFile();
         }
-    }
-
-    isPlaying(): boolean {
-        return this.mpvInstance !== null && this.mpvInstance.isRunning();
     }
 }
