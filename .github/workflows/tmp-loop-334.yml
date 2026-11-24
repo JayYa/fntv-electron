@@ -32,12 +32,12 @@ jobs:
         shell: bash
         run: |
           hit=0
-          for i in $(seq 1 12); do
+          for i in $(seq 1 24); do
             node --test --test-reporter=tap --test-timeout=30000 tests/*.test.cjs > "run-$i.log" 2>&1 || true
             if grep -q "^not ok .*pending-updates item disappears" "run-$i.log"; then
               hit=$((hit + 1)); echo "run $i: pending-updates test failed"
             fi
             grep "^not ok" "run-$i.log" | sed "s/^/run $i: /" || true
           done
-          echo "pending-updates failed $hit of 12"
+          echo "pending-updates failed $hit of 24"
           [ "$hit" -eq 0 ]
