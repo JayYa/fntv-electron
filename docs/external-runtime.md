@@ -100,7 +100,7 @@ MPV 接管默认开启。配置字段沿用旧名 `hideOriginalPlayButton`，所
 
 - `src/modules/fn_config/settings.ts` 读配置。
 - `src/main/handlers/plugins/config.ts` 写配置，缺失值按 `true` 保存。
-- `src/preload/core/playback.ts` 读配置，2 秒内没收到回复时回退为 `true`。
+- `src/preload/core/takeover.ts` 读配置，2 秒内没收到回复时回退为 `true`。
 - `resource/login/index.html` 的开关默认勾选，`resource/login/settings.js` 只有明确收到 `false` 才取消。
 
 ## Proxy
