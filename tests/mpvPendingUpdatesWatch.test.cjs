@@ -16,7 +16,7 @@ function setupWatch(t) {
     return { dir, onChange: () => { changes += 1; }, changes: () => changes };
 }
 
-test('starting to watch recounts once even when no file event arrives', (t) => {
+test('starting to watch calls onChange once even when no file event arrives', (t) => {
     const watch = setupWatch(t);
     watchPendingUpdates(watch.dir, watch.onChange);
 
@@ -26,7 +26,7 @@ test('starting to watch recounts once even when no file event arrives', (t) => {
     assert.equal(watch.changes(), 1);
 });
 
-test('watching the same directory again schedules no further recount', (t) => {
+test('watching the same directory again does not call onChange again', (t) => {
     const watch = setupWatch(t);
     watchPendingUpdates(watch.dir, watch.onChange);
     t.mock.timers.tick(200);
