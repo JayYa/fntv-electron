@@ -220,3 +220,17 @@ test('MPV that refuses to quit when the player stops is killed', async (t) => {
     assert.equal(isSocketFileLeft(child), false);
     assert.deepEqual(events, [ply.EventType.EXIT]);
 });
+
+test('MPV whose process fails while playing keeps playing and nothing escapes as an uncaught exception', async (t) => {
+    const spawned = useFakeMpvProcess(t);
+    const ply = require('../dest/modules/players/index.js');
+    const { player, events } = newPlayer(t, ply);
+
+    assert.equal(await playWithin(player), true);
+    const [child] = spawned;
+    assert.doesNotThrow(() => child.emit('error', new Error('kill EPERM')));
+    await delay(20);
+
+    assert.equal(hasExited(child), false);
+    assert.deepEqual(events, []);
+});
