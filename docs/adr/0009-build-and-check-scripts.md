@@ -76,7 +76,3 @@ CI 的 Electron 下载缓存。key 只取 `package.json` 里的版本号，安�
 ## `update-mpv-archive.cjs`
 
 把构建固定的 MPV 归档换成 `JayYa/fntv-mpv-config` 的另一个 Release，定时 workflow（`update-mpv-archive.yml`）和手工升级共用。改 `mpv-archive.json`（唯一来源：`{ repo, tag, asset, sha256 }`）、`README.md` 准备步骤和 `docs/external-runtime.md` 里的 tag，三处一致由 `tests/mpvArchiveCache.test.cjs` 把关；先算好三个文件的新内容，全部成功才写。不改 `.github/workflows`：GITHUB_TOKEN 推不了改 workflow 的提交。资产名和 sha256 只取 Release API 给的（Release 里恰好一个 `.zip`，sha256 用资产的 digest），不下载归档；资产名会进构建的环境变量和下载地址，只收安全字符。不带参数时取最新正式 Release，tag 更新才改；`--tag <tag>` 取指定 Release，不比较新旧，也用于回滚。设了 `GITHUB_OUTPUT` 时写 `updated`、`previous-tag`、`tag`、`asset`、`sha256`。
-
-## `update-comment-baseline.cjs`
-
-见 ADR-0007。
