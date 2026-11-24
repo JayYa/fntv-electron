@@ -29,15 +29,19 @@ export function watchPendingUpdates(mpvConfigDir: string | undefined, onChange: 
     stopWatchingPendingUpdates();
     if (mpvConfigDir === undefined || !fs.existsSync(mpvConfigDir)) return;
     const current: { dir: string; timer?: NodeJS.Timeout } = { dir: mpvConfigDir };
-    const watcher = tryWatchRecursive(mpvConfigDir, (_event, filename) => {
-        if (filename && !filename.toString().endsWith(PENDING_UPDATE_SUFFIX)) return;
+    const scheduleRefresh = () => {
         clearTimeout(current.timer);
         current.timer = setTimeout(onChange, REFRESH_DELAY_MS);
+    };
+    const watcher = tryWatchRecursive(mpvConfigDir, (_event, filename) => {
+        if (filename && !filename.toString().endsWith(PENDING_UPDATE_SUFFIX)) return;
+        scheduleRefresh();
     });
     if (!watcher) return;
     watcher.on('error', () => stopWatchingPendingUpdates());
     watcher.unref();
     watched = Object.assign(current, { watcher });
+    scheduleRefresh();
 }
 
 function tryWatchRecursive(dir: string, listener: fs.WatchListener<string>): fs.FSWatcher | undefined {

@@ -33,7 +33,7 @@ jobs:
         run: |
           hit=0
           for i in $(seq 1 12); do
-            node --test --test-timeout=30000 tests/*.test.cjs > "run-$i.log" 2>&1 || true
+            node --test --test-reporter=tap --test-timeout=30000 tests/*.test.cjs > "run-$i.log" 2>&1 || true
             if grep -q "^not ok .*pending-updates item disappears" "run-$i.log"; then
               hit=$((hit + 1)); echo "run $i: pending-updates test failed"
             fi
