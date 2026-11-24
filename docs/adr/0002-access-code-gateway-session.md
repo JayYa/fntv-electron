@@ -5,11 +5,11 @@
 ## 数据流
 
 1. 登录页通过受限的 `login` IPC 频道，把可选的 `accessCode` 和账号凭据一起发给主进程。
-2. `establishAccessCodeSession`（`src/main/common/accessCodeSession.ts`）用 `persist:fntv` 会话请求 `GET /access_code_verify`，请求头是 `x-access-code`（UTF-8 后 Base64）和 `x-access-source: web`。
+2. `establishAccessCodeSession`（`src/main/common/accessCodeSession.ts`）用网页端会话（`WEB_UI_SESSION_PARTITION`，`src/main/common/webUiSession.ts`）请求 `GET /access_code_verify`，请求头是 `x-access-code`（UTF-8 后 Base64）和 `x-access-source: web`。
 3. 验证后记下最终 origin，把该会话的 Cookie 存成按 origin 区分的内存授权（`src/modules/fn_api/accessGrant.ts`）。`mode` 和 `trim-mc-token` 不进授权。
 4. `ApiService` 在签名的 FNMedia 请求上附加授权 Cookie，从不附加明文访问码。
-5. 登录成功后，访问码经 `safeStorage` 写入当前配置和历史。启动时先重新验证，再恢复 token；验证失败回到登录页。
-6. 创建播放会话时，授权 Cookie 经 IPC 进入 Proxy 子进程（ADR-0004）。
+5. 登录成功后，访问码经 `safeStorage` 写入当前配置和历史。启动时 `restoreAtStartup`（`src/main/common/currentLogin.ts`）先重新验证访问码，再校验已保存的 token、写入网页端会话；任一步失败回到登录页。
+6. 创建播放会话时，`currentConnection()` 给出当前登录和它的授权 Cookie，授权 Cookie 经 IPC 进入 Proxy 子进程（ADR-0004）。
 7. Proxy 把 Cookie 加到 FNMedia API 和本地 NAS 范围请求上。云盘直连只用云盘自己的 Cookie。
 
 ## 契约
@@ -46,10 +46,10 @@ FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离�
 - 当前访问码解不开时，`readCurrentLogin` 连同 token 一起按未登录返回，启动回到登录页，不跳过网关。两者的密文都保留，密钥恢复后还能用。
 - 访问码不进日志、URL、命令行参数和环境变量，也不出现在 Proxy 响应里。派生的 Cookie 不出现在播放会话 URL 里。
 - `config-data` 不含密码、访问码和 token。当前配置只带 `hasAccessCode` 布尔值，`history` 只带 `domain`、`account` 和 `useHttps`。
-- 恢复登录时写进 `persist:fntv` 的 `Trim-MC-token` 不设 `httpOnly`：飞牛网页前端读这个 Cookie 维持路由和 API 登录态。远程页面已由 `contextIsolation`、关闭 `nodeIntegration` 与本机能力隔离。同时写 `mode=relay`，FN Connect 外网访问要它。
+- 写进网页端会话的 `Trim-MC-token` 不设 `httpOnly`：飞牛网页前端读这个 Cookie 维持路由和 API 登录态。远程页面已由 `contextIsolation`、关闭 `nodeIntegration` 与本机能力隔离。同时写 `mode=relay`，FN Connect 外网访问要它。
 - 明文凭据按需发给本地登录页：用户点击历史时走 `get-history-credentials`，当前配置有访问码时走 `get-current-access-code` 回填表单。主进程校验 `senderFrame` 是本地 `file:` 登录页，其它来源不回复。回复带域名和账号，登录页丢弃对不上的回复。解不开的凭据是空值，表单留空由用户手动输入。
 - 按需频道减少的是登录页内存里常驻的明文，防不了登录页自身被注入：注入的脚本同样能发这些请求，只是要逐条取。当前访问码在打开登录页时就会回填，和改动前一样留在表单里。
-- 配置里的 token 不经 IPC 发给渲染进程，但它不是只留在主进程：`Trim-MC-token` Cookie 是 `httpOnly: false`，飞牛网页前端要读取它（`src/modules/fn_config/cookie.ts`），所以远程页面的脚本能读到 token。
+- 配置里的 token 不经 IPC 发给渲染进程，但它不是只留在主进程：`Trim-MC-token` Cookie 是 `httpOnly: false`，网页端要读取它（`src/main/common/currentLogin.ts` 写入网页端会话），所以远程页面的脚本能读到 token。
 
 ## 配置文件（`src/modules/fn_config/configFile.ts`、`loginStore.ts`）
 

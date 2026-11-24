@@ -1,11 +1,13 @@
-import { session } from 'electron';
+import { dialog, session, type BrowserWindow } from 'electron';
+import { isTrusted } from '../../modules/cert_trust';
 import { clearAccessGrants, getAccessCookieHeader } from '../../modules/fn_api/accessGrant';
+import { ApiService } from '../../modules/fn_api/api';
 import * as loginStore from '../../modules/fn_config/loginStore';
-import { restoreCookies } from '../../modules/fn_config/cookie';
 import * as log from '../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
 import { AccessCodeVerificationError, establishAccessCodeSession, type AccessCodeSessionResult } from './accessCodeSession';
 import { LOGIN_PAGE_PATH } from './loginPage';
+import { WEB_UI_SESSION_PARTITION } from './webUiSession';
 
 export interface LoginError {
     title: string;
@@ -18,6 +20,7 @@ export type LoginFailureReason =
     | 'access-code-rejected'
     | 'access-code-unreachable'
     | 'token-not-issued'
+    | 'saved-token-invalid'
     | 'session-not-restored'
     | 'secure-storage'
     | 'unexpected';
@@ -101,6 +104,34 @@ interface LoginSteps {
     history?: loginStore.NewHistoryEntry;
 }
 
+async function savedTokenAccepted(baseUrl: string, token: string): Promise<boolean> {
+    const response = await new ApiService(baseUrl, token).getUserInfo(5000, 0);
+    return Boolean(response?.success);
+}
+
+async function installWebUiSession(baseUrl: string, token: string): Promise<boolean> {
+    const cookies = session.fromPartition(WEB_UI_SESSION_PARTITION).cookies;
+    const secure = baseUrl.startsWith('https://');
+    const cookie = (name: string, value: string) => ({
+        url: baseUrl,
+        name,
+        value,
+        path: '/',
+        secure,
+        httpOnly: false,
+        sameSite: secure ? 'no_restriction' as const : 'lax' as const,
+    });
+    try {
+        await cookies.remove(baseUrl, 'Trim-MC-token');
+        await cookies.set(cookie('Trim-MC-token', token));
+        await cookies.set(cookie('mode', 'relay'));
+        return true;
+    } catch (error) {
+        log.error('Cookie 设置失败:', error);
+        return false;
+    }
+}
+
 async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): Promise<LoginResult> {
     const { access, isNewLogin } = steps;
     try {
@@ -113,7 +144,11 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
         const { token } = issued;
         const baseUrl = issued.movedTo || granted.baseUrl;
 
-        if (!await restoreCookies(baseUrl, token, isNewLogin)) {
+        if (!isNewLogin && !await savedTokenAccepted(baseUrl, token)) {
+            return fail('saved-token-invalid', { title: '登录失败', message: '已保存的登录已失效，请重新登录。' });
+        }
+
+        if (!token || !await installWebUiSession(baseUrl, token)) {
             return fail('session-not-restored', { title: '登录失败', message: '无法恢复登录状态，请重新登录。' });
         }
 
@@ -160,13 +195,6 @@ export function establishNewLogin(windowForWebUi: () => LoginWindow, login: NewL
     });
 }
 
-export interface SavedLogin {
-    baseUrl: string;
-    accessCode: string;
-    account: string;
-    savedToken: string;
-}
-
 const END_LOGIN_TIMEOUT_MS = 5000;
 
 export async function endCurrentLogin(window: LoginWindow): Promise<void> {
@@ -177,7 +205,7 @@ export async function endCurrentLogin(window: LoginWindow): Promise<void> {
             (cleared) => { if (cleared) log.info('已清空配置中的登录 token'); },
             (error: unknown) => { log.error('清空配置中的登录 token 失败:', error); },
         ),
-        session.fromPartition('persist:fntv').clearStorageData({ storages: ['cookies'] }).then(
+        session.fromPartition(WEB_UI_SESSION_PARTITION).clearStorageData({ storages: ['cookies'] }).then(
             () => { log.info('会话 Cookie 已清除'); },
             (error: unknown) => { log.error('清除会话 Cookie 失败:', error); },
         ),
@@ -194,11 +222,60 @@ export async function endCurrentLogin(window: LoginWindow): Promise<void> {
     showLoginPage(window);
 }
 
-export function restoreCurrentLogin(windowForWebUi: () => LoginWindow, saved: SavedLogin): Promise<LoginResult> {
-    return establish(windowForWebUi, {
-        access: { baseUrl: saved.baseUrl, accessCode: saved.accessCode },
-        account: saved.account,
-        token: async () => ({ token: saved.savedToken }),
+async function readSavedLogin(window: BrowserWindow): Promise<loginStore.SavedLogin | null> {
+    try {
+        return await loginStore.readCurrentLogin();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : '无法读取配置文件';
+        log.error('读取配置失败:', error);
+        await dialog.showMessageBox(window, {
+            type: 'error',
+            title: '无法读取配置',
+            message,
+            detail: '请检查配置文件 ~/.fntv/config.json 是否可读，然后重新登录。',
+        });
+        return null;
+    }
+}
+
+export async function restoreAtStartup(window: BrowserWindow): Promise<void> {
+    const saved = await readSavedLogin(window);
+    if (!saved?.token || !saved.domain?.startsWith('http')) {
+        log.warn('没有可恢复的当前登录，显示登录页');
+        showLoginPage(window);
+        return;
+    }
+
+    const result = await establish(() => window, {
+        access: { baseUrl: saved.domain, accessCode: saved.accessCode || '' },
+        account: saved.account || '',
+        token: async () => ({ token: saved.token }),
         isNewLogin: false,
     });
+    if (!result.ok) {
+        log.warn('恢复当前登录失败，跳转到登录页面:', result.reason);
+        showLoginPage(window);
+    }
+}
+
+export interface CurrentConnection {
+    baseUrl: string;
+    token: string;
+    account: string;
+    accessCookie: string;
+    trustedHost: boolean;
+}
+
+export async function currentConnection(): Promise<CurrentConnection> {
+    const login = await loginStore.readCurrentLogin();
+    if (!login?.domain || !login.token || !login.account) {
+        throw new Error('无法找到有效的服务器登录配置');
+    }
+    return {
+        baseUrl: login.domain,
+        token: login.token,
+        account: login.account,
+        accessCookie: getAccessCookieHeader(login.domain),
+        trustedHost: isTrusted(login.domain),
+    };
 }

@@ -3,6 +3,7 @@ import * as path from 'path';
 import { interceptor } from './core/interceptor';
 import { initAppHooks } from './core/appHook';
 import * as log from '../../modules/logger';
+import { WEB_UI_SESSION_PARTITION } from '../common/webUiSession';
 
 interface Plugin {
     init?: () => void;
@@ -36,7 +37,7 @@ function loadPlugins(): void {
 }
 
 function registerAllPlugins(): void {
-    interceptor.init('persist:fntv');
+    interceptor.init(WEB_UI_SESSION_PARTITION);
     loadPlugins();
 
     interceptor.run();

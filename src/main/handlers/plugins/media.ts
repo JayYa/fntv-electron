@@ -2,17 +2,15 @@ import { dialog, IpcMainEvent } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
 import * as settings from '../../../modules/fn_config/settings';
-import { readCurrentLogin } from '../../../modules/fn_config/loginStore';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
-import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
+import { currentConnection } from '../../common/currentLogin';
 import { getCurrentMpvProgram, getMpvConfigDir } from './mpvConfig';
 import { MpvProgram, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
-import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
 import { isPlayRequest } from '../../../modules/playback/playRequest';
 import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
 import * as playbackState from '../../../modules/playback/playbackState';
@@ -40,23 +38,17 @@ async function refreshWindow(): Promise<void> {
 }
 
 async function connect(): ReturnType<PlayDeps['connect']> {
-    const login = await readCurrentLogin();
-    if (!login?.domain || !login.token || !login.account) {
-        throw new Error('无法找到有效的服务器登录配置');
-    }
-    const { domain, token, account } = login;
-
-    const fnapi = new fn.ApiService(domain, token);
+    const { baseUrl, token, account, accessCookie, trustedHost } = await currentConnection();
 
     return {
-        fnapi,
+        fnapi: new fn.ApiService(baseUrl, token),
         async openProxySession(itemGuids) {
             const playback = await createPlaybackSession({
                 token,
                 account,
-                domain,
-                accessCookie: getAccessCookieHeader(domain),
-                skipVerify: isTrusted(domain),
+                domain: baseUrl,
+                accessCookie,
+                skipVerify: trustedHost,
                 useNasLocal: settings.getNasProxyEnabled(),
                 itemGuids,
             });

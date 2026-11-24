@@ -12,7 +12,7 @@
 | `productName`（`飞牛影视`） | `package.json` 的 `build` | 打包后它决定应用名，风险同 `name`；安装目录和快捷方式名也随之改变。 |
 | `appId`（`com.qiaokes.fntv`） | `package.json` 的 `build` | 打包工具用它生成 macOS bundle id 和 Windows 安装标识。改了会变成另一个应用，而不是升级。 |
 | `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、Chromium 会话和 `logs/`。改了等于丢配置。在 `app.setPath` 之前加载的模块用 `USER_DATA_PATH`，那时 `app.getPath('userData')` 还是 Electron 默认目录（`src/modules/logger/logger.ts`）。 |
-| `persist:fntv` | `src/main/common/mainwin.ts` 等，用 `git grep` 找全 | 登录 Cookie 和访问码网关 Cookie 存在这个分区。改了用户要重新登录；只改一处则读写的不是同一个会话。 |
+| `persist:fntv` | `WEB_UI_SESSION_PARTITION`（`src/main/common/webUiSession.ts`） | 网页端会话的分区，登录 Cookie 和访问码网关 Cookie 存在这里。改了用户要重新登录。 |
 | `third_party/fntv-mpv` | `package.json` 的 `extraFiles`、`mpvConfigHelpers.ts`、`build.yml` | 构建、打包和运行时都按这个路径找 MPV。 |
 | `FNMedia_*` 产物名 | `package.json` 的 `artifactName` | `src/modules/updater/updateChecker.ts` 按这个前缀和 `_win_x64` 这类后缀匹配下载链接。 |
 | 更新源 `releases/latest/download/` | `package.json` 的 `build.publish`、`src/modules/updater/updateChecker.ts` | 已发的客户端按 `https://github.com/JayYa/fntv-electron/releases/latest/download/` 找应用内更新。改地址或换仓库，已发客户端就找不到新版本，只能手动升级（`tests/releaseGate.test.cjs`）。 |
@@ -27,7 +27,7 @@
 - 新增页面可用的 IPC 频道时加进 `src/preload/loginPageApi.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
 - `registerHandler` 已经捕获并记录 IPC 处理器的同步和异步错误，处理器只在需要告诉渲染进程失败时写 `try`/`catch`（`src/main/handlers/core/ipcHandler.ts`）。
 - FN ID 窗口加载远程页面。向它注入脚本、处理 bridge 消息、放行导航或采用 `Trim-MC-token` Cookie 前，都要过 `fnIdTrust.ts` 的判断。信任按 FN Connect 运行时返回的 NAS 地址判断，不按域名白名单（`tests/fnIdTrust.test.cjs`）。
-- 依赖 `persist:fntv` 会话 Cookie 的请求用 Electron `net`（`src/main/common/accessCodeSession.ts`）。
+- 依赖网页端会话 Cookie 的请求用 Electron `net`（`src/main/common/accessCodeSession.ts`）。
 
 ## 凭据和配置
 
