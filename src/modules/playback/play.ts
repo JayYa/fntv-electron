@@ -1,6 +1,6 @@
 import type { ApiService } from '../fn_api/api';
 import type { ItemListRequest, PlayInfo, PlayListItem, PlayRecord } from '../fn_api/core/types';
-import { EventData, EventHandler, EventType, Player, PlayErrorData, PlayExitData, PlayItem, PlayStatusData } from '../players/types';
+import { EventHandler, EventType, Player, PlayerEvent, PlayExitData, PlayItem, PlayStatusData } from '../players/types';
 import * as log from '../logger';
 import { isNearEnd, resumePosition } from './nearEnd';
 import type { PlayRequest } from './playRequest';
@@ -222,10 +222,10 @@ async function finishPlayItem(fnapi: PlayApi, status: PlayStatusData): Promise<v
 function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
     const enqueue = createWriteQueue();
 
-    return async (type: EventType, data: EventData) => {
+    return async (...[type, data]: PlayerEvent) => {
         switch (type) {
             case EventType.PROGRESS: {
-                const progress = { ...(data as PlayStatusData) };
+                const progress = { ...data };
                 if (progress.itemGuid.length === 0) {
                     log.info('process itemguid is empty');
                     return;
@@ -235,24 +235,22 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
             }
 
             case EventType.ITEM_END: {
-                const endedItem = { ...(data as PlayStatusData) };
+                const endedItem = { ...data };
                 log.info('播放项结束:', endedItem);
                 await enqueue({ itemGuid: endedItem.itemGuid, kind: 'final', write: () => finishPlayItem(fnapi, endedItem) });
                 break;
             }
 
             case EventType.ERROR:
-                log.error('MPV error:', String((data as PlayErrorData).message));
+                log.error('MPV error:', data.message);
                 break;
 
-            case EventType.EXIT: {
-                const exit = data as PlayExitData;
-                await run.ended(enqueue({ itemGuid: exit.status.itemGuid, kind: exitWriteKind(exit), write: () => handleExit(deps, fnapi, exit) }));
+            case EventType.EXIT:
+                await run.ended(enqueue({ itemGuid: data.status.itemGuid, kind: exitWriteKind(data), write: () => handleExit(deps, fnapi, data) }));
                 break;
-            }
 
             default:
-                log.debug('收到播放器事件:', type);
+                log.debug('收到播放器事件:', type satisfies never);
                 break;
         }
     };

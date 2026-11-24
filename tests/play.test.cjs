@@ -72,7 +72,6 @@ class FakePlayer {
         return Promise.resolve(true);
     }
     stop() { this.options.onEvent(EventType.EXIT, { code: 0, status: this.exitStatus }); }
-    isPlaying() { return true; }
     emit(type, data) { return this.options.onEvent(type, data); }
 }
 
