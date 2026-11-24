@@ -178,18 +178,84 @@ index 0a6247de9149ae0bb563b07b5eb89a6f9a30f66d..9ca21a52b37fb09713a0fc1dc4a27733
  						messages.forEach((message) => {
  							// ignore empty messages
 diff --git a/lib/mpv/_startStop.js b/lib/mpv/_startStop.js
-index f598d06ef88a1e49e1679d641805d2c6cd926103..3fe1326ecb812cde805cd4befcc73fe6d60ce092 100644
+index f598d06ef88a1e49e1679d641805d2c6cd926103..2bfb013ea8e8f94c586be84f80516d7dc1bba9e6 100644
 --- a/lib/mpv/_startStop.js
 +++ b/lib/mpv/_startStop.js
-@@ -118,6 +118,7 @@ const startStop = {
+@@ -66,6 +66,8 @@ const startStop = {
+ 
+ 		// these steps are only necessary if a new MPV instance is created, if the module is hooking into an existing
+ 		// one, there's no need to start a new instance
++		// MPV exiting or failing before start() finishes rejects start() instead of leaving it pending
++		let startup = null;
+ 		if (!instance_running) {
+ 
+ 			// =========================
+@@ -77,13 +79,44 @@ const startStop = {
+ 			// check for the corrrect ipc command
+ 			const ipcCommand = await util.findIPCCommand(this.options)
+ 	
++			let startupFailed;
++			const startupFailure = new Promise((resolve, reject) => { startupFailed = reject; });
++			startupFailure.catch(() => {});
++			const onStartupExit = (code, signal) => startupFailed(this.errorHandler.errorMessage(8, 'start()', [this.options.socket],
++				`MPV exited while starting (code ${code}, signal ${signal})`));
++			const onStartupError = (error) => startupFailed(error);
++			const observeSocket = net.Socket();
++			observeSocket.on('error', onStartupError);
++			this.socket.socket.on('error', onStartupError);
++			startup = {
++				failure: startupFailure,
++				// a failed start leaves no socket connected and no listener waiting on MPV's output
++				abandon: () => {
++					if (this.mpvPlayer) {
++						this.mpvPlayer.stdout.removeAllListeners('data');
++						this.mpvPlayer.stderr.removeAllListeners('data');
++						this.mpvPlayer.removeListener('exit', onStartupExit);
++					}
++					observeSocket.destroy();
++					clearInterval(this.timepositionListenerId);
++					this.socket.quit();
++				},
++				done: () => {
++					this.mpvPlayer.removeListener('exit', onStartupExit);
++					this.mpvPlayer.removeListener('error', onStartupError);
++					this.socket.socket.removeListener('error', onStartupError);
++				},
++			};
++			try {
+ 			// check if mpv could be started succesffuly	
+-			await new Promise ((resolve, reject) => {						
++			await Promise.race([startupFailure, new Promise ((resolve, reject) => {						
+ 				// add the ipcCommand to the arguments
+ 				this.mpv_arguments.push(ipcCommand+'='+this.options.socket);
+ 				// spawns the mpv player
+ 				
+ 				this.mpvPlayer = spawn((this.options.binary ? this.options.binary : 'mpv'), this.mpv_arguments.concat(mpv_args));
++				this.mpvPlayer.once('exit', onStartupExit);
++				this.mpvPlayer.on('error', onStartupError);
+ 				// callback to listen to stdout + stderr to see, if MPV could bind the IPC socket
+ 				const stdCallback = (data) => {
+ 					// stdout/stderr output
+@@ -109,15 +142,15 @@ const startStop = {
+ 				// are usually output via stdout are output via stderr instead. That's why it's required to listen
+ 				// for the same messages on stderr as well
+ 				this.mpvPlayer.stderr.on('data', stdCallback);
+-			});
++			})]);
+ 			
+ 			// check if mpv went into idle mode and is ready to receive commands
+-			await  new Promise((resolve, reject) => {
++			await Promise.race([startupFailure, new Promise((resolve, reject) => {
+ 				// Set up the socket connection
+ 				this.socket.connect(this.options.socket);
  				// socket to check for the idle event to check if mpv fully loaded and
  				// actually running
- 				const observeSocket = net.Socket();
+-				const observeSocket = net.Socket();
 +				const splitLines = util.lineSplitter();
  				observeSocket.connect({path: this.options.socket}, () => {
  					// send any message to see if there's a MPV instance responding
  					observeSocket.write(JSON.stringify({
-@@ -126,7 +127,7 @@ const startStop = {
+@@ -126,7 +159,7 @@ const startStop = {
  					if (this.options.debug || this.options.verbose) console.log('[Node-MPV] sending stimulus');
  				}).on('data', (data) => {
  					// parse the messages from the socket
@@ -198,6 +264,37 @@ index f598d06ef88a1e49e1679d641805d2c6cd926103..3fe1326ecb812cde805cd4befcc73fe6
  					// check every message
  					messages.forEach((message) => { 
  						// ignore empty messages
+@@ -153,7 +186,12 @@ const startStop = {
+ 						}
+ 					});
+ 				});
+-			});
++			})]);
++			}
++			catch (error) {
++				startup.abandon();
++				throw error;
++			}
+ 		}
+ 		// if the module is hooking into an existing instance of MPV, we still ned to set up the
+ 		// socket connection for the module
+@@ -195,7 +233,15 @@ const startStop = {
+ 		});
+ 	
+ 		// wait for all observe commands to finish
+-		await Promise.all(observePromises);
++		const observed = Promise.all(observePromises);
++		try {
++			await (startup ? Promise.race([startup.failure, observed]) : observed);
++		}
++		catch (error) {
++			if (startup) startup.abandon();
++			throw error;
++		}
++		if (startup) startup.done();
+ 
+ 		// ### Events ###
+ 
 diff --git a/lib/mpv/mpv.js b/lib/mpv/mpv.js
 index d5a7e9e939d2d900d112e70bd08a9893ceccd35d..111e87dcfd69710ea8f7bfea37fbb9b41dcf1903 100644
 --- a/lib/mpv/mpv.js
