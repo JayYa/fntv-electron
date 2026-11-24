@@ -39,7 +39,7 @@ export interface UserDirs {
     appDataDir: string;
 }
 
-export interface MpvPlayer {
+export interface MpvProgram {
     path: string;
     bundled: boolean;
 }
@@ -62,7 +62,7 @@ export interface PlatformImpl {
         pathExists: (target: string) => boolean,
         readTextFile: (target: string) => string | null,
     ): string;
-    defaultMpvPlayer(bundledMpvPath: string, pathExists: (target: string) => boolean): MpvPlayer | undefined;
+    defaultMpvProgram(bundledMpvPath: string, pathExists: (target: string) => boolean): MpvProgram | undefined;
     mpvIpcSocket(tmpDir: string, name: string): MpvIpcSocket;
     inAppUpdateAvailability(isPackaged: boolean, appImagePath: string | undefined, isWritableDir: (dir: string) => boolean): InAppUpdateAvailability;
     installerAssetSuffix: Partial<Record<string, string>>;

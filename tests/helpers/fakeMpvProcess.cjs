@@ -6,6 +6,8 @@ class FakeMpvProcess {
         this.properties = [];
         this.playlists = [];
         this.seeks = [];
+        this.seekAttempts = 0;
+        this.seekFailures = options.seekFailures ?? 0;
         this.subtitles = [];
         this.started = false;
         this.stopRequested = false;
@@ -85,6 +87,11 @@ class FakeMpvProcess {
     }
 
     seekTo(seconds) {
+        if (this.delivering()) this.seekAttempts++;
+        if (this.delivering() && this.seekFailures > 0) {
+            this.seekFailures--;
+            return Promise.reject(new Error('property unavailable'));
+        }
         return this.command(() => this.seeks.push(seconds));
     }
 

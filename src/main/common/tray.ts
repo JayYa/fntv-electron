@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCurrentMpvPlayer, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
+import { getCurrentMpvProgram, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
 import { mpvCapabilityTrayItems } from './mpvConfigNotices';
 import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } from './mpvConfigSync/pendingUpdates';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
@@ -48,7 +48,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     const mpvEnabled = settings.getHideOriginalPlayButton();
     const nasProxyEnabled = settings.getNasProxyEnabled();
     const currentMpvPath = settings.getMpvPlayerPath();
-    const playerPath = getCurrentMpvPlayer()?.path;
+    const programPath = getCurrentMpvProgram()?.path;
     let mpvConfigDir: string | undefined;
     try {
         mpvConfigDir = getMpvConfigDir(currentMpvPath);
@@ -99,7 +99,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'separator'
         },
         {
-            label: `设置 MPV 播放器路径 (${playerPath ?? '未找到'})`,
+            label: `设置 MPV 播放器路径 (${programPath ?? '未找到'})`,
             click: async () => {
                 if (mainWindow) {
                     const result = await dialog.showOpenDialog(mainWindow, {

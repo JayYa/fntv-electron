@@ -8,8 +8,8 @@ import * as log from '../../../modules/logger';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
-import { getCurrentMpvPlayer, getMpvConfigDir } from './mpvConfig';
-import { MpvPlayer, platformBehavior } from '../../../public/platform';
+import { getCurrentMpvProgram, getMpvConfigDir } from './mpvConfig';
+import { MpvProgram, platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { getAccessCookieHeader } from '../../../modules/fn_api/accessGrant';
@@ -17,11 +17,11 @@ import { isPlayRequest } from '../../../modules/playback/playRequest';
 import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
 import * as playbackState from '../../../modules/playback/playbackState';
 
-function getPlayerOrNotify(): MpvPlayer | undefined {
-    const player = getCurrentMpvPlayer();
-    if (player) {
-        log.info(`MPV 播放器路径: ${player.path}`);
-        return player;
+function getProgramOrNotify(): MpvProgram | undefined {
+    const program = getCurrentMpvProgram();
+    if (program) {
+        log.info(`MPV 播放器路径: ${program.path}`);
+        return program;
     }
     const message = platformBehavior().mpvNotFoundMessage;
     dialog.showErrorBox('错误', message);
@@ -66,7 +66,7 @@ async function connect(): ReturnType<PlayDeps['connect']> {
 }
 
 function launchPlayer(options: PlayerOptions): ply.Player | undefined {
-    const mpv = getPlayerOrNotify();
+    const mpv = getProgramOrNotify();
     if (!mpv) {
         return undefined;
     }
