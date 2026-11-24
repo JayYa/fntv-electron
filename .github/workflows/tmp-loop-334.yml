@@ -28,16 +28,16 @@ jobs:
       - run: rm -f .npmrc
       - uses: ./.github/actions/install-dependencies
       - run: pnpm run compile
-      - name: Loop the pending-updates tray test
+      - name: Loop the full test suite
         shell: bash
         run: |
-          failed=0
-          for i in $(seq 1 60); do
-            if ! node --test --test-timeout=30000 --test-name-pattern='pending-updates item disappears' tests/trayMpvMenu.test.cjs > "run-$i.log" 2>&1; then
-              failed=$((failed + 1))
-              echo "run $i failed"
-              tail -30 "run-$i.log"
+          hit=0
+          for i in $(seq 1 12); do
+            node --test --test-timeout=30000 tests/*.test.cjs > "run-$i.log" 2>&1 || true
+            if grep -q "^not ok .*pending-updates item disappears" "run-$i.log"; then
+              hit=$((hit + 1)); echo "run $i: pending-updates test failed"
             fi
+            grep "^not ok" "run-$i.log" | sed "s/^/run $i: /" || true
           done
-          echo "failed $failed of 60"
-          [ "$failed" -eq 0 ]
+          echo "pending-updates failed $hit of 12"
+          [ "$hit" -eq 0 ]
