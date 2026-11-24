@@ -32,6 +32,8 @@ status: accepted
 - 接管已有 MPV 实例时 socket 一关就先后发出 `crashed` 和 `quit`。
 - `quit()` 先摘掉子进程的 `close` 监听，所以 `stop()` 之后库不会再发 `quit`；`stop()` 自己发出 EXIT。
 - `start()` 成功后加载播放列表失败时，`playList` 先退出 MPV 再返回 false，不发 EXIT。
+- `start()` 还没完成时被 `stop()` 的播放器已经发过 EXIT；`start()` 随后完成时 `playList` 退出这个 MPV 并返回 false。
+- 崩溃或未知退出码时 MPV 进程已经退出，当场删除 Unix socket 文件（ADR-0011）；`stop()` 仍等 `quit()` 返回后再删。
 
 ## `node-mpv-2` 的连接（`tests/mpvIpc.test.cjs`）
 

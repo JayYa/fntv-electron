@@ -62,11 +62,16 @@ export class MpvPlayer implements Player {
                 auto_restart: false,
             };
 
-            this.mpvInstance = new NodeMpv(mpvOptions, mpvArgs);
+            const mpv = new NodeMpv(mpvOptions, mpvArgs);
+            this.mpvInstance = mpv;
 
             this.setupEventListeners();
 
-            await this.mpvInstance.start()
+            await mpv.start();
+            if (this.finished) {
+                this.quitMpv(mpv);
+                return false;
+            }
             this.watchProcessClose();
 
             await this.loadPlaylistItems(infos, pos);
@@ -195,6 +200,7 @@ export class MpvPlayer implements Player {
                 message: 'MPV 播放器崩溃'
             };
             this.emitEvent(EventType.ERROR, errorEvent);
+            this.removeIpcSocket();
             this.handleExit(1);
         });
 
@@ -352,13 +358,14 @@ export class MpvPlayer implements Player {
     private watchProcessClose(): void {
         const mpvProcess = (this.mpvInstance as unknown as { mpvPlayer?: ChildProcess } | null)?.mpvPlayer;
         mpvProcess?.once('close', (code: number | null) => {
+            this.removeIpcSocket();
             this.handleExit(typeof code === 'number' ? code : 1);
         });
     }
 
     private abandon(): void {
         this.finished = true;
-        this.quitMpv();
+        this.quitMpv(this.mpvInstance);
         this.cleanupPlaylistFile();
         this.mpvInstance = null;
     }
@@ -372,8 +379,8 @@ export class MpvPlayer implements Player {
             status: this.statusSnapshot()
         };
 
-        this.emitEvent(EventType.EXIT, event);
         this.finished = true;
+        this.config.onEvent(EventType.EXIT, event);
 
         if (this.config.debug) {
             if (code !== 0) {
@@ -407,10 +414,10 @@ export class MpvPlayer implements Player {
         this.ipcSocket = null;
     }
 
-    private quitMpv(): void {
-        if (!this.mpvInstance) return;
+    private quitMpv(mpv: NodeMpv | null): void {
+        if (!mpv) return;
         try {
-            this.mpvInstance.quit().catch((error: any) => {
+            mpv.quit().catch((error: any) => {
                 if (this.config.debug) {
                     log.debug('停止播放时出错:', error);
                 }
@@ -427,7 +434,7 @@ export class MpvPlayer implements Player {
     stop(): void {
         if (this.mpvInstance) {
             log.info('停止播放');
-            this.quitMpv();
+            this.quitMpv(this.mpvInstance);
             this.handleExit(0);
         } else {
             this.cleanupPlaylistFile();

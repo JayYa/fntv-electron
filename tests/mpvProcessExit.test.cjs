@@ -9,6 +9,10 @@ const { useFakeModule } = require('./helpers/fakeElectron.cjs');
 
 const NODE_MPV_DIR = path.dirname(require.resolve('node-mpv-2/package.json'));
 
+async function waitUntil(condition) {
+    for (let i = 0; i < 100 && !condition(); i++) await delay(10);
+}
+
 function forgetNodeMpv() {
     Object.keys(require.cache)
         .filter((id) => id.startsWith(NODE_MPV_DIR))
@@ -54,6 +58,7 @@ function useFakeMpvProcess(t) {
             child.stderr = new EventEmitter();
             const socketPath = args.find((arg) => arg.startsWith('--input-ipc-server=')).split('=')[1];
             void serveMpvIpc(t, socketPath).then(() => child.stdout.emit('data', Buffer.from('Listening to IPC socket')));
+            child.socketPath = socketPath;
             spawned.push(child);
             return child;
         },
@@ -64,7 +69,7 @@ function useFakeMpvProcess(t) {
     return spawned;
 }
 
-test('MPV exiting with a code node-mpv does not report still ends the player once as an abnormal exit', async (t) => {
+test('MPV exiting with a code node-mpv does not report still ends the player once as an abnormal exit and removes its IPC socket file', async (t) => {
     const spawned = useFakeMpvProcess(t);
     const ply = require('../dest/modules/players/index.js');
     const events = [];
@@ -77,8 +82,12 @@ test('MPV exiting with a code node-mpv does not report still ends the player onc
     t.after(() => player.stop());
 
     assert.equal(await player.playList([{ itemGuid: 'item-1', title: 'Episode 1', playLink: 'http://127.0.0.1/stream', ts: 0, duration: 100 }], 0), true);
+    const { socketPath } = spawned[0];
+    const isSocketFile = !socketPath.startsWith('\\');
     spawned[0].emit('close', 2, null);
-    await delay(20);
+    spawned[0].emit('close', 2, null);
+    await waitUntil(() => !isSocketFile || !fs.existsSync(socketPath));
 
     assert.deepEqual(events, [{ type: ply.EventType.EXIT, code: 2 }]);
+    assert.equal(isSocketFile && fs.existsSync(socketPath), false);
 });

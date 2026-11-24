@@ -260,3 +260,23 @@ test('MPV that exits with a code node-mpv does not report ends the player once a
         assert.deepEqual(events, [{ type: ply.EventType.EXIT, code: expected }]);
     }
 });
+
+test('MPV that finishes starting after the player was stopped is quit and reports nothing more', async (t) => {
+    let finishStart;
+    const calls = [];
+    class SlowStartNodeMpv extends RunningNodeMpv {
+        start() { return new Promise((resolve) => { finishStart = () => { calls.push('started'); resolve(); }; }); }
+        quit() { calls.push('quit'); return Promise.resolve(); }
+    }
+    const ply = useFakeNodeMpv(t, SlowStartNodeMpv);
+    const events = [];
+    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type) => events.push(type) }));
+
+    const playing = player.playList(twoItems(), 0);
+    player.stop();
+    finishStart();
+
+    assert.equal(await playing, false);
+    assert.deepEqual(calls.slice(-2), ['started', 'quit']);
+    assert.deepEqual(events, [ply.EventType.EXIT]);
+});
