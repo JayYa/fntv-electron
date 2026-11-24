@@ -242,13 +242,16 @@ function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {
             }
 
             case EventType.ERROR:
-                log.error('MPV error:', String(data.message));
+                log.error('MPV error:', data.message);
                 break;
 
-            case EventType.EXIT: {
+            case EventType.EXIT:
                 await run.ended(enqueue({ itemGuid: data.status.itemGuid, kind: exitWriteKind(data), write: () => handleExit(deps, fnapi, data) }));
                 break;
-            }
+
+            default:
+                log.debug('收到播放器事件:', type satisfies never);
+                break;
         }
     };
 }
