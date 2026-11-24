@@ -172,7 +172,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  node-mpv-2@2.0.0-beta.3: 5510106b11af6082c11017189d6174fda80f038fdb79beb66ad67080beae5d83
+  node-mpv-2@2.0.0-beta.3: 52e44164465080fb4e5321d66db1b6eaea83b2c3452c95479d00f6f47a7a9ad7
 
 importers:
 
@@ -186,7 +186,7 @@ importers:
         version: 6.8.11(supports-color@7.2.0)
       node-mpv-2:
         specifier: 2.0.0-beta.3
-        version: 2.0.0-beta.3(patch_hash=5510106b11af6082c11017189d6174fda80f038fdb79beb66ad67080beae5d83)
+        version: 2.0.0-beta.3(patch_hash=52e44164465080fb4e5321d66db1b6eaea83b2c3452c95479d00f6f47a7a9ad7)
       semver:
         specifier: 7.8.6
         version: 7.8.6
@@ -3924,7 +3924,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-mpv-2@2.0.0-beta.3(patch_hash=5510106b11af6082c11017189d6174fda80f038fdb79beb66ad67080beae5d83): {}
+  node-mpv-2@2.0.0-beta.3(patch_hash=52e44164465080fb4e5321d66db1b6eaea83b2c3452c95479d00f6f47a7a9ad7): {}
 
   nopt@9.0.0:
     dependencies:

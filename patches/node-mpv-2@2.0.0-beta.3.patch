@@ -178,7 +178,7 @@ index 0a6247de9149ae0bb563b07b5eb89a6f9a30f66d..9ca21a52b37fb09713a0fc1dc4a27733
  						messages.forEach((message) => {
  							// ignore empty messages
 diff --git a/lib/mpv/_startStop.js b/lib/mpv/_startStop.js
-index f598d06ef88a1e49e1679d641805d2c6cd926103..2bfb013ea8e8f94c586be84f80516d7dc1bba9e6 100644
+index f598d06ef88a1e49e1679d641805d2c6cd926103..8124ad52eab515c448df91f1f568bcb9e45cb29c 100644
 --- a/lib/mpv/_startStop.js
 +++ b/lib/mpv/_startStop.js
 @@ -66,6 +66,8 @@ const startStop = {
@@ -295,6 +295,15 @@ index f598d06ef88a1e49e1679d641805d2c6cd926103..2bfb013ea8e8f94c586be84f80516d7d
  
  		// ### Events ###
  
+@@ -206,7 +252,7 @@ const startStop = {
+ 			this.mpvPlayer.on('close', (error_code) => this.closeHandler(error_code));
+ 	
+ 			// Output any errors thrown by MPV
+-			this.mpvPlayer.on('error', (error) => this.errorHandler(error));
++			this.mpvPlayer.on('error', (error) => { if (this.options.debug) console.log(error); });
+ 		}
+ 		// if the module is hooking into an existing and running istance of mpv we need an event listener
+ 		// that is attached directly to the net socket, to clear the interval for the time position
 diff --git a/lib/mpv/mpv.js b/lib/mpv/mpv.js
 index d5a7e9e939d2d900d112e70bd08a9893ceccd35d..111e87dcfd69710ea8f7bfea37fbb9b41dcf1903 100644
 --- a/lib/mpv/mpv.js
