@@ -11,6 +11,7 @@ status: accepted
 - MPV 的 `path` 属性会原样报回 M3U8 播放列表里的地址，因此按 `item.playLink === mpvPath` 反查当前播放项。
 - 加载播放列表时，MPV 最先报出的 `path` 是 `.m3u8` 播放列表文件本身，在播放列表项里找不到，直接忽略。
 - 跳转到播放列表指定位置时直接 `await setProperty('playlist-pos', pos)`，不调用 `node-mpv-2` 的 `jump(pos)`。`node-mpv-2` 的 `jump()` 会另开一条 `observeSocket`，先 `await setProperty('playlist-pos', pos)` 之后才注册 `data` 监听等待 `start-file` 与 `playback-restart`，容易错过事件；且它没有时间超时和连接关闭处理，也没有捕获连接回调里的异常，会导致 Promise 永久挂起或产生未处理拒绝。`MpvPlayer` 已通过属性变化监听 `playlist-pos` 与 `path`，只需等待 MPV 确认属性设置即可。
+- 续播跳转在播放项开始后每 10ms 调一次 `seekTo`，直到 MPV 接受：播放源还没加载好时 MPV 拒绝跳转。最多重试 30 秒，留给 MPV 加载播放源；超过就当续播失败，只记日志，MPV 从头播放，不发 ERROR。MPV 切到别的播放项（`path` 又变了，包括切走再切回）后旧的那轮重试立即停止，否则上一项的续播位置会跳到新播放项上。
 
 ## 字幕名称
 

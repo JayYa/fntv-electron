@@ -52,7 +52,7 @@ export const darwin: PlatformImpl = {
     },
 
     mpvUserConfigDir: (dirs, env, _userMpvPath, pathExists) => posixMpvUserConfigDir(dirs, env, pathExists),
-    defaultMpvPlayer: (_bundledMpvPath, pathExists) => firstExistingMpv(MPV_SEARCH_PATHS, pathExists),
+    defaultMpvProgram: (_bundledMpvPath, pathExists) => firstExistingMpv(MPV_SEARCH_PATHS, pathExists),
     mpvIpcSocket: posixMpvIpcSocket,
 
     inAppUpdateAvailability() {

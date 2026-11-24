@@ -9,7 +9,7 @@ const {
     platformBehavior,
     mpvUserConfigDir,
     mpvIpcSocket,
-    mpvPlayer,
+    mpvProgram,
     inAppUpdateAvailability,
 } = require('../dest/public/platform/index.js');
 
@@ -116,7 +116,7 @@ test('Linux uses the exit mode, a PNG window icon, restores on tray click and re
 
 test('a platform without its own implementation behaves like Linux', () => {
     assert.deepEqual(platformBehavior('freebsd'), platformBehavior('linux'));
-    assert.deepEqual(mpvPlayer('freebsd', undefined, 'C:\\mpv.exe', (target) => target === '/usr/bin/mpv'), { path: '/usr/bin/mpv', bundled: false });
+    assert.deepEqual(mpvProgram('freebsd', undefined, 'C:\\mpv.exe', (target) => target === '/usr/bin/mpv'), { path: '/usr/bin/mpv', bundled: false });
 });
 
 test('a platform without its own installer never updates in app, even as a packaged AppImage', () => {
@@ -292,32 +292,32 @@ const found = (target) => ({ path: target, bundled: false });
 
 test('a user-chosen MPV wins on every platform, even when it does not exist', () => {
     for (const platform of ['win32', 'darwin', 'linux']) {
-        assert.deepEqual(mpvPlayer(platform, 'E:\\tools\\mpv.exe', bundledMpv, existing('/usr/bin/mpv')), found('E:\\tools\\mpv.exe'));
+        assert.deepEqual(mpvProgram(platform, 'E:\\tools\\mpv.exe', bundledMpv, existing('/usr/bin/mpv')), found('E:\\tools\\mpv.exe'));
     }
 });
 
 test('choosing the bundled mpv.exe by hand counts as a user-chosen MPV', () => {
-    assert.deepEqual(mpvPlayer('win32', bundledMpv, bundledMpv, existing(bundledMpv)), found(bundledMpv));
+    assert.deepEqual(mpvProgram('win32', bundledMpv, bundledMpv, existing(bundledMpv)), found(bundledMpv));
 });
 
 test('Windows without a user-chosen MPV uses the bundled MPV without checking that it exists', () => {
-    assert.deepEqual(mpvPlayer('win32', undefined, bundledMpv, existing()), { path: bundledMpv, bundled: true });
+    assert.deepEqual(mpvProgram('win32', undefined, bundledMpv, existing()), { path: bundledMpv, bundled: true });
 });
 
 test('macOS uses the first existing mpv among Homebrew, /usr/local and the app bundle', () => {
     const appBundle = '/Applications/mpv.app/Contents/MacOS/mpv';
-    assert.deepEqual(mpvPlayer('darwin', undefined, bundledMpv, existing(appBundle, '/usr/local/bin/mpv')), found('/usr/local/bin/mpv'));
-    assert.deepEqual(mpvPlayer('darwin', undefined, bundledMpv, existing(appBundle, '/opt/homebrew/bin/mpv')), found('/opt/homebrew/bin/mpv'));
-    assert.deepEqual(mpvPlayer('darwin', undefined, bundledMpv, existing(appBundle)), found(appBundle));
+    assert.deepEqual(mpvProgram('darwin', undefined, bundledMpv, existing(appBundle, '/usr/local/bin/mpv')), found('/usr/local/bin/mpv'));
+    assert.deepEqual(mpvProgram('darwin', undefined, bundledMpv, existing(appBundle, '/opt/homebrew/bin/mpv')), found('/opt/homebrew/bin/mpv'));
+    assert.deepEqual(mpvProgram('darwin', undefined, bundledMpv, existing(appBundle)), found(appBundle));
 });
 
 test('Linux uses the first existing mpv among the system, local, snap, games and /opt locations', () => {
-    assert.deepEqual(mpvPlayer('linux', undefined, bundledMpv, existing('/snap/bin/mpv', '/opt/mpv/bin/mpv')), found('/snap/bin/mpv'));
-    assert.deepEqual(mpvPlayer('linux', undefined, bundledMpv, existing('/usr/games/mpv', '/usr/bin/mpv')), found('/usr/bin/mpv'));
-    assert.deepEqual(mpvPlayer('linux', undefined, bundledMpv, existing('/opt/mpv/bin/mpv')), found('/opt/mpv/bin/mpv'));
+    assert.deepEqual(mpvProgram('linux', undefined, bundledMpv, existing('/snap/bin/mpv', '/opt/mpv/bin/mpv')), found('/snap/bin/mpv'));
+    assert.deepEqual(mpvProgram('linux', undefined, bundledMpv, existing('/usr/games/mpv', '/usr/bin/mpv')), found('/usr/bin/mpv'));
+    assert.deepEqual(mpvProgram('linux', undefined, bundledMpv, existing('/opt/mpv/bin/mpv')), found('/opt/mpv/bin/mpv'));
 });
 
 test('macOS and Linux find no mpv when none of the known locations exist, and never fall back to the bundled MPV', () => {
-    assert.equal(mpvPlayer('darwin', undefined, bundledMpv, existing(bundledMpv, '/usr/bin/mpv')), undefined);
-    assert.equal(mpvPlayer('linux', undefined, bundledMpv, existing(bundledMpv, '/opt/homebrew/bin/mpv')), undefined);
+    assert.equal(mpvProgram('darwin', undefined, bundledMpv, existing(bundledMpv, '/usr/bin/mpv')), undefined);
+    assert.equal(mpvProgram('linux', undefined, bundledMpv, existing(bundledMpv, '/opt/homebrew/bin/mpv')), undefined);
 });

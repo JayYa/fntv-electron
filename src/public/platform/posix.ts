@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { MpvIpcSocket, MpvPlayer, UserDirs } from './shared';
+import { MpvIpcSocket, MpvProgram, UserDirs } from './shared';
 
 export function posixMpvUserConfigDir(dirs: UserDirs, env: Record<string, string | undefined>, pathExists: (target: string) => boolean): string {
     const xdgConfigHome = env.XDG_CONFIG_HOME;
@@ -12,7 +12,7 @@ export function posixMpvUserConfigDir(dirs: UserDirs, env: Record<string, string
     return standardDir;
 }
 
-export function firstExistingMpv(searchPaths: string[], pathExists: (target: string) => boolean): MpvPlayer | undefined {
+export function firstExistingMpv(searchPaths: string[], pathExists: (target: string) => boolean): MpvProgram | undefined {
     const found = searchPaths.find(pathExists);
     return found ? { path: found, bundled: false } : undefined;
 }

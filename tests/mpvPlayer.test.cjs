@@ -231,3 +231,65 @@ test('a playlist that fails to load after MPV started stops MPV and reports one 
     assert.equal(mpv.exited, true);
     assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'invalid playlist-pos' } }]);
 });
+
+test('the playlist the caller passes in is left unchanged while MPV reports progress', async (t) => {
+    const items = twoItems();
+    const before = structuredClone(items);
+    const { mpv } = await startPlaying(t, items);
+
+    mpv.path = items[0].playLink;
+    mpv.emitProperty('path', items[0].playLink);
+    mpv.emitTimePosition(600);
+    await delay(0);
+    mpv.emitSeek(700);
+
+    assert.deepEqual(items, before);
+});
+
+const resumeItem1At600 = { resumePosition: (item) => (item.itemGuid === 'item 1' ? 600 : 0) };
+
+test('a resume seek MPV rejects at first is retried until MPV accepts it, once', async (t) => {
+    const items = twoItems();
+    const { mpv } = await startPlaying(t, items, { ...resumeItem1At600, mpvOptions: { seekFailures: 3 } });
+
+    mpv.emitProperty('path', items[0].playLink);
+    await delay(200);
+
+    assert.deepEqual(mpv.seeks, [600]);
+});
+
+test('a resume seek still being retried stops once MPV moves on to another play item', async (t) => {
+    const items = twoItems();
+    const { mpv } = await startPlaying(t, items, { ...resumeItem1At600, mpvOptions: { seekFailures: Infinity } });
+
+    mpv.emitProperty('path', items[0].playLink);
+    await delay(50);
+    mpv.emitProperty('path', items[1].playLink);
+    mpv.seekFailures = 0;
+    await delay(50);
+
+    assert.deepEqual(mpv.seeks, []);
+});
+
+test('a resume seek MPV keeps rejecting is given up after 30 seconds', async (t) => {
+    const items = twoItems();
+    const { events, mpv } = await startPlaying(t, items, { ...resumeItem1At600, mpvOptions: { seekFailures: Infinity } });
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const advance = async (ms) => {
+        for (let elapsed = 0; elapsed < ms; elapsed += 10) {
+            t.mock.timers.tick(10);
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+    };
+
+    mpv.emitProperty('path', items[0].playLink);
+    await advance(29_000);
+    const attemptsBeforeLimit = mpv.seekAttempts;
+    await advance(2_000);
+    const attemptsAtLimit = mpv.seekAttempts;
+    await advance(1_000);
+
+    assert.ok(attemptsAtLimit > attemptsBeforeLimit);
+    assert.equal(mpv.seekAttempts, attemptsAtLimit);
+    assert.deepEqual(events, []);
+});

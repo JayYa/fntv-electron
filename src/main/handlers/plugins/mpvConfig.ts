@@ -14,7 +14,7 @@ import { mpvConfigSyncLogLines } from '../../common/mpvConfigSync/log';
 import { mergePrompt } from '../../common/mpvConfigSync/mergePrompt';
 import { resolveManifestPath } from '../../common/mpvConfigSync/manifest';
 import { synchronizeMpvConfig } from '../../common/mpvConfigSync/sync';
-import { currentPlatform, mpvPlayer, MpvPlayer, mpvUserConfigDir } from '../../../public/platform';
+import { currentPlatform, mpvProgram, MpvProgram, mpvUserConfigDir } from '../../../public/platform';
 
 export function getMpvConfigDir(userMpvPath?: string): string {
     return mpvUserConfigDir(
@@ -35,13 +35,13 @@ function readTextFileOrNull(target: string): string | null {
     }
 }
 
-export function getCurrentMpvPlayer(): MpvPlayer | undefined {
+export function getCurrentMpvProgram(): MpvProgram | undefined {
     const bundledMpvPath = resolveBundledMpvPath({
         appPath: app.getAppPath(),
         execPath: process.execPath,
         isPackaged: app.isPackaged,
     });
-    return mpvPlayer(currentPlatform(), settings.getMpvPlayerPath(), bundledMpvPath, fs.existsSync);
+    return mpvProgram(currentPlatform(), settings.getMpvPlayerPath(), bundledMpvPath, fs.existsSync);
 }
 
 function getPortableConfigDir(): string {

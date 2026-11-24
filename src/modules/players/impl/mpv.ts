@@ -15,7 +15,7 @@ import * as log from '../../logger';
 import { MpvProcess } from './mpvProcess';
 
 const PROGRESS_INTERVAL_MS = 15000;
-const SEEK_RETRIES = 50000;
+const SEEK_TIMEOUT_MS = 30000;
 const SEEK_RETRY_DELAY_MS = 10;
 
 export class MpvPlayer implements Player {
@@ -27,6 +27,7 @@ export class MpvPlayer implements Player {
     private playlistFilePath: string = '';
     private stopRequested = false;
     private abandoned = false;
+    private itemGeneration = 0;
 
     constructor(config: Config) {
         this.config = {
@@ -98,7 +99,7 @@ export class MpvPlayer implements Player {
             throw new Error('播放列表为空');
         }
 
-        this.playlistItems = infos;
+        this.playlistItems = infos.map(item => ({ ...item }));
         this.playlistFilePath = path.join(os.tmpdir(), `mpv_playlist_${Date.now()}.m3u8`);
         await fs.promises.writeFile(this.playlistFilePath, this.generateM3U8Playlist(infos), 'utf-8');
         log.debug(`生成播放列表文件: ${this.playlistFilePath}，共 ${infos.length} 项`);
@@ -178,6 +179,7 @@ export class MpvPlayer implements Player {
     }
 
     private startItem(mpv: MpvProcess, mpvPath: string): void {
+        const generation = ++this.itemGeneration;
         const currentItem = this.findItem(mpvPath);
         if (!currentItem) {
             log.debug('path changed: 不是播放列表里的播放项:', mpvPath);
@@ -190,7 +192,7 @@ export class MpvPlayer implements Player {
 
         const position = this.config.resumePosition(currentItem);
         if (position > 0) {
-            void this.seekWithRetry(mpv, position);
+            void this.seekWithRetry(mpv, position, generation);
         }
 
         this.config.loadSubtitles(currentItem.itemGuid)
@@ -214,10 +216,11 @@ export class MpvPlayer implements Player {
         this.emitEvent(EventType.PROGRESS, st);
     }
 
-    private async seekWithRetry(mpv: MpvProcess, position: number): Promise<void> {
-        for (let attempt = 0; attempt <= SEEK_RETRIES; attempt++) {
+    private async seekWithRetry(mpv: MpvProcess, position: number, generation: number): Promise<void> {
+        const deadline = Date.now() + SEEK_TIMEOUT_MS;
+        for (let attempt = 0; ; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, SEEK_RETRY_DELAY_MS));
-            if (this.process !== mpv || this.stopRequested) {
+            if (this.process !== mpv || this.stopRequested || this.itemGeneration !== generation) {
                 return;
             }
             try {
@@ -225,8 +228,9 @@ export class MpvPlayer implements Player {
                 log.debug(`跳转成功: 位置 ${position}s ${attempt > 0 ? `(重试 ${attempt} 次后成功)` : ''}`);
                 return;
             } catch (error) {
-                if (attempt === SEEK_RETRIES) {
-                    log.info(`跳转失败，已达到最大重试次数 ${SEEK_RETRIES} (位置: ${position}s):`, error);
+                if (Date.now() >= deadline) {
+                    log.info(`跳转失败，${SEEK_TIMEOUT_MS / 1000} 秒内 MPV 未接受跳转 (位置: ${position}s):`, error);
+                    return;
                 }
             }
         }

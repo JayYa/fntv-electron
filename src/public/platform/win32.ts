@@ -80,7 +80,7 @@ export const win32: PlatformImpl = {
         return path.win32.join(dirs.appDataDir, 'mpv');
     },
 
-    defaultMpvPlayer(bundledMpvPath) {
+    defaultMpvProgram(bundledMpvPath) {
         return { path: bundledMpvPath, bundled: true };
     },
 

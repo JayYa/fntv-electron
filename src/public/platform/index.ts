@@ -1,9 +1,9 @@
 import { darwin } from './darwin';
 import { linux } from './linux';
-import { InAppUpdateAvailability, MpvIpcSocket, MpvPlayer, PlatformBehavior, PlatformImpl, UserDirs } from './shared';
+import { InAppUpdateAvailability, MpvIpcSocket, MpvProgram, PlatformBehavior, PlatformImpl, UserDirs } from './shared';
 import { win32 } from './win32';
 
-export type { CloseBehaviorSetting, InAppUpdateAvailability, MpvIpcSocket, MpvPlayer, PlatformBehavior, UserDirs } from './shared';
+export type { CloseBehaviorSetting, InAppUpdateAvailability, MpvIpcSocket, MpvProgram, PlatformBehavior, UserDirs } from './shared';
 
 export function currentPlatform(): NodeJS.Platform {
     return process.platform;
@@ -41,16 +41,16 @@ export function mpvUserConfigDir(
     return implOrLinux(platform).mpvUserConfigDir(dirs, env, userMpvPath, pathExists, readTextFile);
 }
 
-export function mpvPlayer(
+export function mpvProgram(
     platform: NodeJS.Platform,
     userMpvPath: string | undefined,
     bundledMpvPath: string,
     pathExists: (target: string) => boolean,
-): MpvPlayer | undefined {
+): MpvProgram | undefined {
     if (userMpvPath) {
         return { path: userMpvPath, bundled: false };
     }
-    return implOrLinux(platform).defaultMpvPlayer(bundledMpvPath, pathExists);
+    return implOrLinux(platform).defaultMpvProgram(bundledMpvPath, pathExists);
 }
 
 export function mpvIpcSocket(platform: NodeJS.Platform, tmpDir: string, id: string): MpvIpcSocket {
