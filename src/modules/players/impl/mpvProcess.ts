@@ -45,6 +45,7 @@ class NodeMpvProcess implements MpvProcess {
     private started = false;
     private stopRequested = false;
     private exited = false;
+    private exitReported = false;
     private watchingExit = false;
     private killSent = false;
 
@@ -151,15 +152,17 @@ class NodeMpvProcess implements MpvProcess {
         const child = this.childProcess();
         if (!child || this.watchingExit) return;
         this.watchingExit = true;
-        child.once('exit', (code: number | null) => {
-            this.removeIpcSocket();
-            this.reportExit(code);
-        });
+        child.once('exit', (code: number | null) => this.processExited(code));
+    }
+
+    private processExited(code: number | null): void {
+        this.exited = true;
+        void this.removeIpcSocket().then(() => this.reportExit(code));
     }
 
     private reportExit(code: number | null): void {
-        if (!this.started || this.exited) return;
-        this.exited = true;
+        if (!this.started || this.exitReported) return;
+        this.exitReported = true;
         const exitCode = this.stopRequested ? 0 : (code ?? 1);
         if (exitCode !== 0) {
             log.error(`MPV 异常退出 (code ${exitCode})`);
@@ -183,8 +186,7 @@ class NodeMpvProcess implements MpvProcess {
         const child = this.childProcess();
         if (!child || this.killSent) return;
         if (child.exitCode !== null || child.signalCode !== null) {
-            this.removeIpcSocket();
-            this.reportExit(child.exitCode);
+            this.processExited(child.exitCode);
             return;
         }
         child.on('error', (error) => log.warn('结束 MPV 进程失败:', error.message));
@@ -192,12 +194,13 @@ class NodeMpvProcess implements MpvProcess {
         this.killSent = true;
         if (!child.kill()) {
             log.warn('结束 MPV 进程失败');
-            this.removeIpcSocket();
+            void this.removeIpcSocket();
         }
     }
 
-    private removeIpcSocket(): void {
-        removePlaybackIpcSocket(this.ipcSocket, (error) => log.debug('清理 MPV IPC socket 失败:', error));
+    private removeIpcSocket(): Promise<void> {
+        const socket = this.ipcSocket;
         this.ipcSocket = null;
+        return removePlaybackIpcSocket(socket, (error) => log.debug('清理 MPV IPC socket 失败:', error));
     }
 }
