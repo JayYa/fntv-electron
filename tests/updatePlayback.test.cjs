@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { beginRun } = require('./helpers/playbackRun.cjs');
 const {
     setupUpdateChecker,
     settle,
@@ -37,7 +38,7 @@ function setup(t, options = {}) {
 }
 
 function startPlaying(playback, report = Promise.resolve()) {
-    const session = playback.beginPlayback();
+    const session = beginRun(playback);
     const player = {
         stops: 0,
         stop() {
@@ -66,7 +67,7 @@ test('the startup check holds the new version dialog while MPV is playing and sh
     await waitFor(() => dialogs.length === 1);
     assert.deepEqual(dialogs.map((d) => d.title), ['发现新版本']);
 
-    playback.beginPlayback().ended();
+    beginRun(playback).ended();
     await settle();
     assert.equal(dialogs.length, 1);
 });

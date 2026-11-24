@@ -29,19 +29,10 @@ export interface PlayDeps {
 }
 
 export function createPlay(deps: PlayDeps): (request: PlayRequest, run: PlaybackRun) => Promise<void> {
-    return async (request, run) => {
-        let started = false;
-        try {
-            started = await startPlayback(deps, request, run);
-        } finally {
-            if (!started) {
-                void run.ended();
-            }
-        }
-    };
+    return (request, run) => startPlayback(deps, request, run);
 }
 
-async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayRequest, run: PlaybackRun): Promise<boolean> {
+async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayRequest, run: PlaybackRun): Promise<void> {
     log.info('Play movie event received id:', id, ' index:', sourceIndex, ' restart:', restart === true);
 
     const { fnapi, openProxySession } = await deps.connect();
@@ -49,7 +40,7 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
     const response = await fnapi.getPlayInfo(id);
     if (!response.success || !response.data) {
         log.error('获取播放信息失败:', response ? response.message : '未知错误');
-        return false;
+        return;
     }
     const info = response.data;
     log.info('获取播放信息成功:', { guid: info.guid, type: info.type, parent_guid: info.parent_guid || '' });
@@ -57,7 +48,7 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
     let playList = await buildPlayList(fnapi, info);
     if (playList.length === 0) {
         log.warn('播放列表为空');
-        return false;
+        return;
     }
 
     const currentIndex = playList.findIndex(item => item.itemGuid === info.guid);
@@ -87,10 +78,10 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
         loadSubtitles: async (itemGuid) => fnapi.downloadSubtitle(await fnapi.getSubtitle(itemGuid)),
     });
     if (!player) {
-        return false;
+        return;
     }
 
-    return run.start(player, () => player.playList(playList, currentIndex));
+    await run.start(player, () => player.playList(playList, currentIndex));
 }
 
 async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[]> {
