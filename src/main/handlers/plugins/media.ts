@@ -83,9 +83,7 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
 
     return new ply.MpvPlayer({
         ...options,
-        playerPath: mpv.path,
-        extraArgs,
-        debug: true,
+        createMpvProcess: ply.mpvProcessFactory({ binary: mpv.path, args: extraArgs, debug: true }),
         onVolumeChange: settings.setMpvVolume,
     });
 }

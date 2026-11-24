@@ -1,50 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
-const { useFakeModule } = require('./helpers/fakeElectron.cjs');
-
-class FakeNodeMpv {
-    on() {}
-    start() { return new Promise(() => {}); }
-    quit() { return Promise.resolve(); }
-    isRunning() { return false; }
-}
-
-class RunningNodeMpv {
-    static last = null;
-    static onSetProperty = null;
-    constructor(options) {
-        this.options = options;
-        this.handlers = new Map();
-        this.path = '';
-        this.seeks = [];
-        this.subtitles = [];
-        this.properties = [];
-        this.quits = 0;
-        RunningNodeMpv.last = this;
-    }
-    on(event, handler) { this.handlers.set(event, handler); }
-    emit(event, value) { return this.handlers.get(event)(value); }
-    start() { this.mpvPlayer = new EventEmitter(); return Promise.resolve(); }
-    loadPlaylist() { return Promise.resolve(); }
-    quit() { this.quits += 1; return Promise.resolve(); }
-    isRunning() { return true; }
-    setProperty(property, value) {
-        this.properties.push([property, value]);
-        return RunningNodeMpv.onSetProperty ? RunningNodeMpv.onSetProperty(property, value) : Promise.resolve();
-    }
-    goToPosition(position) { this.seeks.push(position); return Promise.resolve(); }
-    addSubtitles(file) { this.subtitles.push(file); return Promise.resolve(); }
-    getDuration() { return Promise.resolve(1500); }
-    getPercentPosition() { return Promise.resolve(40); }
-    getFilename() { return Promise.resolve(this.path); }
-}
-
-function useFakeNodeMpv(t, NodeMpvClass = FakeNodeMpv) {
-    useFakeModule(t, 'node-mpv-2', NodeMpvClass);
-    return require('../dest/modules/players/index.js');
-}
+const { fakeMpvProcesses } = require('./helpers/fakeMpvProcess.cjs');
+const ply = require('../dest/modules/players/index.js');
 
 const playItem = {
     itemGuid: 'item-1',
@@ -53,14 +11,6 @@ const playItem = {
     ts: 0,
     duration: 100,
 };
-
-const playerConfig = (overrides) => ({
-    playerPath: '',
-    onEvent: () => {},
-    resumePosition: () => 0,
-    loadSubtitles: async () => [],
-    ...overrides,
-});
 
 function twoItems() {
     return ['item 1', 'item-2'].map((itemGuid) => ({
@@ -71,35 +21,119 @@ function twoItems() {
     }));
 }
 
-async function startPlaying(t, ply, items, overrides) {
-    const player = new ply.MpvPlayer(playerConfig(overrides));
+function newPlayer(t, { mpvOptions, ...overrides } = {}) {
+    const processes = fakeMpvProcesses(mpvOptions);
+    const events = [];
+    const player = new ply.MpvPlayer({
+        createMpvProcess: processes.createMpvProcess,
+        onEvent: (type, data) => events.push({ type, data }),
+        resumePosition: () => 0,
+        loadSubtitles: async () => [],
+        ...overrides,
+    });
     t.after(() => player.stop());
-    assert.equal(await player.playList(items, 0), true);
-    return { player, mpv: RunningNodeMpv.last };
+    return { player, events, processes };
 }
 
-test('stopping right after playList is called, before it settles, reports the player exit', (t) => {
-    const ply = useFakeNodeMpv(t);
-    const events = [];
-    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type) => events.push(type) }));
+async function startPlaying(t, items, overrides) {
+    const started = newPlayer(t, overrides);
+    assert.equal(await started.player.playList(items, 0), true);
+    return { ...started, mpv: started.processes.last() };
+}
 
-    void player.playList([playItem], 0);
+const types = (events) => events.map(({ type }) => type);
+
+test('stopping before MPV finishes starting fails the play request and reports nothing', async (t) => {
+    const { player, events } = newPlayer(t, { mpvOptions: { startPending: true } });
+
+    const playing = player.playList([playItem], 0);
     player.stop();
 
-    assert.deepEqual(events, [ply.EventType.EXIT]);
+    assert.equal(await playing, false);
+    await delay(10);
+    assert.deepEqual(events, []);
+});
+
+test('MPV that fails to start fails the play request with one error and no exit', async (t) => {
+    const { player, events } = newPlayer(t, { mpvOptions: { startError: new Error('spawn EACCES') } });
+
+    assert.equal(await player.playList([playItem], 0), false);
+
+    assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'spawn EACCES' } }]);
+});
+
+test('stopping the player reports its exit only once MPV has exited, with the latest progress', async (t) => {
+    const items = twoItems();
+    const { player, events, mpv } = await startPlaying(t, items);
+    mpv.emitProperty('playlist-pos', 0);
+    mpv.emitSeek(300);
+
+    player.stop();
+    assert.deepEqual(types(events), [ply.EventType.PROGRESS]);
+    await delay(10);
+
+    assert.deepEqual(events.slice(1), [{
+        type: ply.EventType.EXIT,
+        data: { code: 0, status: { itemGuid: 'item 1', ts: 300, duration: 1500, percentage: 0 } },
+    }]);
+});
+
+test('stopping while the playlist is still loading lets MPV start and reports its exit once it has exited', async (t) => {
+    let resolvePos;
+    const onSetProperty = (property) => (
+        property === 'playlist-pos' ? new Promise((resolve) => { resolvePos = resolve; }) : Promise.resolve()
+    );
+    const { player, events } = newPlayer(t, { mpvOptions: { onSetProperty } });
+
+    const playing = player.playList(twoItems(), 1);
+    await delay(10);
+    player.stop();
+    resolvePos();
+
+    assert.equal(await playing, true);
+    await delay(10);
+    assert.deepEqual(events.map(({ type, data }) => ({ type, code: data.code })), [{ type: ply.EventType.EXIT, code: 0 }]);
+});
+
+test('progress MPV reports while playing reaches the caller at most once every 15 seconds', async (t) => {
+    const items = twoItems();
+    const { events, mpv } = await startPlaying(t, items);
+    mpv.path = items[0].playLink;
+    const realNow = Date.now;
+    let now = realNow();
+    Date.now = () => now;
+    t.after(() => { Date.now = realNow; });
+
+    for (const [seconds, later] of [[100, 0], [101, 14999], [102, 1], [103, 5000]]) {
+        now += later;
+        mpv.emitTimePosition(seconds);
+        await delay(0);
+    }
+
+    assert.deepEqual(events.map(({ type, data }) => [type, data.ts]), [
+        [ply.EventType.PROGRESS, 100],
+        [ply.EventType.PROGRESS, 102],
+    ]);
+});
+
+test('MPV exiting on its own ends the player with its exit code and no separate error', async (t) => {
+    const { events, mpv } = await startPlaying(t, twoItems());
+
+    mpv.exit(4);
+
+    assert.deepEqual(events.map(({ type, data }) => ({ type, code: data.code })), [{ type: ply.EventType.EXIT, code: 4 }]);
 });
 
 test('event data stays as emitted after the player moves on to the next item', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
     const items = twoItems();
-    const events = [];
-    const { mpv } = await startPlaying(t, ply, items, { onEvent: (type, data) => events.push({ type, data }) });
-    mpv.emit('status', { property: 'playlist-pos', value: 0 });
+    const { events, mpv } = await startPlaying(t, items);
+    mpv.emitProperty('playlist-pos', 0);
 
     mpv.path = items[0].playLink;
-    await mpv.emit('timeposition', 600);
-    mpv.emit('seek', { end: 700 });
-    mpv.emit('status', { property: 'playlist-pos', value: 1 });
+    mpv.emitTimePosition(600);
+    await delay(0);
+    mpv.emitSeek(700);
+    mpv.emitProperty('playlist-pos', 1);
 
     const expected = { itemGuid: 'item 1', duration: 1500, percentage: 40 };
     assert.deepEqual(
@@ -113,21 +147,21 @@ test('event data stays as emitted after the player moves on to the next item', a
 });
 
 test('an item starting seeks to the position the caller gives for it, with its latest progress', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
     const items = twoItems();
     const asked = [];
-    const { mpv } = await startPlaying(t, ply, items, {
+    const { mpv } = await startPlaying(t, items, {
         resumePosition: (item) => {
             asked.push([item.itemGuid, item.ts]);
             return item.itemGuid === 'item 1' ? item.ts : 0;
         },
     });
 
-    mpv.emit('status', { property: 'path', value: items[0].playLink });
+    mpv.emitProperty('path', items[0].playLink);
     mpv.path = items[0].playLink;
-    await mpv.emit('timeposition', 600);
-    mpv.emit('status', { property: 'path', value: items[1].playLink });
-    mpv.emit('status', { property: 'path', value: items[0].playLink });
+    mpv.emitTimePosition(600);
+    await delay(0);
+    mpv.emitProperty('path', items[1].playLink);
+    mpv.emitProperty('path', items[0].playLink);
     await delay(50);
 
     assert.deepEqual(asked, [['item 1', 0], ['item-2', 0], ['item 1', 600]]);
@@ -135,53 +169,39 @@ test('an item starting seeks to the position the caller gives for it, with its l
 });
 
 test('subtitles the caller loads for an item are added to MPV', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
     const items = twoItems();
-    const { mpv } = await startPlaying(t, ply, items, {
+    const { mpv } = await startPlaying(t, items, {
         loadSubtitles: async (itemGuid) => [`/tmp/${itemGuid}.zh@1.srt`],
     });
 
-    mpv.emit('status', { property: 'path', value: items[1].playLink });
+    mpv.emitProperty('path', items[1].playLink);
     await delay(0);
 
     assert.deepEqual(mpv.subtitles, ['/tmp/item-2.zh@1.srt']);
 });
 
 test('a path that is not a play item in the playlist is ignored', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    const events = [];
     const asked = [];
-    const { mpv } = await startPlaying(t, ply, twoItems(), {
-        onEvent: (type) => events.push(type),
+    const { events, mpv } = await startPlaying(t, twoItems(), {
         resumePosition: (item) => { asked.push(item.itemGuid); return 0; },
         loadSubtitles: async (itemGuid) => { asked.push(itemGuid); return []; },
     });
 
-    mpv.emit('status', { property: 'path', value: 'C:\\Temp\\mpv_playlist_1.m3u8' });
+    mpv.emitProperty('path', 'C:\\Temp\\mpv_playlist_1.m3u8');
     mpv.path = 'C:\\Temp\\mpv_playlist_1.m3u8';
-    await mpv.emit('timeposition', 5);
+    mpv.emitTimePosition(5);
+    await delay(0);
 
     assert.deepEqual(asked, []);
     assert.deepEqual(events, []);
 });
 
-function onSetProperty(t, targetProperty, handler) {
-    RunningNodeMpv.onSetProperty = (property, value) => (
-        property === targetProperty ? handler(value) : Promise.resolve()
-    );
-    t.after(() => { RunningNodeMpv.onSetProperty = null; });
-}
-
 test('playList waits for playlist-pos to be set before resolving when starting past the first item', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
     let resolvePos;
-    onSetProperty(t, 'playlist-pos', () => new Promise((resolve) => { resolvePos = resolve; }));
-
-    const { mpv: firstMpv } = await startPlaying(t, ply, twoItems());
-    assert.deepEqual(firstMpv.properties, []);
-
-    const player = new ply.MpvPlayer(playerConfig());
-    t.after(() => player.stop());
+    const onSetProperty = (property) => (
+        property === 'playlist-pos' ? new Promise((resolve) => { resolvePos = resolve; }) : Promise.resolve()
+    );
+    const { player, processes } = newPlayer(t, { mpvOptions: { onSetProperty } });
 
     let settled = false;
     const playing = player.playList(twoItems(), 1).then((ok) => {
@@ -191,92 +211,23 @@ test('playList waits for playlist-pos to be set before resolving when starting p
 
     await delay(20);
     assert.equal(settled, false);
-    assert.deepEqual(RunningNodeMpv.last.properties, [['playlist-pos', 1]]);
+    assert.deepEqual(processes.last().properties, [['playlist-pos', 1]]);
 
     resolvePos();
     assert.equal(await playing, true);
 });
 
-test('playList emits an error and returns false when setting playlist-pos fails', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    onSetProperty(t, 'playlist-pos', () => Promise.reject(new Error('invalid playlist-pos')));
-
-    const events = [];
-    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type, data) => events.push({ type, data }) }));
-    t.after(() => player.stop());
-
-    const ok = await player.playList(twoItems(), 1);
-
-    assert.equal(ok, false);
-    assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'invalid playlist-pos' } }]);
-});
-
-test('a playlist that fails to load after MPV started quits MPV and reports nothing more', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    onSetProperty(t, 'playlist-pos', () => Promise.reject(new Error('invalid playlist-pos')));
-    const events = [];
-    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type) => events.push(type) }));
+test('a playlist that fails to load after MPV started stops MPV and reports one error and nothing more', async (t) => {
+    const onSetProperty = (property) => (
+        property === 'playlist-pos' ? Promise.reject(new Error('invalid playlist-pos')) : Promise.resolve()
+    );
+    const { player, events, processes } = newPlayer(t, { mpvOptions: { onSetProperty } });
 
     assert.equal(await player.playList(twoItems(), 1), false);
-    const mpv = RunningNodeMpv.last;
-    mpv.emit('crashed');
-    mpv.emit('quit');
+    const mpv = processes.last();
+    await delay(10);
     player.stop();
 
-    assert.equal(mpv.quits, 1);
-    assert.deepEqual(events, [ply.EventType.ERROR]);
-});
-
-test('MPV is not restarted by node-mpv after it crashes', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    const { mpv } = await startPlaying(t, ply, twoItems());
-
-    assert.equal(mpv.options.auto_restart, false);
-});
-
-test('MPV that crashes, even when also reported as quit, ends the player once as an abnormal exit', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    const events = [];
-    const { mpv } = await startPlaying(t, ply, twoItems(), { onEvent: (type, data) => events.push({ type, code: data.code }) });
-
-    mpv.emit('crashed');
-    mpv.emit('quit');
-
-    assert.deepEqual(events, [
-        { type: ply.EventType.ERROR, code: undefined },
-        { type: ply.EventType.EXIT, code: 1 },
-    ]);
-});
-
-test('MPV that exits with a code node-mpv does not report ends the player once as an abnormal exit', async (t) => {
-    const ply = useFakeNodeMpv(t, RunningNodeMpv);
-    for (const [code, signal, expected] of [[2, null, 2], [null, 'SIGKILL', 1]]) {
-        const events = [];
-        const { mpv } = await startPlaying(t, ply, twoItems(), { onEvent: (type, data) => events.push({ type, code: data.code }) });
-
-        mpv.mpvPlayer.emit('close', code, signal);
-        mpv.mpvPlayer.emit('close', code, signal);
-
-        assert.deepEqual(events, [{ type: ply.EventType.EXIT, code: expected }]);
-    }
-});
-
-test('MPV that finishes starting after the player was stopped is quit and reports nothing more', async (t) => {
-    let finishStart;
-    const calls = [];
-    class SlowStartNodeMpv extends RunningNodeMpv {
-        start() { return new Promise((resolve) => { finishStart = () => { calls.push('started'); resolve(); }; }); }
-        quit() { calls.push('quit'); return Promise.resolve(); }
-    }
-    const ply = useFakeNodeMpv(t, SlowStartNodeMpv);
-    const events = [];
-    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type) => events.push(type) }));
-
-    const playing = player.playList(twoItems(), 0);
-    player.stop();
-    finishStart();
-
-    assert.equal(await playing, false);
-    assert.deepEqual(calls.slice(-2), ['started', 'quit']);
-    assert.deepEqual(events, [ply.EventType.EXIT]);
+    assert.equal(mpv.exited, true);
+    assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'invalid playlist-pos' } }]);
 });

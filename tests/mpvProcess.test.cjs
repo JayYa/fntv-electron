@@ -8,6 +8,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { useFakeModule } = require('./helpers/fakeElectron.cjs');
 
 const NODE_MPV_DIR = path.dirname(require.resolve('node-mpv-2/package.json'));
+const PLAYERS_DIR = path.join(__dirname, '..', 'dest', 'modules', 'players');
 
 async function waitUntil(condition) {
     for (let i = 0; i < 100 && !condition(); i++) await delay(10);
@@ -15,7 +16,7 @@ async function waitUntil(condition) {
 
 function forgetNodeMpv() {
     Object.keys(require.cache)
-        .filter((id) => id.startsWith(NODE_MPV_DIR))
+        .filter((id) => id.startsWith(NODE_MPV_DIR) || id.startsWith(PLAYERS_DIR))
         .forEach((id) => delete require.cache[id]);
 }
 
@@ -35,12 +36,10 @@ function serveMpvIpc(t, child, answer = () => 'success') {
                 if (error === undefined) continue;
                 conn.write(`${JSON.stringify({ request_id, error, data: null })}\n`);
                 if (command[0] === 'quit' && error === 'success') setImmediate(() => exit(child, 0, null));
-                if (command[0] === 'loadlist') {
-                    setImmediate(() => connections.forEach((each) => each.write('{"event":"start-file"}\n{"event":"file-loaded"}\n')));
-                }
             }
         });
     });
+    child.sendEvent = (event) => connections.forEach((conn) => conn.write(`${JSON.stringify(event)}\n`));
     t.after(async () => {
         for (const conn of connections) conn.destroy();
         await new Promise((resolve) => server.close(resolve));
@@ -70,7 +69,7 @@ function exit(child, code, signal) {
     child.emit('close', code, signal);
 }
 
-function useFakeMpvProcess(t, startUp = listenOnIpc) {
+function useFakeChildProcess(t, startUp = listenOnIpc) {
     const spawned = [];
     const childProcess = {
         exec(_command, _options, callback) {
@@ -100,48 +99,95 @@ function useFakeMpvProcess(t, startUp = listenOnIpc) {
     return spawned;
 }
 
-test('MPV exiting with a code node-mpv does not report still ends the player once as an abnormal exit and removes its IPC socket file', async (t) => {
-    const spawned = useFakeMpvProcess(t);
-    const ply = require('../dest/modules/players/index.js');
-    const events = [];
-    const player = new ply.MpvPlayer({
-        playerPath: '',
-        onEvent: (type, data) => events.push({ type, code: data.code }),
-        resumePosition: () => 0,
-        loadSubtitles: async () => [],
+function newMpvProcess(t, spawned) {
+    const { mpvProcessFactory } = require('../dest/modules/players/index.js');
+    const reported = [];
+    const mpv = mpvProcessFactory({ binary: '', args: [], debug: false })({
+        onProperty: (property, value) => reported.push(['property', property, value]),
+        onTimePosition: (seconds) => reported.push(['timeposition', seconds]),
+        onSeek: (seconds) => reported.push(['seek', seconds]),
+        onExit: (code) => reported.push(['exit', code, { socketFileLeft: isSocketFileLeft(spawned[0]) }]),
     });
-    t.after(() => player.stop());
-
-    assert.equal(await player.playList([{ itemGuid: 'item-1', title: 'Episode 1', playLink: 'http://127.0.0.1/stream', ts: 0, duration: 100 }], 0), true);
-    const { socketPath } = spawned[0];
-    const isSocketFile = !socketPath.startsWith('\\');
-    spawned[0].emit('close', 2, null);
-    spawned[0].emit('close', 2, null);
-    await waitUntil(() => !isSocketFile || !fs.existsSync(socketPath));
-
-    assert.deepEqual(events, [{ type: ply.EventType.EXIT, code: 2 }]);
-    assert.equal(isSocketFile && fs.existsSync(socketPath), false);
-});
-
-function newPlayer(t, ply) {
-    const events = [];
-    const player = new ply.MpvPlayer({
-        playerPath: '',
-        onEvent: (type) => events.push(type),
-        resumePosition: () => 0,
-        loadSubtitles: async () => [],
-    });
-    t.after(() => player.stop());
-    return { player, events };
+    t.after(() => mpv.stop());
+    return { mpv, reported };
 }
 
-function playWithin(player, ms = 3000) {
-    const item = { itemGuid: 'item-1', title: 'Episode 1', playLink: 'http://127.0.0.1/stream', ts: 0, duration: 100 };
+function startWithin(mpv, ms = 3000) {
     return Promise.race([
-        player.playList([item], 0),
+        mpv.start().then(() => 'started', () => 'rejected'),
         delay(ms).then(() => 'still starting'),
     ]);
 }
+
+const exited = (code) => ['exit', code, { socketFileLeft: false }];
+
+test('MPV exiting on its own reports its exit code once, with its IPC socket file already removed', async (t) => {
+    for (const [code, signal, expected] of [[0, null, 0], [2, null, 2], [4, null, 4], [null, 'SIGKILL', 1]]) {
+        const spawned = useFakeChildProcess(t);
+        const { mpv, reported } = newMpvProcess(t, spawned);
+
+        assert.equal(await startWithin(mpv), 'started');
+        exit(spawned[0], code, signal);
+        spawned[0].emit('exit', code, signal);
+        await delay(20);
+
+        assert.deepEqual(reported, [exited(expected)]);
+    }
+});
+
+test('MPV that crashes is not started again', async (t) => {
+    const spawned = useFakeChildProcess(t);
+    const { mpv } = newMpvProcess(t, spawned);
+
+    assert.equal(await startWithin(mpv), 'started');
+    exit(spawned[0], 4, null);
+    await delay(50);
+
+    assert.equal(spawned.length, 1);
+});
+
+test('stopping MPV quits it and reports a normal exit once, with its IPC socket file already removed', async (t) => {
+    const spawned = useFakeChildProcess(t);
+    const { mpv, reported } = newMpvProcess(t, spawned);
+
+    assert.equal(await startWithin(mpv), 'started');
+    mpv.stop();
+    mpv.stop();
+    await waitUntil(() => reported.length > 0);
+    await delay(20);
+
+    assert.equal(spawned[0].killed, false);
+    assert.deepEqual(reported, [exited(0)]);
+});
+
+test('MPV that refuses to quit when stopped is killed and still reports a normal exit', async (t) => {
+    const spawned = useFakeChildProcess(t, (t, child) => listenOnIpc(t, child, (command) => (command[0] === 'quit' ? 'error' : 'success')));
+    const { mpv, reported } = newMpvProcess(t, spawned);
+
+    assert.equal(await startWithin(mpv), 'started');
+    mpv.stop();
+    await waitUntil(() => reported.length > 0);
+
+    assert.equal(spawned[0].killed, true);
+    assert.deepEqual(reported, [exited(0)]);
+});
+
+test('nothing but the exit is reported once MPV is asked to stop', async (t) => {
+    const spawned = useFakeChildProcess(t, (t, child) => listenOnIpc(t, child, (command) => (command[0] === 'quit' ? undefined : 'success')));
+    const { mpv, reported } = newMpvProcess(t, spawned);
+
+    assert.equal(await startWithin(mpv), 'started');
+    spawned[0].sendEvent({ event: 'property-change', name: 'volume', data: 40 });
+    await waitUntil(() => reported.length > 0);
+    mpv.stop();
+    spawned[0].sendEvent({ event: 'property-change', name: 'volume', data: 50 });
+    await delay(50);
+    await assert.rejects(mpv.setProperty('volume', 60));
+    exit(spawned[0], 0, null);
+    await waitUntil(() => reported.length > 1);
+
+    assert.deepEqual(reported, [['property', 'volume', 40], exited(0)]);
+});
 
 const startupFailures = [
     ['MPV that cannot bind its IPC socket and keeps running', (_t, child) => {
@@ -174,63 +220,49 @@ const startupFailures = [
 ];
 
 for (const [name, startUp] of startupFailures) {
-    test(`${name} fails the play request with one error, leaves no MPV process running and ends the player without EXIT`, async (t) => {
-        const spawned = useFakeMpvProcess(t, startUp);
-        const ply = require('../dest/modules/players/index.js');
-        const { player, events } = newPlayer(t, ply);
+    test(`${name} fails to start, leaves no MPV process or IPC socket file and reports no exit`, async (t) => {
+        const spawned = useFakeChildProcess(t, startUp);
+        const { mpv, reported } = newMpvProcess(t, spawned);
 
-        assert.equal(await playWithin(player), false);
+        assert.equal(await startWithin(mpv), 'rejected');
         const [child] = spawned;
         await waitUntil(() => hasExited(child) && !isSocketFileLeft(child));
         await delay(20);
 
         assert.equal(hasExited(child), true);
         assert.equal(isSocketFileLeft(child), false);
-        assert.deepEqual(events, [ply.EventType.ERROR]);
+        assert.deepEqual(reported, []);
     });
 }
 
-test('stopping before MPV finishes starting ends the player once, fails the play request and leaves no MPV process running', async (t) => {
-    const spawned = useFakeMpvProcess(t);
-    const ply = require('../dest/modules/players/index.js');
-    const { player, events } = newPlayer(t, ply);
+test('stopping MPV before it finishes starting fails the start, leaves no MPV process and reports no exit', async (t) => {
+    for (const stopAfterSpawn of [false, true]) {
+        const spawned = useFakeChildProcess(t, stopAfterSpawn ? () => {} : listenOnIpc);
+        const { mpv, reported } = newMpvProcess(t, spawned);
 
-    const playing = playWithin(player);
-    player.stop();
+        const starting = startWithin(mpv);
+        if (stopAfterSpawn) await waitUntil(() => spawned.length > 0);
+        mpv.stop();
 
-    assert.equal(await playing, false);
-    const [child] = spawned;
-    await waitUntil(() => hasExited(child) && !isSocketFileLeft(child));
-    assert.equal(hasExited(child), true);
-    assert.equal(isSocketFileLeft(child), false);
-    assert.deepEqual(events, [ply.EventType.EXIT]);
-});
-
-test('MPV that refuses to quit when the player stops is killed', async (t) => {
-    const spawned = useFakeMpvProcess(t, (t, child) => listenOnIpc(t, child, (command) => (command[0] === 'quit' ? 'error' : 'success')));
-    const ply = require('../dest/modules/players/index.js');
-    const { player, events } = newPlayer(t, ply);
-
-    assert.equal(await playWithin(player), true);
-    player.stop();
-    const [child] = spawned;
-    await waitUntil(() => hasExited(child) && !isSocketFileLeft(child));
-
-    assert.equal(child.killed, true);
-    assert.equal(isSocketFileLeft(child), false);
-    assert.deepEqual(events, [ply.EventType.EXIT]);
+        assert.equal(await starting, 'rejected');
+        const [child] = spawned;
+        await waitUntil(() => hasExited(child) && !isSocketFileLeft(child));
+        await delay(20);
+        assert.equal(hasExited(child), true);
+        assert.equal(isSocketFileLeft(child), false);
+        assert.deepEqual(reported, []);
+    }
 });
 
 test('MPV whose process fails while playing keeps playing and nothing escapes as an uncaught exception', async (t) => {
-    const spawned = useFakeMpvProcess(t);
-    const ply = require('../dest/modules/players/index.js');
-    const { player, events } = newPlayer(t, ply);
+    const spawned = useFakeChildProcess(t);
+    const { mpv, reported } = newMpvProcess(t, spawned);
 
-    assert.equal(await playWithin(player), true);
+    assert.equal(await startWithin(mpv), 'started');
     const [child] = spawned;
     assert.doesNotThrow(() => child.emit('error', new Error('kill EPERM')));
     await delay(20);
 
     assert.equal(hasExited(child), false);
-    assert.deepEqual(events, []);
+    assert.deepEqual(reported, []);
 });

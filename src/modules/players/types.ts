@@ -1,3 +1,5 @@
+import type { CreateMpvProcess } from './impl/mpvProcess';
+
 export enum EventType {
     PROGRESS = 'progress',
     ERROR = 'error',
@@ -41,9 +43,7 @@ export type PlayerEvent =
 export type EventHandler = (...event: PlayerEvent) => void;
 
 export type Config = {
-    playerPath: string;
-    debug?: boolean;
-    extraArgs?: string[];
+    createMpvProcess: CreateMpvProcess;
     onEvent: EventHandler;
     onVolumeChange?: (volume: number) => void;
     resumePosition: (item: PlayItem) => number;
