@@ -16,6 +16,7 @@
 - 模块支持注入依赖时，直接传假对象（`establishAccessCodeSession` 的 `gatewaySession`、`requester`）。
 - 替换 `require` 的模块用 `tests/helpers/fakeElectron.cjs`：`useFakeElectron(t, 假对象, { platform })` 替换 `electron`，`useFakeModule` 替换其它模块，`withoutElectron` 模拟没有 Electron 的进程。它负责恢复、清理 `dest/` 模块缓存和模拟平台，lint 拦截别处改 `Module._load`。
 - Electron 假对象要包含各平台分支用到的 API，例如 Linux 才调用的 `safeStorage.getSelectedStorageBackend`。按平台跳过的测试，本地只确认它在本机是跳过而不是失败。
+- 网页端里的 preload 行为用 `tests/helpers/webUiPage.cjs`：它在 happy-dom 页面里运行打包后的 `dest/preload/bundle.js`，派发 pointer、click、键盘事件，读出发给主进程的 `play-movie`（`tests/takeover.test.cjs`）。
 - 更新检查的测试替换 `axios.get` 返回 GitHub 响应，HTTP 错误用真实的 `axios.AxiosError` 构造（`tests/updateChecker.test.cjs`）。
 
 ## 只测外部行为

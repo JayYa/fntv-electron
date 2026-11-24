@@ -17,18 +17,13 @@ test('keeps the historical MPV default while rejecting malformed values', () => 
     assert.equal(isMpvPlaybackEnabled({ value: true }), false);
 });
 
-test('preload timeout and login settings default to MPV playback', () => {
-    const preloadPlayback = fs.readFileSync(
-        path.join(__dirname, '..', 'dest', 'preload', 'core', 'playback.js'),
-        'utf8',
-    );
+test('login settings default to MPV playback', () => {
     const loginPage = fs.readFileSync(
         path.join(__dirname, '..', 'resource', 'login', 'index.html'),
         'utf8',
     );
     const loginScript = loginPageScriptText();
 
-    assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: true \}\)/);
     assert.match(loginPage, /id="hideOriginalPlayButtonSwitch" checked/);
     assert.match(loginScript, /data\.hideOriginalPlayButton !== false/);
 });

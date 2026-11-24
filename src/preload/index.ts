@@ -3,12 +3,10 @@ import { ipcRenderer } from 'electron';
 import { HookType, runHooks } from './core/hooks';
 import './loginPageApi';
 
-import './plugins/continueWatchingMenu';
-import './plugins/playButton';
-import './plugins/playMaskButton';
+import './plugins/takeover';
 import './plugins/titlebar';
 
-const PLUGINS = ['continueWatchingMenu', 'playButton', 'playMaskButton', 'titlebar'];
+const PLUGINS = ['takeover', 'titlebar'];
 
 function initInjector(): void {
     if (document.readyState !== 'loading') {
