@@ -83,7 +83,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
             ...require('../../dest/modules/fn_config/loginStore.js'),
             ...require('../../dest/modules/fn_config/settings.js'),
         }),
-        loadWinctrl: () => require('../../dest/main/common/winctrl.js'),
+        loadCurrentLogin: () => require('../../dest/main/common/currentLogin.js'),
         dialogs,
         configPath: path.join(paths.userData, 'config.json'),
         logPath: path.join(testRoot, 'log', 'app.log'),

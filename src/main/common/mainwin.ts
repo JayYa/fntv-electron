@@ -3,6 +3,7 @@ import * as path from 'path';
 import { platformBehavior } from '../../public/platform';
 import { USER_DATA_PATH } from '../../public/constants';
 import * as log from '../../modules/logger';
+import { WEB_UI_SESSION_PARTITION } from './webUiSession';
 import { DisplayLayout, Rect, WindowPlacement, loadWindowPlacement, saveWindowPlacement } from './windowState';
 
 const behavior = platformBehavior();
@@ -22,7 +23,7 @@ const mainwinConfig: BrowserWindowConstructorOptions = {
     }),
     webPreferences: {
         webgl: true,
-        partition: 'persist:fntv',
+        partition: WEB_UI_SESSION_PARTITION,
         preload: path.join(__dirname, '../../preload/bundle.js'),
         nodeIntegration: false,
         contextIsolation: true,

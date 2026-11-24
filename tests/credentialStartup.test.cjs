@@ -25,12 +25,12 @@ test('startup getters keep working when every credential is undecryptable', asyn
 
 for (const failing of ['saved-token', 'saved-access-code']) {
     test(`startup goes to the login page without a dialog when ${failing} is undecryptable`, async (t) => {
-        const { loadStores, loadWinctrl, dialogs, undecryptable } = setupConfig(t);
+        const { loadStores, loadCurrentLogin, dialogs, undecryptable } = setupConfig(t);
         await seedLoggedInConfig(loadStores());
         undecryptable.add(failing);
 
         const window = fakeMainWindow();
-        await loadWinctrl().setupCookieRestore(window);
+        await loadCurrentLogin().restoreAtStartup(window);
 
         assertLandedOnLoginPage(window);
         assert.deepEqual(dialogs, []);
@@ -38,11 +38,11 @@ for (const failing of ['saved-token', 'saved-access-code']) {
 }
 
 test('startup does not blame the keyring when the config file itself cannot be read', async (t) => {
-    const { loadWinctrl, configPath, dialogs } = setupConfig(t);
+    const { loadCurrentLogin, configPath, dialogs } = setupConfig(t);
     fs.mkdirSync(configPath);
 
     const window = fakeMainWindow();
-    await loadWinctrl().setupCookieRestore(window);
+    await loadCurrentLogin().restoreAtStartup(window);
 
     assertLandedOnLoginPage(window);
     assert.equal(dialogs.length, 1);
