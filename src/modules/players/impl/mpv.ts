@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import type { ChildProcess } from 'child_process';
 import {
     Config,
     EventData,
@@ -25,6 +26,7 @@ export class MpvPlayer implements Player {
     private throttleInterval: number = 15000;
     private playlistItems: PlayItem[] = [];
     private playlistFilePath: string = '';
+    private finished = false;
 
     constructor(config: Config) {
         this.config = {
@@ -44,6 +46,7 @@ export class MpvPlayer implements Player {
     }
 
     private emitEvent(type: EventType, event: EventData): void {
+        if (this.finished) return;
         this.config.onEvent(type, event);
     }
 
@@ -56,6 +59,7 @@ export class MpvPlayer implements Player {
                 debug: this.config.debug,
                 binary: this.config.playerPath.length > 0 ? this.config.playerPath : undefined,
                 socket: this.ipcSocket.path,
+                auto_restart: false,
             };
 
             this.mpvInstance = new NodeMpv(mpvOptions, mpvArgs);
@@ -63,6 +67,7 @@ export class MpvPlayer implements Player {
             this.setupEventListeners();
 
             await this.mpvInstance.start()
+            this.watchProcessClose();
 
             await this.loadPlaylistItems(infos, pos);
 
@@ -78,6 +83,7 @@ export class MpvPlayer implements Player {
                 message: error.message || error.toString()
             };
             this.emitEvent(EventType.ERROR, errorEvent);
+            this.abandon();
             return false;
         }
     }
@@ -343,7 +349,22 @@ export class MpvPlayer implements Player {
         });
     }
 
+    private watchProcessClose(): void {
+        const mpvProcess = (this.mpvInstance as unknown as { mpvPlayer?: ChildProcess } | null)?.mpvPlayer;
+        mpvProcess?.once('close', (code: number | null) => {
+            this.handleExit(typeof code === 'number' ? code : 1);
+        });
+    }
+
+    private abandon(): void {
+        this.finished = true;
+        this.quitMpv();
+        this.cleanupPlaylistFile();
+        this.mpvInstance = null;
+    }
+
     private handleExit(code: number): void {
+        if (this.finished) return;
         this.cleanupPlaylistFile();
 
         const event: PlayExitData = {
@@ -352,6 +373,7 @@ export class MpvPlayer implements Player {
         };
 
         this.emitEvent(EventType.EXIT, event);
+        this.finished = true;
 
         if (this.config.debug) {
             if (code !== 0) {
@@ -385,23 +407,27 @@ export class MpvPlayer implements Player {
         this.ipcSocket = null;
     }
 
+    private quitMpv(): void {
+        if (!this.mpvInstance) return;
+        try {
+            this.mpvInstance.quit().catch((error: any) => {
+                if (this.config.debug) {
+                    log.debug('停止播放时出错:', error);
+                }
+            }).finally(() => {
+                this.removeIpcSocket();
+            });
+        } catch (error) {
+            if (this.config.debug) {
+                log.debug('停止播放异常:', error);
+            }
+        }
+    }
+
     stop(): void {
         if (this.mpvInstance) {
-            try {
-                log.info('停止播放');
-                this.mpvInstance.quit().catch((error: any) => {
-                    if (this.config.debug) {
-                        log.debug('停止播放时出错:', error);
-                    }
-                }).finally(() => {
-                    this.removeIpcSocket();
-                });
-            } catch (error) {
-                if (this.config.debug) {
-                    log.debug('停止播放异常:', error);
-                }
-            }
-
+            log.info('停止播放');
+            this.quitMpv();
             this.handleExit(0);
         } else {
             this.cleanupPlaylistFile();

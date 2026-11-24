@@ -23,6 +23,16 @@ status: accepted
 - 接近片尾是播放进度达到总时长的 98%（`src/modules/playback/nearEnd.ts`）。总时长不大于 0 时一律不算接近片尾：直链类播放源拿不到可靠时长，宁可漏判也不误判；这时打开播放项也不续播。
 - 一次播放的写入（`src/modules/playback/writeQueue.ts`）按到达顺序逐条写，前一条完成或失败才开始下一条，播放进度不会被较早发出、较晚完成的请求倒退回去。只有排队还没开始的进度回传会被取代：新的进度回传取代旧的；`final`（离开播放项时写最终进度和已观看）取代同一播放项排队的进度回传；`other`（不写进度的操作，例如 MPV 异常退出后刷新网页端）只排在前面的写入之后，不取代任何写入。返回的 Promise 在这条写完或被取代时兑现，不 reject。
 
+## 一个播放器只结束一次
+
+`MpvPlayer` 每个实例最多发出一个 EXIT，之后不再发出任何事件；`node-mpv-2` 本身不保证这一点，所以由 `MpvPlayer` 补齐：
+
+- `auto_restart` 默认开启：MPV 崩溃（退出码 4）后库先在后台重启一个 MPV，再发 `crashed`，重启出来的 MPV 不属于任何一次播放。构造时传 `auto_restart: false`。
+- 退出码不是 0 或 4（包括被信号终止）时库什么事件都不发，一次播放就永远结束不了，之后的播放请求都被当成重复请求。`start()` 之后监听库私有的子进程字段 `mpvPlayer` 的 `close`，按异常退出处理；退出码为 0 或 4 时库的监听先注册、先发出 `quit`/`crashed`，这里的监听晚到被忽略。`tests/mpvProcessExit.test.cjs` 用真实的库加替换的 `child_process` 钉住这个私有字段，升级库后字段改名会失败。
+- 接管已有 MPV 实例时 socket 一关就先后发出 `crashed` 和 `quit`。
+- `quit()` 先摘掉子进程的 `close` 监听，所以 `stop()` 之后库不会再发 `quit`；`stop()` 自己发出 EXIT。
+- `start()` 成功后加载播放列表失败时，`playList` 先退出 MPV 再返回 false，不发 EXIT。
+
 ## `node-mpv-2` 的连接（`tests/mpvIpc.test.cjs`）
 
 - `start()` 连上已有的 MPV 时直接接管，不启动子进程，测试借这条路径用假的 JSON IPC 服务端驱动库的公开接口。`start()` 的探测连接一直不关，最后一个连接才是库的主连接。收到 `seek` 事件后库另开一个连接等 `playback-restart`。

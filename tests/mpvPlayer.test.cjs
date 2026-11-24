@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 const { setTimeout: delay } = require('node:timers/promises');
 const { useFakeModule } = require('./helpers/fakeElectron.cjs');
 
@@ -13,19 +14,21 @@ class FakeNodeMpv {
 class RunningNodeMpv {
     static last = null;
     static onSetProperty = null;
-    constructor() {
+    constructor(options) {
+        this.options = options;
         this.handlers = new Map();
         this.path = '';
         this.seeks = [];
         this.subtitles = [];
         this.properties = [];
+        this.quits = 0;
         RunningNodeMpv.last = this;
     }
     on(event, handler) { this.handlers.set(event, handler); }
     emit(event, value) { return this.handlers.get(event)(value); }
-    start() { return Promise.resolve(); }
+    start() { this.mpvPlayer = new EventEmitter(); return Promise.resolve(); }
     loadPlaylist() { return Promise.resolve(); }
-    quit() { return Promise.resolve(); }
+    quit() { this.quits += 1; return Promise.resolve(); }
     isRunning() { return true; }
     setProperty(property, value) {
         this.properties.push([property, value]);
@@ -206,4 +209,54 @@ test('playList emits an error and returns false when setting playlist-pos fails'
 
     assert.equal(ok, false);
     assert.deepEqual(events, [{ type: ply.EventType.ERROR, data: { message: 'invalid playlist-pos' } }]);
+});
+
+test('a playlist that fails to load after MPV started quits MPV and reports nothing more', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    onSetProperty(t, 'playlist-pos', () => Promise.reject(new Error('invalid playlist-pos')));
+    const events = [];
+    const player = new ply.MpvPlayer(playerConfig({ onEvent: (type) => events.push(type) }));
+
+    assert.equal(await player.playList(twoItems(), 1), false);
+    const mpv = RunningNodeMpv.last;
+    mpv.emit('crashed');
+    mpv.emit('quit');
+    player.stop();
+
+    assert.equal(mpv.quits, 1);
+    assert.deepEqual(events, [ply.EventType.ERROR]);
+});
+
+test('MPV is not restarted by node-mpv after it crashes', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    const { mpv } = await startPlaying(t, ply, twoItems());
+
+    assert.equal(mpv.options.auto_restart, false);
+});
+
+test('MPV that crashes, even when also reported as quit, ends the player once as an abnormal exit', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    const events = [];
+    const { mpv } = await startPlaying(t, ply, twoItems(), { onEvent: (type, data) => events.push({ type, code: data.code }) });
+
+    mpv.emit('crashed');
+    mpv.emit('quit');
+
+    assert.deepEqual(events, [
+        { type: ply.EventType.ERROR, code: undefined },
+        { type: ply.EventType.EXIT, code: 1 },
+    ]);
+});
+
+test('MPV that exits with a code node-mpv does not report ends the player once as an abnormal exit', async (t) => {
+    const ply = useFakeNodeMpv(t, RunningNodeMpv);
+    for (const [code, signal, expected] of [[2, null, 2], [null, 'SIGKILL', 1]]) {
+        const events = [];
+        const { mpv } = await startPlaying(t, ply, twoItems(), { onEvent: (type, data) => events.push({ type, code: data.code }) });
+
+        mpv.mpvPlayer.emit('close', code, signal);
+        mpv.mpvPlayer.emit('close', code, signal);
+
+        assert.deepEqual(events, [{ type: ply.EventType.EXIT, code: expected }]);
+    }
 });
