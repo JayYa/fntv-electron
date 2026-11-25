@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import axios, { AxiosResponse } from 'axios';
 import { dialog, shell, app } from 'electron';
 import semver from 'semver';
-import { getAppDownloadProxyConfig } from '../fn_config/settings';
+import * as preferences from '../fn_config/preferences';
 import * as log from '../logger';
 import {
     assetDownloadUrl,
@@ -212,7 +212,7 @@ export class UpdateChecker {
 
     private withDownloadProxy(originalUrl: string): string {
         try {
-            const proxyConfig = getAppDownloadProxyConfig();
+            const proxyConfig = preferences.get('appDownloadProxy');
             if (proxyConfig.enabled && proxyConfig.proxyUrl && proxyConfig.proxyUrl.trim() !== '') {
                 if (originalUrl.includes('github.com')) {
                     const proxiedUrl = `${proxyConfig.proxyUrl.replace(/\/$/, '')}/${originalUrl}`;

@@ -215,7 +215,7 @@ test('download link goes through the built-in relay when the app download proxy 
         config: { downloadProxyEnabled: true },
         respond: () => release('v2.7.0', PUBLISHED_ASSETS),
     });
-    const { DEFAULT_DOWNLOAD_PROXY_URL } = require('../dest/modules/fn_config/settings.js');
+    const { DEFAULT_DOWNLOAD_PROXY_URL } = require('../dest/modules/fn_config/preferences.js');
 
     const { downloadUrl } = await checker.checkForUpdates();
 

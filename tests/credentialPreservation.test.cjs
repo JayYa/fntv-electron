@@ -11,14 +11,13 @@ const {
 } = require('./helpers/credentialConfig.cjs');
 
 const SETTERS = {
-    setAppDownloadProxyConfig: (config) => config.setAppDownloadProxyConfig({ enabled: false, proxyUrl: 'https://proxy.example' }),
-    setHideOriginalPlayButton: (config) => config.setHideOriginalPlayButton(false),
-    setNasProxyEnabled: (config) => config.setNasProxyEnabled(true),
-    setMacCloseAction: (config) => config.setMacCloseAction('quit'),
-    setTrayNotificationShown: (config) => config.setTrayNotificationShown(true),
-    setMpvPlayerPath: (config) => config.setMpvPlayerPath('/usr/bin/mpv'),
-    setMpvVolume: (config) => config.setMpvVolume(10),
-    setExitMode: (config) => config.setExitMode('direct'),
+    appDownloadProxy: (config) => config.set('appDownloadProxy', { enabled: true, proxyUrl: 'https://proxy.example' }),
+    mpvPlayback: (config) => config.set('mpvPlayback', false),
+    nasLocalProxy: (config) => config.set('nasLocalProxy', true),
+    closeBehavior: (config) => config.set('closeBehavior', 'quit'),
+    userMpvPath: (config) => config.set('userMpvPath', '/usr/bin/mpv'),
+    mpvVolume: (config) => config.setMpvVolume(10),
+    trayNotificationShown: (config) => config.markTrayNotificationShown(),
 };
 
 for (const [name, write] of Object.entries(SETTERS)) {
@@ -47,7 +46,7 @@ for (const failing of SAVED_CREDENTIALS) {
 
         undecryptable.clear();
         await assertCredentialsRestored(config);
-        assert.equal(config.getMpvVolume(), 10);
+        assert.equal(config.mpvVolume(), 10);
     });
 }
 

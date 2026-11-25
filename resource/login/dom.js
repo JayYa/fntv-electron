@@ -3,7 +3,7 @@
     historyDropdown, customConfirm, confirmMessage, confirmCancel, confirmOk, customMessage,
     messageIcon, messageTitle, messageContent, messageButton, versionText, updateBtn,
     proxySettingsBtn, proxyPanel, proxyCloseBtn, proxyEnabledSwitch, proxyUrlInput, proxySaveBtn,
-    hideOriginalPlayButtonSwitch */
+    mpvPlaybackSwitch */
 
 const ipcRenderer = window.electronAPI;
 
@@ -36,4 +36,4 @@ const proxyCloseBtn = document.getElementById('proxyCloseBtn');
 const proxyEnabledSwitch = document.getElementById('proxyEnabledSwitch');
 const proxyUrlInput = document.getElementById('proxyUrlInput');
 const proxySaveBtn = document.getElementById('proxySaveBtn');
-const hideOriginalPlayButtonSwitch = document.getElementById('hideOriginalPlayButtonSwitch');
+const mpvPlaybackSwitch = document.getElementById('mpvPlaybackSwitch');

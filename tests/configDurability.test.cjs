@@ -35,7 +35,7 @@ function setupConfig(t) {
     return {
         config: {
             ...require('../dest/modules/fn_config/loginStore.js'),
-            ...require('../dest/modules/fn_config/settings.js'),
+            ...require('../dest/modules/fn_config/preferences.js'),
         },
         configPath: path.join(userData, 'config.json'),
         userData,
@@ -55,11 +55,11 @@ test('a setter after a corrupt config keeps the damaged content in a backup', as
     fs.writeFileSync(configPath, CORRUPT);
 
     assert.equal((await config.readCurrentLogin()), null);
-    config.setNasProxyEnabled(true);
+    config.set('nasLocalProxy', true);
 
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), CORRUPT);
-    assert.equal(config.getNasProxyEnabled(), true);
+    assert.equal(config.get('nasLocalProxy'), true);
 });
 
 test('the backup limit drops the oldest damaged copies', async (t) => {
@@ -67,7 +67,7 @@ test('the backup limit drops the oldest damaged copies', async (t) => {
 
     for (const round of [1, 2, 3, 4, 5]) {
         fs.writeFileSync(configPath, `{"round":${round},`);
-        config.setNasProxyEnabled(true);
+        config.set('nasLocalProxy', true);
     }
 
     assert.deepEqual(backups().map(readBackup), ['{"round":3,', '{"round":4,', '{"round":5,']);
@@ -78,7 +78,7 @@ test('a failed backup leaves the damaged config untouched', async (t) => {
     fs.writeFileSync(configPath, CORRUPT);
     t.mock.method(fs, 'copyFileSync', () => { throw new Error('disk full'); });
 
-    assert.throws(() => config.setNasProxyEnabled(true), /disk full/);
+    assert.throws(() => config.set('nasLocalProxy', true), /disk full/);
 
     assert.equal(fs.readFileSync(configPath, 'utf8'), CORRUPT);
     assert.deepEqual(backups(), []);
@@ -101,7 +101,7 @@ test('a failed write does not spend a backup slot on the same damaged file', asy
     fs.writeFileSync(configPath, CORRUPT);
     t.mock.method(fs, 'fsyncSync', () => { throw new Error('disk full'); });
 
-    assert.throws(() => config.setNasProxyEnabled(true), /disk full/);
+    assert.throws(() => config.set('nasLocalProxy', true), /disk full/);
 
     assert.deepEqual(backups(), []);
     assert.equal(fs.readFileSync(configPath, 'utf8'), CORRUPT);
@@ -131,7 +131,7 @@ test('the backup is logged by file name without its content', async (t) => {
     const { config, configPath, backups, logText } = setupConfig(t);
     fs.writeFileSync(configPath, CORRUPT);
 
-    config.setNasProxyEnabled(true);
+    config.set('nasLocalProxy', true);
 
     assert.match(logText(), new RegExp(backups()[0]));
     assert.doesNotMatch(logText(), /c2VjcmV0/);
@@ -163,7 +163,7 @@ test('writing over a non-array history keeps the original file in a backup', asy
     assert.equal(backups().length, 1);
     assert.equal(readBackup(backups()[0]), original);
     assert.equal((await readHistoryWithCredentials(config))[0].account, 'user');
-    assert.equal(config.getMpvVolume(), 33);
+    assert.equal(config.mpvVolume(), 33);
     assert.doesNotMatch(logText(), /c2VjcmV0/);
 
     config.setMpvVolume(44);
@@ -190,11 +190,11 @@ for (const [label, content] of [
         const { config, configPath, backups, readBackup } = setupConfig(t);
         fs.writeFileSync(configPath, content);
 
-        config.setNasProxyEnabled(true);
+        config.set('nasLocalProxy', true);
 
         assert.equal(backups().length, 1);
         assert.equal(readBackup(backups()[0]), content);
-        assert.equal(config.getNasProxyEnabled(), true);
+        assert.equal(config.get('nasLocalProxy'), true);
     });
 }
 

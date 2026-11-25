@@ -87,7 +87,7 @@
 
 ## 默认播放方式
 
-MPV 接管默认开启。配置字段沿用旧名 `hideOriginalPlayButton`，所有读取方都用 `isMpvPlaybackEnabled`（`src/modules/fn_config/playbackPreference.ts`）判断：
+MPV 接管默认开启。配置字段沿用旧名 `hideOriginalPlayButton`，只有 `src/modules/fn_config/preferences.ts` 读它，其它地方拿到的都是它给出的布尔值 `mpvPlayback`：
 
 | `hideOriginalPlayButton` | 结果 |
 | --- | --- |
@@ -98,9 +98,9 @@ MPV 接管默认开启。配置字段沿用旧名 `hideOriginalPlayButton`，所
 
 这几处必须同时保持这个默认值：
 
-- `src/modules/fn_config/settings.ts` 读配置。
-- `src/main/handlers/plugins/config.ts` 写配置，缺失值按 `true` 保存。
-- `src/preload/core/takeover.ts` 读配置，2 秒内没收到回复时回退为 `true`。
+- `src/modules/fn_config/preferences.ts` 读写配置。
+- `src/main/handlers/plugins/config.ts` 经 `get-mpv-playback` 回布尔值；`set-mpv-playback` 只收布尔值，别的值返回失败、不写入。
+- `src/preload/core/takeover.ts` 读这个布尔值，2 秒内没收到回复时回退为 `true`。
 - `resource/login/index.html` 的开关默认勾选，`resource/login/settings.js` 只有明确收到 `false` 才取消。
 
 ## Proxy

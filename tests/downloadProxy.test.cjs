@@ -35,7 +35,7 @@ function setupMain(t, storedConfig) {
     return {
         ipcMain,
         configPath,
-        config: require('../dest/modules/fn_config/settings.js'),
+        config: require('../dest/modules/fn_config/preferences.js'),
         loadConfigPlugin: () => require('../dest/main/handlers/plugins/config.js'),
     };
 }
@@ -74,7 +74,7 @@ function openConnectedLoginPage(ipcMain) {
 test('the app download proxy uses the built-in relay when no address was ever saved', (t) => {
     const { config } = setupMain(t, undefined);
 
-    assert.deepEqual(config.getAppDownloadProxyConfig(), {
+    assert.deepEqual(config.get('appDownloadProxy'), {
         enabled: false,
         proxyUrl: config.DEFAULT_DOWNLOAD_PROXY_URL,
     });
@@ -84,7 +84,7 @@ for (const unusable of ['', '   ', 42, null]) {
     test(`a saved relay address ${JSON.stringify(unusable)} reads as the built-in relay`, (t) => {
         const { config } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: unusable });
 
-        assert.equal(config.getAppDownloadProxyConfig().proxyUrl, config.DEFAULT_DOWNLOAD_PROXY_URL);
+        assert.equal(config.get('appDownloadProxy').proxyUrl, config.DEFAULT_DOWNLOAD_PROXY_URL);
     });
 }
 
@@ -93,7 +93,7 @@ for (const legacy of ['https://ghfast.top', 'https://ghfast.top/', '  https://gh
         const { config, configPath } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: legacy });
         const before = fs.readFileSync(configPath, 'utf8');
 
-        assert.deepEqual(config.getAppDownloadProxyConfig(), {
+        assert.deepEqual(config.get('appDownloadProxy'), {
             enabled: true,
             proxyUrl: config.DEFAULT_DOWNLOAD_PROXY_URL,
         });
@@ -105,7 +105,7 @@ for (const custom of ['https://relay.example.test/', 'https://ghfast.top/gh/', '
     test(`a saved custom relay ${JSON.stringify(custom)} is returned as saved`, (t) => {
         const { config } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: custom });
 
-        assert.equal(config.getAppDownloadProxyConfig().proxyUrl, custom);
+        assert.equal(config.get('appDownloadProxy').proxyUrl, custom);
     });
 }
 
@@ -129,5 +129,5 @@ test('saving an empty relay address still shows the built-in relay, also after r
 
     assert.equal(page.proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
     assert.equal(openConnectedLoginPage(ipcMain).proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
-    assert.equal(config.getAppDownloadProxyConfig().proxyUrl, config.DEFAULT_DOWNLOAD_PROXY_URL);
+    assert.equal(config.get('appDownloadProxy').proxyUrl, config.DEFAULT_DOWNLOAD_PROXY_URL);
 });

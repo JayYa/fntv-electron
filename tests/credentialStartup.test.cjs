@@ -13,14 +13,14 @@ test('startup getters keep working when every credential is undecryptable', asyn
     const { loadStores, undecryptable } = setupConfig(t);
     const config = loadStores();
     await seedLoggedInConfig(config);
-    config.setMpvPlayerPath('/usr/bin/mpv');
+    config.set('userMpvPath', '/usr/bin/mpv');
 
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
 
-    assert.equal(config.getMpvPlayerPath(), '/usr/bin/mpv');
-    assert.equal(config.getAppDownloadProxyConfig().enabled, false);
-    assert.equal(config.getHideOriginalPlayButton(), true);
-    assert.equal(config.getNasProxyEnabled(), false);
+    assert.equal(config.get('userMpvPath'), '/usr/bin/mpv');
+    assert.equal(config.get('appDownloadProxy').enabled, false);
+    assert.equal(config.get('mpvPlayback'), true);
+    assert.equal(config.get('nasLocalProxy'), false);
 });
 
 for (const failing of ['saved-token', 'saved-access-code']) {

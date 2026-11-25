@@ -48,13 +48,13 @@ function setupTray(t, { mpvHomeExists = true, openPathError = '', userConfigUnkn
         },
     }, { platform: 'win32' });
 
-    const config = () => require('../dest/modules/fn_config/settings.js');
+    const preferences = () => require('../dest/modules/fn_config/preferences.js');
     const runtime = {
         pendingUpdates: 0,
         listeners: [],
         stopped: false,
         program() {
-            const userPath = config().getMpvPlayerPath();
+            const userPath = preferences().get('userMpvPath');
             if (userPath) return { path: userPath, bundled: false, args: [] };
             return mpvFound ? BUNDLED : undefined;
         },
@@ -91,7 +91,12 @@ function setupTray(t, { mpvHomeExists = true, openPathError = '', userConfigUnkn
         errorBoxes,
         openedPaths,
         openDialogResults,
-        config,
+        preferences,
+        async changeElsewhere(name, value) {
+            const count = menus.length;
+            preferences().set(name, value);
+            await waitForMenuAfter(count);
+        },
         async createTray() {
             trayModule = require('../dest/main/common/tray.js');
             await trayModule.createTray({});
@@ -119,7 +124,7 @@ const CONFIG_ITEM = '打开 MPV 用户配置目录';
 
 test('the tray shows the user-chosen MPV path', async (t) => {
     const tray = setupTray(t);
-    tray.config().setMpvPlayerPath('E:\\tools\\mpv\\mpv.exe');
+    tray.preferences().set('userMpvPath', 'E:\\tools\\mpv\\mpv.exe');
     await tray.createTray();
     assert.equal(tray.item(PLAYER_ITEM).label, `${PLAYER_ITEM} (E:\\tools\\mpv\\mpv.exe)`);
 });
@@ -246,3 +251,52 @@ test('destroying the tray stops the MPV runtime watching for pending updates', a
     tray.destroyTray();
     assert.equal(tray.runtime.stopped, true);
 });
+
+const DOWNLOAD_PROXY_ITEM = '应用更新下载加速';
+const MPV_PLAYBACK_ITEM = '使用 MPV 播放';
+
+test('preferences changed on the login page show up in the tray', async (t) => {
+    const tray = setupTray(t);
+    await tray.createTray();
+    assert.equal(tray.item(MPV_PLAYBACK_ITEM).checked, true);
+
+    await tray.changeElsewhere('mpvPlayback', false);
+    await tray.changeElsewhere('appDownloadProxy', { enabled: true, proxyUrl: 'https://relay.example.test/' });
+
+    assert.equal(tray.item(MPV_PLAYBACK_ITEM).checked, false);
+    assert.equal(tray.item(DOWNLOAD_PROXY_ITEM).checked, true);
+});
+
+test('toggling the app download proxy in the tray keeps the relay address saved on the login page', async (t) => {
+    const tray = setupTray(t);
+    await tray.createTray();
+    await tray.changeElsewhere('appDownloadProxy', { enabled: true, proxyUrl: 'https://relay.example.test/' });
+
+    await tray.clickAndWaitForMenu(DOWNLOAD_PROXY_ITEM);
+
+    assert.deepEqual(tray.preferences().get('appDownloadProxy'), { enabled: false, proxyUrl: 'https://relay.example.test/' });
+    assert.equal(tray.item(DOWNLOAD_PROXY_ITEM).checked, false);
+});
+
+test('toggling MPV playback in the tray flips the saved preference', async (t) => {
+    const tray = setupTray(t);
+    await tray.createTray();
+
+    await tray.clickAndWaitForMenu(MPV_PLAYBACK_ITEM);
+    assert.equal(tray.preferences().get('mpvPlayback'), false);
+    await tray.clickAndWaitForMenu(MPV_PLAYBACK_ITEM);
+    assert.equal(tray.preferences().get('mpvPlayback'), true);
+});
+
+for (const [name, prefix, changedTo] of [['mpvPlayback', MPV_PLAYBACK_ITEM, false], ['nasLocalProxy', 'NAS 中转', true]]) {
+    test(`after ${name} changed on the login page, clicking it in the tray flips the new value`, async (t) => {
+        const tray = setupTray(t);
+        await tray.createTray();
+        await tray.changeElsewhere(name, changedTo);
+
+        await tray.clickAndWaitForMenu(prefix);
+
+        assert.equal(tray.preferences().get(name), !changedTo);
+        assert.equal(tray.item(prefix).checked, !changedTo);
+    });
+}

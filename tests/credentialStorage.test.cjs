@@ -144,11 +144,11 @@ test('changing a setting leaves stored credentials byte-for-byte unchanged, even
     SAVED_CREDENTIALS.forEach((value) => undecryptable.add(value));
 
     config.setMpvVolume(80);
-    config.setExitMode('minimize');
+    config.set('nasLocalProxy', true);
 
     const after = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    assert.deepEqual(after, { ...before, mpvVolume: 80, exitMode: 'minimize' });
-    assert.equal(config.getMpvVolume(), 80);
+    assert.deepEqual(after, { ...before, mpvVolume: 80, nasProxyEnabled: true });
+    assert.equal(config.mpvVolume(), 80);
 });
 
 test('a setting written while a login save is encrypting survives the save', async (t) => {

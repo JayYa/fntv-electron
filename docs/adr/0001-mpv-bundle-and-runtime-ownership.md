@@ -10,9 +10,9 @@
 
 ## 播放归属字段
 
-旧字段 `hideOriginalPlayButton` 继续表示 MPV 是否接管播放，不改名，以兼容已有配置。主进程和 preload 共用一个判断函数，避免缺失值和超时回退再次不一致。
+旧字段 `hideOriginalPlayButton` 继续表示 MPV 是否接管播放，不改名，以兼容已有配置。只有主进程的用户偏好 module 解析它，preload 和登录页只收到布尔值，避免缺失值和超时回退再次不一致。
 
-这个决策当初写的是“只有字面量 `true` 启用，缺失值走网页端自带播放器”。v2.6.2（`f9cf723`）已改回：缺失值和 `true` 都启用 MPV，用户明确关闭的选择保持不变。其它值（字符串、数字等）不按真值处理，一律算关闭（`src/modules/fn_config/playbackPreference.ts`）。以当前代码为准。
+这个决策当初写的是“只有字面量 `true` 启用，缺失值走网页端自带播放器”。v2.6.2（`f9cf723`）已改回：缺失值和 `true` 都启用 MPV，用户明确关闭的选择保持不变。其它值（字符串、数字等）不按真值处理，一律算关闭（`src/modules/fn_config/preferences.ts`）。以当前代码为准。
 
 ## Proxy 密钥持久化
 

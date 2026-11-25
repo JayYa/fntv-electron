@@ -91,7 +91,7 @@ test('the feed goes through the built-in relay when the app download proxy is on
         config: { downloadProxyEnabled: true },
         dialogResponse: clicking({ 发现新版本: '下载并安装' }),
     });
-    const { DEFAULT_DOWNLOAD_PROXY_URL } = require('../dest/modules/fn_config/settings.js');
+    const { DEFAULT_DOWNLOAD_PROXY_URL } = require('../dest/modules/fn_config/preferences.js');
 
     await checker.autoCheckForUpdates();
     await waitFor(() => updater.feeds.length === 1);

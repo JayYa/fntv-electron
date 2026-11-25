@@ -8,7 +8,7 @@ import { bindTaskbarProgress } from './common/taskbarProgress';
 import { manageMainWindow, showMainWindow } from './common/closeBehavior';
 import * as log from '../modules/logger';
 import { getMainWindow } from './common/mainwin';
-import { restoreAtStartup } from './common/currentLogin';
+import { reloadWebUiOnMpvPlaybackChange, restoreAtStartup } from './common/currentLogin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
 import { platformBehavior } from '../public/platform';
@@ -65,6 +65,8 @@ if (!gotTheLock) {
             winctrl.setupFullScreenToggle(mainWindow);
 
             winctrl.setupWindowShowEvents(mainWindow);
+
+            reloadWebUiOnMpvPlaybackChange(() => mainWindow);
 
             await restoreAtStartup(mainWindow);
 

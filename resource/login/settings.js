@@ -1,4 +1,4 @@
-/* exported initVersionInfo, initProxySettings */
+/* exported initVersionInfo, initPreferences */
 
 function initVersionInfo() {
     ipcRenderer.send('get-version');
@@ -32,9 +32,9 @@ ipcRenderer.on('version-info', (event, data) => {
     }
 });
 
-function initProxySettings() {
+function initPreferences() {
     ipcRenderer.send('get-download-proxy');
-    ipcRenderer.send('get-play-button-config');
+    ipcRenderer.send('get-mpv-playback');
 }
 
 function toggleProxyPanel() {
@@ -45,11 +45,11 @@ function closeProxyPanel() {
     proxyPanel.classList.remove('show');
 }
 
-async function requestSaveSettings(downloadProxy, playButtonConfig) {
+async function requestSavePreferences(downloadProxy, mpvPlaybackRequest) {
     try {
         const results = await Promise.all([
             ipcRenderer.invoke('set-download-proxy', downloadProxy),
-            ipcRenderer.invoke('set-play-button-config', playButtonConfig),
+            ipcRenderer.invoke('set-mpv-playback', mpvPlaybackRequest),
         ]);
         const failed = results.find((result) => !result || !result.success);
         return failed ? failed.error || '未知错误' : null;
@@ -59,19 +59,19 @@ async function requestSaveSettings(downloadProxy, playButtonConfig) {
     }
 }
 
-async function saveProxySettings() {
+async function savePreferences() {
     if (proxySaveBtn.disabled) return;
     const downloadProxy = {
         enabled: proxyEnabledSwitch.checked,
         proxyUrl: proxyUrlInput.value.trim(),
     };
-    const playButtonConfig = { hideOriginalPlayButton: hideOriginalPlayButtonSwitch.checked };
+    const mpvPlaybackRequest = { mpvPlayback: mpvPlaybackSwitch.checked };
 
     const originalText = proxySaveBtn.textContent;
     proxySaveBtn.textContent = '保存中...';
     proxySaveBtn.disabled = true;
 
-    const failure = await requestSaveSettings(downloadProxy, playButtonConfig);
+    const failure = await requestSavePreferences(downloadProxy, mpvPlaybackRequest);
 
     proxySaveBtn.textContent = originalText;
     proxySaveBtn.disabled = false;
@@ -87,7 +87,7 @@ async function saveProxySettings() {
 
 proxySettingsBtn.addEventListener('click', toggleProxyPanel);
 proxyCloseBtn.addEventListener('click', closeProxyPanel);
-proxySaveBtn.addEventListener('click', saveProxySettings);
+proxySaveBtn.addEventListener('click', savePreferences);
 
 document.addEventListener('click', (e) => {
     if (!proxyPanel.contains(e.target) && !proxySettingsBtn.contains(e.target) && !customMessage.contains(e.target)) {
@@ -103,8 +103,8 @@ ipcRenderer.on('download-proxy-info', (event, data) => {
     }
 });
 
-ipcRenderer.on('play-button-config-info', (event, data) => {
+ipcRenderer.on('mpv-playback-info', (event, data) => {
     if (data) {
-        hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton !== false;
+        mpvPlaybackSwitch.checked = data.mpvPlayback !== false;
     }
 });

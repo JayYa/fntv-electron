@@ -7,15 +7,15 @@ import type { LoginPageApi } from './core/types';
 const SEND_CHANNELS = new Set([
     'delete-history-item', 'clear-history', 'get-config',
     'get-history-credentials', 'get-current-access-code',
-    'get-version', 'get-download-proxy', 'get-play-button-config',
+    'get-version', 'get-download-proxy', 'get-mpv-playback',
 ]);
 const RECEIVE_CHANNELS = new Set([
     'config-data', 'history-credentials', 'current-access-code',
     'history-item-deleted',
-    'version-info', 'update-status', 'download-proxy-info', 'play-button-config-info',
+    'version-info', 'update-status', 'download-proxy-info', 'mpv-playback-info',
 ]);
 const INVOKE_CHANNELS = new Set([
-    'open-external', 'login', 'check-update', 'set-download-proxy', 'set-play-button-config',
+    'open-external', 'login', 'check-update', 'set-download-proxy', 'set-mpv-playback',
 ]);
 type PageListener = (...args: unknown[]) => void;
 const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();
