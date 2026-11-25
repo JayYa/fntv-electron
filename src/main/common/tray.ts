@@ -43,7 +43,7 @@ function mpvCapabilityItems(): Electron.MenuItemConstructorOptions[] {
     return [{ label: 'MPV 插件需要更新，片头片尾跳过等功能可能不可用（详见日志）', enabled: false }];
 }
 
-async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
+async function createPreferencesSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
     const proxyConfig = preferences.get('appDownloadProxy');
     const mpvEnabled = preferences.get('mpvPlayback');
     const nasProxyEnabled = preferences.get('nasLocalProxy');
@@ -136,7 +136,7 @@ async function updateTrayMenu(): Promise<void> {
     const menuTemplate: Electron.MenuItemConstructorOptions[] = [
         {
             label: '设置',
-            submenu: await createSettingsSubmenu(mainWindow)
+            submenu: await createPreferencesSubmenu(mainWindow)
         },
         {
             type: 'separator'

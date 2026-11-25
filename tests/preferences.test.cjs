@@ -99,3 +99,16 @@ test('clearing the user-chosen MPV removes it from the config file', (t) => {
     assert.equal('mpvPlayerPath' in stored(), false);
     assert.deepEqual(changes, ['userMpvPath']);
 });
+
+test('a subscriber that throws neither fails the save nor keeps later subscribers from hearing it', (t) => {
+    const { preferences, changes } = setup(t);
+    const later = [];
+    preferences.onChange(() => { throw new Error('reload failed'); });
+    preferences.onChange((name) => later.push(name));
+
+    assert.doesNotThrow(() => preferences.set('nasLocalProxy', true));
+
+    assert.equal(preferences.get('nasLocalProxy'), true);
+    assert.deepEqual(changes, ['nasLocalProxy']);
+    assert.deepEqual(later, ['nasLocalProxy']);
+});

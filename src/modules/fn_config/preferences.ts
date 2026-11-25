@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { platformBehavior } from '../../public/platform';
 import type { CloseBehavior, CloseBehaviorSetting } from '../../public/platform/shared';
+import * as log from '../logger';
 import { type StoredConfig, readConfigFile, usableHistory, writeConfigFile } from './configFile';
 
 export interface AppDownloadProxy {
@@ -99,7 +100,13 @@ export function set<K extends PreferenceName>(name: K, value: Preferences[K]): v
     preference.write(config, value);
     writeConfigFile(config);
     if (isDeepStrictEqual(before, preference.read(config))) return;
-    for (const listener of listeners) listener(name);
+    for (const listener of listeners) {
+        try {
+            listener(name);
+        } catch (error) {
+            log.error(`处理用户偏好 ${name} 的变化失败:`, error);
+        }
+    }
 }
 
 export function onChange(listener: (name: PreferenceName) => void): () => void {
@@ -107,11 +114,11 @@ export function onChange(listener: (name: PreferenceName) => void): () => void {
     return () => listeners.delete(listener);
 }
 
+const clampVolume = (volume: number): number => Math.min(100, Math.max(0, Math.round(volume)));
+
 export function mpvVolume(): number {
     const volume = readStoredConfig().mpvVolume;
-    return typeof volume === 'number' && Number.isFinite(volume)
-        ? Math.min(100, Math.max(0, Math.round(volume)))
-        : 70;
+    return typeof volume === 'number' && Number.isFinite(volume) ? clampVolume(volume) : 70;
 }
 
 export function setMpvVolume(volume: number): void {
@@ -119,7 +126,7 @@ export function setMpvVolume(volume: number): void {
         throw new Error('MPV音量必须是有限数值');
     }
     const config = readStoredConfig();
-    config.mpvVolume = Math.min(100, Math.max(0, Math.round(volume)));
+    config.mpvVolume = clampVolume(volume);
     writeConfigFile(config);
 }
 

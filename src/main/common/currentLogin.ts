@@ -7,7 +7,7 @@ import * as preferences from '../../modules/fn_config/preferences';
 import * as log from '../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
 import { AccessCodeVerificationError, establishAccessCodeSession, type AccessCodeSessionResult } from './accessCodeSession';
-import { LOGIN_PAGE_PATH, isLoginPage } from './loginPage';
+import { LOGIN_PAGE_PATH, isLoginPageUrl } from './loginPage';
 import { WEB_UI_SESSION_PARTITION } from './webUiSession';
 
 export interface LoginError {
@@ -291,7 +291,7 @@ export function reloadWebUiOnMpvPlaybackChange(shownWindow: () => WebUiWindow | 
         const window = shownWindow();
         if (name !== 'mpvPlayback' || !window || window.isDestroyed()) return;
         const url = window.webContents.getURL();
-        if (!url || isLoginPage({ senderFrame: { url } })) return;
+        if (!url || isLoginPageUrl(url)) return;
         log.info('MPV 接管开关已改变，重新加载网页端');
         window.webContents.reloadIgnoringCache();
     });

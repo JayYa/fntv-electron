@@ -7,11 +7,15 @@ type FrameEvent = {
     senderFrame?: { url: string } | null;
 };
 
-export function isLoginPage(event: FrameEvent): boolean {
+export function isLoginPageUrl(href: string): boolean {
     try {
-        const url = new URL(event.senderFrame?.url ?? '');
+        const url = new URL(href);
         return url.protocol === 'file:' && path.relative(LOGIN_PAGE_PATH, fileURLToPath(url)) === '';
     } catch {
         return false;
     }
+}
+
+export function isLoginPage(event: FrameEvent): boolean {
+    return isLoginPageUrl(event.senderFrame?.url ?? '');
 }

@@ -287,3 +287,16 @@ test('toggling MPV playback in the tray flips the saved preference', async (t) =
     await tray.clickAndWaitForMenu(MPV_PLAYBACK_ITEM);
     assert.equal(tray.preferences().get('mpvPlayback'), true);
 });
+
+for (const [name, prefix, changedTo] of [['mpvPlayback', MPV_PLAYBACK_ITEM, false], ['nasLocalProxy', 'NAS 中转', true]]) {
+    test(`after ${name} changed on the login page, clicking it in the tray flips the new value`, async (t) => {
+        const tray = setupTray(t);
+        await tray.createTray();
+        await tray.changeElsewhere(name, changedTo);
+
+        await tray.clickAndWaitForMenu(prefix);
+
+        assert.equal(tray.preferences().get(name), !changedTo);
+        assert.equal(tray.item(prefix).checked, !changedTo);
+    });
+}

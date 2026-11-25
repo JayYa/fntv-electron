@@ -1,6 +1,6 @@
 window.addEventListener('DOMContentLoaded', function () {
     loadConfigData();
     initVersionInfo();
-    initProxySettings();
+    initPreferences();
     domainInput.focus();
 });
