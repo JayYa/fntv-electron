@@ -22,7 +22,7 @@
 
 ## 进程边界
 
-- 新建窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnIdOauthWindow.ts`）。
+- 新建窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainwin.ts`、`fnIdLogin.ts`）。
 - preload 在沙箱里运行，只能 `require('electron')`。需要 `fs`、`path`、`process` 或 `electron.shell` 时走主进程 IPC。
 - 新增页面可用的 IPC 频道时加进 `src/preload/loginPageApi.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
 - `registerHandler` 已经捕获并记录 IPC 处理器的同步和异步错误，处理器只在需要告诉渲染进程失败时写 `try`/`catch`（`src/main/handlers/core/ipcHandler.ts`）。

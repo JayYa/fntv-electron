@@ -8,7 +8,7 @@ import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog } from '../../../modules/cert_trust';
 import { isFnId } from '../../../public/fnId';
-import { handleFnIdLogin } from './fnid_login';
+import { handleFnIdLogin } from '../core/fnIdLogin';
 import { establishNewLogin, type IssuedToken, type LoginReply } from '../../common/currentLogin';
 
 interface LoginData {
@@ -23,8 +23,6 @@ interface HistoryItem {
     domain: string;
     account: string;
 }
-
-let fnIdLoginInProgress = false;
 
 async function handleGetConfig(event: IpcMainEvent): Promise<void> {
     try {
@@ -154,20 +152,8 @@ async function handleLogin(_event: IpcMainInvokeEvent, loginData: LoginData): Pr
     }
 
     if (isFnId(loginData.domain)) {
-        if (fnIdLoginInProgress) {
-            return {
-                ok: false,
-                error: { title: 'FN ID 登录进行中', message: '请先在已打开的 FN Connect 窗口中完成或取消登录。' },
-            };
-        }
-
         log.info('检测到 FN ID 格式，使用 FN Connect OAuth 登录');
-        fnIdLoginInProgress = true;
-        try {
-            return await handleFnIdLogin(loginData);
-        } finally {
-            fnIdLoginInProgress = false;
-        }
+        return handleFnIdLogin(loginData);
     }
 
     const accessCode = loginData.accessCode?.trim() || '';

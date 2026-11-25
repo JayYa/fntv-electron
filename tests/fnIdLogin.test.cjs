@@ -237,6 +237,35 @@ test('closing the FN Connect window ends the login with an error for the login p
     });
 });
 
+test('a second FN ID login while one is open is refused without opening another window', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+
+    assert.deepEqual(await login.loginAgain(), {
+        ok: false,
+        error: { title: 'FN ID 登录进行中', message: '请先在已打开的 FN Connect 窗口中完成或取消登录。' },
+    });
+    assert.equal(login.windowsOpened(), 1);
+});
+
+test('a token cookie and an authorization code arriving together establish the current login once', async (t) => {
+    const login = setupLogin(t);
+    await login.start();
+    login.navigate('will-navigate', `${NAS}/v`);
+    await login.finishLoad(`${NAS}/v`);
+    await login.bridge(sysConfig(NAS));
+    const { ApiService } = require('../dest/modules/fn_api/api.js');
+    t.mock.method(ApiService.prototype, 'auth', async () => ({ success: true, data: { token: 'code-token' } }));
+
+    await Promise.all([
+        login.tokenCookieChanged(),
+        login.bridge({ type: 'Response', url: `${NAS}/oauthapi/authorize`, code: 'auth-code' }),
+    ]);
+
+    assert.deepEqual(await login.finished, { ok: true });
+    assert.deepEqual(login.mainWindowLoaded(), [`${NAS}/v`]);
+});
+
 test('a token cookie change on another site does not start the login check', async (t) => {
     const login = setupLogin(t);
     await login.start();

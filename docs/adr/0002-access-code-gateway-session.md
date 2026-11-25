@@ -28,7 +28,7 @@ FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离�
 
 确认后的跳转沿用上面的重定向规则：只允许同主机，不允许 HTTPS 降级到 HTTP。例外是 NAS 在 `sys/config` 里报告的 `nas_oauth.url`，它可以换主机，但同样不能降级；不满足时留在当前 origin。
 
-页面信任判断的细节（`fnIdTrust.ts`、`fnIdOauthWindow.ts`）：
+页面信任判断的细节（`fnIdTrust.ts`、`fnIdLogin.ts`）：
 
 - FN Connect 返回的 NAS 地址可能是局域网 IP、公网 IP、DDNS 或中继，无法预先列白名单，所以按上面的“第一个地址”确认目标，之后只有这个 origin 能拿到凭据。`5ddd.com/{fnId}` 路径下的页面视同 NAS 页面（`fnConnect.ts`）。FN Connect 停在 `5ddd.com/{fnId}` 时，API 的 base URL 要保留 FN ID 这段路径（`resolveFnConnectBaseUrl`）。
 - FN Connect 只认 HTTPS 的 `5ddd.com`、`www.5ddd.com` 和 `check.fnos.net`：离开这些页面后的第一个地址会被确认为目标，明文页面的跳转可以被篡改。`check.fnos.net` 是旧版 NAS 的探测页，它的 HTTP 地址因此被拒绝，旧版 NAS 不再支持 FN ID 登录（#57）。FN Connect 页脚的外链（`fnnas.com` 等）不是 NAS 地址。

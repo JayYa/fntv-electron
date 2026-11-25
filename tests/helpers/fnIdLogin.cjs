@@ -24,10 +24,12 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
     let cookieSetFails = false;
     let oauthWindow = null;
     let mainWindow = null;
+    let windowsOpened = 0;
 
     class FakeBrowserWindow extends EventEmitter {
         constructor() {
             super();
+            windowsOpened += 1;
             if (oauthWindow) mainWindow = this;
             else oauthWindow = this;
             this.loaded = [];
@@ -114,9 +116,10 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         };
     };
 
-    const { handleFnIdLogin } = require('../../dest/main/handlers/plugins/fnid_login.js');
+    const { handleFnIdLogin } = require('../../dest/main/handlers/core/fnIdLogin.js');
     const { readCurrentLogin } = require('../../dest/modules/fn_config/loginStore.js');
-    const finished = handleFnIdLogin({ domain: 'demo123', username: 'alice', password: PASSWORD, accessCode });
+    const loginData = { domain: 'demo123', username: 'alice', password: PASSWORD, accessCode };
+    const finished = handleFnIdLogin(loginData);
 
     t.after(async () => {
         oauthWindow?.close();
@@ -135,6 +138,8 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         cookieSets,
         refuseCookies() { cookieSetFails = true; },
         finished,
+        loginAgain: () => handleFnIdLogin(loginData),
+        windowsOpened: () => windowsOpened,
         readCurrentLogin,
         mainWindowLoaded: () => mainWindow?.loaded ?? [],
         async start() {
