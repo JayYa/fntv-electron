@@ -28,7 +28,7 @@ function setup(t, { userMpvPath, isPackaged = false, userDirsError, withMpvHome 
         platform: 'win32',
         env: withMpvHome ? { MPV_HOME: mpvHome } : {},
         appPaths: () => (isPackaged
-            ? { appPath: path.join(root, 'resources', 'app.asar'), execPath: path.join(root, 'FNMedia.exe'), resourcesPath: path.join(root, 'resources'), isPackaged }
+            ? { appPath: path.join(root, 'Resources', 'app.asar'), execPath: path.join(root, 'MacOS', 'FNMedia'), resourcesPath: path.join(root, 'Resources'), isPackaged }
             : { appPath: root, execPath: path.join(root, 'electron.exe'), resourcesPath: path.join(root, 'resources'), isPackaged }),
         userDirs: () => {
             if (userDirsError) throw new Error(userDirsError);
@@ -61,9 +61,9 @@ test('a user-chosen MPV is started without a config dir', (t) => {
     assert.deepEqual(runtime.program(), { path: 'E:\\tools\\mpv\\mpv.exe', bundled: false, args: [] });
 });
 
-test('the packaged bundled MPV and portable config are found next to the application executable', (t) => {
+test('the packaged bundled MPV is found next to the executable and the portable config next to the resources directory', (t) => {
     const { root, mpvHome, runtime } = setup(t, { isPackaged: true });
-    assert.equal(runtime.program().path, path.join(root, 'third_party', 'fntv-mpv', 'mpv.exe'));
+    assert.equal(runtime.program().path, path.join(root, 'MacOS', 'third_party', 'fntv-mpv', 'mpv.exe'));
 
     writeArchive(path.join(root, 'third_party'), 'fntv-mpv', { files: { 'mpv.conf': 'include="~~/fntv/defaults.conf"\n' } });
     runtime.syncAtStartup();
@@ -194,15 +194,13 @@ test('deleting a pending update notifies listeners and the count follows', async
     assert.equal(app.runtime.userConfig().pendingUpdates, 0);
 });
 
-test('a pending update deleted right after it was counted still notifies listeners', async (t) => {
+test('listeners are notified once the watch starts, even without a file event, so a deletion before it took effect is recounted', async (t) => {
     const app = setup(t);
-    writeTree(app.mpvHome, { 'input.conf.fntv-new': 'new' });
+    fs.mkdirSync(app.mpvHome, { recursive: true });
     let changes = 0;
     app.runtime.onPendingUpdatesChange(() => { changes += 1; });
-    assert.equal(app.runtime.userConfig().pendingUpdates, 1);
-    fs.rmSync(path.join(app.mpvHome, 'input.conf.fntv-new'));
+    assert.equal(app.runtime.userConfig().pendingUpdates, 0);
 
     await waitFor(() => changes > 0);
-    assert.ok(changes > 0);
-    assert.equal(app.runtime.userConfig().pendingUpdates, 0);
+    assert.equal(changes, 1);
 });

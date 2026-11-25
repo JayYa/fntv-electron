@@ -40,7 +40,7 @@
 
 ## 用户配置同步
 
-入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvConfig.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
+入口是 `synchronizeMpvConfig`（`src/main/common/mpvConfigSync/sync.ts`），按 MPV 归档根目录的清单 `fntv-manifest.json`（`resolveManifestPath`，便携配置的上一级）同步。客户端认识的清单格式版本是 `SUPPORTED_MANIFEST_FORMAT_VERSIONS`（`manifest.ts`）。返回结构化结果，`mpvRuntime.ts` 用 `mpvConfigSyncLogLines`（`log.ts`）按文件写日志，未变的文件只计数。
 
 整体跳过时什么都不改，也不写安装记录：
 
@@ -79,7 +79,7 @@
 
 ### 能力检查
 
-同步之后 `mpvConfig.ts` 调 `checkMpvCapabilities`（`src/main/common/mpvConfigSync/capabilities.ts`），把用户配置里实际装上的 `provides` 和客户端的 `requires`（同一文件的 `MPV_REQUIRED_CAPABILITIES`，构建期断言也用 `unmetCapabilities` 和 `describeUnmetCapability`）比较：
+同步之后 `mpvRuntime.ts` 调 `checkMpvCapabilities`（`src/main/common/mpvConfigSync/capabilities.ts`），把用户配置里实际装上的 `provides` 和客户端的 `requires`（同一文件的 `MPV_REQUIRED_CAPABILITIES`，构建期断言也用 `unmetCapabilities` 和 `describeUnmetCapability`）比较：
 
 - 平时读用户配置的安装记录。本次同步失败时旧记录仍有效；没有记录（同步从没成功过）一律不满足。
 - 同步结果是 `same-directory` 时没有安装记录，读归档清单；清单读不到也算不满足。
