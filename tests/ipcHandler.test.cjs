@@ -50,28 +50,15 @@ test('a config read failure in a get handler is logged instead of escaping the m
     loadConfigPlugin().init();
 
     const event = fakeEvent();
-    assert.doesNotThrow(() => ipcMain.emit('get-nas-proxy', event));
+    assert.doesNotThrow(() => ipcMain.emit('get-mpv-playback', event));
 
     assert.deepEqual(event.replies, []);
-    assert.match(logText(), /get-nas-proxy/);
-});
-
-test('a config write failure still reaches the renderer as a failed reply', (t) => {
-    const { ipcMain, configPath, loadConfigPlugin } = setupIpc(t);
-    fs.mkdirSync(configPath);
-    loadConfigPlugin().init();
-
-    const event = fakeEvent();
-    ipcMain.emit('set-nas-proxy', event, { nasProxyEnabled: true });
-
-    assert.equal(event.replies.length, 1);
-    assert.equal(event.replies[0].channel, 'nas-proxy-set');
-    assert.equal(event.replies[0].payload.success, false);
+    assert.match(logText(), /get-mpv-playback/);
 });
 
 for (const [channel, payload] of [
     ['set-download-proxy', { enabled: true, proxyUrl: 'https://relay.example.test/' }],
-    ['set-play-button-config', { hideOriginalPlayButton: true }],
+    ['set-mpv-playback', { mpvPlayback: true }],
 ]) {
     test(`a config write failure in ${channel} answers the login page with a failure`, async (t) => {
         const { invoke, configPath, loadConfigPlugin } = setupIpc(t);
@@ -82,6 +69,22 @@ for (const [channel, payload] of [
 
         assert.equal(result.success, false);
         assert.equal(typeof result.error, 'string');
+    });
+}
+
+for (const [channel, payload] of [
+    ['set-download-proxy', { enabled: 'yes', proxyUrl: 'https://relay.example.test/' }],
+    ['set-mpv-playback', { mpvPlayback: 'false' }],
+    ['set-mpv-playback', undefined],
+]) {
+    test(`${channel} refuses ${JSON.stringify(payload)} and writes nothing`, async (t) => {
+        const { invoke, configPath, loadConfigPlugin } = setupIpc(t);
+        loadConfigPlugin().init();
+
+        const result = await invoke(channel, payload);
+
+        assert.equal(result.success, false);
+        assert.equal(fs.existsSync(configPath), false);
     });
 }
 

@@ -1,5 +1,4 @@
 import { ipcRenderer } from 'electron';
-import { isMpvPlaybackEnabled } from '../../modules/fn_config/playbackPreference';
 import { HookType, registerHook } from './hooks';
 import logger from './logger';
 import { cardPlayButtonEntry, continueWatchingMenuEntry, detailMainButtonEntry, type PlayEntry } from './playEntries';
@@ -9,18 +8,18 @@ const PREFERENCE_TIMEOUT_MS = 2000;
 function readMpvPlaybackPreference(): Promise<boolean> {
     return new Promise((resolve) => {
         const timeout = setTimeout(() => {
-            ipcRenderer.off('play-button-config-info', handler);
+            ipcRenderer.off('mpv-playback-info', handler);
             resolve(true);
         }, PREFERENCE_TIMEOUT_MS);
 
-        const handler = (_event: Electron.IpcRendererEvent, data?: { hideOriginalPlayButton?: unknown }) => {
+        const handler = (_event: Electron.IpcRendererEvent, data?: { mpvPlayback?: unknown }) => {
             clearTimeout(timeout);
-            ipcRenderer.off('play-button-config-info', handler);
-            resolve(isMpvPlaybackEnabled(data?.hideOriginalPlayButton));
+            ipcRenderer.off('mpv-playback-info', handler);
+            resolve(data?.mpvPlayback !== false);
         };
 
-        ipcRenderer.once('play-button-config-info', handler);
-        ipcRenderer.send('get-play-button-config');
+        ipcRenderer.once('mpv-playback-info', handler);
+        ipcRenderer.send('get-mpv-playback');
     });
 }
 

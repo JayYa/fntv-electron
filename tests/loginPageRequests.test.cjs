@@ -141,12 +141,12 @@ test('saving settings closes the panel only after both settings are saved', asyn
 
     openSettings(page);
     assert.equal(page.input('proxySaveBtn').disabled, true);
-    assert.deepEqual(page.pending().map(({ channel }) => channel).sort(), ['set-download-proxy', 'set-play-button-config']);
+    assert.deepEqual(page.pending().map(({ channel }) => channel).sort(), ['set-download-proxy', 'set-mpv-playback']);
 
     await page.resolve('set-download-proxy', { success: true });
     assert.ok(page.input('proxyPanel').classList.contains('show'));
 
-    await page.resolve('set-play-button-config', { success: true });
+    await page.resolve('set-mpv-playback', { success: true });
     assert.equal(page.input('proxyPanel').classList.contains('show'), false);
     assert.equal(page.input('proxySaveBtn').disabled, false);
     assert.equal(shownMessage(page), null);
@@ -158,7 +158,7 @@ test('when a setting fails to save, the panel stays open, the button comes back 
 
     openSettings(page);
     await page.resolve('set-download-proxy', { success: true });
-    await page.resolve('set-play-button-config', { success: false, error: 'disk full' });
+    await page.resolve('set-mpv-playback', { success: false, error: 'disk full' });
 
     assert.ok(page.input('proxyPanel').classList.contains('show'));
     assert.equal(page.input('proxySaveBtn').disabled, false);
@@ -172,7 +172,7 @@ test('when a settings handler throws, the panel stays open and the failure is sh
 
     openSettings(page);
     await page.reject('set-download-proxy', new Error('boom'));
-    await page.resolve('set-play-button-config', { success: true });
+    await page.resolve('set-mpv-playback', { success: true });
 
     assert.ok(page.input('proxyPanel').classList.contains('show'));
     assert.equal(page.input('proxySaveBtn').disabled, false);

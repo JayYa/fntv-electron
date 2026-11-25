@@ -19,10 +19,10 @@ function fakeIpcRenderer({ mpvPlayback }) {
         ipcRenderer: {
             send(channel, ...args) {
                 sent.push({ channel, args });
-                if (channel !== 'get-play-button-config' || mpvPlayback === 'no reply') return;
-                const reply = { hideOriginalPlayButton: mpvPlayback };
+                if (channel !== 'get-mpv-playback' || mpvPlayback === 'no reply') return;
+                const reply = { mpvPlayback };
                 queueMicrotask(() => {
-                    for (const listener of listeners.get('play-button-config-info') ?? []) listener({}, reply);
+                    for (const listener of listeners.get('mpv-playback-info') ?? []) listener({}, reply);
                 });
             },
             on(channel, listener) {

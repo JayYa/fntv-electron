@@ -1,33 +1,12 @@
 import { app, dialog, Notification, type BrowserWindow } from 'electron';
-import * as settings from '../../modules/fn_config/settings';
+import * as preferences from '../../modules/fn_config/preferences';
 import * as log from '../../modules/logger';
 import { isQuitting } from '../../modules/quit/quitCoordinator';
 import { platformBehavior } from '../../public/platform';
-import type { CloseBehavior, CloseBehaviorDialog, CloseBehaviorSetting } from '../../public/platform/shared';
+import type { CloseBehavior, CloseBehaviorDialog } from '../../public/platform/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let showTrayBalloon: ((content: string) => void) | null = null;
-
-const STORED_CLOSE_BEHAVIOR = {
-    macCloseAction: { hide: 'minimize', quit: 'quit', ask: 'ask' },
-    exitMode: { hide: 'minimize', quit: 'direct', ask: 'ask' },
-} as const satisfies Record<CloseBehaviorSetting, Record<CloseBehavior, string>>;
-
-const CLOSE_BEHAVIORS: CloseBehavior[] = ['hide', 'quit', 'ask'];
-
-function readCloseBehavior(): CloseBehavior {
-    const setting = platformBehavior().closeBehaviorSetting;
-    const stored: string = setting === 'macCloseAction' ? settings.getMacCloseAction() : settings.getExitMode();
-    return CLOSE_BEHAVIORS.find(behavior => STORED_CLOSE_BEHAVIOR[setting][behavior] === stored) ?? 'ask';
-}
-
-function saveCloseBehavior(behavior: CloseBehavior): void {
-    if (platformBehavior().closeBehaviorSetting === 'macCloseAction') {
-        settings.setMacCloseAction(STORED_CLOSE_BEHAVIOR.macCloseAction[behavior]);
-    } else {
-        settings.setExitMode(STORED_CLOSE_BEHAVIOR.exitMode[behavior]);
-    }
-}
 
 async function askCloseBehavior(window: BrowserWindow, text: CloseBehaviorDialog, withRemember: boolean): Promise<{ behavior: CloseBehavior; remember: boolean } | null> {
     const labels = [...text.buttons.map(button => button.label), '取消'];
@@ -47,7 +26,7 @@ async function askCloseBehavior(window: BrowserWindow, text: CloseBehaviorDialog
 
 function noticeHidden(): void {
     const notice = platformBehavior().hideNotice;
-    if (!notice || settings.getTrayNotificationShown()) return;
+    if (!notice || preferences.trayNotificationShown()) return;
     if (notice.shownBy === 'notification') {
         if (Notification.isSupported()) {
             new Notification({ title: '飞牛影视', body: notice.body, silent: false }).show();
@@ -56,7 +35,7 @@ function noticeHidden(): void {
         if (!showTrayBalloon) return;
         showTrayBalloon(notice.body);
     }
-    settings.setTrayNotificationShown(true);
+    preferences.markTrayNotificationShown();
 }
 
 function hide(window: BrowserWindow): void {
@@ -66,11 +45,11 @@ function hide(window: BrowserWindow): void {
 }
 
 async function handleClose(window: BrowserWindow): Promise<void> {
-    let behavior = readCloseBehavior();
+    let behavior = preferences.get('closeBehavior');
     if (behavior === 'ask') {
         const choice = await askCloseBehavior(window, platformBehavior().closeBehaviorText.askOnClose, true);
         if (!choice) return;
-        if (choice.remember) saveCloseBehavior(choice.behavior);
+        if (choice.remember) preferences.set('closeBehavior', choice.behavior);
         behavior = choice.behavior;
     }
     if (behavior === 'hide') {
@@ -108,7 +87,7 @@ export function closeBehaviorMenuItem(): { label: string; click: () => Promise<v
         async click() {
             if (!mainWindow) return;
             const choice = await askCloseBehavior(mainWindow, text.settings, false);
-            if (choice) saveCloseBehavior(choice.behavior);
+            if (choice) preferences.set('closeBehavior', choice.behavior);
         },
     };
 }

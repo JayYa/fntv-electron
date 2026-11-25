@@ -1,7 +1,7 @@
 import { dialog, IpcMainEvent } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
-import * as settings from '../../../modules/fn_config/settings';
+import * as preferences from '../../../modules/fn_config/preferences';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { checkLibraryPageUrl } from '../../common/utils';
@@ -49,7 +49,7 @@ async function connect(): ReturnType<PlayDeps['connect']> {
                 domain: baseUrl,
                 accessCookie,
                 skipVerify: trustedHost,
-                useNasLocal: settings.getNasProxyEnabled(),
+                useNasLocal: preferences.get('nasLocalProxy'),
                 itemGuids,
             });
             return (itemGuid, sourceIndex) => createProxyPlaybackUrl(playback, itemGuid, sourceIndex);
@@ -68,12 +68,12 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
         '--force-window=immediate',
         '--border=no',
         '--network-timeout=180',
-        `--volume=${settings.getMpvVolume()}`,
+        `--volume=${preferences.mpvVolume()}`,
     ];
     return new ply.MpvPlayer({
         ...options,
         createMpvProcess: ply.mpvProcessFactory({ binary: program.path, args: extraArgs, debug: true }),
-        onVolumeChange: settings.setMpvVolume,
+        onVolumeChange: preferences.setMpvVolume,
     });
 }
 

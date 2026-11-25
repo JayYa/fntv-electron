@@ -19,7 +19,7 @@ test('an undecryptable token reads as logged out while other settings stay reada
     assert.equal(loaded.domain, 'https://nas.example');
     assert.equal(loaded.account, 'user');
     assert.equal(loaded.useHttps, true);
-    assert.equal(config.getMpvVolume(), 42);
+    assert.equal(config.mpvVolume(), 42);
     assert.equal((await readHistoryWithCredentials(config))[0].password, 'saved-password');
 });
 

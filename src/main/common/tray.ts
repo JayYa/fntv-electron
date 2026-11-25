@@ -5,11 +5,12 @@ import { mpvRuntime, type MpvUserConfig } from './mpvRuntime';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { closeBehaviorMenuItem, provideTrayBalloon, showMainWindow } from './closeBehavior';
 import * as log from '../../modules/logger';
-import * as settings from '../../modules/fn_config/settings';
+import * as preferences from '../../modules/fn_config/preferences';
 import { platformBehavior } from '../../public/platform';
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
+let stopWatchingPreferences: (() => void) | null = null;
 
 async function openMpvConfigDir(mainWindow: BrowserWindow | null, dir: string): Promise<void> {
     if (!fs.existsSync(dir)) {
@@ -43,10 +44,10 @@ function mpvCapabilityItems(): Electron.MenuItemConstructorOptions[] {
 }
 
 async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
-    const proxyConfig = settings.getAppDownloadProxyConfig();
-    const mpvEnabled = settings.getHideOriginalPlayButton();
-    const nasProxyEnabled = settings.getNasProxyEnabled();
-    const currentMpvPath = settings.getMpvPlayerPath();
+    const proxyConfig = preferences.get('appDownloadProxy');
+    const mpvEnabled = preferences.get('mpvPlayback');
+    const nasProxyEnabled = preferences.get('nasLocalProxy');
+    const currentMpvPath = preferences.get('userMpvPath');
     const programPath = mpvRuntime.program()?.path;
     const userConfig = mpvRuntime.userConfig();
     const mpvConfigDir = userConfig?.dir;
@@ -57,9 +58,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             type: 'checkbox',
             checked: proxyConfig.enabled,
             click: () => {
-                const newEnabled = !proxyConfig.enabled;
-                settings.setAppDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
-                updateTrayMenu();
+                const current = preferences.get('appDownloadProxy');
+                preferences.set('appDownloadProxy', { ...current, enabled: !current.enabled });
             }
         },
         {
@@ -69,13 +69,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             label: `使用 MPV 播放`,
             type: 'checkbox',
             checked: mpvEnabled,
-            click: () => {
-                settings.setHideOriginalPlayButton(!mpvEnabled);
-                updateTrayMenu();
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.reloadIgnoringCache();
-                }
-            }
+            click: () => preferences.set('mpvPlayback', !preferences.get('mpvPlayback')),
         },
         {
             type: 'separator'
@@ -84,11 +78,7 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             label: `NAS 中转 网盘/STRM: ${nasProxyEnabled ? '开启' : '关闭'}`,
             type: 'checkbox',
             checked: nasProxyEnabled,
-            click: () => {
-                const newEnabled = !nasProxyEnabled;
-                settings.setNasProxyEnabled(newEnabled);
-                updateTrayMenu();
-            }
+            click: () => preferences.set('nasLocalProxy', !preferences.get('nasLocalProxy')),
         },
         {
             type: 'separator'
@@ -109,10 +99,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
 
                     if (!result.canceled && result.filePaths.length > 0) {
                         const selectedPath = result.filePaths[0];
-                        settings.setMpvPlayerPath(selectedPath);
+                        preferences.set('userMpvPath', selectedPath);
                         log.info(`MPV 播放器路径已设置为: ${selectedPath}`);
-
-                        updateTrayMenu();
                     }
                 }
             }
@@ -121,10 +109,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             label: '清空 MPV 播放器路径',
             enabled: !!currentMpvPath,
             click: () => {
-                settings.setMpvPlayerPath('');
+                preferences.set('userMpvPath', undefined);
                 log.info('MPV 播放器路径已清空，将使用自动检测');
-
-                updateTrayMenu();
             }
         },
         {
@@ -220,15 +206,15 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
 
     tray.setToolTip('飞牛影视');
 
-    mpvRuntime.onPendingUpdatesChange(() => {
+    const refreshMenu = (): void => {
         updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
-    });
+    };
+    mpvRuntime.onPendingUpdatesChange(refreshMenu);
+    stopWatchingPreferences = preferences.onChange(refreshMenu);
 
     await updateTrayMenu();
 
-    getUpdateChecker().downloadProgress.onChange(() => {
-        updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
-    });
+    getUpdateChecker().downloadProgress.onChange(refreshMenu);
 
     tray.on(behavior.tray.restoreEvent as 'click', showMainWindow);
 
@@ -241,6 +227,8 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
 
 export function destroyTray(): void {
     mpvRuntime.stop();
+    stopWatchingPreferences?.();
+    stopWatchingPreferences = null;
     if (tray) {
         tray.destroy();
         tray = null;

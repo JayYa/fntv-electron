@@ -3,10 +3,11 @@ import { isTrusted } from '../../modules/cert_trust';
 import { clearAccessGrants, getAccessCookieHeader } from '../../modules/fn_api/accessGrant';
 import { ApiService } from '../../modules/fn_api/api';
 import * as loginStore from '../../modules/fn_config/loginStore';
+import * as preferences from '../../modules/fn_config/preferences';
 import * as log from '../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
 import { AccessCodeVerificationError, establishAccessCodeSession, type AccessCodeSessionResult } from './accessCodeSession';
-import { LOGIN_PAGE_PATH } from './loginPage';
+import { LOGIN_PAGE_PATH, isLoginPage } from './loginPage';
 import { WEB_UI_SESSION_PARTITION } from './webUiSession';
 
 export interface LoginError {
@@ -278,4 +279,20 @@ export async function currentConnection(): Promise<CurrentConnection> {
         accessCookie: getAccessCookieHeader(login.domain),
         trustedHost: isTrusted(login.domain),
     };
+}
+
+interface WebUiWindow {
+    isDestroyed(): boolean;
+    webContents: { getURL(): string; reloadIgnoringCache(): void };
+}
+
+export function reloadWebUiOnMpvPlaybackChange(shownWindow: () => WebUiWindow | null): () => void {
+    return preferences.onChange((name) => {
+        const window = shownWindow();
+        if (name !== 'mpvPlayback' || !window || window.isDestroyed()) return;
+        const url = window.webContents.getURL();
+        if (!url || isLoginPage({ senderFrame: { url } })) return;
+        log.info('MPV 接管开关已改变，重新加载网页端');
+        window.webContents.reloadIgnoringCache();
+    });
 }

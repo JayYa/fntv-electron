@@ -34,7 +34,7 @@ ipcRenderer.on('version-info', (event, data) => {
 
 function initProxySettings() {
     ipcRenderer.send('get-download-proxy');
-    ipcRenderer.send('get-play-button-config');
+    ipcRenderer.send('get-mpv-playback');
 }
 
 function toggleProxyPanel() {
@@ -45,11 +45,11 @@ function closeProxyPanel() {
     proxyPanel.classList.remove('show');
 }
 
-async function requestSaveSettings(downloadProxy, playButtonConfig) {
+async function requestSaveSettings(downloadProxy, mpvPlayback) {
     try {
         const results = await Promise.all([
             ipcRenderer.invoke('set-download-proxy', downloadProxy),
-            ipcRenderer.invoke('set-play-button-config', playButtonConfig),
+            ipcRenderer.invoke('set-mpv-playback', mpvPlayback),
         ]);
         const failed = results.find((result) => !result || !result.success);
         return failed ? failed.error || '未知错误' : null;
@@ -65,13 +65,13 @@ async function saveProxySettings() {
         enabled: proxyEnabledSwitch.checked,
         proxyUrl: proxyUrlInput.value.trim(),
     };
-    const playButtonConfig = { hideOriginalPlayButton: hideOriginalPlayButtonSwitch.checked };
+    const mpvPlayback = { mpvPlayback: mpvPlaybackSwitch.checked };
 
     const originalText = proxySaveBtn.textContent;
     proxySaveBtn.textContent = '保存中...';
     proxySaveBtn.disabled = true;
 
-    const failure = await requestSaveSettings(downloadProxy, playButtonConfig);
+    const failure = await requestSaveSettings(downloadProxy, mpvPlayback);
 
     proxySaveBtn.textContent = originalText;
     proxySaveBtn.disabled = false;
@@ -103,8 +103,8 @@ ipcRenderer.on('download-proxy-info', (event, data) => {
     }
 });
 
-ipcRenderer.on('play-button-config-info', (event, data) => {
+ipcRenderer.on('mpv-playback-info', (event, data) => {
     if (data) {
-        hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton !== false;
+        mpvPlaybackSwitch.checked = data.mpvPlayback !== false;
     }
 });

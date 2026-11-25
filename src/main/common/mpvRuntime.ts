@@ -2,7 +2,7 @@ import { app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as settings from '../../modules/fn_config/settings';
+import * as preferences from '../../modules/fn_config/preferences';
 import * as logger from '../../modules/logger';
 import { checkMpvCapabilities, mpvCapabilityErrorMessage } from './mpvConfigSync/capabilities';
 import { acknowledgeConflicts } from './mpvConfigSync/installRecord';
@@ -176,7 +176,7 @@ export const mpvRuntime = createMpvRuntime({
         isPackaged: app.isPackaged,
     }),
     userDirs: () => ({ homeDir: os.homedir(), appDataDir: app.getPath('appData') }),
-    userMpvPath: settings.getMpvPlayerPath,
+    userMpvPath: () => preferences.get('userMpvPath'),
     askMergePrompt: askMergePromptWithDialog,
     openPath: target => shell.openPath(target),
 });
