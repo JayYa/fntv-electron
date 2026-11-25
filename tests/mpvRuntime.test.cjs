@@ -70,7 +70,9 @@ test('the packaged bundled MPV is found next to the executable and the portable 
     assert.equal(fs.readFileSync(path.join(mpvHome, 'mpv.conf'), 'utf8'), 'include="~~/fntv/defaults.conf"\n');
 });
 
-test('choosing an MPV with its own portable config moves the user config there', (t) => {
+const onWindowsHost = { skip: process.platform !== 'win32' && 'Windows paths only resolve on a Windows host' };
+
+test('choosing an MPV with its own portable config moves the user config there', onWindowsHost, (t) => {
     const app = setup(t, { withMpvHome: false });
     assert.equal(app.runtime.userConfig().dir, path.join(app.appData, 'mpv'));
 
