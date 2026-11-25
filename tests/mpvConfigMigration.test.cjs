@@ -2,33 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { resolveBundledMpvPath, resolvePortableConfigDir } = require('../dest/main/common/mpvConfigHelpers.js');
 const { resolveManifestPath } = require('../dest/main/common/mpvConfigSync/manifest.js');
 const { synchronizeMpvConfig } = require('../dest/main/common/mpvConfigSync/sync.js');
 const { mpvConfigSyncLogLines } = require('../dest/main/common/mpvConfigSync/log.js');
 const { writeArchive, writeTree, readTree, tempRoot } = require('./helpers/mpvManifestFixture.cjs');
-
-test('resolves the packaged mpv executable next to the application executable', () => {
-    assert.equal(
-        resolveBundledMpvPath({
-            appPath: path.join('C:', 'app', 'resources', 'app.asar'),
-            execPath: path.join('C:', 'app', 'FNMedia.exe'),
-            isPackaged: true,
-        }),
-        path.join('C:', 'app', 'third_party', 'fntv-mpv', 'mpv.exe'),
-    );
-});
-
-test('resolves packaged extraFiles next to the resources directory on every platform', () => {
-    assert.equal(
-        resolvePortableConfigDir({
-            appPath: path.join('C:', 'app', 'resources', 'app.asar'),
-            isPackaged: true,
-            resourcesPath: path.join('C:', 'app', 'resources'),
-        }),
-        path.join('C:', 'app', 'third_party', 'fntv-mpv', 'portable_config'),
-    );
-});
 
 test('finds the manifest at the archive root next to the portable config', () => {
     const portable = path.join('C:', 'app', 'third_party', 'fntv-mpv', 'portable_config');

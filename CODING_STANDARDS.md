@@ -13,7 +13,7 @@
 | `appId`（`com.qiaokes.fntv`） | `package.json` 的 `build` | 打包工具用它生成 macOS bundle id 和 Windows 安装标识。改了会变成另一个应用，而不是升级。 |
 | `~/.fntv` | `USER_DATA_PATH`（`src/public/constants.ts`） | 是 `userData` 目录，放 `config.json`、Chromium 会话和 `logs/`。改了等于丢配置。在 `app.setPath` 之前加载的模块用 `USER_DATA_PATH`，那时 `app.getPath('userData')` 还是 Electron 默认目录（`src/modules/logger/logger.ts`）。 |
 | `persist:fntv` | `WEB_UI_SESSION_PARTITION`（`src/main/common/webUiSession.ts`） | 网页端会话的分区，登录 Cookie 和访问码网关 Cookie 存在这里。改了用户要重新登录。 |
-| `third_party/fntv-mpv` | `package.json` 的 `extraFiles`、`mpvConfigHelpers.ts`、`build.yml` | 构建、打包和运行时都按这个路径找 MPV。 |
+| `third_party/fntv-mpv` | `package.json` 的 `extraFiles`、`mpvRuntime.ts`、`build.yml` | 构建、打包和运行时都按这个路径找 MPV。 |
 | `FNMedia_*` 产物名 | `package.json` 的 `artifactName` | `src/modules/updater/updateChecker.ts` 按这个前缀和 `_win_x64` 这类后缀匹配下载链接。 |
 | 更新源 `releases/latest/download/` | `package.json` 的 `build.publish`、`src/modules/updater/updateChecker.ts` | 已发的客户端按 `https://github.com/JayYa/fntv-electron/releases/latest/download/` 找应用内更新。改地址或换仓库，已发客户端就找不到新版本，只能手动升级（`tests/releaseGate.test.cjs`）。 |
 | `latest.yml`、`latest-linux.yml`、`latest-linux-arm64.yml` | electron-builder 生成，`build.yml` 核对 size 和 sha512 后上传，`release.yml` 发布前核对文件齐全 | 已发客户端里的 electron-updater 按平台和架构从更新源读这几个文件名：Windows 读 `latest.yml`，Linux x64 读 `latest-linux.yml`，Linux arm64 读 `latest-linux-arm64.yml`。Release 里缺一个或改了名，对应平台就收不到应用内更新（`tests/releaseGate.test.cjs`）。 |

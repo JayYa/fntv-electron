@@ -3,6 +3,7 @@ import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import * as winctrl from './common/winctrl';
 import { createTray, destroyTray } from './common/tray';
+import { mpvRuntime } from './common/mpvRuntime';
 import { bindTaskbarProgress } from './common/taskbarProgress';
 import { manageMainWindow, showMainWindow } from './common/closeBehavior';
 import * as log from '../modules/logger';
@@ -54,6 +55,8 @@ if (!gotTheLock) {
             listenForSystemShutdown(mainWindow);
 
             registerAllPlugins();
+
+            mpvRuntime.syncAtStartup();
 
             await createTray(mainWindow);
 

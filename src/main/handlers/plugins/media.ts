@@ -7,16 +7,16 @@ import * as log from '../../../modules/logger';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
 import { currentConnection } from '../../common/currentLogin';
-import { getCurrentMpvProgram, getMpvConfigDir } from './mpvConfig';
-import { MpvProgram, platformBehavior } from '../../../public/platform';
+import { type MpvLaunch, mpvRuntime } from '../../common/mpvRuntime';
+import { platformBehavior } from '../../../public/platform';
 import { createPlaybackSession } from '../../common/proxy';
 import { createProxyPlaybackUrl } from '../../common/proxySession';
 import { isPlayRequest } from '../../../modules/playback/playRequest';
 import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
 import * as playbackState from '../../../modules/playback/playbackState';
 
-function getProgramOrNotify(): MpvProgram | undefined {
-    const program = getCurrentMpvProgram();
+function getProgramOrNotify(): MpvLaunch | undefined {
+    const program = mpvRuntime.program();
     if (program) {
         log.info(`MPV 播放器路径: ${program.path}`);
         return program;
@@ -64,15 +64,12 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
     }
 
     const extraArgs = [
+        ...program.args,
         '--force-window=immediate',
         '--border=no',
         '--network-timeout=180',
         `--volume=${settings.getMpvVolume()}`,
     ];
-    if (program.bundled) {
-        extraArgs.push(`--config-dir=${getMpvConfigDir()}`);
-    }
-
     return new ply.MpvPlayer({
         ...options,
         createMpvProcess: ply.mpvProcessFactory({ binary: program.path, args: extraArgs, debug: true }),
