@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+const { useFakeElectron, useFakeModule } = require('./helpers/fakeElectron.cjs');
 
-const LINUX_MPV_LOCATIONS = ['/usr/bin/mpv', '/usr/local/bin/mpv', '/snap/bin/mpv', '/usr/games/mpv', '/opt/mpv/bin/mpv'];
+const BUNDLED = { path: 'C:\\app\\third_party\\fntv-mpv\\mpv.exe', bundled: true, args: [] };
 
-function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appDataError = '' } = {}) {
+function setupTray(t, { mpvHomeExists = true, openPathError = '', userConfigUnknown = false, mpvFound = true, capabilitiesSatisfied = true } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-tray-'));
     const mpvHome = path.join(testRoot, 'mpv-home');
     if (mpvHomeExists) fs.mkdirSync(mpvHome);
@@ -26,14 +26,11 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
         destroy() {}
     }
     const emptyImage = { isEmpty: () => true, resize() { return this; }, setTemplateImage() {} };
-    const electronMock = {
+    useFakeElectron(t, {
         app: {
             isPackaged: false,
             getAppPath() { return testRoot; },
-            getPath(name) {
-                if (name === 'appData' && appDataError) throw new Error(appDataError);
-                return paths[name];
-            },
+            getPath(name) { return paths[name]; },
             setPath(name, value) { paths[name] = value; },
             commandLine: { getSwitchValue() { return ''; } },
             getVersion() { return '0.0.0'; },
@@ -49,16 +46,28 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
         shell: {
             async openPath(target) { openedPaths.push(target); return openPathError; },
         },
-    };
+    }, { platform: 'win32' });
 
-    useFakeElectron(t, electronMock, { platform });
-    const originalMpvHome = process.env.MPV_HOME;
-    process.env.MPV_HOME = mpvHome;
+    const config = () => require('../dest/modules/fn_config/settings.js');
+    const runtime = {
+        pendingUpdates: 0,
+        listeners: [],
+        stopped: false,
+        program() {
+            const userPath = config().getMpvPlayerPath();
+            if (userPath) return { path: userPath, bundled: false, args: [] };
+            return mpvFound ? BUNDLED : undefined;
+        },
+        userConfig: () => (userConfigUnknown ? undefined : { dir: mpvHome, pendingUpdates: runtime.pendingUpdates }),
+        capabilitiesSatisfied: () => capabilitiesSatisfied,
+        onPendingUpdatesChange(listener) { runtime.listeners.push(listener); },
+        stop() { runtime.stopped = true; },
+    };
+    useFakeModule(t, './mpvRuntime', { mpvRuntime: runtime });
+
     let trayModule;
     t.after(() => {
         trayModule?.destroyTray();
-        if (originalMpvHome === undefined) delete process.env.MPV_HOME;
-        else process.env.MPV_HOME = originalMpvHome;
         fs.rmSync(testRoot, { recursive: true, force: true });
     });
 
@@ -68,31 +77,39 @@ function setupTray(t, { platform, mpvHomeExists = true, openPathError = '', appD
         assert.ok(found, `菜单里没有以“${prefix}”开头的项`);
         return found;
     };
-    const clickAndWaitForMenu = async (prefix) => {
-        const count = menus.length;
-        await item(prefix).click();
+    const waitForMenuAfter = async (count) => {
         for (let i = 0; i < 100 && menus.length === count; i++) {
             await new Promise((resolve) => setImmediate(resolve));
         }
-        assert.ok(menus.length > count, '点击后托盘菜单没有刷新');
+        assert.ok(menus.length > count, '托盘菜单没有刷新');
     };
 
     return {
-        testRoot,
         mpvHome,
+        runtime,
         messageBoxes,
         errorBoxes,
         openedPaths,
         openDialogResults,
-        config: () => require('../dest/modules/fn_config/settings.js'),
+        config,
         async createTray() {
             trayModule = require('../dest/main/common/tray.js');
             await trayModule.createTray({});
         },
+        destroyTray: () => trayModule.destroyTray(),
         settingsItems,
-        menuCount: () => menus.length,
         item,
-        clickAndWaitForMenu,
+        async clickAndWaitForMenu(prefix) {
+            const count = menus.length;
+            await item(prefix).click();
+            await waitForMenuAfter(count);
+        },
+        async changePendingUpdates(pendingUpdates) {
+            runtime.pendingUpdates = pendingUpdates;
+            const count = menus.length;
+            runtime.listeners.forEach((listener) => listener());
+            await waitForMenuAfter(count);
+        },
         logText: () => fs.readFileSync(path.join(testRoot, 'log', 'app.log'), 'utf8'),
     };
 }
@@ -107,23 +124,21 @@ test('the tray shows the user-chosen MPV path', async (t) => {
     assert.equal(tray.item(PLAYER_ITEM).label, `${PLAYER_ITEM} (E:\\tools\\mpv\\mpv.exe)`);
 });
 
-test('on Windows without a user-chosen MPV the tray shows the bundled MPV path', async (t) => {
-    const tray = setupTray(t, { platform: 'win32' });
+test('without a user-chosen MPV the tray shows the program the MPV runtime starts', async (t) => {
+    const tray = setupTray(t);
     await tray.createTray();
-    const bundled = path.join(tray.testRoot, 'third_party', 'fntv-mpv', 'mpv.exe');
-    assert.equal(tray.item(PLAYER_ITEM).label, `${PLAYER_ITEM} (${bundled})`);
+    assert.equal(tray.item(PLAYER_ITEM).label, `${PLAYER_ITEM} (${BUNDLED.path})`);
 });
 
-const hostHasLinuxMpv = LINUX_MPV_LOCATIONS.some((location) => fs.existsSync(location));
-test('on Linux the tray says no mpv was found, without an error dialog', { skip: hostHasLinuxMpv && 'this host has mpv installed in a known location' }, async (t) => {
-    const tray = setupTray(t, { platform: 'linux' });
+test('the tray says no MPV was found, without an error dialog', async (t) => {
+    const tray = setupTray(t, { mpvFound: false });
     await tray.createTray();
     assert.equal(tray.item(PLAYER_ITEM).label, `${PLAYER_ITEM} (未找到)`);
     assert.deepEqual(tray.errorBoxes, []);
 });
 
 test('choosing and clearing the MPV path updates the path shown in the tray', async (t) => {
-    const tray = setupTray(t, { platform: 'win32' });
+    const tray = setupTray(t);
     await tray.createTray();
     const bundledLabel = tray.item(PLAYER_ITEM).label;
 
@@ -170,31 +185,21 @@ test('a failure to open the MPV config folder shows the reason and is logged', a
     assert.match(tray.logText(), /ERROR.*打开 MPV 用户配置目录失败.*Access is denied\./);
 });
 
-test('when the MPV config folder cannot be determined the tray still opens and says so', async (t) => {
-    const tray = setupTray(t, { appDataError: "Failed to get 'appData' path" });
+test('when the MPV config folder is unknown the tray still opens and says so', async (t) => {
+    const tray = setupTray(t, { userConfigUnknown: true });
     await tray.createTray();
 
     const configItem = tray.item(CONFIG_ITEM);
     assert.equal(configItem.label, `${CONFIG_ITEM} (无法确定)`);
     assert.equal(configItem.enabled, false);
-    assert.match(tray.logText(), /获取 MPV 用户配置目录失败.*Failed to get 'appData' path/);
 });
 
 const PENDING_ITEM = 'MPV 配置有';
 const pendingItem = (tray) => tray.settingsItems().find((entry) => entry.label?.startsWith(PENDING_ITEM));
 
-async function waitForPendingItemToGo(tray) {
-    for (let i = 0; i < 100 && pendingItem(tray); i++) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-}
-
 test('the tray shows how many MPV config updates are pending and opens the config folder on click', async (t) => {
     const tray = setupTray(t);
-    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf'), 'mine');
-    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf.fntv-new'), 'new');
-    fs.mkdirSync(path.join(tray.mpvHome, 'script-opts'));
-    fs.writeFileSync(path.join(tray.mpvHome, 'script-opts', 'uosc.conf.fntv-new'), 'new');
+    tray.runtime.pendingUpdates = 2;
     await tray.createTray();
 
     const item = pendingItem(tray);
@@ -203,20 +208,41 @@ test('the tray shows how many MPV config updates are pending and opens the confi
     assert.deepEqual(tray.openedPaths, [tray.mpvHome]);
 });
 
-test('the pending-updates item disappears once the .fntv-new files are deleted', async (t) => {
+test('the pending-updates item follows the MPV runtime when pending updates change', async (t) => {
     const tray = setupTray(t);
-    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf.fntv-new'), 'new');
+    tray.runtime.pendingUpdates = 1;
     await tray.createTray();
     assert.equal(pendingItem(tray)?.label, 'MPV 配置有 1 个待合并的更新');
 
-    fs.rmSync(path.join(tray.mpvHome, 'input.conf.fntv-new'));
-    await waitForPendingItemToGo(tray);
+    await tray.changePendingUpdates(0);
     assert.equal(pendingItem(tray), undefined);
 });
 
-test('the tray shows no pending-updates item without .fntv-new files', async (t) => {
+test('the tray shows no pending-updates item without pending updates', async (t) => {
     const tray = setupTray(t);
-    fs.writeFileSync(path.join(tray.mpvHome, 'input.conf'), 'mine');
     await tray.createTray();
     assert.equal(pendingItem(tray), undefined);
+});
+
+const CAPABILITY_ITEM = 'MPV 插件需要更新';
+
+test('the tray shows a status when the MPV plugins miss a required capability', async (t) => {
+    const tray = setupTray(t, { capabilitiesSatisfied: false });
+    await tray.createTray();
+    const status = tray.settingsItems().filter((entry) => entry.label?.startsWith(CAPABILITY_ITEM));
+    assert.equal(status.length, 1);
+    assert.equal(status[0].enabled, false);
+});
+
+test('the tray shows no capability status when the MPV plugins provide every capability', async (t) => {
+    const tray = setupTray(t);
+    await tray.createTray();
+    assert.ok(!tray.settingsItems().some((entry) => entry.label?.startsWith(CAPABILITY_ITEM)));
+});
+
+test('destroying the tray stops the MPV runtime watching for pending updates', async (t) => {
+    const tray = setupTray(t);
+    await tray.createTray();
+    tray.destroyTray();
+    assert.equal(tray.runtime.stopped, true);
 });

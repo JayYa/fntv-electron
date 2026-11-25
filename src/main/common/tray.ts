@@ -1,9 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCurrentMpvProgram, getMpvConfigDir } from '../handlers/plugins/mpvConfig';
-import { mpvCapabilityTrayItems } from './mpvConfigNotices';
-import { countPendingUpdates, stopWatchingPendingUpdates, watchPendingUpdates } from './mpvConfigSync/pendingUpdates';
+import { mpvRuntime, type MpvUserConfig } from './mpvRuntime';
 import { getInstance as getUpdateChecker } from '../../modules/updater/updateChecker';
 import { closeBehaviorMenuItem, provideTrayBalloon, showMainWindow } from './closeBehavior';
 import * as log from '../../modules/logger';
@@ -31,16 +29,17 @@ async function openMpvConfigDir(mainWindow: BrowserWindow | null, dir: string): 
     }
 }
 
-function pendingMpvUpdatesItems(mainWindow: BrowserWindow | null, mpvConfigDir: string | undefined): Electron.MenuItemConstructorOptions[] {
-    watchPendingUpdates(mpvConfigDir, () => {
-        updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
-    });
-    const pending = mpvConfigDir ? countPendingUpdates(mpvConfigDir) : 0;
-    if (!mpvConfigDir || pending === 0) return [];
+function pendingMpvUpdatesItems(mainWindow: BrowserWindow | null, userConfig: MpvUserConfig | undefined): Electron.MenuItemConstructorOptions[] {
+    if (!userConfig || userConfig.pendingUpdates === 0) return [];
     return [{
-        label: `MPV 配置有 ${pending} 个待合并的更新`,
-        click: () => openMpvConfigDir(mainWindow, mpvConfigDir),
+        label: `MPV 配置有 ${userConfig.pendingUpdates} 个待合并的更新`,
+        click: () => openMpvConfigDir(mainWindow, userConfig.dir),
     }];
+}
+
+function mpvCapabilityItems(): Electron.MenuItemConstructorOptions[] {
+    if (mpvRuntime.capabilitiesSatisfied()) return [];
+    return [{ label: 'MPV 插件需要更新，片头片尾跳过等功能可能不可用（详见日志）', enabled: false }];
 }
 
 async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
@@ -48,13 +47,9 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
     const mpvEnabled = settings.getHideOriginalPlayButton();
     const nasProxyEnabled = settings.getNasProxyEnabled();
     const currentMpvPath = settings.getMpvPlayerPath();
-    const programPath = getCurrentMpvProgram()?.path;
-    let mpvConfigDir: string | undefined;
-    try {
-        mpvConfigDir = getMpvConfigDir(currentMpvPath);
-    } catch (error) {
-        log.error('获取 MPV 用户配置目录失败', error);
-    }
+    const programPath = mpvRuntime.program()?.path;
+    const userConfig = mpvRuntime.userConfig();
+    const mpvConfigDir = userConfig?.dir;
 
     const submenu: Electron.MenuItemConstructorOptions[] = [
         {
@@ -137,8 +132,8 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
             enabled: mpvConfigDir !== undefined,
             click: () => (mpvConfigDir ? openMpvConfigDir(mainWindow, mpvConfigDir) : undefined),
         },
-        ...pendingMpvUpdatesItems(mainWindow, mpvConfigDir),
-        ...mpvCapabilityTrayItems(),
+        ...pendingMpvUpdatesItems(mainWindow, userConfig),
+        ...mpvCapabilityItems(),
     ];
 
     return submenu;
@@ -225,6 +220,10 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
 
     tray.setToolTip('飞牛影视');
 
+    mpvRuntime.onPendingUpdatesChange(() => {
+        updateTrayMenu().catch(error => log.error('刷新托盘菜单失败:', error));
+    });
+
     await updateTrayMenu();
 
     getUpdateChecker().downloadProgress.onChange(() => {
@@ -241,7 +240,7 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
 }
 
 export function destroyTray(): void {
-    stopWatchingPendingUpdates();
+    mpvRuntime.stop();
     if (tray) {
         tray.destroy();
         tray = null;
