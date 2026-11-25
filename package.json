@@ -3,7 +3,7 @@
     "version": "3.4.0",
     "description": "A fntv app built with Electron",
     "main": "dest/main/main.js",
-    "packageManager": "pnpm@12.22.0",
+    "packageManager": "pnpm@12.23.0",
     "scripts": {
         "start": "pnpm run clean && tsc && pnpm run build:preload && electron .",
         "compile": "pnpm run clean && tsc && pnpm run build:preload",
@@ -44,7 +44,7 @@
         "eslint": "10.15.0",
         "happy-dom": "21.0.4",
         "js-yaml": "5.5.0",
-        "knip": "6.47.0",
+        "knip": "6.48.0",
         "playwright-core": "1.65.1",
         "rimraf": "6.1.4",
         "sharp": "0.35.5",
