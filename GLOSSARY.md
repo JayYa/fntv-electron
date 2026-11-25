@@ -144,6 +144,10 @@ _Avoid_: 飞牛账号
 飞牛的远程访问服务，凭 FN ID 找到并连上用户的 NAS（直连地址或中继）。
 _Avoid_: 远程访问、中继（指整个服务时）
 
+**FN ID 登录 (FN ID login)**：
+一次经 FN Connect 的登录尝试，从打开 FN Connect 窗口开始，到建立当前登录或失败为止；同一时间最多一次。拿到登录凭据的途径不止一条，只有先到的那条建立当前登录。
+_Avoid_: FN ID OAuth
+
 **目标 NAS (target origin)**：
 FN ID 登录过程中，离开 FN Connect 后到达的第一个站点；之后只有它能拿到登录凭据。
 _Avoid_: 目标地址、目标站点
