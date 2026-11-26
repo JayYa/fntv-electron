@@ -29,6 +29,7 @@ function setup(t, { storedConfig, platform = 'win32' } = {}) {
     return {
         preferences,
         changes,
+        configPath,
         stored: () => JSON.parse(fs.readFileSync(configPath, 'utf8')),
     };
 }
@@ -111,4 +112,43 @@ test('a subscriber that throws neither fails the save nor keeps later subscriber
     assert.equal(preferences.get('nasLocalProxy'), true);
     assert.deepEqual(changes, ['nasLocalProxy']);
     assert.deepEqual(later, ['nasLocalProxy']);
+});
+
+test('updating several preferences at once writes them together and tells subscribers about each one that changed', (t) => {
+    const { preferences, changes, stored } = setup(t, {
+        storedConfig: { downloadProxyEnabled: false, downloadProxy: 'https://relay.example.test/', hideOriginalPlayButton: true },
+    });
+
+    preferences.update({
+        appDownloadProxy: { enabled: true, proxyUrl: 'https://relay.example.test/' },
+        mpvPlayback: true,
+        nasLocalProxy: true,
+    });
+
+    const { downloadProxyEnabled, downloadProxy, hideOriginalPlayButton, nasProxyEnabled } = stored();
+    assert.deepEqual({ downloadProxyEnabled, downloadProxy, hideOriginalPlayButton, nasProxyEnabled }, {
+        downloadProxyEnabled: true,
+        downloadProxy: 'https://relay.example.test/',
+        hideOriginalPlayButton: true,
+        nasProxyEnabled: true,
+    });
+    assert.deepEqual(changes.sort(), ['appDownloadProxy', 'nasLocalProxy']);
+});
+
+test('an update that leaves a preference out does not touch it', (t) => {
+    const { preferences, changes } = setup(t, { storedConfig: { hideOriginalPlayButton: false } });
+
+    preferences.update({ appDownloadProxy: { enabled: true, proxyUrl: '' } });
+
+    assert.equal(preferences.get('mpvPlayback'), false);
+    assert.deepEqual(changes, ['appDownloadProxy']);
+});
+
+test('an empty update leaves the config file alone', (t) => {
+    const { preferences, changes, configPath } = setup(t);
+
+    preferences.update({});
+
+    assert.equal(fs.existsSync(configPath), false);
+    assert.deepEqual(changes, []);
 });

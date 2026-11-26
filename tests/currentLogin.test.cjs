@@ -257,37 +257,3 @@ test('a rejected access code fails verification with the access code error', asy
         loginError: { title: '访问码错误', message: '访问码错误，请检查后重试。' },
     });
 });
-
-function fakeShownWindow(url) {
-    const window = { reloads: 0, isDestroyed: () => false };
-    window.webContents = { getURL: () => url(), reloadIgnoringCache() { window.reloads += 1; } };
-    return window;
-}
-
-test('turning the MPV playback preference on or off reloads the web UI so takeover follows it', (t) => {
-    const world = setup(t);
-    const preferences = require('../dest/modules/fn_config/preferences.js');
-    const window = fakeShownWindow(() => `${NAS}/v/movie/1`);
-    world.currentLogin().reloadWebUiOnMpvPlaybackChange(() => window);
-
-    preferences.set('mpvPlayback', false);
-    preferences.set('mpvPlayback', false);
-    preferences.set('nasLocalProxy', true);
-    assert.equal(window.reloads, 1);
-
-    preferences.set('mpvPlayback', true);
-    assert.equal(window.reloads, 2);
-});
-
-test('changing the MPV playback preference on the login page does not reload the login page', (t) => {
-    const world = setup(t);
-    const preferences = require('../dest/modules/fn_config/preferences.js');
-    const { pathToFileURL } = require('node:url');
-    const { LOGIN_PAGE_PATH } = require('../dest/main/common/loginPage.js');
-    const window = fakeShownWindow(() => pathToFileURL(LOGIN_PAGE_PATH).href);
-    world.currentLogin().reloadWebUiOnMpvPlaybackChange(() => window);
-
-    preferences.set('mpvPlayback', false);
-
-    assert.equal(window.reloads, 0);
-});

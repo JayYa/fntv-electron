@@ -44,7 +44,7 @@
 
 ## 跨层改动
 
-- 改字段含义前，用 `git grep` 找全读写处，改完再搜一遍。MPV 接管开关的磁盘字段 `hideOriginalPlayButton` 只由 `preferences.ts` 解析，主进程、preload 和登录页的默认值必须一致（`docs/external-runtime.md`）。
+- 改字段含义前，用 `git grep` 找全读写处，改完再搜一遍。MPV 接管开关的磁盘字段 `hideOriginalPlayButton` 和默认值只在 `preferences.ts`，preload 和登录页只用主进程给的快照；takeover 读不到快照时回退为 `true` 是唯一例外（`docs/external-runtime.md`）。
 
 ## 依赖
 

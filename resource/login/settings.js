@@ -32,9 +32,39 @@ ipcRenderer.on('version-info', (event, data) => {
     }
 });
 
+let shownPreferences = null;
+
 function initPreferences() {
-    ipcRenderer.send('get-download-proxy');
-    ipcRenderer.send('get-mpv-playback');
+    ipcRenderer.send('get-preferences');
+}
+
+function applyPreferences(snapshot, { overwriteEdits = false } = {}) {
+    const before = shownPreferences;
+    const untouched = (control, property, value) => overwriteEdits || !before || control[property] === value;
+    if (untouched(proxyEnabledSwitch, 'checked', before?.appDownloadProxy.enabled)) {
+        proxyEnabledSwitch.checked = snapshot.appDownloadProxy.enabled;
+    }
+    if (untouched(proxyUrlInput, 'value', before?.appDownloadProxy.proxyUrl)) {
+        proxyUrlInput.value = snapshot.appDownloadProxy.proxyUrl;
+    }
+    if (untouched(mpvPlaybackSwitch, 'checked', before?.mpvPlayback)) {
+        mpvPlaybackSwitch.checked = snapshot.mpvPlayback;
+    }
+    proxyUrlInput.placeholder = snapshot.defaultProxyUrl;
+    shownPreferences = snapshot;
+}
+
+function changedPreferences() {
+    const patch = {};
+    const appDownloadProxy = { enabled: proxyEnabledSwitch.checked, proxyUrl: proxyUrlInput.value.trim() };
+    const shownProxy = shownPreferences?.appDownloadProxy;
+    if (!shownProxy || appDownloadProxy.enabled !== shownProxy.enabled || appDownloadProxy.proxyUrl !== shownProxy.proxyUrl.trim()) {
+        patch.appDownloadProxy = appDownloadProxy;
+    }
+    if (!shownPreferences || mpvPlaybackSwitch.checked !== shownPreferences.mpvPlayback) {
+        patch.mpvPlayback = mpvPlaybackSwitch.checked;
+    }
+    return patch;
 }
 
 function toggleProxyPanel() {
@@ -45,33 +75,30 @@ function closeProxyPanel() {
     proxyPanel.classList.remove('show');
 }
 
-async function requestSavePreferences(downloadProxy, mpvPlaybackRequest) {
+async function requestSavePreferences(patch) {
     try {
-        const results = await Promise.all([
-            ipcRenderer.invoke('set-download-proxy', downloadProxy),
-            ipcRenderer.invoke('set-mpv-playback', mpvPlaybackRequest),
-        ]);
-        const failed = results.find((result) => !result || !result.success);
-        return failed ? failed.error || '未知错误' : null;
+        const result = await ipcRenderer.invoke('set-preferences', patch);
+        if (result && result.success) return { preferences: result.preferences };
+        return { failure: (result && result.error) || '未知错误' };
     } catch (error) {
         window.log.error('保存设置请求失败:', error);
-        return '未知错误';
+        return { failure: '未知错误' };
     }
 }
 
 async function savePreferences() {
     if (proxySaveBtn.disabled) return;
-    const downloadProxy = {
-        enabled: proxyEnabledSwitch.checked,
-        proxyUrl: proxyUrlInput.value.trim(),
-    };
-    const mpvPlaybackRequest = { mpvPlayback: mpvPlaybackSwitch.checked };
+    const patch = changedPreferences();
+    if (Object.keys(patch).length === 0) {
+        closeProxyPanel();
+        return;
+    }
 
     const originalText = proxySaveBtn.textContent;
     proxySaveBtn.textContent = '保存中...';
     proxySaveBtn.disabled = true;
 
-    const failure = await requestSavePreferences(downloadProxy, mpvPlaybackRequest);
+    const { preferences, failure } = await requestSavePreferences(patch);
 
     proxySaveBtn.textContent = originalText;
     proxySaveBtn.disabled = false;
@@ -81,7 +108,7 @@ async function savePreferences() {
         return;
     }
     window.log.info('设置保存成功');
-    ipcRenderer.send('get-download-proxy');
+    applyPreferences(preferences, { overwriteEdits: true });
     closeProxyPanel();
 }
 
@@ -95,16 +122,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-ipcRenderer.on('download-proxy-info', (event, data) => {
-    if (data) {
-        proxyEnabledSwitch.checked = data.enabled === true;
-        proxyUrlInput.value = data.proxyUrl;
-        proxyUrlInput.placeholder = data.defaultProxyUrl;
-    }
-});
-
-ipcRenderer.on('mpv-playback-info', (event, data) => {
-    if (data) {
-        mpvPlaybackSwitch.checked = data.mpvPlayback !== false;
-    }
+ipcRenderer.on('preferences-snapshot', (event, snapshot) => {
+    if (snapshot) applyPreferences(snapshot);
 });

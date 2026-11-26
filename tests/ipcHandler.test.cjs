@@ -50,17 +50,17 @@ test('a config read failure in a get handler is logged instead of escaping the m
     loadConfigPlugin().init();
 
     const event = fakeEvent();
-    assert.doesNotThrow(() => ipcMain.emit('get-mpv-playback', event));
+    assert.doesNotThrow(() => ipcMain.emit('get-preferences', event));
 
     assert.deepEqual(event.replies, []);
-    assert.match(logText(), /get-mpv-playback/);
+    assert.match(logText(), /get-preferences/);
 });
 
 for (const [channel, payload] of [
-    ['set-download-proxy', { enabled: true, proxyUrl: 'https://relay.example.test/' }],
-    ['set-mpv-playback', { mpvPlayback: true }],
+    ['set-preferences', { appDownloadProxy: { enabled: true, proxyUrl: 'https://relay.example.test/' } }],
+    ['set-preferences', { mpvPlayback: true }],
 ]) {
-    test(`a config write failure in ${channel} answers the login page with a failure`, async (t) => {
+    test(`a config write failure while saving ${JSON.stringify(payload)} answers the login page with a failure`, async (t) => {
         const { invoke, configPath, loadConfigPlugin } = setupIpc(t);
         fs.mkdirSync(configPath);
         loadConfigPlugin().init();
@@ -73,9 +73,11 @@ for (const [channel, payload] of [
 }
 
 for (const [channel, payload] of [
-    ['set-download-proxy', { enabled: 'yes', proxyUrl: 'https://relay.example.test/' }],
-    ['set-mpv-playback', { mpvPlayback: 'false' }],
-    ['set-mpv-playback', undefined],
+    ['set-preferences', { appDownloadProxy: { enabled: 'yes', proxyUrl: 'https://relay.example.test/' } }],
+    ['set-preferences', { mpvPlayback: 'false' }],
+    ['set-preferences', { mpvPlayback: true, appDownloadProxy: { enabled: 'yes' } }],
+    ['set-preferences', { nasLocalProxy: true }],
+    ['set-preferences', undefined],
 ]) {
     test(`${channel} refuses ${JSON.stringify(payload)} and writes nothing`, async (t) => {
         const { invoke, configPath, loadConfigPlugin } = setupIpc(t);

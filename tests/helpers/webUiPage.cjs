@@ -19,10 +19,10 @@ function fakeIpcRenderer({ mpvPlayback }) {
         ipcRenderer: {
             send(channel, ...args) {
                 sent.push({ channel, args });
-                if (channel !== 'get-mpv-playback' || mpvPlayback === 'no reply') return;
-                const reply = { mpvPlayback };
+                if (channel !== 'get-preferences' || mpvPlayback === 'no reply') return;
+                const reply = { appDownloadProxy: { enabled: false, proxyUrl: 'https://gh-proxy.com/' }, mpvPlayback, defaultProxyUrl: 'https://gh-proxy.com/' };
                 queueMicrotask(() => {
-                    for (const listener of listeners.get('mpv-playback-info') ?? []) listener({}, reply);
+                    for (const listener of listeners.get('preferences-snapshot') ?? []) listener({}, reply);
                 });
             },
             on(channel, listener) {

@@ -2,42 +2,47 @@ import { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import * as preferences from '../../../modules/fn_config/preferences';
 import { registerHandler } from '../core/ipcHandler';
 
-type SaveResult = { success: true } | { success: false; error: string };
+type SaveResult = { success: true; preferences: preferences.PreferencesSnapshot } | { success: false; error: string };
 
-function save(write: () => void): SaveResult {
+type Patch = Partial<Pick<preferences.Preferences, 'appDownloadProxy' | 'mpvPlayback'>>;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function parsePatch(request: unknown): Patch | string {
+    if (!isRecord(request)) return '设置不是对象';
+    const patch: Patch = {};
+    for (const [name, value] of Object.entries(request)) {
+        if (name === 'appDownloadProxy') {
+            if (!isRecord(value) || typeof value.enabled !== 'boolean') return '应用更新下载加速的开关不是布尔值';
+            patch.appDownloadProxy = { enabled: value.enabled, proxyUrl: typeof value.proxyUrl === 'string' ? value.proxyUrl : '' };
+        } else if (name === 'mpvPlayback') {
+            if (typeof value !== 'boolean') return 'MPV 接管开关不是布尔值';
+            patch.mpvPlayback = value;
+        } else {
+            return `不能从登录页修改 ${name}`;
+        }
+    }
+    return patch;
+}
+
+function handleGetPreferences(event: IpcMainEvent): void {
+    event.reply('preferences-snapshot', preferences.snapshot());
+}
+
+function handleSetPreferences(_event: IpcMainInvokeEvent, request?: unknown): SaveResult {
+    const patch = parsePatch(request);
+    if (typeof patch === 'string') return { success: false, error: patch };
     try {
-        write();
-        return { success: true };
+        preferences.update(patch);
+        return { success: true, preferences: preferences.snapshot() };
     } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }
 
-function handleGetAppDownloadProxy(event: IpcMainEvent): void {
-    event.reply('download-proxy-info', { ...preferences.get('appDownloadProxy'), defaultProxyUrl: preferences.DEFAULT_DOWNLOAD_PROXY_URL });
-}
-
-function handleSetAppDownloadProxy(_event: IpcMainInvokeEvent, request?: { enabled?: unknown; proxyUrl?: unknown }): SaveResult {
-    const { enabled, proxyUrl } = request ?? {};
-    if (typeof enabled !== 'boolean') return { success: false, error: '应用更新下载加速的开关不是布尔值' };
-    return save(() => preferences.set('appDownloadProxy', { enabled, proxyUrl: typeof proxyUrl === 'string' ? proxyUrl : '' }));
-}
-
-function handleGetMpvPlayback(event: IpcMainEvent): void {
-    event.reply('mpv-playback-info', { mpvPlayback: preferences.get('mpvPlayback') });
-}
-
-function handleSetMpvPlayback(_event: IpcMainInvokeEvent, request?: { mpvPlayback?: unknown }): SaveResult {
-    const mpvPlayback = request?.mpvPlayback;
-    if (typeof mpvPlayback !== 'boolean') return { success: false, error: 'MPV 接管开关不是布尔值' };
-    return save(() => preferences.set('mpvPlayback', mpvPlayback));
-}
-
 function init(): void {
-    registerHandler('get-download-proxy', handleGetAppDownloadProxy);
-    registerHandler('set-download-proxy', handleSetAppDownloadProxy, { useHandle: true });
-    registerHandler('get-mpv-playback', handleGetMpvPlayback);
-    registerHandler('set-mpv-playback', handleSetMpvPlayback, { useHandle: true });
+    registerHandler('get-preferences', handleGetPreferences);
+    registerHandler('set-preferences', handleSetPreferences, { useHandle: true });
 }
 
 export {
