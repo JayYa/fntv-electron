@@ -1,7 +1,5 @@
-import { CreatePlaybackSessionRequest, PROXY_HOST, ProxyMessage } from '../../modules/proxy_service/control';
+import { CreatePlaybackSessionRequest, ProxyMessage } from '../../modules/proxy_service/control';
 import type { PlaybackSessionInput } from '../../modules/proxy_service/playbackSessions';
-
-export type { PlaybackSessionInput } from '../../modules/proxy_service/playbackSessions';
 
 const SESSION_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -60,15 +58,4 @@ export class ProxyControlClient {
         clearTimeout(entry.timer);
         action(entry);
     }
-}
-
-export interface ProxyPlaybackSession {
-    session: string;
-    port: number;
-}
-
-export function createProxyPlaybackUrl(playback: ProxyPlaybackSession, itemGuid: string, sourceIndex: number = 0): string {
-    const query = new URLSearchParams({ session: playback.session });
-    if (sourceIndex > 0) query.set('sourceIndex', String(sourceIndex));
-    return `http://${PROXY_HOST}:${playback.port}/api/v1/playvideo/${encodeURIComponent(itemGuid)}?${query}`;
 }

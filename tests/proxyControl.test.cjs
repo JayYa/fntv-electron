@@ -5,7 +5,7 @@ const { startFakeFnMedia } = require('./helpers/fakeFnMedia.cjs');
 const { SERVICE_DIR, MEDIA, startProxy, get, sessionInput } = require('./helpers/proxyService.cjs');
 
 const { handleControlRequest } = require(path.join(SERVICE_DIR, 'control.js'));
-const { ProxyControlClient } = require('../dest/main/common/proxySession.js');
+const { ProxyControlClient } = require('../dest/main/common/proxyControlClient.js');
 
 function connect(service) {
     const sent = [];

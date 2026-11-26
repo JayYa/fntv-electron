@@ -10,7 +10,7 @@ Proxy 原来是单独打包的 Go 可执行文件，构建要装 Go 工具链、
 
 从 Go 版升级的用户目录里留着 `proxy-secret`，启动时删掉（`src/main/common/legacyProxySecret.ts`）；删不掉（例如 Windows 上文件被占用，`EPERM`、`EBUSY`）只记日志，TS 版用不到这个文件，不影响启动，下次启动再删。
 
-子进程（`child.ts`）只转发 `parentPort` 的消息、回报启动结果和日志。监听失败时它报 `startFailed`（带错误码），由主进程结束这个进程。播放会话只在创建它的那个 Proxy 子进程里有效，所以主进程拿到的会话 ID 和该进程的端口一起返回（`ProxyPlaybackSession`，`src/main/common/proxySession.ts`）。
+子进程（`child.ts`）只转发 `parentPort` 的消息、回报启动结果和日志。监听失败时它报 `startFailed`（带错误码），由主进程结束这个进程。播放会话只在创建它的那个 Proxy 子进程里有效，所以开播放会话时由 Proxy module 用该进程的端口拼好播放地址再交给调用方，端口不出 `src/main/common/proxy.ts`（`openPlaybackSession`）。
 
 端口仍固定为 `127.0.0.1:22345`，因为 MPV 归档里的 `smart_skip` 插件把这个地址写死了。
 
