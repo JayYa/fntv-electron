@@ -4,20 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
-const { bindTaskbarProgress } = require('../dest/main/common/taskbarProgress.js');
-
-function fakeDownloadProgress() {
-    let current = null;
-    const listeners = [];
-    return {
-        percent: () => current,
-        onChange(listener) { listeners.push(listener); },
-        set(percent) {
-            current = percent;
-            listeners.forEach((listener) => listener(percent));
-        },
-    };
-}
+const { fakeDownloadProgress, useStubMainWindow } = require('./helpers/fakeMainWindow.cjs');
 
 function setupTray(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-tray-progress-'));
@@ -49,6 +36,7 @@ function setupTray(t) {
         dialog: {},
         shell: {},
     });
+    useStubMainWindow(t);
     const originalMpvHome = process.env.MPV_HOME;
     process.env.MPV_HOME = mpvHome;
     t.after(() => {
@@ -76,7 +64,7 @@ function setupTray(t) {
 
     return {
         async createTray() {
-            await require('../dest/main/common/tray.js').createTray({});
+            await require('../dest/main/common/tray.js').createTray();
         },
         checkForUpdatesItem,
         setProgressAndWaitForMenu,
@@ -96,38 +84,4 @@ test('the tray check-for-updates item shows the download percent while an update
 
     await tray.setProgressAndWaitForMenu(null);
     assert.equal(tray.checkForUpdatesItem().label, '检查更新');
-});
-
-function fakeWindow() {
-    const progressBarValues = [];
-    let destroyed = false;
-    return {
-        progressBarValues,
-        destroy() { destroyed = true; },
-        isDestroyed: () => destroyed,
-        setProgressBar(value) { progressBarValues.push(value); },
-    };
-}
-
-test('the taskbar progress bar follows the download percent and clears when the download ends', () => {
-    const window = fakeWindow();
-    const progress = fakeDownloadProgress();
-    bindTaskbarProgress(window, progress);
-
-    progress.set(0);
-    progress.set(42);
-    progress.set(100);
-    progress.set(null);
-    assert.deepEqual(window.progressBarValues, [0, 0.42, 1, -1]);
-});
-
-test('the taskbar progress bar is left alone once the main window is destroyed', () => {
-    const window = fakeWindow();
-    const progress = fakeDownloadProgress();
-    bindTaskbarProgress(window, progress);
-
-    window.destroy();
-    progress.set(42);
-    progress.set(null);
-    assert.deepEqual(window.progressBarValues, []);
 });

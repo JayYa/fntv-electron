@@ -29,7 +29,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 
 ## 窗口和托盘
 
-- 关闭主窗口读的设置：macOS 是 `macCloseAction`（隐藏到状态栏），其它平台是 `exitMode`（最小化到托盘）。macOS 所有窗口关闭后不退出，等 dock 图标重新打开窗口；有 dock 时恢复窗口显示 dock 图标、隐藏到状态栏时隐藏，`activate` 时重建窗口。
+- 关闭主窗口读的设置：macOS 是 `macCloseAction`（隐藏到状态栏），其它平台是 `exitMode`（最小化到托盘）。macOS 所有窗口关闭后不退出，等 dock 图标重新打开窗口；有 dock 时恢复窗口显示 dock 图标、隐藏到状态栏时隐藏，`activate` 时显示主窗口。主窗口的 `close` 不在退出途中时总被拦下改为隐藏，退出前不会被销毁，所以 `activate` 不重建窗口。
 - 标题栏：macOS 用系统交通灯按钮（`hiddenInset`），其它平台是无边框窗口加页面里的自定义按钮。
 - 主窗口图标：`nativeImage` 只在 Windows 上读 ICO，其它平台用 PNG（#74）。macOS 托盘用模板图标，加载失败时回退到 `icon.png`。
 - 托盘恢复窗口的事件：Linux 上激活托盘图标只发 `click`，没有 `double-click`（#75）。

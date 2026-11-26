@@ -96,7 +96,7 @@ test('the login plugin ends the login when the web app opens the login, welcome 
     const { interceptor, attached } = setup(t);
     const mainWindow = {};
     const ended = [];
-    t.mock.method(require('../dest/main/common/mainwin.js'), 'getMainWindow', () => mainWindow);
+    t.mock.method(require('../dest/main/common/mainWindow.js').mainWindow, 'window', () => mainWindow);
     t.mock.method(require('../dest/main/common/currentLogin.js'), 'endCurrentLogin', async (win) => ended.push(win));
     require('../dest/main/handlers/plugins/login.js').init();
     interceptor.run();

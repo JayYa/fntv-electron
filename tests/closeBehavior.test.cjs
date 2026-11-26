@@ -3,23 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { EventEmitter } = require('node:events');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { settle, waitFor } = require('./helpers/updateChecker.cjs');
 const { createQuittingApp, deferred, startPlaying, startQuitCoordinator } = require('./helpers/fakeQuitApp.cjs');
-
-function createWindow(events) {
-    return Object.assign(new EventEmitter(), {
-        minimized: false,
-        visible: true,
-        isMinimized() { return this.minimized; },
-        isVisible() { return this.visible; },
-        restore() { this.minimized = false; events.push('window restored'); },
-        show() { this.visible = true; events.push('window shown'); },
-        hide() { this.visible = false; events.push('window hidden'); },
-        focus() { events.push('window focused'); },
-    });
-}
+const { fakeDownloadProgress, fakeMainWindowElectron } = require('./helpers/fakeMainWindow.cjs');
 
 function clickClose(window) {
     const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
@@ -27,7 +14,7 @@ function clickClose(window) {
     return event;
 }
 
-function setup(t, { platform, config } = {}) {
+function setup(t, { platform, config, trayReady = true } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-close-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     fs.mkdirSync(paths.userData, { recursive: true });
@@ -64,15 +51,21 @@ function setup(t, { platform, config } = {}) {
             return { response, checkboxChecked: answer.remember === true };
         },
     };
-    useFakeElectron(t, { app, dialog, Notification, shell: {} }, { platform });
+    useFakeElectron(t, { ...fakeMainWindowElectron(events).electron, app, dialog, Notification, shell: {} }, { platform });
 
-    const closeBehavior = require('../dest/main/common/closeBehavior.js');
     startQuitCoordinator(events);
-    closeBehavior.provideTrayBalloon((content) => events.push(`balloon: ${content}`));
-    const window = createWindow(events);
-    closeBehavior.manageMainWindow(window);
+    const { mainWindow } = require('../dest/main/common/mainWindow.js');
+    const showBalloon = (content) => {
+        if (!trayReady) return false;
+        events.push(`balloon: ${content}`);
+        return true;
+    };
+    mainWindow.start({ showBalloon, downloadProgress: fakeDownloadProgress() });
+    const window = mainWindow.window();
+    window.emit('ready-to-show');
+    events.length = 0;
     return {
-        app, events, window, closeBehavior, dialogs,
+        app, events, window, mainWindow, dialogs,
         answer(click, { remember = false } = {}) { answers.push({ click, remember }); },
     };
 }
@@ -95,6 +88,15 @@ test('on Windows closing with the default setting asks, and minimizing hides the
         'window hidden',
     ]);
     assert.equal(env.app.exited, false);
+});
+
+test('hiding the window before the tray exists keeps the one-time balloon for the next hide', async (t) => {
+    const env = setup(t, { platform: 'win32', config: { exitMode: 'minimize' }, trayReady: false });
+
+    clickClose(env.window);
+    await settle();
+
+    assert.equal(require('../dest/modules/fn_config/preferences.js').trayNotificationShown(), false);
 });
 
 test('on Windows choosing quit with remember quits, and the next start quits on close without asking', async (t) => {
@@ -196,7 +198,7 @@ test('an unrecognized stored close behavior asks on close', async (t) => {
 test('the close behavior settings dialog changes what closing does', async (t) => {
     const env = setup(t, { platform: 'win32', config: { exitMode: 'minimize' } });
 
-    const item = env.closeBehavior.closeBehaviorMenuItem();
+    const item = env.mainWindow.closeBehaviorMenuItem();
     assert.equal(item.label, '退出行为设置');
     env.answer('直接退出');
     await item.click();
@@ -210,7 +212,7 @@ test('the close behavior settings dialog changes what closing does', async (t) =
 test('on macOS the close behavior settings dialog can switch back to asking', async (t) => {
     const env = setup(t, { platform: 'darwin', config: { macCloseAction: 'minimize' } });
 
-    const item = env.closeBehavior.closeBehaviorMenuItem();
+    const item = env.mainWindow.closeBehaviorMenuItem();
     assert.equal(item.label, '关闭行为设置');
     env.answer('每次询问');
     await item.click();
@@ -220,24 +222,4 @@ test('on macOS the close behavior settings dialog can switch back to asking', as
 
     assert.equal(env.dialogs.length, 2);
     assert.equal(env.dialogs[1].title, '关闭窗口');
-});
-
-test('showing the main window restores, shows and focuses it, and shows the dock icon on macOS', async (t) => {
-    const env = setup(t, { platform: 'darwin', config: { macCloseAction: 'minimize' } });
-    clickClose(env.window);
-    await settle();
-    env.window.minimized = true;
-    env.events.length = 0;
-
-    env.closeBehavior.showMainWindow();
-
-    assert.deepEqual(env.events, ['window restored', 'window shown', 'window focused', 'dock shown']);
-});
-
-test('showing the main window on Windows leaves a visible window in place and focuses it', async (t) => {
-    const env = setup(t, { platform: 'win32' });
-
-    env.closeBehavior.showMainWindow();
-
-    assert.deepEqual(env.events, ['window focused']);
 });

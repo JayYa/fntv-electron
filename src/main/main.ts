@@ -1,28 +1,21 @@
 import { app, BrowserWindow } from 'electron';
 import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
-import * as winctrl from './common/winctrl';
-import { createTray, destroyTray } from './common/tray';
+import { createTray, destroyTray, showTrayBalloon } from './common/tray';
 import { mpvRuntime } from './common/mpvRuntime';
-import { bindTaskbarProgress } from './common/taskbarProgress';
-import { manageMainWindow, showMainWindow } from './common/closeBehavior';
 import * as log from '../modules/logger';
-import { followPreferences, getMainWindow } from './common/mainwin';
+import { mainWindow } from './common/mainWindow';
 import { restoreAtStartup } from './common/currentLogin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
 import { platformBehavior } from '../public/platform';
-import { initQuitCoordinator, listenForSystemShutdown } from '../modules/quit/quitCoordinator';
-
-let mainWindow: BrowserWindow | null = null;
+import { initQuitCoordinator } from '../modules/quit/quitCoordinator';
 
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
     app.quit();
 } else {
-    app.on('second-instance', showMainWindow);
-
     app.whenReady().then(async () => {
         try {
             log.info('=== 飞牛影视启动 ===');
@@ -50,27 +43,21 @@ if (!gotTheLock) {
 
             await startProxyProcess();
 
-            mainWindow = getMainWindow();
+            mainWindow.start({ showBalloon: showTrayBalloon, downloadProgress: getUpdateChecker().downloadProgress });
 
-            listenForSystemShutdown(mainWindow);
+            app.on('second-instance', () => mainWindow.show());
+
+            if (platformBehavior().hasDock) {
+                app.on('activate', () => mainWindow.show());
+            }
 
             registerAllPlugins();
 
             mpvRuntime.syncAtStartup();
 
-            await createTray(mainWindow);
+            await createTray();
 
-            manageMainWindow(mainWindow);
-
-            winctrl.setupFullScreenToggle(mainWindow);
-
-            winctrl.setupWindowShowEvents(mainWindow);
-
-            followPreferences(() => mainWindow);
-
-            await restoreAtStartup(mainWindow);
-
-            bindTaskbarProgress(mainWindow, getUpdateChecker().downloadProgress);
+            await restoreAtStartup(mainWindow.window());
 
             setTimeout(() => {
                 getUpdateChecker().autoCheckForUpdates().catch((error: Error) => {
@@ -92,17 +79,5 @@ initQuitCoordinator({
 app.on('window-all-closed', () => {
     if (platformBehavior().quitsWhenAllWindowsClosed) {
         app.quit();
-    }
-});
-
-app.on('activate', () => {
-    if (platformBehavior().hasDock) {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            mainWindow = getMainWindow();
-            manageMainWindow(mainWindow);
-            app.dock?.show();
-        } else {
-            showMainWindow();
-        }
     }
 });

@@ -7,6 +7,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { openLoginPage } = require('./helpers/loginPage.cjs');
+const { fakeDownloadProgress, fakeMainWindowElectron } = require('./helpers/fakeMainWindow.cjs');
 
 function setup(t, storedConfig, { url } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-login-page-preferences-'));
@@ -15,6 +16,7 @@ function setup(t, storedConfig, { url } = {}) {
     ipcMain.invokeHandlers = new Map();
     ipcMain.handle = (channel, handler) => ipcMain.invokeHandlers.set(channel, handler);
     useFakeElectron(t, {
+        ...fakeMainWindowElectron([]).electron,
         ipcMain,
         app: {
             isPackaged: false,
@@ -34,16 +36,11 @@ function setup(t, storedConfig, { url } = {}) {
     const { LOGIN_PAGE_PATH } = require('../dest/main/common/loginPage.js');
 
     const page = openLoginPage();
-    const window = {
-        reloads: 0,
-        isDestroyed: () => false,
-        webContents: {
-            getURL: () => url ?? pathToFileURL(LOGIN_PAGE_PATH).href,
-            send: (channel, data) => page.receive(channel, data),
-            reloadIgnoringCache() { window.reloads += 1; },
-        },
-    };
-    require('../dest/main/common/mainwin.js').followPreferences(() => window);
+    const { mainWindow } = require('../dest/main/common/mainWindow.js');
+    mainWindow.start({ showBalloon: () => true, downloadProgress: fakeDownloadProgress() });
+    const window = mainWindow.window();
+    window.webContents.url = url ?? pathToFileURL(LOGIN_PAGE_PATH).href;
+    window.webContents.send = (channel, data) => page.receive(channel, data);
 
     let delivered = 0;
     const deliverSent = () => {
@@ -128,10 +125,10 @@ test('turning the MPV playback preference on or off reloads the web UI so takeov
     preferences.set('mpvPlayback', false);
     preferences.set('mpvPlayback', false);
     preferences.set('nasLocalProxy', true);
-    assert.equal(window.reloads, 1);
+    assert.equal(window.webContents.reloads, 1);
 
     preferences.set('mpvPlayback', true);
-    assert.equal(window.reloads, 2);
+    assert.equal(window.webContents.reloads, 2);
 });
 
 test('changing the MPV playback preference on the login page does not reload the login page', (t) => {
@@ -139,7 +136,7 @@ test('changing the MPV playback preference on the login page does not reload the
 
     preferences.set('mpvPlayback', false);
 
-    assert.equal(window.reloads, 0);
+    assert.equal(window.webContents.reloads, 0);
 });
 
 test('with no saved MPV playback preference the login page shows MPV playback turned on', (t) => {

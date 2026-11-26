@@ -1,6 +1,6 @@
 import { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { isLoginPage } from '../../common/loginPage';
-import { getMainWindow } from '../../common/mainwin';
+import { mainWindow } from '../../common/mainWindow';
 import * as fn from '../../../modules/fn_api/api';
 import { HTTPS_PORT_MISMATCH_MESSAGE, isHttpsPortMismatch } from '../../../modules/fn_api/core/httpsPortMismatch';
 import * as loginStore from '../../../modules/fn_config/loginStore';
@@ -114,7 +114,7 @@ async function requestToken(
         const shouldTrust = await showCertificateTrustDialog(
             baseUrl,
             response.message || '未知证书错误',
-            getMainWindow(),
+            mainWindow.window(),
         );
         if (!shouldTrust) {
             return { error: { title: '登录取消', message: '用户取消信任证书，无法继续登录。' } };
@@ -157,7 +157,7 @@ async function handleLogin(_event: IpcMainInvokeEvent, loginData: LoginData): Pr
     }
 
     const accessCode = loginData.accessCode?.trim() || '';
-    const result = await establishNewLogin(getMainWindow, {
+    const result = await establishNewLogin(mainWindow.window, {
         access: {
             baseUrl: loginData.useHttps ? `https://${loginData.domain}` : `http://${loginData.domain}`,
             accessCode,

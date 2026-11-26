@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron, useFakeModule } = require('./helpers/fakeElectron.cjs');
+const { useStubMainWindow } = require('./helpers/fakeMainWindow.cjs');
 
 const BUNDLED = { path: 'C:\\app\\third_party\\fntv-mpv\\mpv.exe', bundled: true, args: [] };
 
@@ -47,6 +48,7 @@ function setupTray(t, { mpvHomeExists = true, openPathError = '', userConfigUnkn
             async openPath(target) { openedPaths.push(target); return openPathError; },
         },
     }, { platform: 'win32' });
+    useStubMainWindow(t);
 
     const preferences = () => require('../dest/modules/fn_config/preferences.js');
     const runtime = {
@@ -99,7 +101,7 @@ function setupTray(t, { mpvHomeExists = true, openPathError = '', userConfigUnkn
         },
         async createTray() {
             trayModule = require('../dest/main/common/tray.js');
-            await trayModule.createTray({});
+            await trayModule.createTray();
         },
         destroyTray: () => trayModule.destroyTray(),
         settingsItems,
