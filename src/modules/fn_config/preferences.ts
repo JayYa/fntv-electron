@@ -111,7 +111,7 @@ function notify(name: PreferenceName): void {
 }
 
 export function update(patch: Partial<Preferences>): void {
-    const names = (Object.keys(patch) as PreferenceName[]).filter(name => name in PREFERENCES);
+    const names = Object.keys(patch) as PreferenceName[];
     if (names.length === 0) return;
     const config = readStoredConfig();
     const changed = names.filter(name => writePreference(config, name, patch[name] as Preferences[typeof name]));

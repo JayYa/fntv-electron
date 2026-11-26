@@ -40,14 +40,14 @@ function initPreferences() {
 
 function applyPreferences(snapshot, { overwriteEdits = false } = {}) {
     const before = shownPreferences;
-    const untouched = (control, property, value) => overwriteEdits || !before || control[property] === value;
-    if (untouched(proxyEnabledSwitch, 'checked', before?.appDownloadProxy.enabled)) {
+    const untouched = (shown, current) => overwriteEdits || !before || shown === current;
+    if (untouched(before?.appDownloadProxy.enabled, proxyEnabledSwitch.checked)) {
         proxyEnabledSwitch.checked = snapshot.appDownloadProxy.enabled;
     }
-    if (untouched(proxyUrlInput, 'value', before?.appDownloadProxy.proxyUrl)) {
+    if (untouched(before?.appDownloadProxy.proxyUrl.trim(), proxyUrlInput.value.trim())) {
         proxyUrlInput.value = snapshot.appDownloadProxy.proxyUrl;
     }
-    if (untouched(mpvPlaybackSwitch, 'checked', before?.mpvPlayback)) {
+    if (untouched(before?.mpvPlayback, mpvPlaybackSwitch.checked)) {
         mpvPlaybackSwitch.checked = snapshot.mpvPlayback;
     }
     proxyUrlInput.placeholder = snapshot.defaultProxyUrl;
@@ -57,11 +57,11 @@ function applyPreferences(snapshot, { overwriteEdits = false } = {}) {
 function changedPreferences() {
     const patch = {};
     const appDownloadProxy = { enabled: proxyEnabledSwitch.checked, proxyUrl: proxyUrlInput.value.trim() };
-    const shownProxy = shownPreferences?.appDownloadProxy;
-    if (!shownProxy || appDownloadProxy.enabled !== shownProxy.enabled || appDownloadProxy.proxyUrl !== shownProxy.proxyUrl.trim()) {
+    const shownProxy = shownPreferences.appDownloadProxy;
+    if (appDownloadProxy.enabled !== shownProxy.enabled || appDownloadProxy.proxyUrl !== shownProxy.proxyUrl.trim()) {
         patch.appDownloadProxy = appDownloadProxy;
     }
-    if (!shownPreferences || mpvPlaybackSwitch.checked !== shownPreferences.mpvPlayback) {
+    if (mpvPlaybackSwitch.checked !== shownPreferences.mpvPlayback) {
         patch.mpvPlayback = mpvPlaybackSwitch.checked;
     }
     return patch;
@@ -88,6 +88,10 @@ async function requestSavePreferences(patch) {
 
 async function savePreferences() {
     if (proxySaveBtn.disabled) return;
+    if (!shownPreferences) {
+        showCustomMessage('error', '保存失败', '设置还没有读取完成，请稍后再试。');
+        return;
+    }
     const patch = changedPreferences();
     if (Object.keys(patch).length === 0) {
         closeProxyPanel();
