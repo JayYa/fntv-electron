@@ -80,7 +80,7 @@ function setup(t, { fnMedia = fakeFnMedia(), mpvFound = true, connect } = {}) {
     const play = createPlay({
         connect: connect ?? (async () => ({
             fnapi: fnMedia.api,
-            openProxySession: async (itemGuids) => {
+            openPlaybackSession: async (itemGuids) => {
                 world.proxyItems.push(itemGuids);
                 return (itemGuid, sourceIndex) => `http://127.0.0.1:1234/${itemGuid}${sourceIndex ? `?sourceIndex=${sourceIndex}` : ''}`;
             },

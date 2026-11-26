@@ -4,6 +4,7 @@ import * as log from '../../modules/logger';
 import * as preferences from '../../modules/fn_config/preferences';
 import { CreatePlaybackSessionRequest, PROXY_HOST, ProxyMessage } from '../../modules/proxy_service/control';
 import { writeProxyLog } from '../../modules/proxy_service/log';
+import type { PlaybackUrl } from '../../modules/playback/play';
 import type { CurrentConnection } from './currentLogin';
 import { ProxyControlClient } from './proxyControlClient';
 
@@ -36,11 +37,9 @@ export interface ProxyStartOptions {
     onUnrecoverable(error: Error): void;
 }
 
-export type ProxyPlaybackUrl = (itemGuid: string, sourceIndex?: number) => string;
-
 export interface Proxy {
     start(options: ProxyStartOptions): Promise<void>;
-    openPlaybackSession(connection: CurrentConnection, itemGuids: string[]): Promise<ProxyPlaybackUrl>;
+    openPlaybackSession(connection: CurrentConnection, itemGuids: string[]): Promise<PlaybackUrl>;
     shutdown(): Promise<void>;
 }
 
@@ -50,7 +49,7 @@ interface RunningProxy {
     port: number;
 }
 
-function playbackUrl(port: number, session: string): ProxyPlaybackUrl {
+function playbackUrl(port: number, session: string): PlaybackUrl {
     return (itemGuid, sourceIndex = 0) => {
         const query = new URLSearchParams({ session });
         if (sourceIndex > 0) query.set('sourceIndex', String(sourceIndex));

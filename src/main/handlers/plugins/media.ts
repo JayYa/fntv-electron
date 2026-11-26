@@ -30,7 +30,7 @@ async function connect(): ReturnType<PlayDeps['connect']> {
 
     return {
         fnapi: new fn.ApiService(connection.baseUrl, connection.token),
-        openProxySession: (itemGuids) => proxy.openPlaybackSession(connection, itemGuids),
+        openPlaybackSession: (itemGuids) => proxy.openPlaybackSession(connection, itemGuids),
     };
 }
 
