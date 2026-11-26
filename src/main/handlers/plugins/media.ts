@@ -8,8 +8,7 @@ import { mainWindow } from '../../common/mainWindow';
 import { currentConnection } from '../../common/currentLogin';
 import { type MpvLaunch, mpvRuntime } from '../../common/mpvRuntime';
 import { platformBehavior } from '../../../public/platform';
-import { createPlaybackSession } from '../../common/proxy';
-import { createProxyPlaybackUrl } from '../../common/proxySession';
+import { proxy } from '../../common/proxy';
 import { isPlayRequest } from '../../../modules/playback/playRequest';
 import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
 import * as playbackState from '../../../modules/playback/playbackState';
@@ -27,22 +26,11 @@ function getProgramOrNotify(): MpvLaunch | undefined {
 }
 
 async function connect(): ReturnType<PlayDeps['connect']> {
-    const { baseUrl, token, account, accessCookie, trustedHost } = await currentConnection();
+    const connection = await currentConnection();
 
     return {
-        fnapi: new fn.ApiService(baseUrl, token),
-        async openProxySession(itemGuids) {
-            const playback = await createPlaybackSession({
-                token,
-                account,
-                domain: baseUrl,
-                accessCookie,
-                skipVerify: trustedHost,
-                useNasLocal: preferences.get('nasLocalProxy'),
-                itemGuids,
-            });
-            return (itemGuid, sourceIndex) => createProxyPlaybackUrl(playback, itemGuid, sourceIndex);
-        },
+        fnapi: new fn.ApiService(connection.baseUrl, connection.token),
+        openPlaybackSession: (itemGuids) => proxy.openPlaybackSession(connection, itemGuids),
     };
 }
 

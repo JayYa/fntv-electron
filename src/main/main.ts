@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import { createTray, destroyTray, showTrayBalloon } from './common/tray';
@@ -7,11 +7,36 @@ import * as log from '../modules/logger';
 import { mainWindow } from './common/mainWindow';
 import { restoreAtStartup } from './common/currentLogin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
-import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
+import { proxy } from './common/proxy';
+import { removeLegacyProxySecret } from './common/legacyProxySecret';
 import { platformBehavior } from '../public/platform';
 import { initQuitCoordinator } from '../modules/quit/quitCoordinator';
 
 const gotTheLock = app.requestSingleInstanceLock();
+
+async function showErrorAndQuit(title: string, message: string): Promise<void> {
+    try {
+        await dialog.showMessageBox({ type: 'error', title, message, buttons: ['退出应用'] });
+    } finally {
+        app.quit();
+    }
+}
+
+async function startProxy(): Promise<void> {
+    removeLegacyProxySecret(app.getPath('userData'), log);
+    try {
+        await proxy.start({
+            onUnrecoverable: () => {
+                void showErrorAndQuit('应用即将退出', '飞牛影视的播放服务（Proxy）多次启动失败，无法继续运行。');
+            },
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.error('启动 Proxy 失败:', message);
+        await showErrorAndQuit('启动失败', `飞牛影视的播放服务（Proxy）无法启动。\n\n错误详情: ${message}\n\n请查看应用日志获取更多信息。`);
+        throw error;
+    }
+}
 
 if (!gotTheLock) {
     app.quit();
@@ -41,7 +66,7 @@ if (!gotTheLock) {
                 }
             });
 
-            await startProxyProcess();
+            await startProxy();
 
             mainWindow.start({ showBalloon: showTrayBalloon, downloadProgress: getUpdateChecker().downloadProgress });
 
@@ -72,7 +97,7 @@ if (!gotTheLock) {
 }
 
 initQuitCoordinator({
-    closeProxy: shutdownProxyProcess,
+    closeProxy: () => proxy.shutdown(),
     onQuitReleased: destroyTray,
 });
 

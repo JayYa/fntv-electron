@@ -121,7 +121,7 @@ Proxy 是 TypeScript 写的（`src/modules/proxy_service/`），客户端启动�
 
 ## 播放会话
 
-- 播放地址只带 `session`，不带登录 token（`createProxyPlaybackUrl`，`src/main/common/proxySession.ts`）。格式是 `http://127.0.0.1:<port>/api/v1/playvideo/<itemGuid>?session=<session>[&sourceIndex=<n>]`。会话只在创建它的那个 Proxy 子进程里有效，所以 `createPlaybackSession` 把会话 ID 和该进程的端口一起返回。
+- 播放地址只带 `session`，不带登录 token（`openPlaybackSession`，`src/main/common/proxy.ts`）。格式是 `http://127.0.0.1:<port>/api/v1/playvideo/<itemGuid>?session=<session>[&sourceIndex=<n>]`。会话只在创建它的那个 Proxy 子进程里有效，所以地址用创建会话的那个进程的端口拼。
 - 入参 `PlaybackSessionInput` 只定义一次（`src/modules/proxy_service/playbackSessions.ts`），主进程经 IPC 原样传入。
 - `session` 是 64 位十六进制，有效期 24 小时，每次访问顺延。
 - 每个会话只允许访问创建时列出的 `itemGuids`。

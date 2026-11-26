@@ -22,7 +22,7 @@ export type PlayerOptions = {
 export interface PlayDeps {
     connect(): Promise<{
         fnapi: PlayApi;
-        openProxySession(itemGuids: string[]): Promise<PlaybackUrl>;
+        openPlaybackSession(itemGuids: string[]): Promise<PlaybackUrl>;
     }>;
     launchPlayer(options: PlayerOptions): Player | undefined;
     onAbnormalExit(): Promise<void>;
@@ -35,7 +35,7 @@ export function createPlay(deps: PlayDeps): (request: PlayRequest, run: Playback
 async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayRequest, run: PlaybackRun): Promise<void> {
     log.info('Play movie event received id:', id, ' index:', sourceIndex, ' restart:', restart === true);
 
-    const { fnapi, openProxySession } = await deps.connect();
+    const { fnapi, openPlaybackSession } = await deps.connect();
 
     const response = await fnapi.getPlayInfo(id);
     if (!response.success || !response.data) {
@@ -62,7 +62,7 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
         playList[currentIndex] = { ...playList[currentIndex], ts: 0 };
     }
 
-    const urlFor = await openProxySession(playList.map(item => item.itemGuid));
+    const urlFor = await openPlaybackSession(playList.map(item => item.itemGuid));
     const selectedSourceIndex = Number.isInteger(sourceIndex) && sourceIndex > 0 ? sourceIndex : 0;
     if (selectedSourceIndex > 0) {
         log.info(`使用指定的播放源索引: ${selectedSourceIndex}`);
