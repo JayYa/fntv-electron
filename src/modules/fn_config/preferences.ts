@@ -93,13 +93,14 @@ export function get<K extends PreferenceName>(name: K): Preferences[K] {
     return PREFERENCES[name].read(readStoredConfig());
 }
 
-export function set<K extends PreferenceName>(name: K, value: Preferences[K]): void {
+function writePreference<K extends PreferenceName>(config: StoredConfig, name: K, value: Preferences[K]): boolean {
     const preference = PREFERENCES[name];
-    const config = readStoredConfig();
     const before = preference.read(config);
     preference.write(config, value);
-    writeConfigFile(config);
-    if (isDeepStrictEqual(before, preference.read(config))) return;
+    return !isDeepStrictEqual(before, preference.read(config));
+}
+
+function notify(name: PreferenceName): void {
     for (const listener of listeners) {
         try {
             listener(name);
@@ -107,6 +108,30 @@ export function set<K extends PreferenceName>(name: K, value: Preferences[K]): v
             log.error(`处理用户偏好 ${name} 的变化失败:`, error);
         }
     }
+}
+
+export function update(patch: Partial<Preferences>): void {
+    const names = Object.keys(patch) as PreferenceName[];
+    if (names.length === 0) return;
+    const config = readStoredConfig();
+    const changed = names.filter(name => writePreference(config, name, patch[name] as Preferences[typeof name]));
+    writeConfigFile(config);
+    changed.forEach(notify);
+}
+
+export function set<K extends PreferenceName>(name: K, value: Preferences[K]): void {
+    update({ [name]: value });
+}
+
+export type PreferencesSnapshot = Pick<Preferences, 'appDownloadProxy' | 'mpvPlayback'> & { defaultProxyUrl: string };
+
+export function snapshot(): PreferencesSnapshot {
+    const config = readStoredConfig();
+    return {
+        appDownloadProxy: PREFERENCES.appDownloadProxy.read(config),
+        mpvPlayback: PREFERENCES.mpvPlayback.read(config),
+        defaultProxyUrl: DEFAULT_DOWNLOAD_PROXY_URL,
+    };
 }
 
 export function onChange(listener: (name: PreferenceName) => void): () => void {

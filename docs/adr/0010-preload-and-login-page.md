@@ -40,7 +40,7 @@ status: accepted
 - 主进程用 `isLoginPage`（`src/main/common/loginPage.ts`）自己再查一次 `senderFrame` 是不是登录页：preload 的 `file:` 判断在渲染进程里。路径用 `path.relative` 比较，它在 Windows 上不区分大小写，盘符写法不同也算同一个文件。
 - 测试（`tests/helpers/loginPage.cjs`）用假 DOM 跑登录页真实的脚本。文件列表取自 `index.html` 的引用，还要和目录内容一致：新文件没接进页面或测试读漏时在这里失败，不会让 `doesNotMatch` 对着空内容通过。脚本按页面加载顺序逐个运行，不拼起来：拼接后函数提升会盖住顺序问题。
 - FN ID 的判定只有一份（`src/public/fnId.ts`，不依赖 electron 和 Node 内置模块）：主进程直接导入，登录页经 preload 桥的 `electronAPI.isFnId` 同步调用。FN ID 会拼进 `https://5ddd.com/{fnId}`，只放行不改变 URL 结构的字符（6 到 30 位字母、数字、`_`、`-`）。FN Connect 页面的规则更严（小写字母开头，只含小写字母、数字和单个连字符），但那些规则是逐步加的，老 FN ID 可能不满足，这里不跟进，由 FN Connect 页面自己提示。
-- 应用更新下载加速地址留空时发空值，由主进程用默认地址；主进程下发的 `proxyUrl` 已回退到默认地址，保存后重新读取，回显实际生效的地址。
+- 登录页的设置面板显示主进程推送的偏好快照（`preferences-snapshot`），托盘改了偏好时随之更新，用户在面板里已改动的控件不被覆盖。保存只发相对快照改动过的偏好（`set-preferences`），没有改动就不发；主进程一次写入，返回保存后的快照，面板用它回显实际生效的值。应用更新下载加速地址留空时发空值，由主进程用默认地址。
 
 ## 主进程 IPC 处理器（`src/main/handlers/`）
 

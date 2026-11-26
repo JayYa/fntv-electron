@@ -2,7 +2,9 @@ import { BrowserWindow, BrowserWindowConstructorOptions, screen } from 'electron
 import * as path from 'path';
 import { platformBehavior } from '../../public/platform';
 import { USER_DATA_PATH } from '../../public/constants';
+import * as preferences from '../../modules/fn_config/preferences';
 import * as log from '../../modules/logger';
+import { isLoginPageUrl } from './loginPage';
 import { WEB_UI_SESSION_PARTITION } from './webUiSession';
 import { DisplayLayout, Rect, WindowPlacement, loadWindowPlacement, saveWindowPlacement } from './windowState';
 
@@ -105,4 +107,22 @@ export function getMainWindow(): BrowserWindow {
 
 export function shouldStartMaximized(): boolean {
     return startMaximized;
+}
+
+interface PreferenceFollowingWindow {
+    isDestroyed(): boolean;
+    webContents: { getURL(): string; send(channel: string, data: unknown): void; reloadIgnoringCache(): void };
+}
+
+export function followPreferences(shownWindow: () => PreferenceFollowingWindow | null): () => void {
+    return preferences.onChange((name) => {
+        const window = shownWindow();
+        if (!window || window.isDestroyed()) return;
+        window.webContents.send('preferences-snapshot', preferences.snapshot());
+        if (name !== 'mpvPlayback') return;
+        const url = window.webContents.getURL();
+        if (!url || isLoginPageUrl(url)) return;
+        log.info('MPV 接管开关已改变，重新加载网页端');
+        window.webContents.reloadIgnoringCache();
+    });
 }

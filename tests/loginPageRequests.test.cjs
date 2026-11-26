@@ -18,8 +18,12 @@ const shownMessage = (page) => (page.input('customMessage').classList.contains('
     ? { title: page.input('messageTitle').textContent, message: page.input('messageContent').textContent }
     : null);
 
-function openSettings(page) {
+const SNAPSHOT = { appDownloadProxy: { enabled: false, proxyUrl: 'https://gh-proxy.com/' }, mpvPlayback: true, defaultProxyUrl: 'https://gh-proxy.com/' };
+
+function saveMpvPlaybackTurnedOff(page) {
+    page.receive('preferences-snapshot', SNAPSHOT);
     page.click('proxySettingsBtn');
+    page.input('mpvPlaybackSwitch').checked = false;
     assert.ok(page.input('proxyPanel').classList.contains('show'));
     page.click('proxySaveBtn');
 }
@@ -135,30 +139,28 @@ test('when the update check handler throws, the update button comes back and an 
     assert.equal(shownMessage(page).title, '检查更新失败');
 });
 
-test('saving settings closes the panel only after both settings are saved', async () => {
+test('saving settings closes the panel only after the save is answered', async () => {
     const page = openLoginPage();
     page.load();
 
-    openSettings(page);
+    saveMpvPlaybackTurnedOff(page);
     assert.equal(page.input('proxySaveBtn').disabled, true);
-    assert.deepEqual(page.pending().map(({ channel }) => channel).sort(), ['set-download-proxy', 'set-mpv-playback']);
-
-    await page.resolve('set-download-proxy', { success: true });
+    assert.deepEqual(page.pending(), [{ channel: 'set-preferences', payload: { mpvPlayback: false } }]);
     assert.ok(page.input('proxyPanel').classList.contains('show'));
 
-    await page.resolve('set-mpv-playback', { success: true });
+    await page.resolve('set-preferences', { success: true, preferences: { ...SNAPSHOT, mpvPlayback: false } });
     assert.equal(page.input('proxyPanel').classList.contains('show'), false);
     assert.equal(page.input('proxySaveBtn').disabled, false);
+    assert.equal(page.input('mpvPlaybackSwitch').checked, false);
     assert.equal(shownMessage(page), null);
 });
 
-test('when a setting fails to save, the panel stays open, the button comes back and the failure is shown', async () => {
+test('when the settings fail to save, the panel stays open, the button comes back and the failure is shown', async () => {
     const page = openLoginPage();
     page.load();
 
-    openSettings(page);
-    await page.resolve('set-download-proxy', { success: true });
-    await page.resolve('set-mpv-playback', { success: false, error: 'disk full' });
+    saveMpvPlaybackTurnedOff(page);
+    await page.resolve('set-preferences', { success: false, error: 'disk full' });
 
     assert.ok(page.input('proxyPanel').classList.contains('show'));
     assert.equal(page.input('proxySaveBtn').disabled, false);
@@ -166,15 +168,38 @@ test('when a setting fails to save, the panel stays open, the button comes back 
     assert.match(shownMessage(page).message, /disk full/);
 });
 
-test('when a settings handler throws, the panel stays open and the failure is shown', async () => {
+test('when the settings handler throws, the panel stays open and the failure is shown', async () => {
     const page = openLoginPage();
     page.load();
 
-    openSettings(page);
-    await page.reject('set-download-proxy', new Error('boom'));
-    await page.resolve('set-mpv-playback', { success: true });
+    saveMpvPlaybackTurnedOff(page);
+    await page.reject('set-preferences', new Error('boom'));
 
     assert.ok(page.input('proxyPanel').classList.contains('show'));
     assert.equal(page.input('proxySaveBtn').disabled, false);
     assert.equal(shownMessage(page).title, '保存失败');
+});
+
+test('saving settings before the preferences have arrived writes nothing and says so', () => {
+    const page = openLoginPage();
+    page.load();
+
+    page.click('proxySettingsBtn');
+    page.click('proxySaveBtn');
+
+    assert.deepEqual(page.pending(), []);
+    assert.ok(page.input('proxyPanel').classList.contains('show'));
+    assert.equal(shownMessage(page).title, '保存失败');
+});
+
+test('a relay address the user only padded with spaces counts as untouched when a tray change arrives', () => {
+    const page = openLoginPage();
+    page.load();
+    page.receive('preferences-snapshot', SNAPSHOT);
+
+    page.click('proxySettingsBtn');
+    page.input('proxyUrlInput').value = ' https://gh-proxy.com/ ';
+    page.receive('preferences-snapshot', { ...SNAPSHOT, appDownloadProxy: { enabled: true, proxyUrl: 'https://other.example.test/' } });
+
+    assert.equal(page.input('proxyUrlInput').value, 'https://other.example.test/');
 });

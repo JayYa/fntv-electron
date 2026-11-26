@@ -8,18 +8,18 @@ const PREFERENCE_TIMEOUT_MS = 2000;
 function readMpvPlaybackPreference(): Promise<boolean> {
     return new Promise((resolve) => {
         const timeout = setTimeout(() => {
-            ipcRenderer.off('mpv-playback-info', handler);
+            ipcRenderer.off('preferences-snapshot', handler);
             resolve(true);
         }, PREFERENCE_TIMEOUT_MS);
 
         const handler = (_event: Electron.IpcRendererEvent, data?: { mpvPlayback?: unknown }) => {
             clearTimeout(timeout);
-            ipcRenderer.off('mpv-playback-info', handler);
+            ipcRenderer.off('preferences-snapshot', handler);
             resolve(data?.mpvPlayback !== false);
         };
 
-        ipcRenderer.once('mpv-playback-info', handler);
-        ipcRenderer.send('get-mpv-playback');
+        ipcRenderer.once('preferences-snapshot', handler);
+        ipcRenderer.send('get-preferences');
     });
 }
 

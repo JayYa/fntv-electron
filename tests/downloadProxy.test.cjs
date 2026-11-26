@@ -47,7 +47,7 @@ function openConnectedLoginPage(ipcMain) {
         while (delivered < page.sent.length) {
             const { channel, payload } = page.sent[delivered];
             delivered += 1;
-            if (channel === 'get-download-proxy') {
+            if (channel === 'get-preferences') {
                 ipcMain.emit(channel, { reply: (replyChannel, data) => page.receive(replyChannel, data) }, payload);
             }
         }
