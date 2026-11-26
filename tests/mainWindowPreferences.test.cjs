@@ -37,7 +37,7 @@ function setup(t, storedConfig, { url } = {}) {
 
     const page = openLoginPage();
     const { mainWindow } = require('../dest/main/common/mainWindow.js');
-    mainWindow.start({ showBalloon() {}, downloadProgress: fakeDownloadProgress() });
+    mainWindow.start({ showBalloon: () => true, downloadProgress: fakeDownloadProgress() });
     const window = mainWindow.window();
     window.webContents.url = url ?? pathToFileURL(LOGIN_PAGE_PATH).href;
     window.webContents.send = (channel, data) => page.receive(channel, data);

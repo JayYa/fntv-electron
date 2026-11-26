@@ -6,7 +6,7 @@ import * as preferences from '../../modules/fn_config/preferences';
 import * as log from '../../modules/logger';
 import { listenForSystemShutdown } from '../../modules/quit/quitCoordinator';
 import type { DownloadProgress } from '../../modules/updater/inAppUpdate';
-import { closeBehaviorMenuItem, followCloseBehavior } from './closeBehavior';
+import { closeBehaviorMenuItem, followCloseBehavior, type ShowTrayBalloon } from './closeBehavior';
 import { isLoginPageUrl } from './loginPage';
 import { checkLibraryPageUrl } from './utils';
 import { WEB_UI_SESSION_PARTITION } from './webUiSession';
@@ -134,7 +134,7 @@ function followDownloadProgress(window: BrowserWindow, progress: DownloadProgres
 }
 
 export interface MainWindowDeps {
-    showBalloon(content: string): void;
+    showBalloon: ShowTrayBalloon;
     downloadProgress: DownloadProgress;
 }
 
@@ -173,7 +173,7 @@ export const mainWindow = {
         if (window.isMinimized()) window.restore();
         if (!window.isVisible()) window.show();
         window.focus();
-        if (platformBehavior().hasDock) app.dock?.show();
+        if (behavior.hasDock) app.dock?.show();
     },
 
     minimize(): void {

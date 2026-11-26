@@ -14,7 +14,7 @@ function clickClose(window) {
     return event;
 }
 
-function setup(t, { platform, config } = {}) {
+function setup(t, { platform, config, trayReady = true } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-close-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     fs.mkdirSync(paths.userData, { recursive: true });
@@ -55,7 +55,12 @@ function setup(t, { platform, config } = {}) {
 
     startQuitCoordinator(events);
     const { mainWindow } = require('../dest/main/common/mainWindow.js');
-    mainWindow.start({ showBalloon: (content) => events.push(`balloon: ${content}`), downloadProgress: fakeDownloadProgress() });
+    const showBalloon = (content) => {
+        if (!trayReady) return false;
+        events.push(`balloon: ${content}`);
+        return true;
+    };
+    mainWindow.start({ showBalloon, downloadProgress: fakeDownloadProgress() });
     const window = mainWindow.window();
     window.emit('ready-to-show');
     events.length = 0;
@@ -83,6 +88,15 @@ test('on Windows closing with the default setting asks, and minimizing hides the
         'window hidden',
     ]);
     assert.equal(env.app.exited, false);
+});
+
+test('hiding the window before the tray exists keeps the one-time balloon for the next hide', async (t) => {
+    const env = setup(t, { platform: 'win32', config: { exitMode: 'minimize' }, trayReady: false });
+
+    clickClose(env.window);
+    await settle();
+
+    assert.equal(require('../dest/modules/fn_config/preferences.js').trayNotificationShown(), false);
 });
 
 test('on Windows choosing quit with remember quits, and the next start quits on close without asking', async (t) => {

@@ -99,7 +99,7 @@ function useStubMainWindow(t) {
 
 function startMainWindow() {
     const { mainWindow } = require('../../dest/main/common/mainWindow.js');
-    mainWindow.start({ showBalloon() {}, downloadProgress: fakeDownloadProgress() });
+    mainWindow.start({ showBalloon: () => true, downloadProgress: fakeDownloadProgress() });
     return mainWindow.window();
 }
 

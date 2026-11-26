@@ -21,7 +21,9 @@ async function askCloseBehavior(window: BrowserWindow, text: CloseBehaviorDialog
     return chosen ? { behavior: chosen.behavior, remember: result.checkboxChecked } : null;
 }
 
-function noticeHidden(showTrayBalloon: (content: string) => void): void {
+export type ShowTrayBalloon = (content: string) => boolean;
+
+function noticeHidden(showTrayBalloon: ShowTrayBalloon): void {
     const notice = platformBehavior().hideNotice;
     if (!notice || preferences.trayNotificationShown()) return;
     if (notice.shownBy === 'notification') {
@@ -29,18 +31,18 @@ function noticeHidden(showTrayBalloon: (content: string) => void): void {
             new Notification({ title: '飞牛影视', body: notice.body, silent: false }).show();
         }
     } else {
-        showTrayBalloon(notice.body);
+        if (!showTrayBalloon(notice.body)) return;
     }
     preferences.markTrayNotificationShown();
 }
 
-function hide(window: BrowserWindow, showTrayBalloon: (content: string) => void): void {
+function hide(window: BrowserWindow, showTrayBalloon: ShowTrayBalloon): void {
     window.hide();
     if (platformBehavior().hasDock) app.dock?.hide();
     noticeHidden(showTrayBalloon);
 }
 
-async function handleClose(window: BrowserWindow, showTrayBalloon: (content: string) => void): Promise<void> {
+async function handleClose(window: BrowserWindow, showTrayBalloon: ShowTrayBalloon): Promise<void> {
     let behavior = preferences.get('closeBehavior');
     if (behavior === 'ask') {
         const choice = await askCloseBehavior(window, platformBehavior().closeBehaviorText.askOnClose, true);
@@ -55,7 +57,7 @@ async function handleClose(window: BrowserWindow, showTrayBalloon: (content: str
     }
 }
 
-export function followCloseBehavior(window: BrowserWindow, showTrayBalloon: (content: string) => void): void {
+export function followCloseBehavior(window: BrowserWindow, showTrayBalloon: ShowTrayBalloon): void {
     window.on('close', (event) => {
         if (isQuitting()) return;
         event.preventDefault();

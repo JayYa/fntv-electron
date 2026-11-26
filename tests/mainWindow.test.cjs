@@ -39,7 +39,7 @@ function setup(t, { platform = 'win32', windowState } = {}) {
         mainWindow,
         progress,
         start() {
-            mainWindow.start({ showBalloon: (content) => events.push(`balloon: ${content}`), downloadProgress: progress });
+            mainWindow.start({ showBalloon: () => true, downloadProgress: progress });
             return mainWindow.window();
         },
     };
@@ -89,7 +89,7 @@ test('the main window is created once and every caller gets the same one', (t) =
 
     assert.equal(env.mainWindow.window(), window);
     assert.equal(env.created.length, 1);
-    assert.throws(() => env.mainWindow.start({ showBalloon() {}, downloadProgress: env.progress }), /主窗口已经启动/);
+    assert.throws(() => env.mainWindow.start({ showBalloon: () => true, downloadProgress: env.progress }), /主窗口已经启动/);
 });
 
 test('using the main window before it is started fails at once', (t) => {
@@ -140,4 +140,12 @@ test('showing the main window on Windows leaves a visible window in place and fo
     env.mainWindow.show();
 
     assert.deepEqual(env.events, ['window focused']);
+});
+
+test('a Windows session end on the main window is handed to the quit coordinator, which listens only once', (t) => {
+    const env = setup(t);
+    const window = env.start();
+
+    assert.equal(window.listenerCount('session-end'), 1);
+    assert.throws(() => require('../dest/modules/quit/quitCoordinator.js').listenForSystemShutdown(window), /已经在监听系统关机/);
 });

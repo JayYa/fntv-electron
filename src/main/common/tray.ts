@@ -216,8 +216,10 @@ export async function createTray(): Promise<void> {
     log.info('系统托盘创建成功');
 }
 
-export function showTrayBalloon(content: string): void {
-    tray?.displayBalloon({ iconType: 'info', title: '飞牛影视', content });
+export function showTrayBalloon(content: string): boolean {
+    if (!tray) return false;
+    tray.displayBalloon({ iconType: 'info', title: '飞牛影视', content });
+    return true;
 }
 
 export function destroyTray(): void {
