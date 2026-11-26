@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const axios = require('axios');
 const { useFakeElectron } = require('./fakeElectron.cjs');
+const { startMainWindow } = require('./fakeMainWindow.cjs');
 
 const PASSWORD = 'plain-password-value';
 const ACCESS_CODE = 'plain-access-code';
@@ -29,9 +30,12 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
     class FakeBrowserWindow extends EventEmitter {
         constructor() {
             super();
-            windowsOpened += 1;
-            if (oauthWindow) mainWindow = this;
-            else oauthWindow = this;
+            if (mainWindow) {
+                windowsOpened += 1;
+                oauthWindow = this;
+            } else {
+                mainWindow = this;
+            }
             this.loaded = [];
             this.scripts = [];
             this.destroyed = false;
@@ -78,6 +82,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         },
         BrowserWindow: FakeBrowserWindow,
         screen: fakeSingleDisplayScreen(),
+        powerMonitor: new EventEmitter(),
         dialog: {},
         net: {
             request(options) {
@@ -116,6 +121,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
         };
     };
 
+    startMainWindow();
     const { handleFnIdLogin } = require('../../dest/main/handlers/core/fnIdLogin.js');
     const { readCurrentLogin } = require('../../dest/modules/fn_config/loginStore.js');
     const loginData = { domain: 'demo123', username: 'alice', password: PASSWORD, accessCode };

@@ -1,5 +1,5 @@
 import { BrowserWindow, Session } from 'electron';
-import { getMainWindow } from '../../common/mainwin';
+import { mainWindow } from '../../common/mainWindow';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
 import { establishNewLogin, GrantedBaseUrl, LoginFailedError, type LoginReply, verifyAccess } from '../../common/currentLogin';
@@ -145,7 +145,7 @@ class FnIdLogin {
 
     private async complete(token: string, target: GrantedBaseUrl): Promise<void> {
         try {
-            const result = await establishNewLogin(getMainWindow, {
+            const result = await establishNewLogin(mainWindow.window, {
                 access: target,
                 account: this.loginData.username,
                 token,

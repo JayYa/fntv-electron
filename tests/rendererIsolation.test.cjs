@@ -6,7 +6,7 @@ const { loginPageScriptText } = require('./helpers/loginPage.cjs');
 
 test('main window disables renderer Node access and enables isolation and the sandbox', () => {
     const mainWindow = fs.readFileSync(
-        path.join(__dirname, '..', 'dest', 'main', 'common', 'mainwin.js'),
+        path.join(__dirname, '..', 'dest', 'main', 'common', 'mainWindow.js'),
         'utf8',
     );
     assert.match(mainWindow, /nodeIntegration:\s*false/);

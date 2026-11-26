@@ -1,19 +1,13 @@
 import { OnBeforeRequestListenerDetails } from 'electron';
 import { endCurrentLogin } from '../../common/currentLogin';
-import { getMainWindow } from '../../common/mainwin';
+import { mainWindow } from '../../common/mainWindow';
 import { interceptor } from '../core/interceptor';
 import * as log from '../../../modules/logger';
 
 function handleLeaveRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
     log.info('网页端请求登录页或登出，结束当前登录');
     callback({ cancel: true });
-
-    const mainWindow = getMainWindow();
-    if (!mainWindow) {
-        log.error('主窗口未创建，无法跳转到登录页面');
-        return;
-    }
-    void endCurrentLogin(mainWindow);
+    void endCurrentLogin(mainWindow.window());
 }
 
 function init(): void {

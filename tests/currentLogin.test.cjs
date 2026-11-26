@@ -62,7 +62,7 @@ test('when the login state cannot be restored, password login saves nothing and 
     });
 
     await assertNothingSaved(world);
-    assert.equal(world.mainWindow(), null);
+    assert.deepEqual(world.mainWindow().loaded.urls, []);
 });
 
 test('a rejected password is reported as it came from FNMedia and nothing is saved', async (t) => {
@@ -161,7 +161,7 @@ test('when secure storage is unavailable, password login says so and saves nothi
     assert.equal(reply.error.title, '无法安全保存登录信息');
     assert.match(reply.error.message, /安全存储不可用/);
     await assertNothingSaved(world);
-    assert.equal(world.mainWindow(), null);
+    assert.deepEqual(world.mainWindow().loaded.urls, []);
 });
 
 test('a login whose access code was already verified saves the current login and history without asking the gateway again', async (t) => {

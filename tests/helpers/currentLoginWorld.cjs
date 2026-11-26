@@ -5,6 +5,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const axios = require('axios');
 const { useFakeElectron } = require('./fakeElectron.cjs');
+const { startMainWindow } = require('./fakeMainWindow.cjs');
 
 const NAS = 'https://nas.example:5667';
 const PASSWORD_LOGIN = { domain: 'nas.example:5667', username: 'alice', password: 'secret', useHttps: true };
@@ -59,6 +60,7 @@ function setup(t, {
         },
         BrowserWindow: FakeBrowserWindow,
         screen: { getAllDisplays: () => [display], getPrimaryDisplay: () => display },
+        powerMonitor: new EventEmitter(),
         ipcMain: {
             on(channel, listener) { listeners.set(channel, listener); },
             handle(channel, handler) { invokeHandlers.set(channel, handler); },
@@ -135,6 +137,7 @@ function setup(t, {
     });
 
     fs.mkdirSync(paths.userData, { recursive: true });
+    startMainWindow();
     const config = require('../../dest/modules/fn_config/loginStore.js');
     require('../../dest/main/handlers/plugins/auth.js').init();
 

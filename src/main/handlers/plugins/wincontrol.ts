@@ -1,27 +1,21 @@
-import { getMainWindow } from '../../common/mainwin';
-import { unmaximizeWindow, setFullScreen } from '../../common/winctrl';
+import { mainWindow } from '../../common/mainWindow';
 import { platformBehavior, PlatformBehavior } from '../../../public/platform';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 
 function handleMinimize(): void {
     log.info('窗口控制: 最小化');
-    const mainWindow = getMainWindow();
-    if (mainWindow) mainWindow.minimize();
+    mainWindow.minimize();
 }
 
 function handleMaximize(): void {
     log.info('窗口控制: 最大化或还原');
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-        mainWindow.isMaximized() ? unmaximizeWindow(mainWindow) : setFullScreen(mainWindow);
-    }
+    mainWindow.toggleMaximized();
 }
 
 function handleClose(): void {
     log.info('窗口控制: 关闭');
-    const mainWindow = getMainWindow();
-    if (mainWindow) mainWindow.close();
+    mainWindow.close();
 }
 
 function handleGetTitleBar(): PlatformBehavior['titleBar'] {

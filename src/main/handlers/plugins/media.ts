@@ -4,8 +4,7 @@ import * as fn from '../../../modules/fn_api/api';
 import * as preferences from '../../../modules/fn_config/preferences';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
-import { checkLibraryPageUrl } from '../../common/utils';
-import { getMainWindow } from '../../common/mainwin';
+import { mainWindow } from '../../common/mainWindow';
 import { currentConnection } from '../../common/currentLogin';
 import { type MpvLaunch, mpvRuntime } from '../../common/mpvRuntime';
 import { platformBehavior } from '../../../public/platform';
@@ -25,16 +24,6 @@ function getProgramOrNotify(): MpvLaunch | undefined {
     dialog.showErrorBox('错误', message);
     log.error(message);
     return undefined;
-}
-
-async function refreshWindow(): Promise<void> {
-    const currentURL = getMainWindow().webContents.getURL() || '';
-    if (checkLibraryPageUrl(currentURL)) {
-        return;
-    }
-
-    log.info('刷新当前窗口');
-    getMainWindow().webContents.reloadIgnoringCache();
 }
 
 async function connect(): ReturnType<PlayDeps['connect']> {
@@ -82,7 +71,7 @@ const play = createPlay({
     launchPlayer,
     async onAbnormalExit() {
         await new Promise(resolve => setTimeout(resolve, 50));
-        await refreshWindow();
+        mainWindow.reloadWebUi();
     },
 });
 
