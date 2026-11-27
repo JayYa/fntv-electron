@@ -98,7 +98,7 @@ MPV 接管默认开启。配置字段沿用旧名 `hideOriginalPlayButton`，只
 
 默认值只在 `src/modules/fn_config/preferences.ts` 里，其它地方只用它给出的值：
 
-- `src/main/handlers/plugins/config.ts` 经 `get-preferences` 回快照 `preferences-snapshot`；`set-preferences` 里的 `mpvPlayback` 只收布尔值，别的值让整次保存失败、什么都不写。
+- `src/main/ipc/preferences.ts` 经 `get-preferences` 返回快照，偏好变化时主窗口推送 `preferences-snapshot`；`set-preferences` 里的 `mpvPlayback` 只收布尔值，别的值让整次保存被拒绝、什么都不写。
 - `src/preload/core/takeover.ts` 读快照里的值，2 秒内没收到快照时回退为 `true`。这是默认值唯一的另一处，和 `preferences.ts` 一起改。
 - 登录页（`resource/login/settings.js`）的开关只显示快照里的值，HTML 里不预设勾选。
 

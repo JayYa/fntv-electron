@@ -1,73 +1,45 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge } from 'electron';
 
 import { isFnId } from '../public/fnId';
+import { isPushChannel, mayCall, type PushChannel, type RequestChannel } from '../public/ipcChannels';
+import { onPush, request } from './core/ipc';
 import preloadLogger from './core/logger';
 import type { LoginPageApi } from './core/types';
 
-const SEND_CHANNELS = new Set([
-    'delete-history-item', 'clear-history', 'get-config',
-    'get-history-credentials', 'get-current-access-code',
-    'get-version', 'get-preferences',
-]);
-const RECEIVE_CHANNELS = new Set([
-    'config-data', 'history-credentials', 'current-access-code',
-    'history-item-deleted',
-    'version-info', 'preferences-snapshot',
-]);
-const INVOKE_CHANNELS = new Set([
-    'open-external', 'login', 'check-update', 'set-preferences',
-]);
-type PageListener = (...args: unknown[]) => void;
-const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();
+type PageListener = (payload: unknown) => void;
+const unsubscribers = new Map<string, Map<PageListener, () => void>>();
 
-function assertAllowed(channels: Set<string>, channel: string): void {
-    if (!channels.has(channel)) throw new Error(`IPC channel not allowed: ${channel}`);
+function invoke(channel: string, payload?: unknown): Promise<unknown> {
+    if (!mayCall(channel, 'loginPage')) throw new Error(`IPC channel not allowed: ${channel}`);
+    return (request as (channel: RequestChannel, payload?: unknown) => Promise<unknown>)(channel as RequestChannel, payload);
 }
 
-function invokeAllowed(channel: string, ...args: unknown[]): Promise<unknown> {
-    assertAllowed(INVOKE_CHANNELS, channel);
-    return ipcRenderer.invoke(channel, ...args);
-}
-
-function wrapListener(channel: string, listener: PageListener): (...args: unknown[]) => void {
-    const wrapped = (_event: unknown, ...args: unknown[]) => listener(undefined, ...args);
-    let channelListeners = listenerWrappers.get(channel);
-    if (!channelListeners) {
-        channelListeners = new Map();
-        listenerWrappers.set(channel, channelListeners);
-    }
-    channelListeners.set(listener, wrapped);
-    return wrapped;
+function assertPushChannel(channel: string): asserts channel is PushChannel {
+    if (!isPushChannel(channel)) throw new Error(`IPC channel not allowed: ${channel}`);
 }
 
 function exposeLoginPageApi(): void {
     if (window.location.protocol !== 'file:') return;
 
     const api: LoginPageApi = {
-        send(channel: string, ...args: unknown[]) {
-            assertAllowed(SEND_CHANNELS, channel);
-            ipcRenderer.send(channel, ...args);
-        },
-        invoke(channel: string, ...args: unknown[]) {
-            return invokeAllowed(channel, ...args);
-        },
+        invoke,
         on(channel: string, listener: PageListener) {
-            assertAllowed(RECEIVE_CHANNELS, channel);
-            ipcRenderer.on(channel, wrapListener(channel, listener));
-        },
-        once(channel: string, listener: PageListener) {
-            assertAllowed(RECEIVE_CHANNELS, channel);
-            ipcRenderer.once(channel, wrapListener(channel, listener));
+            assertPushChannel(channel);
+            let channelListeners = unsubscribers.get(channel);
+            if (!channelListeners) {
+                channelListeners = new Map();
+                unsubscribers.set(channel, channelListeners);
+            }
+            channelListeners.get(listener)?.();
+            channelListeners.set(listener, onPush(channel, listener));
         },
         off(channel: string, listener: PageListener) {
-            assertAllowed(RECEIVE_CHANNELS, channel);
-            const wrapped = listenerWrappers.get(channel)?.get(listener);
-            if (!wrapped) return;
-            ipcRenderer.off(channel, wrapped);
-            listenerWrappers.get(channel)?.delete(listener);
+            assertPushChannel(channel);
+            unsubscribers.get(channel)?.get(listener)?.();
+            unsubscribers.get(channel)?.delete(listener);
         },
         async openExternal(url: string) {
-            await invokeAllowed('open-external', url);
+            await invoke('open-external', url);
         },
         isFnId,
     };

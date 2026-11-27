@@ -1,7 +1,12 @@
 /* exported initVersionInfo, initPreferences */
 
-function initVersionInfo() {
-    ipcRenderer.send('get-version');
+async function initVersionInfo() {
+    try {
+        const { version } = await ipcRenderer.invoke('get-version');
+        if (version) versionText.textContent = `版本 ${version}`;
+    } catch (error) {
+        window.log.error('读取版本失败:', error);
+    }
 }
 
 async function handleUpdateCheck() {
@@ -26,16 +31,14 @@ async function handleUpdateCheck() {
 
 updateBtn.addEventListener('click', handleUpdateCheck);
 
-ipcRenderer.on('version-info', (event, data) => {
-    if (data && data.version) {
-        versionText.textContent = `版本 ${data.version}`;
-    }
-});
-
 let shownPreferences = null;
 
-function initPreferences() {
-    ipcRenderer.send('get-preferences');
+async function initPreferences() {
+    try {
+        applyPreferences(await ipcRenderer.invoke('get-preferences'));
+    } catch (error) {
+        window.log.error('读取设置失败:', error);
+    }
 }
 
 function applyPreferences(snapshot, { overwriteEdits = false } = {}) {
@@ -126,6 +129,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-ipcRenderer.on('preferences-snapshot', (event, snapshot) => {
+ipcRenderer.on('preferences-snapshot', (snapshot) => {
     if (snapshot) applyPreferences(snapshot);
 });

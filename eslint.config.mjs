@@ -40,11 +40,26 @@ const SAFE_STORAGE_SYNC_PROPERTIES = [
     message: `safeStorage.${property} 在 Electron 46 删除，用 ${replacement}。`
 }));
 
-const IPC_HANDLER_FILE = 'src/main/handlers/core/ipcHandler.ts';
+const IPC_CHANNELS_FILE = 'src/public/ipcChannels.ts';
+const IPC_ADAPTER_FILE = 'src/main/ipc/adapter.ts';
+const PRELOAD_IPC_FILE = 'src/preload/core/ipc.ts';
 const IPC_REGISTER_PROPERTIES = ['handle', 'handleOnce', 'on', 'once', 'addListener', 'prependListener', 'prependOnceListener'].map((property) => ({
     object: 'ipcMain',
     property,
-    message: `IPC 处理器用 ${IPC_HANDLER_FILE} 的 registerHandler 注册，不要直接调用 ipcMain.${property}。`
+    message: `IPC 频道写进 ${IPC_CHANNELS_FILE}，处理函数放进 src/main/ipc/ 的频道表，由 ${IPC_ADAPTER_FILE} 注册，不要直接调用 ipcMain.${property}。`
+}));
+const IPC_RENDERER_PROPERTIES = ['send', 'sendSync', 'invoke', 'on', 'once', 'off', 'addListener', 'removeListener', 'removeAllListeners', 'postMessage', 'sendToHost'].map((property) => ({
+    object: 'ipcRenderer',
+    property,
+    message: `preload 用 ${PRELOAD_IPC_FILE} 的 request 和 onPush 收发 ${IPC_CHANNELS_FILE} 里的频道，不要直接调用 ipcRenderer.${property}。`
+}));
+const NO_PAGE_PUSH = [
+    "CallExpression[callee.property.name='send'][callee.object.name=/^(webContents|sender)$/]",
+    "CallExpression[callee.property.name='send'][callee.object.property.name=/^(webContents|sender)$/]",
+    "CallExpression[callee.property.name='reply'][callee.object.name=/^(event|_event)$/]",
+].map((selector) => ({
+    selector,
+    message: `主进程推给页面的频道写进 ${IPC_CHANNELS_FILE}，用 ${IPC_ADAPTER_FILE} 的 push 发送。`
 }));
 
 const OS_MODULE = '/^(node:)?os$/';
@@ -121,7 +136,7 @@ const NO_BEFORE_REQUEST_LISTENER = {
 };
 
 const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
-const SRC_RULE_SYNTAX = [...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER];
+const SRC_RULE_SYNTAX = [...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER, ...NO_PAGE_PUSH];
 
 const LOGGER_DIR = 'src/modules/logger';
 const NO_CONSOLE = {
@@ -171,7 +186,7 @@ export default [
             'nas/no-address-log': 'error',
             'no-restricted-globals': ['error', NO_CONSOLE],
             'no-restricted-syntax': ['error', ...SRC_RULE_SYNTAX, NO_BEFORE_REQUEST_LISTENER],
-            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
+            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES, ...IPC_RENDERER_PROPERTIES]
         }
     },
     {
@@ -181,15 +196,22 @@ export default [
         }
     },
     {
-        files: [IPC_HANDLER_FILE],
+        files: [IPC_ADAPTER_FILE],
         rules: {
-            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES]
+            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER, NO_BEFORE_REQUEST_LISTENER],
+            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_RENDERER_PROPERTIES]
+        }
+    },
+    {
+        files: [PRELOAD_IPC_FILE],
+        rules: {
+            'no-restricted-properties': ['error', ...PLATFORM_PROPERTIES, ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
         }
     },
     {
         files: [QUIT_COORDINATOR_FILE],
         rules: {
-            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_REQUEST_LISTENER]
+            'no-restricted-syntax': ['error', ...SRC_RESTRICTED_SYNTAX, NO_BEFORE_REQUEST_LISTENER, ...NO_PAGE_PUSH]
         }
     },
     {
@@ -219,8 +241,8 @@ export default [
     {
         files: [PLATFORM_INDEX_FILE],
         rules: {
-            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...PLATFORM_BRANCH_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER, NO_BEFORE_REQUEST_LISTENER],
-            'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES]
+            'no-restricted-syntax': ['error', NO_MODULE_EXPORTS, ...PLATFORM_BRANCH_SYNTAX, NO_BEFORE_QUIT_LISTENER, NO_SHUTDOWN_LISTENER, NO_BEFORE_REQUEST_LISTENER, ...NO_PAGE_PUSH],
+            'no-restricted-properties': ['error', ...SAFE_STORAGE_SYNC_PROPERTIES, ...IPC_REGISTER_PROPERTIES, ...IPC_RENDERER_PROPERTIES]
         }
     },
     {

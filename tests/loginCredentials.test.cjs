@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+const { fakeIpcMain } = require('./helpers/fakeIpc.cjs');
 const { pathToFileURL } = require('node:url');
 
 const LOGIN_PAGE_URL = pathToFileURL(path.join(__dirname, '..', 'resource', 'login', 'index.html')).href;
@@ -35,7 +36,7 @@ function setupAuth(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-login-credentials-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
     const undecryptable = new Set();
-    const listeners = new Map();
+    const ipc = fakeIpcMain();
     const electronMock = {
         app: {
             isPackaged: false,
@@ -44,11 +45,7 @@ function setupAuth(t) {
             commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
-        ipcMain: {
-            on(channel, listener) { listeners.set(channel, listener); },
-            handle() {},
-            removeAllListeners(channel) { listeners.delete(channel); },
-        },
+        ipcMain: ipc.ipcMain,
         safeStorage: {
             async isAsyncEncryptionAvailable() { return true; },
             getSelectedStorageBackend() { return 'gnome_libsecret'; },
@@ -66,19 +63,12 @@ function setupAuth(t) {
 
     fs.mkdirSync(paths.userData, { recursive: true });
     const config = require('../dest/modules/fn_config/loginStore.js');
-    require('../dest/main/handlers/plugins/auth.js').init();
+    ipc.register(require('../dest/main/ipc/login.js').loginHandlers);
 
     return {
         config,
         undecryptable,
-        async send(channel, payload, frameUrl = LOGIN_PAGE_URL) {
-            const replies = [];
-            await listeners.get(channel)({
-                senderFrame: frameUrl === null ? null : { url: frameUrl },
-                reply(replyChannel, data) { replies.push({ channel: replyChannel, data }); },
-            }, payload);
-            return replies;
-        },
+        request: (channel, payload, frameUrl = LOGIN_PAGE_URL) => ipc.invoke(channel, payload, { frameUrl }),
     };
 }
 
@@ -95,15 +85,14 @@ async function seedLogins({ config }) {
     await config.saveCurrentLogin(CURRENT_LOGIN);
 }
 
-test('config-data lists logins and says whether an access code is saved without sending credentials', async (t) => {
+test('get-config lists logins and says whether an access code is saved without sending credentials', async (t) => {
     const auth = setupAuth(t);
     await seedLogins(auth);
 
-    const [reply] = (await auth.send('get-config'));
+    const config = await auth.request('get-config');
 
-    assert.equal(reply.channel, 'config-data');
-    assert.doesNotMatch(JSON.stringify(reply.data), SECRETS);
-    assert.deepEqual(reply.data, {
+    assert.doesNotMatch(JSON.stringify(config), SECRETS);
+    assert.deepEqual(config, {
         config: {
             account: 'current-user',
             domain: 'https://nas.example:5667',
@@ -117,32 +106,21 @@ test('config-data lists logins and says whether an access code is saved without 
     });
 });
 
-test('clicking a history entry returns only that entry\'s credentials, keyed by domain and account', async (t) => {
+test('clicking a history entry returns only the credentials of that entry', async (t) => {
     const auth = setupAuth(t);
     await seedLogins(auth);
 
-    const replies = (await auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }));
-
-    assert.deepEqual(replies, [{
-        channel: 'history-credentials',
-        data: {
-            domain: 'first.example',
-            account: 'first-user',
-            password: 'first-password',
-            accessCode: 'first-access-code',
-        },
-    }]);
+    assert.deepEqual(await auth.request('get-history-credentials', { domain: 'first.example', account: 'first-user' }), {
+        password: 'first-password',
+        accessCode: 'first-access-code',
+    });
 });
 
 test('an account on another domain does not receive the credentials of a same-named entry', async (t) => {
     const auth = setupAuth(t);
     await seedLogins(auth);
 
-    const [reply] = (await auth.send('get-history-credentials', { domain: 'second.example', account: 'first-user' }));
-
-    assert.deepEqual(reply.data, {
-        domain: 'second.example',
-        account: 'first-user',
+    assert.deepEqual(await auth.request('get-history-credentials', { domain: 'second.example', account: 'first-user' }), {
         password: '',
         accessCode: '',
     });
@@ -154,25 +132,21 @@ test('undecryptable history credentials come back empty so the form stays blank'
     auth.undecryptable.add('first-password');
     auth.undecryptable.add('first-access-code');
 
-    const [reply] = (await auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }));
-
-    assert.equal(reply.channel, 'history-credentials');
-    assert.equal(reply.data.password, '');
-    assert.equal(reply.data.accessCode, '');
+    assert.deepEqual(await auth.request('get-history-credentials', { domain: 'first.example', account: 'first-user' }), {
+        password: '',
+        accessCode: '',
+    });
 });
 
 test('the current access code is available on request and tagged with the current login', async (t) => {
     const auth = setupAuth(t);
     await seedLogins(auth);
 
-    assert.deepEqual((await auth.send('get-current-access-code')), [{
-        channel: 'current-access-code',
-        data: {
-            domain: 'https://nas.example:5667',
-            account: 'current-user',
-            accessCode: 'saved-access-code',
-        },
-    }]);
+    assert.deepEqual(await auth.request('get-current-access-code'), {
+        domain: 'https://nas.example:5667',
+        account: 'current-user',
+        accessCode: 'saved-access-code',
+    });
 });
 
 test('an undecryptable current access code reads as not saved', async (t) => {
@@ -180,8 +154,8 @@ test('an undecryptable current access code reads as not saved', async (t) => {
     await seedLogins(auth);
     auth.undecryptable.add('saved-access-code');
 
-    assert.equal((await auth.send('get-config'))[0].data.config.hasAccessCode, false);
-    assert.equal((await auth.send('get-current-access-code'))[0].data.accessCode, '');
+    assert.equal((await auth.request('get-config')).config.hasAccessCode, false);
+    assert.equal((await auth.request('get-current-access-code')).accessCode, '');
 });
 
 for (const [name, frameUrl] of [
@@ -195,18 +169,18 @@ for (const [name, frameUrl] of [
         const auth = setupAuth(t);
         await seedLogins(auth);
 
-        assert.deepEqual(
-            (await auth.send('get-history-credentials', { domain: 'first.example', account: 'first-user' }, frameUrl)),
-            [],
+        await assert.rejects(
+            auth.request('get-history-credentials', { domain: 'first.example', account: 'first-user' }, frameUrl),
+            /不接受这个页面的请求/,
         );
-        assert.deepEqual((await auth.send('get-current-access-code', undefined, frameUrl)), []);
+        await assert.rejects(auth.request('get-current-access-code', undefined, frameUrl), /不接受这个页面的请求/);
     });
 }
 
-test('a credential request without a domain and account is ignored', async (t) => {
+test('a credential request without a domain and account is refused', async (t) => {
     const auth = setupAuth(t);
     await seedLogins(auth);
 
-    assert.deepEqual((await auth.send('get-history-credentials')), []);
-    assert.deepEqual((await auth.send('get-history-credentials', { domain: 'first.example' })), []);
+    await assert.rejects(auth.request('get-history-credentials'), /参数不合法/);
+    await assert.rejects(auth.request('get-history-credentials', { domain: 'first.example' }), /参数不合法/);
 });

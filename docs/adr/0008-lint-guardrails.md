@@ -10,7 +10,7 @@ status: accepted
 
 - **`no-alert`**：浏览器原生弹窗在 Electron 里不可靠，确认和输入走主进程的 `dialog` 或页面内组件。
 - **`safeStorage` 同步方法**（`isEncryptionAvailable`、`encryptString`、`decryptString`）：Electron 45 弃用、46 删除，用对应的 `*Async`（`tests/eslintSafeStorageRules.test.cjs`）。
-- **IPC 处理器只经 `registerHandler` 注册**：它捕获并记录 `ipcMain.on` 处理器的同步和异步错误，还拦下重复注册。只有 `src/main/handlers/core/ipcHandler.ts` 能直接调用 `ipcMain.handle`、`on` 等（`tests/eslintIpcRules.test.cjs`）。
+- **IPC 只经频道表收发**（ADR-0010）：只有 `src/main/ipc/adapter.ts` 能调用 `ipcMain.handle`、`on` 等和向页面推送（`webContents.send`、`sender.send`、`event.reply`），它统一检查调用来源、校验参数和记录错误；preload 里只有 `src/preload/core/ipc.ts` 能调用 `ipcRenderer` 的收发方法，其它代码用它按频道表做类型检查的 `request` 和 `onPush`（`tests/eslintIpcRules.test.cjs`）。lint 只认 `webContents`、`sender`、`event` 这几个名字，换了名字的推送由审查兜底。
 - **只在 `src/public/platform/index.ts` 读当前平台**（ADR-0006）。`no-restricted-properties` 只认对象名，`os` 模块换个写法导入就拦不住，所以另用 `no-restricted-syntax` 禁掉从 `os` 导入或解构 `platform`、`arch`，以及用 `os` 以外的名字导入 `os` 模块。不用 `no-restricted-imports` 的 `importNames`：它连 `import * as os` 也一起拦下。
 - **不写 `module.exports =`**：整体替换 export 的结果，新函数没加进表时运行时是 `undefined`，tsc 查不出。
 - **`before-quit` 和系统关机信号只在退出协调模块监听**（`src/modules/quit/quitCoordinator.ts`）：退出收尾的先后顺序只由它决定，其它模块向它注册（`initQuitCoordinator`、`onQuitStarted`、`provideInstallOnQuit`）。关机、重启或注销的信号是窗口的 `session-end` 和 `powerMonitor` 的 `shutdown`（#192，`tests/eslintQuitRules.test.cjs`）。lint 拦字面量，测试拦其余写法：lint 只认事件名直接写在调用参数里的字符串或模板字面量，`const e = 'before-quit'; app.on(e, …)` 这样先放进变量的写法拦不住；同一个测试文件扫描 `src/` 下全部文件，`before-quit`、`session-end` 和带引号的 `'shutdown'` 只能出现在退出协调模块里，出现在别处时测试失败并列出文件（#261）。

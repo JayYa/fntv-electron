@@ -8,7 +8,7 @@ status: accepted
 
 - 沙箱里不能读目录，也不能 `require` 相对路径，插件只能在 `src/preload/index.ts` 静态导入，新增插件时加一行，保持字母序（和原来 `readdirSync` 的加载顺序一致）。静态导入先于 `index.ts` 的语句执行，注册钩子时插件都已加载。
 - 登录页的桥（`loginPageApi.ts`）排在插件之前导入：插件顶层出错时登录页仍可用（`tests/preloadBundle.test.cjs`）。
-- 沙箱里没有 `shell`，打开外部链接走 IPC，地址和来源由主进程校验（`src/main/handlers/plugins/externalLink.ts`）。被拒的地址不写进日志：它由页面传入。
+- 沙箱里没有 `shell`，打开外部链接走 IPC，地址和来源由主进程校验（`src/main/ipc/app.ts`）。被拒的地址不写进日志：它由页面传入。
 - macOS 的窗口按钮由系统绘制（`hiddenInset`），标题栏插件只保留透明拖动区域；其它平台用页面里的自定义窗口控制按钮。
 
 ## MPV 接管网页端播放
@@ -36,14 +36,18 @@ status: accepted
 
 ## 登录页
 
-- 凭据回复按请求配对：连点历史或用户改了表单后，迟到的回复直接丢弃；用户动过表单后以用户输入为准。解不开的凭据回复里是空值，表单留空让用户手动输入。
-- 主进程用 `isLoginPage`（`src/main/common/loginPage.ts`）自己再查一次 `senderFrame` 是不是登录页：preload 的 `file:` 判断在渲染进程里。路径用 `path.relative` 比较，它在 Windows 上不区分大小写，盘符写法不同也算同一个文件。
+- 凭据结果按请求配对：每次请求记下自己，await 之后不是最近一次请求，或用户已经改了表单，结果就丢弃；用户动过表单后以用户输入为准。解不开的凭据回复里是空值，表单留空让用户手动输入。
+- IPC adapter 用 `isLoginPage`（`src/main/common/loginPage.ts`）自己再查一次 `senderFrame` 是不是登录页：preload 的 `file:` 判断在渲染进程里。路径用 `path.relative` 比较，它在 Windows 上不区分大小写，盘符写法不同也算同一个文件。
 - 测试（`tests/helpers/loginPage.cjs`）用假 DOM 跑登录页真实的脚本。文件列表取自 `index.html` 的引用，还要和目录内容一致：新文件没接进页面或测试读漏时在这里失败，不会让 `doesNotMatch` 对着空内容通过。脚本按页面加载顺序逐个运行，不拼起来：拼接后函数提升会盖住顺序问题。
 - FN ID 的判定只有一份（`src/public/fnId.ts`，不依赖 electron 和 Node 内置模块）：主进程直接导入，登录页经 preload 桥的 `electronAPI.isFnId` 同步调用。FN ID 会拼进 `https://5ddd.com/{fnId}`，只放行不改变 URL 结构的字符（6 到 30 位字母、数字、`_`、`-`）。FN Connect 页面的规则更严（小写字母开头，只含小写字母、数字和单个连字符），但那些规则是逐步加的，老 FN ID 可能不满足，这里不跟进，由 FN Connect 页面自己提示。
-- 登录页的设置面板显示主进程推送的偏好快照（`preferences-snapshot`），托盘改了偏好时随之更新，用户在面板里已改动的控件不被覆盖。保存只发相对快照改动过的偏好（`set-preferences`），没有改动就不发；主进程一次写入，返回保存后的快照，面板用它回显实际生效的值。应用更新下载加速地址留空时发空值，由主进程用默认地址。
+- 登录页的设置面板打开时经 `get-preferences` 读快照，之后显示主进程推送的偏好快照（`preferences-snapshot`），托盘改了偏好时随之更新，用户在面板里已改动的控件不被覆盖。保存只发相对快照改动过的偏好（`set-preferences`），没有改动就不发；主进程一次写入，返回保存后的快照，面板用它回显实际生效的值。应用更新下载加速地址留空时发空值，由主进程用默认地址。
 
-## 主进程 IPC 处理器（`src/main/handlers/`）
+## IPC 频道表（`src/public/ipcChannels.ts`、`src/main/ipc/`）
 
-- `ipcMain.on` 的处理器抛错会变成主进程未捕获异常，`ipcMain.handle` 的错误由 Electron 转给调用方。所以 `registerHandler` 给 `on` 的处理器包一层，错误只记日志；`handle` 的处理器记日志后照常抛出。async 处理器 `await` 之前的部分仍是同步执行的，同样包在里面。
+- 所有频道只登记在 `src/public/ipcChannels.ts` 一处：频道名、谁可以调用（只有登录页、只有网页端或两者），以及参数和结果的类型。它不依赖 electron，主进程和 preload 都导入它；登录页桥的放行列表就是表里对登录页开放的频道，接收方向只放行表里的推送频道。
+- 页面发给主进程的一律是 invoke，有结果或错误；主进程主动推送的只有 `preferences-snapshot`。没有 send 加 reply 的配对，也没有 `ipcMain.on`：`on` 的处理器抛错会变成主进程未捕获异常，invoke 的错误由 Electron 转给调用方。
+- 主进程的处理函数按领域放在 `src/main/ipc/` 下，`index.ts` 的 `startIpc` 把它们交给 adapter（`adapter.ts`）注册，类型要求表里每个频道都有处理函数。adapter 对每个请求依次做三件事：发送方不是主窗口，或调用来源不在表里允许的范围内，拒绝；处理函数的 `parse` 不接受参数（`InvalidPayload`），拒绝；处理函数出错时记日志后照常抛出。拒绝时记一条 warn，只写原因，不写参数（参数由页面传入，可能含凭据）。网页端指主窗口里登录页以外的页面；FN Connect 窗口不加载 preload，发不了 IPC。
+- 频道表的约束由 `tests/ipcChannels.test.cjs` 经 adapter 的 interface 检查：每个频道都注册了、调用来源不对时拒绝、参数形状不对时拒绝。登录页测试的假桥（`tests/helpers/loginPage.cjs`）遇到不对登录页开放的频道直接失败。
+- `play-movie` 不等一次播放结束才返回：处理函数开始一次播放就返回，播放中的重复请求只记日志。
 - 播放请求的凭据只取自主进程的当前登录，不信任远程页面传进来的 token。
 - preload 启动后报告自己加载的插件，主进程记一行进程号、沙箱状态和插件列表，手工冒烟靠这条判断沙箱和插件。`osSandboxed` 是系统层面的实际状态，Electron 只在 Windows 和 macOS 上提供。

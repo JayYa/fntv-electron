@@ -24,8 +24,8 @@
 
 - 新建窗口保持 `nodeIntegration: false`、`contextIsolation: true`（`mainWindow.ts`、`fnIdLogin.ts`）。
 - preload 在沙箱里运行，只能 `require('electron')`。需要 `fs`、`path`、`process` 或 `electron.shell` 时走主进程 IPC。
-- 新增页面可用的 IPC 频道时加进 `src/preload/loginPageApi.ts` 的 `SEND_CHANNELS`、`RECEIVE_CHANNELS` 或 `INVOKE_CHANNELS`。
-- `registerHandler` 已经捕获并记录 IPC 处理器的同步和异步错误，处理器只在需要告诉渲染进程失败时写 `try`/`catch`（`src/main/handlers/core/ipcHandler.ts`）。
+- 新增 IPC 频道时先加进 `src/public/ipcChannels.ts`：调用来源和参数、结果的类型，再在 `src/main/ipc/` 对应领域的文件里写 `parse` 和 `handle`。preload 用 `src/preload/core/ipc.ts` 的 `request`，登录页用 `electronAPI.invoke`（ADR-0010）。
+- IPC adapter 已经拒绝来源不对和参数不合法的请求，并记录处理函数的错误后交给调用方，处理函数只在要把失败作为结果返回时写 `try`/`catch`（`src/main/ipc/adapter.ts`）。
 - FN ID 窗口加载远程页面。向它注入脚本、处理 bridge 消息、放行导航或采用 `Trim-MC-token` Cookie 前，都要过 `fnIdTrust.ts` 的判断。信任按 FN Connect 运行时返回的 NAS 地址判断，不按域名白名单（`tests/fnIdTrust.test.cjs`）。
 - 依赖网页端会话 Cookie 的请求用 Electron `net`（`src/main/common/accessCodeSession.ts`）。
 

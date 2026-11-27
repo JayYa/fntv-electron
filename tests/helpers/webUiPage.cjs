@@ -7,37 +7,18 @@ const BUNDLE = path.resolve(__dirname, '..', '..', 'dest', 'preload', 'bundle.js
 
 function fakeIpcRenderer({ mpvPlayback }) {
     const sent = [];
-    const listeners = new Map();
-
-    function removeListener(channel, listener) {
-        const channelListeners = listeners.get(channel) ?? [];
-        listeners.set(channel, channelListeners.filter(entry => entry !== listener));
-    }
+    const snapshot = { appDownloadProxy: { enabled: false, proxyUrl: 'https://gh-proxy.com/' }, mpvPlayback, defaultProxyUrl: 'https://gh-proxy.com/' };
 
     return {
         sent,
         ipcRenderer: {
-            send(channel, ...args) {
-                sent.push({ channel, args });
-                if (channel !== 'get-preferences' || mpvPlayback === 'no reply') return;
-                const reply = { appDownloadProxy: { enabled: false, proxyUrl: 'https://gh-proxy.com/' }, mpvPlayback, defaultProxyUrl: 'https://gh-proxy.com/' };
-                queueMicrotask(() => {
-                    for (const listener of listeners.get('preferences-snapshot') ?? []) listener({}, reply);
-                });
+            invoke(channel, payload) {
+                sent.push({ channel, payload });
+                if (channel !== 'get-preferences') return Promise.resolve(undefined);
+                return mpvPlayback === 'no reply' ? new Promise(() => {}) : Promise.resolve(snapshot);
             },
-            on(channel, listener) {
-                listeners.set(channel, [...(listeners.get(channel) ?? []), listener]);
-            },
-            once(channel, listener) {
-                const once = (...args) => {
-                    removeListener(channel, once);
-                    listener(...args);
-                };
-                listeners.set(channel, [...(listeners.get(channel) ?? []), once]);
-            },
-            off: removeListener,
-            removeListener,
-            invoke: async () => undefined,
+            on() {},
+            off() {},
         },
     };
 }
@@ -95,7 +76,7 @@ async function openWebUiPage(t, { url, html, mpvPlayback = true }) {
         settle,
         plays: () => sent
             .filter(message => message.channel === 'play-movie')
-            .map(message => JSON.parse(JSON.stringify(message.args[0]))),
+            .map(message => JSON.parse(JSON.stringify(message.payload))),
         nativeClicks(selector) {
             const clicks = [];
             element(selector).addEventListener('click', event => clicks.push(event));

@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
 const { maskLogLine } = require('../dest/modules/logger/masking.js');
 const { LogLevel } = require('../dest/modules/logger/config.js');
-const { describeFnIdPageForLog } = require('../dest/main/handlers/core/fnIdTrust.js');
+const { describeFnIdPageForLog } = require('../dest/main/common/fnId/fnIdTrust.js');
 
 function maskText(text) {
     return maskLogLine(LogLevel.INFO, text, []);

@@ -53,12 +53,16 @@ test('the bundled preload uses no Node globals', () => {
     assert.doesNotMatch(bundle, /\b(?:process|__dirname|__filename|Buffer)\b/);
 });
 
-function runBundledPreload(protocol) {
+function runBundledPreload(protocol, invoked = []) {
     const bundle = fs.readFileSync(path.join(root, 'dest', 'preload', 'bundle.js'), 'utf8');
     const exposed = {};
     const electron = {
         contextBridge: { exposeInMainWorld(name, value) { exposed[name] = value; } },
-        ipcRenderer: { send() {}, on() {}, once() {}, off() {}, invoke: async () => undefined },
+        ipcRenderer: {
+            on(channel) { invoked.push({ listen: channel }); },
+            off() {},
+            invoke: async (channel, payload) => { invoked.push({ channel, payload }); },
+        },
     };
     const context = {
         window: { location: { protocol }, addEventListener() {} },
@@ -86,6 +90,23 @@ test('the login page bridge checks FN IDs synchronously with the main process ru
     }
     assert.equal(electronAPI.isFnId('  demo123  '), true);
     assert.equal(electronAPI.isFnId(''), false);
+});
+
+test('the login page bridge passes on only the channels the table opens to the login page', async () => {
+    const invoked = [];
+    const { electronAPI } = runBundledPreload('file:', invoked);
+    invoked.length = 0;
+
+    await electronAPI.invoke('get-history-credentials', { domain: 'nas.example', account: 'user' });
+    assert.throws(() => electronAPI.invoke('play-movie', { id: 'item' }), /not allowed/);
+    assert.throws(() => electronAPI.invoke('config-data'), /not allowed/);
+    electronAPI.on('preferences-snapshot', () => {});
+    assert.throws(() => electronAPI.on('history-credentials', () => {}), /not allowed/);
+
+    assert.deepEqual(invoked, [
+        { channel: 'get-history-credentials', payload: { domain: 'nas.example', account: 'user' } },
+        { listen: 'preferences-snapshot' },
+    ]);
 });
 
 test('pages other than the login page get no bridge', () => {

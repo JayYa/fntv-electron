@@ -8,7 +8,7 @@ const {
     resolveFnIdNavigation,
     resolveFnIdOauthTrust,
     resolveFnIdWindowOpen,
-} = require('../dest/main/handlers/core/fnIdTrust.js');
+} = require('../dest/main/common/fnId/fnIdTrust.js');
 
 const FN_CONNECT_URL = 'https://5ddd.com/demo123';
 

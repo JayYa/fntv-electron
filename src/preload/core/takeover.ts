@@ -1,25 +1,18 @@
-import { ipcRenderer } from 'electron';
+import { request } from './ipc';
 import { HookType, registerHook } from './hooks';
 import logger from './logger';
+import type { PlayMovieData } from './types';
 import { cardPlayButtonEntry, continueWatchingMenuEntry, detailMainButtonEntry, type PlayEntry } from './playEntries';
 
 const PREFERENCE_TIMEOUT_MS = 2000;
 
 function readMpvPlaybackPreference(): Promise<boolean> {
     return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            ipcRenderer.off('preferences-snapshot', handler);
-            resolve(true);
-        }, PREFERENCE_TIMEOUT_MS);
-
-        const handler = (_event: Electron.IpcRendererEvent, data?: { mpvPlayback?: unknown }) => {
-            clearTimeout(timeout);
-            ipcRenderer.off('preferences-snapshot', handler);
-            resolve(data?.mpvPlayback !== false);
-        };
-
-        ipcRenderer.once('preferences-snapshot', handler);
-        ipcRenderer.send('get-preferences');
+        const timeout = setTimeout(() => resolve(true), PREFERENCE_TIMEOUT_MS);
+        request('get-preferences').then(
+            (snapshot) => resolve(snapshot?.mpvPlayback !== false),
+            () => resolve(true),
+        ).finally(() => clearTimeout(timeout));
     });
 }
 
@@ -32,6 +25,10 @@ function suppressNative(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
+}
+
+function sendPlayRequest(playRequest: PlayMovieData): void {
+    request('play-movie', playRequest).catch((error: unknown) => logger.error('发送播放请求失败:', error));
 }
 
 function interceptPlayEntries(entries: PlayEntry[]): void {
@@ -48,8 +45,8 @@ function interceptPlayEntries(entries: PlayEntry[]): void {
     }
 
     function play(hit: Hit): void {
-        const request = hit.entry.take(hit.element);
-        if (request) ipcRenderer.send('play-movie', request);
+        const playRequest = hit.entry.take(hit.element);
+        if (playRequest) sendPlayRequest(playRequest);
     }
 
     function handlePointerDown(event: PointerEvent): void {

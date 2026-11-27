@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const axios = require('axios');
 const { useFakeElectron } = require('./fakeElectron.cjs');
 const { startMainWindow } = require('./fakeMainWindow.cjs');
+const { fakeIpcMain } = require('./fakeIpc.cjs');
 
 const NAS = 'https://nas.example:5667';
 const PASSWORD_LOGIN = { domain: 'nas.example:5667', username: 'alice', password: 'secret', useHttps: true };
@@ -27,8 +28,7 @@ function setup(t, {
 } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-current-login-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
-    const listeners = new Map();
-    const invokeHandlers = new Map();
+    const ipc = fakeIpcMain();
     const cookies = [...initialCookies];
     const dialogs = [];
     const loginRequests = [];
@@ -63,11 +63,7 @@ function setup(t, {
         BrowserWindow: FakeBrowserWindow,
         screen: { getAllDisplays: () => [display], getPrimaryDisplay: () => display },
         powerMonitor: new EventEmitter(),
-        ipcMain: {
-            on(channel, listener) { listeners.set(channel, listener); },
-            handle(channel, handler) { invokeHandlers.set(channel, handler); },
-            removeAllListeners(channel) { listeners.delete(channel); },
-        },
+        ipcMain: ipc.ipcMain,
         dialog: {
             async showMessageBox(...args) {
                 dialogs.push(args.at(-1).title);
@@ -148,7 +144,7 @@ function setup(t, {
     fs.mkdirSync(paths.userData, { recursive: true });
     startMainWindow();
     const config = require('../../dest/modules/fn_config/loginStore.js');
-    require('../../dest/main/handlers/plugins/auth.js').init();
+    ipc.register(require('../../dest/main/ipc/login.js').loginHandlers);
 
     return {
         config,
@@ -168,7 +164,7 @@ function setup(t, {
             return require(index);
         },
         login(loginData = PASSWORD_LOGIN) {
-            return invokeHandlers.get('login')({}, loginData);
+            return ipc.invoke('login', loginData);
         },
     };
 }

@@ -1,10 +1,14 @@
-import { ipcRenderer } from 'electron';
+import { request } from '../core/ipc';
 import { registerHook } from '../core/hooks';
 import { HookType } from '../core/hooks';
 import logger from '../core/logger';
 import type { PlatformBehavior } from '../../public/platform';
 
 type TitleBar = PlatformBehavior['titleBar'];
+
+function sendWindowControl(channel: 'window-minimize' | 'window-maximize' | 'window-close'): void {
+    request(channel).catch((err: unknown) => logger.error('窗口控制失败:', err));
+}
 
 function injectTitleBar(titleBar: TitleBar): void {
     logger.info('Injecting custom title bar...');
@@ -120,26 +124,26 @@ function injectTitleBar(titleBar: TitleBar): void {
 
     if (minBtn) {
         minBtn.addEventListener('click', () => {
-            ipcRenderer.send('window-minimize');
+            sendWindowControl('window-minimize');
         });
     }
 
     if (maxBtn) {
         maxBtn.addEventListener('click', () => {
-            ipcRenderer.send('window-maximize');
+            sendWindowControl('window-maximize');
         });
     }
 
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
-            ipcRenderer.send('window-close');
+            sendWindowControl('window-close');
         });
     }
 }
 
 registerHook(HookType.OnReady, () => {
-    ipcRenderer.invoke('get-title-bar').then(
-        (titleBar: TitleBar) => injectTitleBar(titleBar),
+    request('get-title-bar').then(
+        (titleBar) => injectTitleBar(titleBar),
         (err: unknown) => logger.error('获取标题栏样式失败:', err),
     );
 });

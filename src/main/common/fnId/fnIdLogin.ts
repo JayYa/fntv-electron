@@ -1,8 +1,8 @@
 import { BrowserWindow, Session } from 'electron';
-import { mainWindow } from '../../common/mainWindow';
+import { mainWindow } from '../mainWindow';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
-import { establishNewLogin, GrantedBaseUrl, LoginFailedError, type LoginReply, verifyAccess } from '../../common/currentLogin';
+import { establishNewLogin, GrantedBaseUrl, LoginFailedError, type LoginReply, verifyAccess } from '../currentLogin';
 import { resolveFnConnectBaseUrl } from './fnConnect';
 import {
     createFnIdTrust,
