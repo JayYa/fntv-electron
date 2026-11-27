@@ -1,5 +1,5 @@
-import { BrowserWindow, net, session, type Session } from 'electron';
-import { isTrusted, showCertificateTrustDialog } from './index';
+import { net, session, type Session } from 'electron';
+import { confirmTrust } from './index';
 
 const PROBE_TIMEOUT_MS = 10000;
 const ACCEPT = 0;
@@ -54,10 +54,7 @@ export async function confirmCertificate(baseUrl: string): Promise<boolean> {
     if (url.protocol !== 'https:') return true;
     const untrusted = await probeUntrustedCertificate(url);
     if (!untrusted) return true;
-    if (!isTrusted(baseUrl)) {
-        const parentWindow = BrowserWindow.getFocusedWindow() ?? undefined;
-        if (!await showCertificateTrustDialog(baseUrl, untrusted.error, parentWindow)) return false;
-    }
+    if (!await confirmTrust(baseUrl, untrusted.error)) return false;
     confirmedCertificates.add(certificateKey(untrusted.hostname, untrusted.fingerprint));
     return true;
 }

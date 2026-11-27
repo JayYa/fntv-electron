@@ -42,9 +42,15 @@ interface LoginWindow {
     loadFile(filePath: string): Promise<void> | void;
 }
 
+export function certificateLoginError(reason: 'declined' | 'still-untrusted'): LoginError {
+    return reason === 'declined'
+        ? { title: '登录取消', message: '用户取消信任证书，无法继续登录。' }
+        : { title: '证书验证失败', message: '信任证书后仍无法建立安全连接，请检查服务器证书配置。' };
+}
+
 function accessCodeFailure(error: AccessCodeVerificationError): LoginFailedError {
     if (error.reason === 'certificate-declined') {
-        return new LoginFailedError('certificate-declined', { title: '登录取消', message: '用户取消信任证书，无法继续登录。' });
+        return new LoginFailedError('certificate-declined', certificateLoginError('declined'));
     }
     return error.reason === 'rejected'
         ? new LoginFailedError('access-code-rejected', { title: '访问码错误', message: '访问码错误，请检查后重试。' })
