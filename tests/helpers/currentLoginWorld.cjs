@@ -37,6 +37,8 @@ function setup(t, {
     let mainWindow = null;
 
     class FakeBrowserWindow extends EventEmitter {
+        static getFocusedWindow() { return null; }
+
         constructor() {
             super();
             mainWindow = this;
@@ -160,6 +162,11 @@ function setup(t, {
         currentLogin: () => require('../../dest/main/common/currentLogin.js'),
         accessGrant: () => require('../../dest/modules/fn_api/accessGrant.js'),
         certTrust: () => require('../../dest/modules/cert_trust/index.js'),
+        certTrustAfterRestart() {
+            const index = require.resolve('../../dest/modules/cert_trust/index.js');
+            delete require.cache[index];
+            return require(index);
+        },
         login(loginData = PASSWORD_LOGIN) {
             return invokeHandlers.get('login')({}, loginData);
         },

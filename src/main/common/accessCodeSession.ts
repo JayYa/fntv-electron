@@ -79,10 +79,7 @@ export function encodeAccessCode(accessCode: string): string {
     return Buffer.from(accessCode, 'utf8').toString('base64');
 }
 
-export const requestAccessCode: GatewayRequester = async (gatewaySession, url, headers) => {
-    if (!await confirmCertificate(url)) {
-        throw new AccessCodeVerificationError('certificate-declined', '用户取消信任证书');
-    }
+export const requestAccessCode: GatewayRequester = (gatewaySession, url, headers) => {
     return new Promise((resolve, reject) => {
         let currentUrl = parseBaseUrl(url);
         let redirects = 0;
@@ -156,6 +153,10 @@ export async function establishAccessCodeSession(
     clearAccessGrants();
     if (!normalizedCode) {
         return { baseUrl: initialUrl.origin, cookie: '' };
+    }
+
+    if (!await confirmCertificate(initialUrl.origin)) {
+        throw new AccessCodeVerificationError('certificate-declined', '用户取消信任证书');
     }
 
     const verificationUrl = new URL('/access_code_verify', initialUrl);

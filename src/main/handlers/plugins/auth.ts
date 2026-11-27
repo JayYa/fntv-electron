@@ -5,10 +5,10 @@ import * as fn from '../../../modules/fn_api/api';
 import * as loginStore from '../../../modules/fn_config/loginStore';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
-import { showCertificateTrustDialog } from '../../../modules/cert_trust';
+import { withCertificateTrust } from '../../../modules/cert_trust';
 import { isFnId } from '../../../public/fnId';
 import { handleFnIdLogin } from '../core/fnIdLogin';
-import { establishNewLogin, type IssuedToken, type LoginReply } from '../../common/currentLogin';
+import { certificateLoginError, establishNewLogin, type IssuedToken, type LoginReply } from '../../common/currentLogin';
 
 interface LoginData {
     domain: string;
@@ -92,12 +92,18 @@ const HTTPS_PORT_MISMATCH_MESSAGE = '无法用 HTTPS 连接到服务器，请检
 
 const loginFailed = (message: string): IssuedToken => ({ error: { title: '登录失败', message } });
 
-async function requestToken(
-    baseUrl: string,
-    loginData: LoginData,
-    certificateRetryAttempted = false,
-): Promise<IssuedToken> {
-    const response = await new fn.ApiService(baseUrl).login(loginData.username, loginData.password);
+async function requestToken(baseUrl: string, loginData: LoginData): Promise<IssuedToken> {
+    const outcome = await withCertificateTrust(baseUrl, async () => {
+        const response = await new fn.ApiService(baseUrl).login(loginData.username, loginData.password);
+        return !response.ok && response.failure.kind === 'certificate'
+            ? { ok: false, certificateError: response.failure.message || '未知证书错误' }
+            : { ok: true, value: response };
+    });
+    if (!outcome.ok) {
+        log.info(outcome.reason === 'declined' ? '用户取消信任证书，登录取消' : '信任证书后登录仍遇到证书错误');
+        return { error: certificateLoginError(outcome.reason) };
+    }
+    const response = outcome.value;
 
     if (response.ok) {
         const token = response.data?.token;
@@ -110,28 +116,6 @@ async function requestToken(
     }
 
     const { failure } = response;
-    if (failure.kind === 'certificate') {
-        log.info('检测到证书验证错误，询问用户是否信任');
-        const shouldTrust = await showCertificateTrustDialog(
-            baseUrl,
-            failure.message || '未知证书错误',
-            mainWindow.window(),
-        );
-        if (!shouldTrust) {
-            return { error: { title: '登录取消', message: '用户取消信任证书，无法继续登录。' } };
-        }
-        if (certificateRetryAttempted) {
-            return {
-                error: {
-                    title: '证书验证失败',
-                    message: '信任证书后仍无法建立安全连接，请检查服务器证书配置。',
-                },
-            };
-        }
-        log.info('用户信任证书，重试登录');
-        return requestToken(baseUrl, loginData, true);
-    }
-
     log.error('登录失败:', failure.message);
     return loginFailed(failure.kind === 'https-port-mismatch'
         ? HTTPS_PORT_MISMATCH_MESSAGE

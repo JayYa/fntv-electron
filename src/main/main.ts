@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, dialog } from 'electron';
 import { registerAllPlugins } from './handlers';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import { createTray, destroyTray, showTrayBalloon } from './common/tray';
@@ -7,7 +7,7 @@ import * as log from '../modules/logger';
 import { mainWindow } from './common/mainWindow';
 import { endCurrentLogin, restoreAtStartup } from './common/currentLogin';
 import * as webUiSession from './common/webUiSession';
-import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
+import * as certTrust from '../modules/cert_trust';
 import { proxy } from './common/proxy';
 import { removeLegacyProxySecret } from './common/legacyProxySecret';
 import { platformBehavior } from '../public/platform';
@@ -50,22 +50,7 @@ if (!gotTheLock) {
             log.info('Node.js版本:', process.versions.node);
             log.info('日志文件位置:', log.getLogFile());
 
-            app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-                if (isTrusted(url)) {
-                    event.preventDefault();
-                    callback(true);
-                } else {
-                    log.warn(`证书验证错误: ${url}, 错误: ${error}`);
-                    event.preventDefault();
-                    const parentWindow = BrowserWindow.fromWebContents(webContents) || undefined;
-                    showCertificateTrustDialog(url, error, parentWindow)
-                        .then(callback)
-                        .catch((dialogError: unknown) => {
-                            log.error('处理证书信任确认失败:', dialogError);
-                            callback(false);
-                        });
-                }
-            });
+            certTrust.start({ fallbackWindow: () => mainWindow.window() });
 
             webUiSession.acceptConfirmedCertificates();
 

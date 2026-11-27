@@ -98,8 +98,7 @@ test('trusting a certificate without "remember" does not add the host to the tru
     assert.deepEqual(await world.login(), { ok: true });
 
     assert.equal(world.certTrust().isTrusted(NAS), true);
-    world.certTrust().reloadTrustedHosts();
-    assert.deepEqual(world.certTrust().getTrustedHosts(), []);
+    assert.equal(world.certTrustAfterRestart().isTrusted(NAS), false);
 });
 
 test('trusting a certificate with "remember" keeps the host trusted across restarts', async (t) => {
@@ -111,8 +110,7 @@ test('trusting a certificate with "remember" keeps the host trusted across resta
 
     assert.deepEqual(await world.login(), { ok: true });
 
-    world.certTrust().reloadTrustedHosts();
-    assert.deepEqual(world.certTrust().getTrustedHosts(), [new URL(NAS).host]);
+    assert.equal(world.certTrustAfterRestart().isTrusted(NAS), true);
 });
 
 test('when the user does not trust the certificate, password login is cancelled and nothing is saved', async (t) => {

@@ -105,7 +105,7 @@ test('startup goes to the login page without asking FNMedia when the saved addre
 });
 
 test('the current connection carries the saved login, its access grant and whether its host is trusted', async (t) => {
-    const world = setup(t, { accessCodeStatus: 200 });
+    const world = setup(t, { accessCodeStatus: 200, trustCertificate: true });
     const currentLogin = world.currentLogin();
     await currentLogin.establishNewLogin(() => fakeStartupWindow(), {
         access: await currentLogin.verifyAccess(NAS, 'code'),
@@ -121,7 +121,7 @@ test('the current connection carries the saved login, its access grant and wheth
         accessCookie: 'gateway=granted',
         trustedHost: false,
     });
-    world.certTrust().addTrustedHost(NAS);
+    assert.equal(await world.certTrust().confirmTrust(NAS, 'net::ERR_CERT_AUTHORITY_INVALID'), true);
     assert.equal((await currentLogin.currentConnection()).trustedHost, true);
 });
 
