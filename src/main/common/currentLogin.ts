@@ -19,6 +19,7 @@ export type IssuedToken = { token: string; movedTo?: string } | { error: LoginEr
 export type LoginFailureReason =
     | 'access-code-rejected'
     | 'access-code-unreachable'
+    | 'certificate-declined'
     | 'token-not-issued'
     | 'saved-token-invalid'
     | 'session-not-restored'
@@ -42,6 +43,9 @@ interface LoginWindow {
 }
 
 function accessCodeFailure(error: AccessCodeVerificationError): LoginFailedError {
+    if (error.reason === 'certificate-declined') {
+        return new LoginFailedError('certificate-declined', { title: '登录取消', message: '用户取消信任证书，无法继续登录。' });
+    }
     return error.reason === 'rejected'
         ? new LoginFailedError('access-code-rejected', { title: '访问码错误', message: '访问码错误，请检查后重试。' })
         : new LoginFailedError('access-code-unreachable', {
