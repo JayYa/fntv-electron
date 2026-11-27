@@ -1,5 +1,5 @@
-import { ipcRenderer } from 'electron';
-
+import { request } from './core/ipc';
+import preloadLogger from './core/logger';
 import { HookType, runHooks } from './core/hooks';
 import './loginPageApi';
 
@@ -22,4 +22,4 @@ function initInjector(): void {
 
 initInjector();
 
-ipcRenderer.send('preload-started', PLUGINS);
+request('preload-started', PLUGINS).catch((error: unknown) => preloadLogger.warn('报告 preload 启动失败:', error));

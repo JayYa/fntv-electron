@@ -1,17 +1,17 @@
-import { dialog, IpcMainEvent } from 'electron';
-import * as ply from '../../../modules/players';
-import * as fn from '../../../modules/fn_api/api';
-import * as clientState from '../../../modules/fn_config/clientState';
-import { registerHandler } from '../core/ipcHandler';
-import * as log from '../../../modules/logger';
-import { mainWindow } from '../../common/mainWindow';
-import { currentConnection } from '../../common/currentLogin';
-import { type MpvLaunch, mpvRuntime } from '../../common/mpvRuntime';
-import { platformBehavior } from '../../../public/platform';
-import { proxy } from '../../common/proxy';
-import { isPlayRequest } from '../../../modules/playback/playRequest';
-import { createPlay, PlayDeps, PlayerOptions } from '../../../modules/playback/play';
-import * as playbackState from '../../../modules/playback/playbackState';
+import { dialog } from 'electron';
+import * as ply from '../../modules/players';
+import * as fn from '../../modules/fn_api/api';
+import * as clientState from '../../modules/fn_config/clientState';
+import * as log from '../../modules/logger';
+import { mainWindow } from '../common/mainWindow';
+import { currentConnection } from '../common/currentLogin';
+import { type MpvLaunch, mpvRuntime } from '../common/mpvRuntime';
+import { platformBehavior } from '../../public/platform';
+import { proxy } from '../common/proxy';
+import { isPlayRequest, type PlayRequest } from '../../modules/playback/playRequest';
+import { type ChannelHandlers, InvalidPayload } from './adapter';
+import { createPlay, PlayDeps, PlayerOptions } from '../../modules/playback/play';
+import * as playbackState from '../../modules/playback/playbackState';
 
 function getProgramOrNotify(): MpvLaunch | undefined {
     const program = mpvRuntime.program();
@@ -63,22 +63,19 @@ const play = createPlay({
     },
 });
 
-async function handlePlayMovie(_event: IpcMainEvent, request: unknown): Promise<void> {
-    if (!isPlayRequest(request)) {
-        log.warn('忽略无效的播放请求：缺少播放项 id');
-        return;
-    }
-
-    const accepted = await playbackState.runPlayback((run) => play(request, run));
-    if (!accepted) {
-        log.warn('播放器正在启动或播放，忽略重复播放请求');
-    }
+function parsePlayRequest(raw: unknown): PlayRequest {
+    if (!isPlayRequest(raw)) throw new InvalidPayload('缺少播放项 id');
+    return raw;
 }
 
-function init(): void {
-    registerHandler('play-movie', handlePlayMovie);
+function startPlayback(request: PlayRequest): void {
+    playbackState.runPlayback((run) => play(request, run)).then((accepted) => {
+        if (!accepted) log.warn('播放器正在启动或播放，忽略重复播放请求');
+    }, (error: unknown) => {
+        log.error('播放失败:', error);
+    });
 }
 
-export {
-    init
+export const playbackHandlers: Pick<ChannelHandlers, 'play-movie'> = {
+    'play-movie': { parse: parsePlayRequest, handle: startPlayback },
 };

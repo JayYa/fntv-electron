@@ -1,23 +1,21 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { openLoginPage } = require('./helpers/loginPage.cjs');
+const { fakeIpcMain } = require('./helpers/fakeIpc.cjs');
 const { fakeDownloadProgress, fakeMainWindowElectron } = require('./helpers/fakeMainWindow.cjs');
 
-function setup(t, storedConfig, { url } = {}) {
+async function setup(t, storedConfig, { url } = {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-login-page-preferences-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
-    const ipcMain = new EventEmitter();
-    ipcMain.invokeHandlers = new Map();
-    ipcMain.handle = (channel, handler) => ipcMain.invokeHandlers.set(channel, handler);
+    const ipc = fakeIpcMain();
     useFakeElectron(t, {
         ...fakeMainWindowElectron([]).electron,
-        ipcMain,
+        ipcMain: ipc.ipcMain,
         app: {
             isPackaged: false,
             getAppPath() { return testRoot; },
@@ -32,7 +30,7 @@ function setup(t, storedConfig, { url } = {}) {
     fs.writeFileSync(path.join(paths.userData, 'config.json'), JSON.stringify(storedConfig));
 
     const preferences = require('../dest/modules/fn_config/preferences.js');
-    require('../dest/main/handlers/plugins/config.js').init();
+    ipc.register(require('../dest/main/ipc/preferences.js').preferencesHandlers);
     const { LOGIN_PAGE_PATH } = require('../dest/main/common/loginPage.js');
 
     const page = openLoginPage();
@@ -42,18 +40,8 @@ function setup(t, storedConfig, { url } = {}) {
     window.webContents.url = url ?? pathToFileURL(LOGIN_PAGE_PATH).href;
     window.webContents.send = (channel, data) => page.receive(channel, data);
 
-    let delivered = 0;
-    const deliverSent = () => {
-        while (delivered < page.sent.length) {
-            const { channel, payload } = page.sent[delivered];
-            delivered += 1;
-            if (ipcMain.listenerCount(channel) > 0) {
-                ipcMain.emit(channel, { reply: (replyChannel, data) => page.receive(replyChannel, data) }, payload);
-            }
-        }
-    };
     page.load();
-    deliverSent();
+    await ipc.deliverTo(page);
 
     return {
         preferences,
@@ -63,18 +51,15 @@ function setup(t, storedConfig, { url } = {}) {
         openPanel: () => page.click('proxySettingsBtn'),
         async save() {
             page.click('proxySaveBtn');
-            for (const { channel, payload } of page.pending()) {
-                await page.resolve(channel, await ipcMain.invokeHandlers.get(channel)({}, payload));
-            }
-            deliverSent();
+            await ipc.deliverTo(page);
         },
     };
 }
 
 const STORED = { downloadProxyEnabled: false, downloadProxy: 'https://relay.example.test/', hideOriginalPlayButton: true };
 
-test('a preference changed in the tray while the login page is open shows up in its settings panel', (t) => {
-    const { preferences, switchOf } = setup(t, STORED);
+test('a preference changed in the tray while the login page is open shows up in its settings panel', async (t) => {
+    const { preferences, switchOf } = await setup(t, STORED);
     assert.equal(switchOf('mpvPlaybackSwitch'), true);
 
     preferences.set('mpvPlayback', false);
@@ -83,7 +68,7 @@ test('a preference changed in the tray while the login page is open shows up in 
 });
 
 test('saving the app download proxy on the login page keeps a MPV playback change made in the tray', async (t) => {
-    const { preferences, page, openPanel, save } = setup(t, STORED);
+    const { preferences, page, openPanel, save } = await setup(t, STORED);
 
     preferences.set('mpvPlayback', false);
     openPanel();
@@ -96,7 +81,7 @@ test('saving the app download proxy on the login page keeps a MPV playback chang
 });
 
 test('a tray change arriving while the user edits the panel leaves the edited setting as the user typed it', async (t) => {
-    const { preferences, page, openPanel, save } = setup(t, STORED);
+    const { preferences, page, openPanel, save } = await setup(t, STORED);
 
     openPanel();
     page.input('proxyUrlInput').value = 'https://typed.example.test/';
@@ -110,17 +95,17 @@ test('a tray change arriving while the user edits the panel leaves the edited se
 });
 
 test('saving the panel without changes sends nothing and closes it', async (t) => {
-    const { page, openPanel } = setup(t, STORED);
+    const { page, openPanel } = await setup(t, STORED);
 
     openPanel();
     page.click('proxySaveBtn');
 
-    assert.deepEqual(page.pending(), []);
+    assert.deepEqual(page.pending().filter(({ channel }) => channel === 'set-preferences'), []);
     assert.equal(page.input('proxyPanel').classList.contains('show'), false);
 });
 
-test('turning the MPV playback preference on or off reloads the web UI so takeover follows it', (t) => {
-    const { preferences, window } = setup(t, STORED, { url: 'https://nas.example:5667/v/movie/1' });
+test('turning the MPV playback preference on or off reloads the web UI so takeover follows it', async (t) => {
+    const { preferences, window } = await setup(t, STORED, { url: 'https://nas.example:5667/v/movie/1' });
 
     preferences.set('mpvPlayback', false);
     preferences.set('mpvPlayback', false);
@@ -131,16 +116,16 @@ test('turning the MPV playback preference on or off reloads the web UI so takeov
     assert.equal(window.webContents.reloads, 2);
 });
 
-test('changing the MPV playback preference on the login page does not reload the login page', (t) => {
-    const { preferences, window } = setup(t, STORED);
+test('changing the MPV playback preference on the login page does not reload the login page', async (t) => {
+    const { preferences, window } = await setup(t, STORED);
 
     preferences.set('mpvPlayback', false);
 
     assert.equal(window.webContents.reloads, 0);
 });
 
-test('with no saved MPV playback preference the login page shows MPV playback turned on', (t) => {
-    const { switchOf } = setup(t, {});
+test('with no saved MPV playback preference the login page shows MPV playback turned on', async (t) => {
+    const { switchOf } = await setup(t, {});
 
     assert.equal(switchOf('mpvPlaybackSwitch'), true);
 });

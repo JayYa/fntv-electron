@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const { isFnId } = require('../../dest/public/fnId.js');
+const { isPushChannel, mayCall } = require('../../dest/public/ipcChannels.js');
 
 const LOGIN_DIR = path.join(__dirname, '..', '..', 'resource', 'login');
 
@@ -90,27 +91,28 @@ function openLoginPage() {
         if (!elements.has(id)) elements.set(id, createElement(focusTracker));
         return elements.get(id);
     };
-    const sent = [];
     const invoked = [];
     const pendingInvocations = [];
     const pageListeners = new Map();
     const copy = (payload) => payload && JSON.parse(JSON.stringify(payload));
-    const takeInvocation = (channel) => {
-        const index = pendingInvocations.findIndex((invocation) => invocation.channel === channel);
-        assert.notEqual(index, -1, `no pending ${channel} invocation`);
-        return pendingInvocations.splice(index, 1)[0];
+    const takeInvocation = (channel, position = 0) => {
+        const indexes = pendingInvocations.flatMap((invocation, index) => (invocation.channel === channel ? [index] : []));
+        assert.ok(position < indexes.length, `no pending ${channel} invocation`);
+        return pendingInvocations.splice(indexes[position], 1)[0];
     };
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     const electronAPI = {
-        send(channel, payload) { sent.push({ channel, payload: copy(payload) }); },
         invoke(channel, payload) {
+            assert.ok(mayCall(channel, 'loginPage'), `the login page may not invoke ${channel}`);
             invoked.push({ channel, payload: copy(payload) });
             return new Promise((resolve, reject) => {
                 pendingInvocations.push({ channel, payload: copy(payload), resolve, reject });
             });
         },
-        on(channel, listener) { pageListeners.set(channel, listener); },
-        once() {},
+        on(channel, listener) {
+            assert.ok(isPushChannel(channel), `the main process pushes nothing on ${channel}`);
+            pageListeners.set(channel, listener);
+        },
         off() {},
         isFnId,
     };
@@ -148,11 +150,14 @@ function openLoginPage() {
     });
 
     return {
-        sent,
         invoked,
         pending: () => pendingInvocations.map(({ channel, payload }) => ({ channel, payload })),
         async resolve(channel, value) {
             takeInvocation(channel).resolve(value);
+            await settle();
+        },
+        async resolveAt(channel, position, value) {
+            takeInvocation(channel, position).resolve(value);
             await settle();
         },
         async reject(channel, error) {
@@ -177,7 +182,7 @@ function openLoginPage() {
             documentElement.dispatch('keydown', { key, target });
             documentElement.dispatch('keypress', { key, target });
         },
-        receive(channel, data) { pageListeners.get(channel)(undefined, data); },
+        receive(channel, data) { pageListeners.get(channel)(data); },
         clickHistory(index) {
             getElement('historyDropdown').querySelectorAll('.history-content')[index].dispatch('click');
         },

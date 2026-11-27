@@ -4,7 +4,7 @@ import { clearAccessGrants, getAccessCookieHeader } from '../../modules/fn_api/a
 import { ApiService } from '../../modules/fn_api/api';
 import * as loginStore from '../../modules/fn_config/loginStore';
 import * as log from '../../modules/logger';
-import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
+import { applyVerifiedOriginToFnConnectBaseUrl } from './fnId/fnConnect';
 import { AccessCodeVerificationError, establishAccessCodeSession, type AccessCodeSessionResult } from './accessCodeSession';
 import { LOGIN_PAGE_PATH } from './loginPage';
 import * as webUiSession from './webUiSession';

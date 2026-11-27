@@ -83,9 +83,10 @@ test('closing a message falls back to the domain input when the previously focus
     assert.equal(page.focusedId(), 'domain');
 });
 
-test('cancelling the clear history confirmation returns focus to the button that opened it', () => {
+test('cancelling the clear history confirmation returns focus to the button that opened it', async () => {
     const page = openLoginPage();
-    page.receive('config-data', {
+    page.load();
+    await page.resolve('get-config', {
         config: { account: 'user', domain: 'nas.example', hasAccessCode: false, useHttps: false },
         history: [{ domain: 'nas.example', account: 'user', useHttps: false }],
     });

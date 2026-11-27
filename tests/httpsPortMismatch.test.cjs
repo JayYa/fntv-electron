@@ -5,6 +5,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+const { fakeIpcMain } = require('./helpers/fakeIpc.cjs');
 
 const ELECTRON_ERROR = 'write EPROTO 115584:error:100000f7:SSL routines:OPENSSL_internal:WRONG_VERSION_NUMBER:..\..\third_party\boringssl\src\ssl\tls_record.cc:127:\n';
 const NODE_ERROR = 'write EPROTO E84B0000:error:0A00010B:SSL routines:tls_validate_record_header:wrong version number:openssl\ssl\record\methods\tlsany_meth.c:78:\n';
@@ -28,7 +29,7 @@ test('does not treat other failures as HTTPS reaching an HTTP port', () => {
 function setupLogin(t, onConnection = () => {}) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-https-port-'));
     const paths = { home: testRoot, temp: testRoot, userData: path.join(testRoot, '.fntv') };
-    const invokeHandlers = new Map();
+    const ipc = fakeIpcMain();
     const electronMock = {
         app: {
             isPackaged: true,
@@ -37,11 +38,7 @@ function setupLogin(t, onConnection = () => {}) {
             commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
-        ipcMain: {
-            on() {},
-            handle(channel, handler) { invokeHandlers.set(channel, handler); },
-            removeAllListeners() {},
-        },
+        ipcMain: ipc.ipcMain,
         session: { fromPartition() { return {}; } },
         safeStorage: {
             async isAsyncEncryptionAvailable() { return true; },
@@ -67,7 +64,7 @@ function setupLogin(t, onConnection = () => {}) {
     });
 
     fs.mkdirSync(paths.userData, { recursive: true });
-    require('../dest/main/handlers/plugins/auth.js').init();
+    ipc.register(require('../dest/main/ipc/login.js').loginHandlers);
 
     return {
         connections: () => connections,
@@ -75,7 +72,7 @@ function setupLogin(t, onConnection = () => {}) {
         async login() {
             await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
             const domain = `127.0.0.1:${server.address().port}`;
-            return invokeHandlers.get('login')({}, { domain, username: 'user', password: 'password', useHttps: true });
+            return ipc.invoke('login', { domain, username: 'user', password: 'password', useHttps: true });
         },
     };
 }

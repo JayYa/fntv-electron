@@ -1,9 +1,10 @@
-import { ipcRenderer } from 'electron';
+import type { LogLevel } from '../../public/ipcChannels';
+import { request } from './ipc';
 import type { Logger } from './types';
 
-async function forward(level: string, fallback: (...args: any[]) => void, args: any[]): Promise<void> {
+async function forward(level: LogLevel, fallback: (...args: any[]) => void, args: any[]): Promise<void> {
     try {
-        await ipcRenderer.invoke('log-message', level, ...args);
+        await request('log-message', { level, args });
     } catch {
         fallback(...args);
     }

@@ -23,7 +23,7 @@
 
 ## FN ID 登录
 
-FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离开 FN Connect 时到达的第一个地址就是目标 origin（`src/main/handlers/core/fnIdTrust.ts`）。访问码只在页面属于这个 origin，而且是 fnOS 访问码页时注入脚本，用于自动填写。拿到目标 FNMedia origin 后，主进程再建立和直接登录相同的授权。
+FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离开 FN Connect 时到达的第一个地址就是目标 origin（`src/main/common/fnId/fnIdTrust.ts`）。访问码只在页面属于这个 origin，而且是 fnOS 访问码页时注入脚本，用于自动填写。拿到目标 FNMedia origin 后，主进程再建立和直接登录相同的授权。
 
 渲染窗口遇到证书错误（`app` 的 `certificate-error`）时，不在信任列表里的地址也弹窗问用户，不直接拒绝：FN Connect 跳到使用自签名证书的 NAS 时，直接拒绝会静默白屏。
 
@@ -61,9 +61,9 @@ proc 拿不到端口，所以按指纹而不是按主机和端口确认：同一
 - Electron 45 的同步 API 写的密文格式是 `safe-storage:v1:` 加 `encryptString` 结果的 base64，`tests/helpers/credentialConfig.cjs` 按这个格式造旧密文。
 - 当前访问码解不开时，`readCurrentLogin` 连同 token 一起按未登录返回，启动回到登录页，不跳过网关。两者的密文都保留，密钥恢复后还能用。
 - 访问码不进日志、URL、命令行参数和环境变量，也不出现在 Proxy 响应里。派生的 Cookie 不出现在播放会话 URL 里。
-- `config-data` 不含密码、访问码和 token。当前配置只带 `hasAccessCode` 布尔值，`history` 只带 `domain`、`account` 和 `useHttps`。
+- `get-config` 的结果不含密码、访问码和 token。当前配置只带 `hasAccessCode` 布尔值，`history` 只带 `domain`、`account` 和 `useHttps`。
 - 写进网页端会话的 `Trim-MC-token` 不设 `httpOnly`：飞牛网页前端读这个 Cookie 维持路由和 API 登录态。远程页面已由 `contextIsolation`、关闭 `nodeIntegration` 与本机能力隔离。同时写 `mode=relay`，FN Connect 外网访问要它。
-- 明文凭据按需发给本地登录页：用户点击历史时走 `get-history-credentials`，当前配置有访问码时走 `get-current-access-code` 回填表单。主进程校验 `senderFrame` 是本地 `file:` 登录页，其它来源不回复。回复带域名和账号，登录页丢弃对不上的回复。解不开的凭据是空值，表单留空由用户手动输入。
+- 明文凭据按需发给本地登录页：用户点击历史时走 `get-history-credentials`，当前配置有访问码时走 `get-current-access-code` 回填表单。频道表只对登录页开放这两个频道，IPC adapter 校验 `senderFrame` 是本地 `file:` 登录页，其它来源的请求被拒绝。登录页丢弃不是最近一次请求的结果；当前访问码的结果带域名和账号，对不上当前配置时也丢弃。解不开的凭据是空值，表单留空由用户手动输入。
 - 按需频道减少的是登录页内存里常驻的明文，防不了登录页自身被注入：注入的脚本同样能发这些请求，只是要逐条取。当前访问码在打开登录页时就会回填，和改动前一样留在表单里。
 - 配置里的 token 不经 IPC 发给渲染进程，但它不是只留在主进程：`Trim-MC-token` Cookie 是 `httpOnly: false`，网页端要读取它（`src/main/common/currentLogin.ts` 写入网页端会话），所以远程页面的脚本能读到 token。
 

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+const { fakeIpcMain } = require('./helpers/fakeIpc.cjs');
 const { pathToFileURL } = require('node:url');
 const { resolveAllowedExternalUrl } = require('../dest/main/common/externalUrl.js');
 
@@ -12,14 +13,10 @@ const LOGIN_PAGE_URL = pathToFileURL(path.resolve(__dirname, '..', 'resource', '
 function setupHandler(t) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-external-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
-    const handlers = new Map();
+    const ipc = fakeIpcMain();
     const opened = [];
     const electronMock = {
-        ipcMain: {
-            handle(channel, handler) { handlers.set(channel, handler); },
-            on() {},
-            removeAllListeners() {},
-        },
+        ipcMain: ipc.ipcMain,
         shell: {
             async openExternal(url) { opened.push(url); },
         },
@@ -27,6 +24,7 @@ function setupHandler(t) {
             isPackaged: false,
             getAppPath() { return testRoot; },
             getPath(name) { return paths[name]; },
+            commandLine: { getSwitchValue() { return ''; } },
             setPath(name, value) { paths[name] = value; },
         },
     };
@@ -34,8 +32,9 @@ function setupHandler(t) {
     useFakeElectron(t, electronMock);
     t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
 
-    require('../dest/main/handlers/plugins/externalLink.js').init();
-    return { openExternal: handlers.get('open-external'), opened };
+    ipc.register(require('../dest/main/ipc/app.js').appHandlers);
+    const openExternal = (frameUrl, url) => ipc.invoke('open-external', url, { frameUrl });
+    return { openExternal, opened };
 }
 
 test('only https github.com addresses are allowed', () => {
@@ -65,7 +64,7 @@ test('only https github.com addresses are allowed', () => {
 test('the login page can open a github link', async (t) => {
     const { openExternal, opened } = setupHandler(t);
 
-    await openExternal({ senderFrame: { url: LOGIN_PAGE_URL } }, 'https://github.com/JayYa');
+    await openExternal(LOGIN_PAGE_URL, 'https://github.com/JayYa');
 
     assert.deepEqual(opened, ['https://github.com/JayYa']);
 });
@@ -74,7 +73,7 @@ test('the login page cannot open an address outside github', async (t) => {
     const { openExternal, opened } = setupHandler(t);
 
     await assert.rejects(
-        openExternal({ senderFrame: { url: LOGIN_PAGE_URL } }, 'https://evil.example/'),
+        openExternal(LOGIN_PAGE_URL, 'https://evil.example/'),
         /GitHub/,
     );
 
@@ -84,12 +83,8 @@ test('the login page cannot open an address outside github', async (t) => {
 test('frames other than the login page cannot open links', async (t) => {
     const { openExternal, opened } = setupHandler(t);
 
-    for (const senderFrame of [
-        { url: 'http://nas.example:5666/v' },
-        { url: 'file:///C:/somewhere/else.html' },
-        null,
-    ]) {
-        await assert.rejects(openExternal({ senderFrame }, 'https://github.com/JayYa'), /登录页/);
+    for (const frameUrl of ['http://nas.example:5666/v', 'file:///C:/somewhere/else.html', null]) {
+        await assert.rejects(openExternal(frameUrl, 'https://github.com/JayYa'), /不接受这个页面的请求/);
     }
 
     assert.deepEqual(opened, []);

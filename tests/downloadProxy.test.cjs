@@ -1,20 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 const { openLoginPage } = require('./helpers/loginPage.cjs');
+const { fakeIpcMain } = require('./helpers/fakeIpc.cjs');
 
 function setupMain(t, storedConfig) {
     const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-download-proxy-'));
     const paths = { home: testRoot, userData: path.join(testRoot, '.fntv') };
-    const ipcMain = new EventEmitter();
-    ipcMain.invokeHandlers = new Map();
-    ipcMain.handle = (channel, handler) => ipcMain.invokeHandlers.set(channel, handler);
+    const ipc = fakeIpcMain();
     const electronMock = {
-        ipcMain,
+        ipcMain: ipc.ipcMain,
         app: {
             isPackaged: false,
             getAppPath() { return testRoot; },
@@ -33,40 +31,24 @@ function setupMain(t, storedConfig) {
         fs.writeFileSync(configPath, JSON.stringify(storedConfig));
     }
     return {
-        ipcMain,
+        ipc,
         configPath,
         config: require('../dest/modules/fn_config/preferences.js'),
-        loadConfigPlugin: () => require('../dest/main/handlers/plugins/config.js'),
+        registerPreferencesChannels: () => ipc.register(require('../dest/main/ipc/preferences.js').preferencesHandlers),
     };
 }
 
-function openConnectedLoginPage(ipcMain) {
+async function openConnectedLoginPage(ipc) {
     const page = openLoginPage();
-    let delivered = 0;
-    const deliverSent = () => {
-        while (delivered < page.sent.length) {
-            const { channel, payload } = page.sent[delivered];
-            delivered += 1;
-            if (channel === 'get-preferences') {
-                ipcMain.emit(channel, { reply: (replyChannel, data) => page.receive(replyChannel, data) }, payload);
-            }
-        }
-    };
-    const deliverInvoked = async () => {
-        for (const { channel, payload } of page.pending()) {
-            await page.resolve(channel, await ipcMain.invokeHandlers.get(channel)({}, payload));
-        }
-        deliverSent();
-    };
     page.load();
-    deliverSent();
+    await ipc.deliverTo(page);
     return {
         proxyUrlInput: () => page.input('proxyUrlInput'),
         async clearProxyUrlAndSave() {
             page.click('proxySettingsBtn');
             page.input('proxyUrlInput').value = '';
             page.click('proxySaveBtn');
-            await deliverInvoked();
+            await ipc.deliverTo(page);
         },
     };
 }
@@ -109,25 +91,25 @@ for (const custom of ['https://relay.example.test/', 'https://ghfast.top/gh/', '
     });
 }
 
-test('the settings panel shows the built-in relay when no address was ever saved', (t) => {
-    const { ipcMain, config, loadConfigPlugin } = setupMain(t, undefined);
-    loadConfigPlugin().init();
+test('the settings panel shows the built-in relay when no address was ever saved', async (t) => {
+    const { ipc, config, registerPreferencesChannels } = setupMain(t, undefined);
+    registerPreferencesChannels();
 
-    const page = openConnectedLoginPage(ipcMain);
+    const page = await openConnectedLoginPage(ipc);
 
     assert.equal(page.proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
     assert.equal(page.proxyUrlInput().placeholder, config.DEFAULT_DOWNLOAD_PROXY_URL);
 });
 
 test('saving an empty relay address still shows the built-in relay, also after reopening the page', async (t) => {
-    const { ipcMain, config, loadConfigPlugin } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: 'https://relay.example.test/' });
-    loadConfigPlugin().init();
-    const page = openConnectedLoginPage(ipcMain);
+    const { ipc, config, registerPreferencesChannels } = setupMain(t, { downloadProxyEnabled: true, downloadProxy: 'https://relay.example.test/' });
+    registerPreferencesChannels();
+    const page = await openConnectedLoginPage(ipc);
     assert.equal(page.proxyUrlInput().value, 'https://relay.example.test/');
 
     await page.clearProxyUrlAndSave();
 
     assert.equal(page.proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
-    assert.equal(openConnectedLoginPage(ipcMain).proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
+    assert.equal((await openConnectedLoginPage(ipc)).proxyUrlInput().value, config.DEFAULT_DOWNLOAD_PROXY_URL);
     assert.equal(config.get('appDownloadProxy').proxyUrl, config.DEFAULT_DOWNLOAD_PROXY_URL);
 });

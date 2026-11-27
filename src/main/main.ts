@@ -1,5 +1,5 @@
 import { app, dialog } from 'electron';
-import { registerAllPlugins } from './handlers';
+import { startIpc } from './ipc';
 import { getInstance as getUpdateChecker } from '../modules/updater/updateChecker';
 import { createTray, destroyTray, showTrayBalloon } from './common/tray';
 import { mpvRuntime } from './common/mpvRuntime';
@@ -64,7 +64,7 @@ if (!gotTheLock) {
                 app.on('activate', () => mainWindow.show());
             }
 
-            registerAllPlugins();
+            startIpc({ isMainWindow: (sender) => sender === mainWindow.window().webContents });
             webUiSession.start(() => endCurrentLogin(mainWindow.window()));
 
             mpvRuntime.syncAtStartup();

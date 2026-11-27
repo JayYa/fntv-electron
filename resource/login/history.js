@@ -1,6 +1,9 @@
+/* exported loadConfigData */
+
 let historyData = [];
-let pendingHistoryCredentials = null;
-let pendingCurrentAccessCode = null;
+let configRequest = null;
+let credentialsRequest = null;
+let accessCodeRequest = null;
 
 historyBtn.addEventListener('click', function (e) {
     e.stopPropagation();
@@ -62,9 +65,8 @@ function renderHistoryList() {
             accessCodeInput.value = '';
             document.getElementById('httpsSwitch').checked = item.useHttps === true;
 
-            pendingCurrentAccessCode = null;
-            pendingHistoryCredentials = { domain: item.domain, account: item.account };
-            ipcRenderer.send('get-history-credentials', pendingHistoryCredentials);
+            accessCodeRequest = null;
+            fillHistoryCredentials({ domain: item.domain, account: item.account });
 
             historyDropdown.classList.remove('show');
             
@@ -84,9 +86,7 @@ function renderHistoryList() {
             
             showCustomConfirm(
                 `确定要删除 ${item.account}@${item.domain} 的登录记录吗？`,
-                () => {
-                    ipcRenderer.send('delete-history-item', { domain: item.domain, account: item.account });
-                }
+                () => deleteHistoryItem({ domain: item.domain, account: item.account })
             );
         });
     });
@@ -101,25 +101,51 @@ function renderHistoryList() {
             
             showCustomConfirm(
                 '确定要清除所有历史记录吗？',
-                () => {
-                    ipcRenderer.send('clear-history');
-                    historyData = [];
-                    renderHistoryList();
-                }
+                clearHistory
             );
         });
     }
 }
 
-function loadConfigData() {
-    ipcRenderer.send('get-config');
+async function deleteHistoryItem(key) {
+    try {
+        if (await ipcRenderer.invoke('delete-history-item', key)) loadConfigData();
+    } catch (error) {
+        window.log.error('删除历史记录项失败:', error);
+        showCustomMessage('error', '删除失败', '没能删除这条登录记录，请稍后重试。');
+    }
 }
 
-ipcRenderer.on('config-data', (event, data) => {
-    const { config, history } = data;
+async function clearHistory() {
+    try {
+        await ipcRenderer.invoke('clear-history');
+    } catch (error) {
+        window.log.error('清除历史记录失败:', error);
+        showCustomMessage('error', '清除失败', '没能清除历史记录，请稍后重试。');
+        return;
+    }
+    historyData = [];
+    renderHistoryList();
+}
+
+async function loadConfigData() {
+    const request = {};
+    configRequest = request;
+    let data;
+    try {
+        data = await ipcRenderer.invoke('get-config');
+    } catch (error) {
+        window.log.error('读取配置失败:', error);
+        return;
+    }
+    if (configRequest !== request) return;
+    showConfig(data);
+}
+
+function showConfig({ config, history }) {
     historyData = history || [];
-    pendingHistoryCredentials = null;
-    pendingCurrentAccessCode = null;
+    credentialsRequest = null;
+    accessCodeRequest = null;
 
     if (config && config.domain) {
         domainInput.value = config.domain.replace(/^https?:\/\//, '');
@@ -131,40 +157,47 @@ ipcRenderer.on('config-data', (event, data) => {
         usernameInput.value = config.account;
     }
     if (config && config.hasAccessCode) {
-        pendingCurrentAccessCode = { domain: config.domain, account: config.account };
-        ipcRenderer.send('get-current-access-code');
+        fillCurrentAccessCode({ domain: config.domain, account: config.account });
     }
 
     renderHistoryList();
-    
-    checkInputs();
-});
 
-function isPendingLogin(pending, reply) {
-    return pending && pending.domain === reply.domain && pending.account === reply.account;
+    checkInputs();
 }
 
-ipcRenderer.on('history-credentials', (event, data) => {
-    if (!isPendingLogin(pendingHistoryCredentials, data)) return;
-    pendingHistoryCredentials = null;
-    passwordInput.value = data.password;
-    accessCodeInput.value = data.accessCode;
+async function fillHistoryCredentials(request) {
+    credentialsRequest = request;
+    let credentials;
+    try {
+        credentials = await ipcRenderer.invoke('get-history-credentials', request);
+    } catch (error) {
+        window.log.error('读取历史凭据失败:', error);
+        return;
+    }
+    if (credentialsRequest !== request) return;
+    credentialsRequest = null;
+    passwordInput.value = credentials.password;
+    accessCodeInput.value = credentials.accessCode;
     checkInputs();
-});
+}
 
-ipcRenderer.on('current-access-code', (event, data) => {
-    if (!isPendingLogin(pendingCurrentAccessCode, data)) return;
-    pendingCurrentAccessCode = null;
-    accessCodeInput.value = data.accessCode;
-});
+async function fillCurrentAccessCode(request) {
+    accessCodeRequest = request;
+    let saved;
+    try {
+        saved = await ipcRenderer.invoke('get-current-access-code');
+    } catch (error) {
+        window.log.error('读取当前访问码失败:', error);
+        return;
+    }
+    if (accessCodeRequest !== request || saved.domain !== request.domain || saved.account !== request.account) return;
+    accessCodeRequest = null;
+    accessCodeInput.value = saved.accessCode;
+}
 
 [domainInput, usernameInput, passwordInput, accessCodeInput].forEach(input => {
     input.addEventListener('input', () => {
-        pendingHistoryCredentials = null;
-        pendingCurrentAccessCode = null;
+        credentialsRequest = null;
+        accessCodeRequest = null;
     });
-});
-
-ipcRenderer.on('history-item-deleted', () => {
-    loadConfigData();
 });

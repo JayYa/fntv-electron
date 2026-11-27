@@ -145,7 +145,7 @@ test('saving settings closes the panel only after the save is answered', async (
 
     saveMpvPlaybackTurnedOff(page);
     assert.equal(page.input('proxySaveBtn').disabled, true);
-    assert.deepEqual(page.pending(), [{ channel: 'set-preferences', payload: { mpvPlayback: false } }]);
+    assert.deepEqual(page.pending().filter(({ channel }) => channel === 'set-preferences'), [{ channel: 'set-preferences', payload: { mpvPlayback: false } }]);
     assert.ok(page.input('proxyPanel').classList.contains('show'));
 
     await page.resolve('set-preferences', { success: true, preferences: { ...SNAPSHOT, mpvPlayback: false } });
@@ -187,7 +187,7 @@ test('saving settings before the preferences have arrived writes nothing and say
     page.click('proxySettingsBtn');
     page.click('proxySaveBtn');
 
-    assert.deepEqual(page.pending(), []);
+    assert.deepEqual(page.pending().filter(({ channel }) => channel === 'set-preferences'), []);
     assert.ok(page.input('proxyPanel').classList.contains('show'));
     assert.equal(shownMessage(page).title, '保存失败');
 });

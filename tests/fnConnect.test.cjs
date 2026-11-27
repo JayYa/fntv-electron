@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
     applyVerifiedOriginToFnConnectBaseUrl,
     resolveFnConnectBaseUrl,
-} = require('../dest/main/handlers/core/fnConnect.js');
+} = require('../dest/main/common/fnId/fnConnect.js');
 
 test('keeps the FN ID path while the relay stays on 5ddd.com', () => {
     assert.equal(

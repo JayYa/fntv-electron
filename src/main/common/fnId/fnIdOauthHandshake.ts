@@ -1,7 +1,7 @@
 import { BrowserWindow, CookiesSetDetails } from 'electron';
 import { ApiService } from '../../../modules/fn_api/api';
 import * as log from '../../../modules/logger';
-import { type GrantedBaseUrl, verifyAccess } from '../../common/currentLogin';
+import { type GrantedBaseUrl, verifyAccess } from '../currentLogin';
 
 export interface IssuedFnIdToken {
     token: string;

@@ -17,11 +17,9 @@ export interface PlayMovieData {
 }
 
 export interface LoginPageApi {
-    send: (channel: string, ...args: unknown[]) => void;
-    invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
-    on: (channel: string, listener: (...args: any[]) => void) => void;
-    once: (channel: string, listener: (...args: any[]) => void) => void;
-    off: (channel: string, listener: (...args: any[]) => void) => void;
+    invoke: (channel: string, payload?: unknown) => Promise<unknown>;
+    on: (channel: string, listener: (payload: unknown) => void) => void;
+    off: (channel: string, listener: (payload: unknown) => void) => void;
     openExternal: (url: string) => Promise<void>;
     isFnId: (domain: string) => boolean;
 }

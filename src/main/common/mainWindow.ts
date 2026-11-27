@@ -7,6 +7,7 @@ import * as log from '../../modules/logger';
 import { listenForSystemShutdown } from '../../modules/quit/quitCoordinator';
 import type { DownloadProgress } from '../../modules/updater/inAppUpdate';
 import { closeBehaviorMenuItem, followCloseBehavior, type ShowTrayBalloon } from './closeBehavior';
+import { push } from '../ipc/adapter';
 import { isLoginPageUrl } from './loginPage';
 import { checkLibraryPageUrl } from './utils';
 import { WEB_UI_SESSION_PARTITION } from './webUiSession';
@@ -116,7 +117,7 @@ function toggleMaximized(window: BrowserWindow): void {
 function followPreferences(window: BrowserWindow): void {
     preferences.onChange((name) => {
         if (window.isDestroyed()) return;
-        window.webContents.send('preferences-snapshot', preferences.snapshot());
+        push(window.webContents, 'preferences-snapshot', preferences.snapshot());
         if (name !== 'mpvPlayback') return;
         const url = window.webContents.getURL();
         if (!url || isLoginPageUrl(url)) return;

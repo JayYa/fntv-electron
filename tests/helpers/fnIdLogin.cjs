@@ -122,7 +122,7 @@ function setupLogin(t, { accessCode = '', tokenCookies = [{ value: 'cookie-token
     };
 
     startMainWindow();
-    const { handleFnIdLogin } = require('../../dest/main/handlers/core/fnIdLogin.js');
+    const { handleFnIdLogin } = require('../../dest/main/common/fnId/fnIdLogin.js');
     const { readCurrentLogin } = require('../../dest/modules/fn_config/loginStore.js');
     const loginData = { domain: 'demo123', username: 'alice', password: PASSWORD, accessCode };
     const finished = handleFnIdLogin(loginData);

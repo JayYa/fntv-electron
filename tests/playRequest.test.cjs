@@ -3,13 +3,14 @@ const assert = require('node:assert/strict');
 const os = require('node:os');
 const { isPlayRequest } = require('../dest/modules/playback/playRequest.js');
 const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
+const { fakeIpcMain } = require('./helpers/fakeIpc.cjs');
 
 function loadPlayMovieHandler(t) {
-    const handlers = new Map();
+    const ipc = fakeIpcMain();
     const electron = {
         app: { getPath: () => os.tmpdir(), commandLine: { getSwitchValue: () => '' }, getAppPath: () => os.tmpdir(), isPackaged: false, on() {}, setPath() {} },
         dialog: {},
-        ipcMain: { on: (channel, handler) => handlers.set(channel, handler), handle() {} },
+        ipcMain: ipc.ipcMain,
         safeStorage: {},
         session: {},
     };
@@ -26,8 +27,8 @@ function loadPlayMovieHandler(t) {
         config.readCurrentLogin = originalRead;
     });
 
-    require('../dest/main/handlers/plugins/media.js').init();
-    return { handler: handlers.get('play-movie'), configReads: () => configReads };
+    ipc.register(require('../dest/main/ipc/playback.js').playbackHandlers);
+    return { play: (request) => ipc.invoke('play-movie', request, { from: 'webUi' }), configReads: () => configReads };
 }
 
 test('accepts a request with an item id', () => {
@@ -42,10 +43,10 @@ test('rejects requests without a usable item id', () => {
 });
 
 test('play-movie ignores invalid requests before starting playback', async t => {
-    const { handler, configReads } = loadPlayMovieHandler(t);
+    const { play, configReads } = loadPlayMovieHandler(t);
 
-    await handler({}, undefined);
-    await handler({}, {});
+    await assert.rejects(play(undefined), /参数不合法/);
+    await assert.rejects(play({}), /参数不合法/);
 
     assert.equal(configReads(), 0);
 });
