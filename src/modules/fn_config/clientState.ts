@@ -13,7 +13,7 @@ export function setMpvVolume(volume: number): void {
     if (!Number.isFinite(volume)) {
         throw new Error('MPV音量必须是有限数值');
     }
-    section.write({ ...section.read(), mpvVolume: clampVolume(volume) });
+    section.replace({ ...section.read(), mpvVolume: clampVolume(volume) });
 }
 
 export function trayNotificationShown(): boolean {
@@ -21,5 +21,5 @@ export function trayNotificationShown(): boolean {
 }
 
 export function markTrayNotificationShown(): void {
-    section.write({ ...section.read(), trayNotificationShown: true });
+    section.replace({ ...section.read(), trayNotificationShown: true });
 }

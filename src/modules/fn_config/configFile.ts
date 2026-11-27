@@ -14,7 +14,7 @@ export type ConfigValues<Key extends string> = { [K in Key]?: unknown };
 
 export interface ConfigSection<Key extends string> {
     read(): ConfigValues<Key> | null;
-    write(values: ConfigValues<Key>): void;
+    replace(values: ConfigValues<Key>): void;
 }
 
 const loggedWarnings = new Set<string>();
@@ -124,7 +124,7 @@ export function configSection<const Key extends string>(keys: readonly Key[]): C
             }
             return values;
         },
-        write(values) {
+        replace(values) {
             const foreign = Object.keys(values).filter(key => !owns(key));
             if (foreign.length > 0) throw new Error(`配置键不归这一块: ${foreign.join(', ')}`);
             const stored = readConfigFile() ?? {};

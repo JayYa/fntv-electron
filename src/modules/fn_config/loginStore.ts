@@ -170,7 +170,7 @@ async function commit(state: LoginState): Promise<void> {
         writeCredentials(written, credentials, encrypted, state.access);
         return written;
     });
-    section.write(stored);
+    section.replace(stored);
 }
 
 let queue: Promise<unknown> = Promise.resolve();

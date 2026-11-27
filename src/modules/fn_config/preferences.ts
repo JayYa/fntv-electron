@@ -98,12 +98,12 @@ const PREFERENCES: { [K in PreferenceName]: Preference<Preferences[K]> } = {
 
 const listeners = new Set<(name: PreferenceName) => void>();
 
-function readStoredConfig(): StoredPreferences {
+function readStored(): StoredPreferences {
     return section.read() ?? {};
 }
 
 export function get<K extends PreferenceName>(name: K): Preferences[K] {
-    return PREFERENCES[name].read(readStoredConfig());
+    return PREFERENCES[name].read(readStored());
 }
 
 function writePreference<K extends PreferenceName>(config: StoredPreferences, name: K, value: Preferences[K]): boolean {
@@ -126,9 +126,9 @@ function notify(name: PreferenceName): void {
 export function update(patch: Partial<Preferences>): void {
     const names = Object.keys(patch) as PreferenceName[];
     if (names.length === 0) return;
-    const config = readStoredConfig();
+    const config = readStored();
     const changed = names.filter(name => writePreference(config, name, patch[name] as Preferences[typeof name]));
-    section.write(config);
+    section.replace(config);
     changed.forEach(notify);
 }
 
@@ -139,7 +139,7 @@ export function set<K extends PreferenceName>(name: K, value: Preferences[K]): v
 export type PreferencesSnapshot = Pick<Preferences, 'appDownloadProxy' | 'mpvPlayback'> & { defaultProxyUrl: string };
 
 export function snapshot(): PreferencesSnapshot {
-    const config = readStoredConfig();
+    const config = readStored();
     return {
         appDownloadProxy: PREFERENCES.appDownloadProxy.read(config),
         mpvPlayback: PREFERENCES.mpvPlayback.read(config),
