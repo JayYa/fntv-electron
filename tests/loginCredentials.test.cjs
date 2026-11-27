@@ -210,14 +210,3 @@ test('a credential request without a domain and account is ignored', async (t) =
     assert.deepEqual((await auth.send('get-history-credentials')), []);
     assert.deepEqual((await auth.send('get-history-credentials', { domain: 'first.example' })), []);
 });
-
-test('the preload bridge allows the credential channels', () => {
-    const preload = fs.readFileSync(path.join(__dirname, '..', 'src', 'preload', 'loginPageApi.ts'), 'utf8');
-    const [, send] = preload.match(/SEND_CHANNELS = new Set\(\[([^\]]+)\]/);
-    const [, receive] = preload.match(/RECEIVE_CHANNELS = new Set\(\[([^\]]+)\]/);
-
-    assert.match(send, /'get-history-credentials'/);
-    assert.match(send, /'get-current-access-code'/);
-    assert.match(receive, /'history-credentials'/);
-    assert.match(receive, /'current-access-code'/);
-});

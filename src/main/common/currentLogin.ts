@@ -1,4 +1,4 @@
-import { dialog, session, type BrowserWindow } from 'electron';
+import { dialog, type BrowserWindow } from 'electron';
 import { isTrusted } from '../../modules/cert_trust';
 import { clearAccessGrants, getAccessCookieHeader } from '../../modules/fn_api/accessGrant';
 import { ApiService } from '../../modules/fn_api/api';
@@ -7,7 +7,7 @@ import * as log from '../../modules/logger';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
 import { AccessCodeVerificationError, establishAccessCodeSession, type AccessCodeSessionResult } from './accessCodeSession';
 import { LOGIN_PAGE_PATH } from './loginPage';
-import { WEB_UI_SESSION_PARTITION } from './webUiSession';
+import * as webUiSession from './webUiSession';
 
 export interface LoginError {
     title: string;
@@ -109,29 +109,6 @@ async function savedTokenAccepted(baseUrl: string, token: string): Promise<boole
     return Boolean(response?.success);
 }
 
-async function installWebUiSession(baseUrl: string, token: string): Promise<boolean> {
-    const cookies = session.fromPartition(WEB_UI_SESSION_PARTITION).cookies;
-    const secure = baseUrl.startsWith('https://');
-    const cookie = (name: string, value: string) => ({
-        url: baseUrl,
-        name,
-        value,
-        path: '/',
-        secure,
-        httpOnly: false,
-        sameSite: secure ? 'no_restriction' as const : 'lax' as const,
-    });
-    try {
-        await cookies.remove(baseUrl, 'Trim-MC-token');
-        await cookies.set(cookie('Trim-MC-token', token));
-        await cookies.set(cookie('mode', 'relay'));
-        return true;
-    } catch (error) {
-        log.error('Cookie 设置失败:', error);
-        return false;
-    }
-}
-
 async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): Promise<LoginResult> {
     const { access, isNewLogin } = steps;
     try {
@@ -148,7 +125,7 @@ async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): 
             return fail('saved-token-invalid', { title: '登录失败', message: '已保存的登录已失效，请重新登录。' });
         }
 
-        if (!token || !await installWebUiSession(baseUrl, token)) {
+        if (!token || !await webUiSession.installLoginCookies(baseUrl, token)) {
             return fail('session-not-restored', { title: '登录失败', message: '无法恢复登录状态，请重新登录。' });
         }
 
@@ -205,10 +182,7 @@ export async function endCurrentLogin(window: LoginWindow): Promise<void> {
             (cleared) => { if (cleared) log.info('已清空配置中的登录 token'); },
             (error: unknown) => { log.error('清空配置中的登录 token 失败:', error); },
         ),
-        session.fromPartition(WEB_UI_SESSION_PARTITION).clearStorageData({ storages: ['cookies'] }).then(
-            () => { log.info('会话 Cookie 已清除'); },
-            (error: unknown) => { log.error('清除会话 Cookie 失败:', error); },
-        ),
+        webUiSession.clearCookies(),
     ]);
     let timer: NodeJS.Timeout | undefined;
     const timedOut = new Promise<void>((resolve) => {

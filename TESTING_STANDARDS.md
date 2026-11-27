@@ -3,7 +3,7 @@
 ## 运行
 
 - `pnpm test`：编译到 `dest/`，用 `node node_modules/electron/install.js` 装好 Electron 二进制，再运行全部 `tests/*.test.cjs`。单独运行某个测试前先 `pnpm run compile`，并加 `--test-timeout=30000`，和 `pnpm test` 一致。
-- `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还会被 `readdirSync` 加载。
+- `pnpm run watch` 不清理 `dest/`，删过源文件后跑一次 `pnpm run compile`，否则旧 js 还留在 `dest/` 里，会被打进安装包。
 
 ### `Electron failed to install correctly`
 

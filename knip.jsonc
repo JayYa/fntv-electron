@@ -1,5 +1,5 @@
 // knip 只查依赖：package.json 里没用到的依赖、用到但没写进 package.json 的包和命令、解析不了的导入。
-// 不查未使用的文件和导出。插件按目录动态加载，preload 由 esbuild 打包，knip 跟踪不到，所以这些目录的文件都当入口。
+// 不查未使用的文件和导出。preload 由 esbuild 打包，登录页脚本由 index.html 引用，knip 跟踪不到，所以这些文件都当入口。
 {
     "$schema": "https://unpkg.com/knip@6/schema.json",
     "include": ["dependencies", "devDependencies", "unlisted", "binaries", "unresolved"],

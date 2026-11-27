@@ -1,48 +1,18 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { interceptor } from './core/interceptor';
-import { initAppHooks } from './core/appHook';
-import * as log from '../../modules/logger';
-import { WEB_UI_SESSION_PARTITION } from '../common/webUiSession';
+import * as webUiSession from '../common/webUiSession';
+import * as auth from './plugins/auth';
+import * as config from './plugins/config';
+import * as externalLink from './plugins/externalLink';
+import * as logger from './plugins/logger';
+import * as login from './plugins/login';
+import * as media from './plugins/media';
+import * as update from './plugins/update';
+import * as wincontrol from './plugins/wincontrol';
 
-interface Plugin {
-    init?: () => void;
-}
-
-function loadPlugins(): void {
-    const pluginsDir = path.join(__dirname, 'plugins');
-    
-    try {
-        const files = fs.readdirSync(pluginsDir);
-        
-        files.forEach((file: string) => {
-            if (file.endsWith('.js')) {
-                try {
-                    const plugin: Plugin = require(path.join(pluginsDir, file));
-                    
-                    if (typeof plugin.init === 'function') {
-                        log.info(`正在初始化插件: ${file}`);
-                        plugin.init();
-                    } else {
-                        log.warn(`插件 ${file} 没有导出 init 函数`);
-                    }
-                } catch (error) {
-                    log.error(`加载插件 ${file} 失败:`, error);
-                }
-            }
-        });
-    } catch (error) {
-        log.error('加载插件目录失败:', error);
-    }
-}
+const PLUGINS = [auth, config, externalLink, logger, login, media, update, wincontrol];
 
 function registerAllPlugins(): void {
-    interceptor.init(WEB_UI_SESSION_PARTITION);
-    loadPlugins();
-
-    interceptor.run();
-    
-    initAppHooks();
+    for (const plugin of PLUGINS) plugin.init();
+    webUiSession.start();
 }
 
 export {

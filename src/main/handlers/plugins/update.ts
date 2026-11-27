@@ -10,11 +10,6 @@ async function handleCheckUpdate(): Promise<void> {
     await updateChecker.manualCheckForUpdates();
 }
 
-async function handleAutoCheckUpdate(): Promise<void> {
-    log.info('收到自动检查更新请求');
-    await updateChecker.autoCheckForUpdates();
-}
-
 function handleGetVersion(event: IpcMainEvent): void {
     event.reply('version-info', {
         version: app.getVersion(),
@@ -24,7 +19,6 @@ function handleGetVersion(event: IpcMainEvent): void {
 
 function init(): void {
     registerHandler('check-update', handleCheckUpdate, { useHandle: true });
-    registerHandler('auto-check-update', handleAutoCheckUpdate);
     registerHandler('get-version', handleGetVersion);
 }
 

@@ -1,4 +1,4 @@
-import { session, OnBeforeRequestListenerDetails, CallbackResponse, Session, WebRequestFilter } from 'electron';
+import { OnBeforeRequestListenerDetails, CallbackResponse, Session, WebRequestFilter } from 'electron';
 import * as log from '../../../modules/logger';
 
 type BeforeRequestHandler = (details: OnBeforeRequestListenerDetails, callback: (response: CallbackResponse) => void) => void;
@@ -45,19 +45,10 @@ function parseUrl(raw: string): URL | null {
 
 class SessionInterceptorManager {
     private readonly beforeRequest: BeforeRequestInterceptor[] = [];
-    private session: Session | null = null;
+    private attached = false;
 
-    init(partition: string): void {
-        this.session = session.fromPartition(partition);
-    }
-
-    run(): void {
-        const ses = this.session;
-        if (!ses) {
-            log.error('Session 未初始化，无法运行');
-            return;
-        }
-
+    attach(ses: Session): void {
+        this.attached = true;
         const urls = this.beforeRequest.flatMap(({ filter }) => filter.urls);
         ses.webRequest.onBeforeRequest({ urls }, (details, callback) => {
             const url = parseUrl(details.url);
@@ -77,12 +68,9 @@ class SessionInterceptorManager {
     }
 
     registerBeforeRequest(filter: WebRequestFilter, handler: BeforeRequestHandler, name: string): void {
+        if (this.attached) throw new Error(`拦截已挂载到会话，无法再注册 beforeRequest 拦截器: ${name}`);
         this.beforeRequest.push({ filter, matches: filterMatcher(filter), handler, name });
         log.info(`已注册 beforeRequest 拦截器: ${name}`);
-    }
-
-    getSession(): Session | null {
-        return this.session;
     }
 }
 
