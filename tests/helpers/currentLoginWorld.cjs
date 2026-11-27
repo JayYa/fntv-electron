@@ -73,7 +73,13 @@ function setup(t, {
             },
         },
         net: {
-            request({ url }) {
+            request({ url, method }) {
+                if (method === 'HEAD') {
+                    const probe = new EventEmitter();
+                    probe.abort = () => {};
+                    probe.end = () => setImmediate(() => probe.emit('response', new EventEmitter()));
+                    return probe;
+                }
                 if (accessCodeStatus === null) throw new Error('no access code, the gateway is not asked');
                 gatewayRequests.push(url);
                 const request = new EventEmitter();
@@ -91,6 +97,7 @@ function setup(t, {
         session: {
             fromPartition() {
                 return {
+                    setCertificateVerifyProc() {},
                     clearStorageData({ storages }) {
                         if (clearStorageHangs) return new Promise(() => {});
                         clearedStorages.push(...storages);

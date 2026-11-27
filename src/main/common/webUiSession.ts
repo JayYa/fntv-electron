@@ -1,5 +1,5 @@
 import { session, type Session } from 'electron';
-import { verifyWithConfirmedCertificates } from '../../modules/cert_trust/sessionCertificates';
+import { acceptConfirmedCertificates as acceptConfirmedCertificatesIn } from '../../modules/cert_trust/sessionCertificates';
 import * as log from '../../modules/logger';
 
 export const WEB_UI_SESSION_PARTITION = 'persist:fntv';
@@ -70,6 +70,6 @@ export function start(onLeave: () => Promise<void>): void {
     setInterval(() => { void clearCacheOverLimit(ses); }, CACHE_CHECK_INTERVAL_MS);
 }
 
-export function trustCertificates(): void {
-    verifyWithConfirmedCertificates(webUiSession());
+export function acceptConfirmedCertificates(): void {
+    acceptConfirmedCertificatesIn(webUiSession());
 }

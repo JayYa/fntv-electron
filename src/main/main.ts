@@ -67,7 +67,7 @@ if (!gotTheLock) {
                 }
             });
 
-            webUiSession.trustCertificates();
+            webUiSession.acceptConfirmedCertificates();
 
             await startProxy();
 

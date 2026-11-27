@@ -135,8 +135,8 @@ export const requestAccessCode: GatewayRequester = async (gatewaySession, url, h
             });
         });
         request.on('error', error => {
-            if (error.message.includes('ERR_CERT_')) log.warn('访问码验证遇到证书错误:', error.message);
             if (settled) return;
+            if (error.message.includes('ERR_CERT_')) log.warn('访问码验证遇到证书错误:', error.message);
             settled = true;
             clearTimeout(timeout);
             reject(error);

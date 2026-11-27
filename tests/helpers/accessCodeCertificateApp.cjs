@@ -45,11 +45,11 @@ async function attempt(baseUrl) {
 }
 
 app.whenReady().then(async () => {
-    require(path.join(DEST, 'main', 'common', 'webUiSession.js')).trustCertificates();
+    require(path.join(DEST, 'main', 'common', 'webUiSession.js')).acceptConfirmedCertificates();
     const server = await startFakeNas();
     const baseUrl = `https://127.0.0.1:${server.address().port}`;
     if (scenario.remembered) {
-        fs.writeFileSync(path.join(scenario.userData, 'trusted-hosts.json'), JSON.stringify([`127.0.0.1:${server.address().port}`]));
+        require(path.join(DEST, 'modules', 'cert_trust', 'index.js')).addTrustedHost(baseUrl);
     }
     const attempts = [];
     for (let i = 0; i < scenario.attempts; i++) attempts.push(await attempt(baseUrl));

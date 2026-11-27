@@ -41,6 +41,13 @@ test('cancelling the certificate prompt fails this verification and the next one
     assert.deepEqual(dialogs, ['证书安全警告', '证书安全警告']);
 });
 
+test('a certificate trusted once without remembering passes the next verification without asking again', t => {
+    const { attempts, dialogs } = runElectron(t, { answers: ['trust'], attempts: 2 });
+
+    assert.deepEqual(attempts, [{ ok: true, cookie: 'access-session=granted' }, { ok: true, cookie: 'access-session=granted' }]);
+    assert.deepEqual(dialogs, ['证书安全警告']);
+});
+
 test('a remembered certificate passes access code verification without asking', t => {
     const { attempts, dialogs } = runElectron(t, { remembered: true, answers: [], attempts: 1 });
 
