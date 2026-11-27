@@ -12,7 +12,7 @@ const SEND_CHANNELS = new Set([
 const RECEIVE_CHANNELS = new Set([
     'config-data', 'history-credentials', 'current-access-code',
     'history-item-deleted',
-    'version-info', 'update-status', 'preferences-snapshot',
+    'version-info', 'preferences-snapshot',
 ]);
 const INVOKE_CHANNELS = new Set([
     'open-external', 'login', 'check-update', 'set-preferences',

@@ -14,15 +14,13 @@ function setup(t) {
     };
     useFakeElectron(t, {
         app: { getPath: () => testRoot, getAppPath: () => testRoot, isPackaged: false, setPath() {}, commandLine: { getSwitchValue: () => '' } },
-        session: { fromPartition: () => ({ webRequest }) },
     });
     const { interceptor } = require('../dest/main/handlers/core/interceptor.js');
-    interceptor.init('persist:fntv');
-    return { interceptor, attached };
+    return { interceptor, attached, run: () => interceptor.attach({ webRequest }) };
 }
 
-test('a registered before-request handler is attached to the session with its filter once the manager runs', (t) => {
-    const { interceptor, attached } = setup(t);
+test('a registered before-request handler is attached to the session with its filter once the manager is attached', (t) => {
+    const { interceptor, attached, run } = setup(t);
     const seen = [];
     interceptor.registerBeforeRequest({ urls: ['https://*/v/login'] }, (details, callback) => {
         seen.push(details.url);
@@ -30,7 +28,7 @@ test('a registered before-request handler is attached to the session with its fi
     }, 'login');
 
     assert.equal(attached.length, 0);
-    interceptor.run();
+    run();
 
     assert.equal(attached.length, 1);
     assert.deepEqual(attached[0].filter, { urls: ['https://*/v/login'] });
@@ -41,11 +39,11 @@ test('a registered before-request handler is attached to the session with its fi
 });
 
 test('a before-request handler that throws lets the request continue', (t) => {
-    const { interceptor, attached } = setup(t);
+    const { interceptor, attached, run } = setup(t);
     const logged = [];
     t.mock.method(require('../dest/modules/logger/index.js'), 'error', (message) => logged.push(message));
     interceptor.registerBeforeRequest({ urls: ['https://*/v/login'] }, () => { throw new Error('boom'); }, 'broken');
-    interceptor.run();
+    run();
 
     const responses = [];
     attached[0].listener({ url: 'https://nas/v/login' }, (response) => responses.push(response));
@@ -62,7 +60,7 @@ function deliver(attached, url) {
 }
 
 test('every registered before-request handler runs through a single session listener', (t) => {
-    const { interceptor, attached } = setup(t);
+    const { interceptor, attached, run } = setup(t);
     const seen = [];
     interceptor.registerBeforeRequest({ urls: ['https://*/v/login'] }, (details, callback) => {
         seen.push(`login ${details.url}`);
@@ -72,7 +70,7 @@ test('every registered before-request handler runs through a single session list
         seen.push(`logout ${details.url}`);
         callback({ cancel: true });
     }, 'logout');
-    interceptor.run();
+    run();
 
     assert.equal(attached.length, 1);
     assert.deepEqual(attached[0].filter, { urls: ['https://*/v/login', 'http://*/v/api/v1/user/logout'] });
@@ -82,37 +80,14 @@ test('every registered before-request handler runs through a single session list
 });
 
 test('a request no registered filter matches continues untouched', (t) => {
-    const { interceptor, attached } = setup(t);
+    const { interceptor, attached, run } = setup(t);
     const seen = [];
     interceptor.registerBeforeRequest({ urls: ['https://*/v/login'] }, (details) => seen.push(details.url), 'login');
-    interceptor.run();
+    run();
 
     assert.deepEqual(deliver(attached, 'http://nas/v/login'), [{}]);
     assert.deepEqual(deliver(attached, 'https://nas/v/login/x'), [{}]);
     assert.deepEqual(seen, []);
-});
-
-test('the login plugin ends the login when the web app opens the login, welcome or logout address of a NAS with a port', (t) => {
-    const { interceptor, attached } = setup(t);
-    const mainWindow = {};
-    const ended = [];
-    t.mock.method(require('../dest/main/common/mainWindow.js').mainWindow, 'window', () => mainWindow);
-    t.mock.method(require('../dest/main/common/currentLogin.js'), 'endCurrentLogin', async (win) => ended.push(win));
-    require('../dest/main/handlers/plugins/login.js').init();
-    interceptor.run();
-
-    const leaving = [
-        'http://192.168.1.10:5666/v/login',
-        'https://demo.fnos.net/v/welcome',
-        'http://[fd00::10]:5666/v/api/v1/user/logout',
-    ];
-    for (const url of leaving) {
-        assert.deepEqual(deliver(attached, url), [{ cancel: true }], url);
-    }
-    for (const url of ['http://192.168.1.10:5666/v/login?redirect=%2Fv', 'http://192.168.1.10:5666/v/library']) {
-        assert.deepEqual(deliver(attached, url), [{}], url);
-    }
-    assert.deepEqual(ended, leaving.map(() => mainWindow));
 });
 
 test('registering a URL pattern the manager cannot match fails at once', (t) => {

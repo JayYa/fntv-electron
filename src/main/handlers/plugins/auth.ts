@@ -70,10 +70,9 @@ async function handleGetCurrentAccessCode(event: IpcMainEvent): Promise<void> {
     }
 }
 
-async function handleClearHistory(event: IpcMainEvent): Promise<void> {
+async function handleClearHistory(): Promise<void> {
     try {
         await loginStore.clearHistory();
-        event.reply('history-cleared');
     } catch (error) {
         log.error('清除历史记录失败:', error);
     }
