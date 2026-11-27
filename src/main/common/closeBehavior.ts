@@ -1,4 +1,5 @@
 import { app, dialog, Notification, type BrowserWindow } from 'electron';
+import * as clientState from '../../modules/fn_config/clientState';
 import * as preferences from '../../modules/fn_config/preferences';
 import * as log from '../../modules/logger';
 import { isQuitting } from '../../modules/quit/quitCoordinator';
@@ -25,7 +26,7 @@ export type ShowTrayBalloon = (content: string) => boolean;
 
 function noticeHidden(showTrayBalloon: ShowTrayBalloon): void {
     const notice = platformBehavior().hideNotice;
-    if (!notice || preferences.trayNotificationShown()) return;
+    if (!notice || clientState.trayNotificationShown()) return;
     if (notice.shownBy === 'notification') {
         if (Notification.isSupported()) {
             new Notification({ title: '飞牛影视', body: notice.body, silent: false }).show();
@@ -33,7 +34,7 @@ function noticeHidden(showTrayBalloon: ShowTrayBalloon): void {
     } else {
         if (!showTrayBalloon(notice.body)) return;
     }
-    preferences.markTrayNotificationShown();
+    clientState.markTrayNotificationShown();
 }
 
 function hide(window: BrowserWindow, showTrayBalloon: ShowTrayBalloon): void {

@@ -82,6 +82,7 @@ function setupConfig(t, { storageBackend = 'gnome_libsecret', encryptionAvailabl
         loadStores: () => ({
             ...require('../../dest/modules/fn_config/loginStore.js'),
             ...require('../../dest/modules/fn_config/preferences.js'),
+            ...require('../../dest/modules/fn_config/clientState.js'),
         }),
         loadCurrentLogin: () => require('../../dest/main/common/currentLogin.js'),
         dialogs,
