@@ -5,8 +5,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { assertExitedCleanly } = require('./helpers/childProcess.cjs');
-const { maskStringByPatterns, maskSensitiveData } = require('../dest/modules/logger/masking.js');
+const { maskLogLine } = require('../dest/modules/logger/masking.js');
+const { LogLevel } = require('../dest/modules/logger/config.js');
 const { describeFnIdPageForLog } = require('../dest/main/handlers/core/fnIdTrust.js');
+
+function maskText(text) {
+    return maskLogLine(LogLevel.INFO, text, []);
+}
 
 const loggerModule = path.resolve(__dirname, '../dest/modules/logger/logger.js');
 
@@ -21,12 +26,12 @@ new Logger().noformat(${JSON.stringify(message)});`;
 }
 
 test('keeps only the first two parts of an IP address', () => {
-    assert.equal(maskStringByPatterns('peer 192.168.0.110 up'), 'peer 192.168.***.** up');
-    assert.equal(maskStringByPatterns('peer 10.0.0.12 up'), 'peer 10.0.***.** up');
+    assert.equal(maskText('peer 192.168.0.110 up'), 'peer 192.168.***.** up');
+    assert.equal(maskText('peer 10.0.0.12 up'), 'peer 10.0.***.** up');
 });
 
 test('masks an IP address inside a URL-encoded redirect_uri', () => {
-    const masked = maskStringByPatterns(
+    const masked = maskText(
         'http://nas.local/signin?client_id=abc&redirect_uri=http%3A%2F%2F192.168.0.110%3A5666%2Fv%2Foauth%2Fresult',
     );
     assert.doesNotMatch(masked, /0\.110/);
@@ -34,18 +39,47 @@ test('masks an IP address inside a URL-encoded redirect_uri', () => {
 });
 
 test('masks a host name inside a URL-encoded redirect_uri', () => {
-    const masked = maskStringByPatterns('/signin?redirect_uri=https%3A%2F%2Fmynas.fnos.net%2Fv%2Foauth%2Fresult');
+    const masked = maskText('/signin?redirect_uri=https%3A%2F%2Fmynas.fnos.net%2Fv%2Foauth%2Fresult');
     assert.doesNotMatch(masked, /mynas/);
 });
 
 test('masks a LAN host name in a URL that has a path', () => {
-    const masked = maskStringByPatterns('go http://nas.local:5666/v/api then http://fnnas/v');
+    const masked = maskText('go http://nas.local:5666/v/api then http://fnnas/v');
     assert.doesNotMatch(masked, /nas\.local/);
     assert.doesNotMatch(masked, /fnnas/);
 });
 
 test('masks usernames in logged objects', () => {
-    assert.doesNotMatch(JSON.stringify(maskSensitiveData({ username: 'someone-private' })), /someone-private/);
+    assert.doesNotMatch(maskLogLine(LogLevel.INFO, '登录', [{ username: 'someone-private' }]), /someone-private/);
+});
+
+test('masks object fields by key when the same line also has an IP address', () => {
+    const line = maskLogLine(LogLevel.INFO, '连接 192.168.1.5', [{ username: 'someone-private', secret: 's3cr3tvalue' }]);
+    assert.doesNotMatch(line, /someone-private|s3cr3tvalue|1\.5/);
+    assert.match(line, /^连接 \S+ \{/);
+});
+
+test('masks a token whose key is in the message and value in the next argument', () => {
+    const token = 'abcdef0123456789abcdef';
+    assert.doesNotMatch(maskLogLine(LogLevel.INFO, 'token:', [token]), new RegExp(token));
+});
+
+test('writes the message of an Error logged at any level, and the stack only for errors', () => {
+    const error = Object.assign(new Error('连接 http://nas.local:5666 失败'), { code: 'ECONNREFUSED' });
+    for (const level of [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN]) {
+        const line = maskLogLine(level, '保存失败:', [error]);
+        assert.match(line, /"message":"连接 .* 失败"/);
+        assert.match(line, /"code":"ECONNREFUSED"/);
+        assert.doesNotMatch(line, /nas\.local|"stack"/);
+    }
+    assert.match(maskLogLine(LogLevel.ERROR, '保存失败:', [error]), /"stack"/);
+    assert.match(maskLogLine(LogLevel.WARN, '保存失败:', [{ cause: error }]), /"cause":\{"name":"Error","message"/);
+});
+
+test('throws instead of returning a line when an argument cannot be serialized', () => {
+    const circular = { password: 'hunter2-secret' };
+    circular.self = circular;
+    assert.throws(() => maskLogLine(LogLevel.INFO, 'x', [circular]), /circular/);
 });
 
 test('masks proxy output written without formatting', t => {
@@ -83,13 +117,13 @@ test('masks the address after a url key however the key is written', () => {
         'playURL: nas.local:5666',
         'baseUrl=nas.local:5666',
     ]) {
-        const masked = maskStringByPatterns(text);
+        const masked = maskText(text);
         assert.doesNotMatch(masked, /1\.2:|nas\.local|fnnas/, `${text} => ${masked}`);
     }
 });
 
 test('keeps text where url is only the end of a longer word', () => {
     for (const text of ['smart-skip.origin-from-play-url (需要 1，当前 0)', 'playurl 已启用', 'curl 已启用']) {
-        assert.equal(maskStringByPatterns(text), text);
+        assert.equal(maskText(text), text);
     }
 });

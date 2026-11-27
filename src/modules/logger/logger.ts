@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { logConfig, getLogLevel, LogLevel } from './config';
-import { maskLogArguments, maskError, maskStringByPatterns } from './masking';
+import { maskLogLine } from './masking';
 
 let app: any;
 try {
@@ -139,18 +139,12 @@ export class Logger {
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
     }
 
-    private formatMessage(level: LogLevel, message: string, ...args: any[]): string {
-        const timestamp = this.formatBeijingTime();
-        const levelName = LogLevelNames[level];
-
-        const maskedArgs = maskLogArguments(message, ...args);
-        const [maskedMessage, ...restMaskedArgs] = maskedArgs;
-
-        const formattedArgs = restMaskedArgs.length > 0 ? ' ' + restMaskedArgs.map(arg =>
-            typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-        ).join(' ') : '';
-
-        return `[${timestamp}] [${levelName}] ${maskedMessage}${formattedArgs}`;
+    private formatMessage(level: LogLevel, message: string, args: unknown[]): string {
+        const line = maskLogLine(level, message, args);
+        if (level === LogLevel.NOFORMAT) {
+            return line;
+        }
+        return `[${this.formatBeijingTime()}] [${LogLevelNames[level]}] ${line}`;
     }
 
     private writeToFile(formattedMessage: string): void {
@@ -165,9 +159,7 @@ export class Logger {
 
     public log(level: LogLevel, message: string, ...args: any[]): void {
         if (level >= this.logLevel) {
-            const formattedMessage = level === LogLevel.NOFORMAT
-                ? maskStringByPatterns(message)
-                : this.formatMessage(level, message, ...args);
+            const formattedMessage = this.formatMessage(level, message, args);
 
             this.writeToFile(formattedMessage);
 
@@ -204,14 +196,7 @@ export class Logger {
     }
 
     public error(message: string, ...args: any[]): void {
-        const processedArgs = args.map(arg => {
-            if (arg instanceof Error) {
-                return maskError(arg);
-            }
-            return arg;
-        });
-
-        this.log(LogLevel.ERROR, message, ...processedArgs);
+        this.log(LogLevel.ERROR, message, ...args);
     }
 
     public noformat(message: string): void {

@@ -1,11 +1,13 @@
 import { 
     maskingPatterns, 
-    maskingEnabled, 
     sensitiveKeywords,
     MaskType
 } from './maskingConfig';
+import { LogLevel } from './config';
 
-export function maskValue(
+const MAX_DEPTH = 10;
+
+function maskValue(
     value: any, 
     maskType: MaskType = 'partial', 
     showStart: number = 3, 
@@ -143,7 +145,7 @@ function isFilePath(text: string): boolean {
     return filePathPatterns.some(pattern => pattern.test(text));
 }
 
-export function maskStringByPatterns(text: string): string {
+function maskStringByPatterns(text: string): string {
     if (!text || typeof text !== 'string') {
         return text;
     }
@@ -175,112 +177,68 @@ export function maskStringByPatterns(text: string): string {
     return maskedText;
 }
 
-export function isSensitiveKey(key: string): boolean {
-    if (!key || typeof key !== 'string') {
-        return false;
-    }
-    
+function isSensitiveKey(key: string): boolean {
     const lowerKey = key.toLowerCase();
     return sensitiveKeywords.some(keyword => lowerKey.includes(keyword));
 }
 
-export function maskObjectDeep(obj: any, depth: number = 0, maxDepth: number = 10): any {
-    if (depth > maxDepth) {
+function errorFields(error: Error, includeStack: boolean): Record<string, unknown> {
+    const fields: Record<string, unknown> = { name: error.name, message: error.message };
+    const code = (error as { code?: unknown }).code;
+    if (code !== undefined) {
+        fields.code = code;
+    }
+    if (includeStack && error.stack) {
+        fields.stack = error.stack;
+    }
+    return fields;
+}
+
+function maskByKeys(value: unknown, includeStack: boolean, ancestors: object[]): unknown {
+    if (ancestors.length > MAX_DEPTH) {
         return '[Object: too deep]';
     }
-
-    if (obj === null || obj === undefined) {
-        return obj;
+    if (value instanceof Error) {
+        return maskByKeys(errorFields(value, includeStack), includeStack, ancestors);
+    }
+    if (value === null || typeof value !== 'object' || value instanceof Date || value instanceof RegExp) {
+        return value;
+    }
+    if (ancestors.includes(value)) {
+        throw new TypeError('Converting circular structure to JSON');
+    }
+    const path = [...ancestors, value];
+    if (Array.isArray(value)) {
+        return value.map(item => maskByKeys(item, includeStack, path));
     }
 
-    if (typeof obj !== 'object') {
-        if (typeof obj === 'string') {
-            return maskStringByPatterns(obj);
-        }
-        return obj;
-    }
-
-    if (Array.isArray(obj)) {
-        return obj.map(item => maskObjectDeep(item, depth + 1, maxDepth));
-    }
-
-    if (obj instanceof Date || obj instanceof RegExp || obj instanceof Error) {
-        return obj;
-    }
-
-    const maskedObj: any = {};
-    for (const [key, value] of Object.entries(obj)) {
-        if (isSensitiveKey(key)) {
-            if (typeof value === 'string') {
-                maskedObj[key] = maskValue(value, 'partial', 2, 2);
-            } else if (value !== null && value !== undefined) {
-                maskedObj[key] = '[MASKED]';
-            } else {
-                maskedObj[key] = value;
-            }
+    const masked: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value)) {
+        if (!isSensitiveKey(key)) {
+            masked[key] = maskByKeys(child, includeStack, path);
+        } else if (typeof child === 'string') {
+            masked[key] = maskValue(child, 'partial', 2, 2);
+        } else if (child !== null && child !== undefined) {
+            masked[key] = '[MASKED]';
         } else {
-            maskedObj[key] = maskObjectDeep(value, depth + 1, maxDepth);
+            masked[key] = child;
         }
     }
-
-    return maskedObj;
+    return masked;
 }
 
-export function maskSensitiveData(data: any): any {
-    if (!maskingEnabled) {
-        return data;
+function serialize(value: unknown): string {
+    if (typeof value === 'string') {
+        return value;
     }
-
-    try {
-        if (data === null || data === undefined) {
-            return data;
-        }
-
-        if (typeof data === 'string') {
-            return maskStringByPatterns(data);
-        }
-
-        if (typeof data !== 'object') {
-            return data;
-        }
-
-        return maskObjectDeep(data);
-
-    } catch (error) {
-        return '[MASKING_ERROR: ' + (error as Error).message + ']';
+    if (value !== null && typeof value === 'object') {
+        return JSON.stringify(value);
     }
+    return String(value);
 }
 
-export function maskLogArguments(...args: any[]): any[] {
-    if (!maskingEnabled) {
-        return args;
-    }
-
-    const combinedString = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-    ).join('');
-    
-    const maskedCombined = maskStringByPatterns(combinedString);
-    
-    if (maskedCombined !== combinedString) {
-        return [maskedCombined];
-    }
-    
-    return args.map(arg => maskSensitiveData(arg));
-}
-
-export function maskError(error: any): any {
-    if (!error) {
-        return error;
-    }
-
-    if (error instanceof Error) {
-        return {
-            name: error.name,
-            message: maskStringByPatterns(error.message),
-            stack: error.stack ? maskStringByPatterns(error.stack) : undefined
-        };
-    }
-
-    return maskSensitiveData(error);
+export function maskLogLine(level: LogLevel, message: string, args: readonly unknown[]): string {
+    const includeStack = level === LogLevel.ERROR;
+    const parts = [String(message), ...args.map(arg => serialize(maskByKeys(arg, includeStack, [])))];
+    return maskStringByPatterns(parts.join(' '));
 }
