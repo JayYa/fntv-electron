@@ -15,15 +15,15 @@ const LISTENER = "import { session } from 'electron';\nsession.defaultSession.we
 for (const filePath of ['src/main/example.ts', 'src/modules/quit/quitCoordinator.ts', 'src/public/platform/index.ts']) {
     test(`lint rejects webRequest.onBeforeRequest in ${filePath}`, async () => {
         const messages = await messagesFor(LISTENER, filePath);
-        assert.ok(messages.some((message) => message.includes('registerBeforeRequest')), messages.join('\n'));
+        assert.ok(messages.some((message) => message.includes('webUiSession.ts')), messages.join('\n'));
     });
 }
 
-test('lint allows webRequest.onBeforeRequest inside the interceptor module', async () => {
-    assert.deepEqual(await messagesFor(LISTENER, 'src/main/handlers/core/interceptor.ts'), []);
+test('lint allows webRequest.onBeforeRequest inside the web UI session module', async () => {
+    assert.deepEqual(await messagesFor(LISTENER, 'src/main/common/webUiSession.ts'), []);
 });
 
-test('the interceptor module keeps the other src restrictions', async () => {
-    const messages = await messagesFor("import { app } from 'electron';\napp.on('before-quit', () => undefined);\n", 'src/main/handlers/core/interceptor.ts');
+test('the web UI session module keeps the other src restrictions', async () => {
+    const messages = await messagesFor("import { app } from 'electron';\napp.on('before-quit', () => undefined);\n", 'src/main/common/webUiSession.ts');
     assert.ok(messages.some((message) => message.includes('before-quit')), messages.join('\n'));
 });

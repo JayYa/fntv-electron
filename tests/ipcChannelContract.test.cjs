@@ -60,9 +60,6 @@ function registerMainHandlers(t) {
             commandLine: { getSwitchValue: () => '' },
         },
         ipcMain: { on: (channel) => listened.add(channel), handle: (channel) => handled.add(channel), removeAllListeners() {} },
-        session: {
-            fromPartition: () => ({ webRequest: { onBeforeRequest() {} }, getCacheSize: async () => 0, clearCache: async () => {} }),
-        },
     });
     require('../dest/main/handlers/index.js').registerAllPlugins();
     return { listened, handled };
