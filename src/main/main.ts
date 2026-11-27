@@ -78,7 +78,7 @@ if (!gotTheLock) {
             }
 
             registerAllPlugins();
-            webUiSession.start(() => { void endCurrentLogin(mainWindow.window()); });
+            webUiSession.start(() => endCurrentLogin(mainWindow.window()));
 
             mpvRuntime.syncAtStartup();
 

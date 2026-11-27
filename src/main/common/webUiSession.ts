@@ -58,12 +58,12 @@ async function clearCacheOverLimit(ses: Session): Promise<void> {
     }
 }
 
-export function start(onLeave: () => void): void {
+export function start(onLeave: () => Promise<void>): void {
     const ses = webUiSession();
     ses.webRequest.onBeforeRequest({ urls: LEAVE_URLS }, (_details, callback) => {
         log.info('网页端请求登录页或登出，结束当前登录');
         callback({ cancel: true });
-        onLeave();
+        void onLeave();
     });
     void clearCacheOverLimit(ses);
     setInterval(() => { void clearCacheOverLimit(ses); }, CACHE_CHECK_INTERVAL_MS);

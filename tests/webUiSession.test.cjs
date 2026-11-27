@@ -38,7 +38,7 @@ test('once the web UI session starts, opening the login, welcome or logout addre
     const { webUiSession, attached, partitions, deliver } = setup(t);
     let left = 0;
 
-    webUiSession.start(() => { left += 1; });
+    webUiSession.start(async () => { left += 1; });
 
     assert.equal(attached.length, 1);
     assert.deepEqual([...new Set(partitions)], [webUiSession.WEB_UI_SESSION_PARTITION]);
@@ -50,14 +50,16 @@ test('once the web UI session starts, opening the login, welcome or logout addre
         'https://*/v/login',
         'https://*/v/welcome',
     ]);
-    assert.deepEqual(deliver('http://192.168.1.10:5666/v/login'), [{ cancel: true }]);
-    assert.equal(left, 1);
+    for (const url of ['http://192.168.1.10:5666/v/login', 'https://demo.fnos.net/v/welcome', 'http://[fd00::10]:5666/v/api/v1/user/logout']) {
+        assert.deepEqual(deliver(url), [{ cancel: true }], url);
+    }
+    assert.equal(left, 3);
 });
 
 test('the web UI session clears its cache at start and every six hours once it grows past 100 MB', async (t) => {
     const { webUiSession, cache } = setup(t, { cacheSize: 101 * MB });
 
-    webUiSession.start(() => {});
+    webUiSession.start(async () => {});
     await settle();
     assert.equal(cache.cleared, 1);
 
