@@ -5,7 +5,8 @@ import { createTray, destroyTray, showTrayBalloon } from './common/tray';
 import { mpvRuntime } from './common/mpvRuntime';
 import * as log from '../modules/logger';
 import { mainWindow } from './common/mainWindow';
-import { restoreAtStartup } from './common/currentLogin';
+import { endCurrentLogin, restoreAtStartup } from './common/currentLogin';
+import * as webUiSession from './common/webUiSession';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { proxy } from './common/proxy';
 import { removeLegacyProxySecret } from './common/legacyProxySecret';
@@ -77,6 +78,7 @@ if (!gotTheLock) {
             }
 
             registerAllPlugins();
+            webUiSession.start(() => endCurrentLogin(mainWindow.window()));
 
             mpvRuntime.syncAtStartup();
 

@@ -114,10 +114,10 @@ const NO_SHUTDOWN_LISTENER = {
     message: `系统关机信号（session-end、powerMonitor 的 shutdown）只在 ${QUIT_COORDINATOR_FILE} 监听（listenForSystemShutdown），不要自己监听。`
 };
 
-const INTERCEPTOR_FILE = 'src/main/handlers/core/interceptor.ts';
+const WEB_UI_SESSION_FILE = 'src/main/common/webUiSession.ts';
 const NO_BEFORE_REQUEST_LISTENER = {
     selector: "MemberExpression[property.name='onBeforeRequest']",
-    message: `同一个 session 上 webRequest.onBeforeRequest 只保留最后注册的监听器（#302），拦截器用 ${INTERCEPTOR_FILE} 的 registerBeforeRequest 注册。`
+    message: `同一个 session 上 webRequest.onBeforeRequest 只保留最后注册的监听器（#302），网页端会话的请求拦截只放在 ${WEB_UI_SESSION_FILE}。`
 };
 
 const SRC_RESTRICTED_SYNTAX = [NO_MODULE_EXPORTS, ...OS_IMPORT_SYNTAX, ...PLATFORM_BRANCH_SYNTAX];
@@ -193,7 +193,7 @@ export default [
         }
     },
     {
-        files: [INTERCEPTOR_FILE],
+        files: [WEB_UI_SESSION_FILE],
         rules: {
             'no-restricted-syntax': ['error', ...SRC_RULE_SYNTAX]
         }

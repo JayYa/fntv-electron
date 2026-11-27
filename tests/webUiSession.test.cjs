@@ -34,44 +34,32 @@ function setup(t, { cacheSize = 0 } = {}) {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-test('once the web UI session starts, opening the login, welcome or logout address of a NAS ends the current login', (t) => {
+test('once the web UI session starts, opening the login, welcome or logout address of a NAS is cancelled and reported as leaving', (t) => {
     const { webUiSession, attached, partitions, deliver } = setup(t);
-    const mainWindow = {};
-    const ended = [];
-    t.mock.method(require('../dest/main/common/mainWindow.js').mainWindow, 'window', () => mainWindow);
-    t.mock.method(require('../dest/main/common/currentLogin.js'), 'endCurrentLogin', async (win) => ended.push(win));
-    require('../dest/main/handlers/plugins/login.js').init();
+    let left = 0;
 
-    webUiSession.start();
+    webUiSession.start(async () => { left += 1; });
 
     assert.equal(attached.length, 1);
     assert.deepEqual([...new Set(partitions)], [webUiSession.WEB_UI_SESSION_PARTITION]);
-    const leaving = [
-        'http://192.168.1.10:5666/v/login',
-        'https://demo.fnos.net/v/welcome',
-        'http://[fd00::10]:5666/v/api/v1/user/logout',
-    ];
-    for (const url of leaving) {
+    assert.deepEqual([...attached[0].filter.urls].sort(), [
+        'http://*/v/api/v1/user/logout',
+        'http://*/v/login',
+        'http://*/v/welcome',
+        'https://*/v/api/v1/user/logout',
+        'https://*/v/login',
+        'https://*/v/welcome',
+    ]);
+    for (const url of ['http://192.168.1.10:5666/v/login', 'https://demo.fnos.net/v/welcome', 'http://[fd00::10]:5666/v/api/v1/user/logout']) {
         assert.deepEqual(deliver(url), [{ cancel: true }], url);
     }
-    for (const url of ['http://192.168.1.10:5666/v/login?redirect=%2Fv', 'http://192.168.1.10:5666/v/library']) {
-        assert.deepEqual(deliver(url), [{}], url);
-    }
-    assert.deepEqual(ended, leaving.map(() => mainWindow));
-});
-
-test('registering a request interceptor after the web UI session started fails at once', (t) => {
-    const { webUiSession } = setup(t);
-    const { interceptor } = require('../dest/main/handlers/core/interceptor.js');
-    webUiSession.start();
-
-    assert.throws(() => interceptor.registerBeforeRequest({ urls: ['https://*/v/login'] }, () => {}, 'late'), /late/);
+    assert.equal(left, 3);
 });
 
 test('the web UI session clears its cache at start and every six hours once it grows past 100 MB', async (t) => {
     const { webUiSession, cache } = setup(t, { cacheSize: 101 * MB });
 
-    webUiSession.start();
+    webUiSession.start(async () => {});
     await settle();
     assert.equal(cache.cleared, 1);
 

@@ -1,11 +1,13 @@
 import { session, type Session } from 'electron';
 import * as log from '../../modules/logger';
-import { interceptor } from '../handlers/core/interceptor';
 
 export const WEB_UI_SESSION_PARTITION = 'persist:fntv';
 
 const CACHE_LIMIT_BYTES = 100 * 1024 * 1024;
 const CACHE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+const LEAVE_PATHS = ['/v/login', '/v/welcome', '/v/api/v1/user/logout'];
+const LEAVE_URLS = LEAVE_PATHS.flatMap((path) => [`http://*${path}`, `https://*${path}`]);
 
 const webUiSession = (): Session => session.fromPartition(WEB_UI_SESSION_PARTITION);
 
@@ -56,9 +58,13 @@ async function clearCacheOverLimit(ses: Session): Promise<void> {
     }
 }
 
-export function start(): void {
+export function start(onLeave: () => Promise<void>): void {
     const ses = webUiSession();
-    interceptor.attach(ses);
+    ses.webRequest.onBeforeRequest({ urls: LEAVE_URLS }, (_details, callback) => {
+        log.info('网页端请求登录页或登出，结束当前登录');
+        callback({ cancel: true });
+        void onLeave();
+    });
     void clearCacheOverLimit(ses);
     setInterval(() => { void clearCacheOverLimit(ses); }, CACHE_CHECK_INTERVAL_MS);
 }

@@ -55,7 +55,7 @@ ADR-0006 定了平台差异的写法，这里记各项差异的依据。`Platfor
 
 ## webRequest 监听器
 
-- 同一个 session 上 `webRequest.onBeforeRequest` 只保留最后注册的监听器，后注册的顶掉前面的，不报错（在本仓库的 Electron 里实测，#302）。lint 只允许 `interceptor.ts` 调用它（ADR-0008）。
+- 同一个 session 上 `webRequest.onBeforeRequest` 只保留最后注册的监听器，后注册的顶掉前面的，不报错（在本仓库的 Electron 里实测，#302）。lint 只允许 `webUiSession.ts` 调用它（ADR-0008）。
 - 过滤规则 `urls` 连查询串一起匹配：`*://*/v/login` 不匹配 `/v/login?redirect=…`，路径匹配区分大小写（实测，#302）。
 
 ## 文件系统
