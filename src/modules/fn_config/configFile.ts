@@ -8,11 +8,13 @@ const CONFIG_BACKUP_LIMIT = 3;
 
 app.setPath('userData', USER_DATA_PATH);
 
-export type StoredConfig = Record<string, unknown>;
+type StoredConfig = Record<string, unknown>;
 
-export interface StoredHistoryItem extends Record<string, unknown> {
-    domain: string;
-    account: string;
+export type ConfigValues<Key extends string> = { [K in Key]?: unknown };
+
+export interface ConfigSection<Key extends string> {
+    read(): ConfigValues<Key> | null;
+    replace(values: ConfigValues<Key>): void;
 }
 
 const loggedWarnings = new Set<string>();
@@ -27,24 +29,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function parseConfig(text: string): StoredConfig {
+function parseConfig(text: string): StoredConfig {
     const stored: unknown = JSON.parse(text);
     if (!isObject(stored)) throw new SyntaxError('配置顶层不是对象');
     return stored;
-}
-
-function isHistoryItem(item: unknown): item is StoredHistoryItem {
-    return isObject(item) && typeof item.domain === 'string' && typeof item.account === 'string';
-}
-
-function hasUnusableHistory(stored: { history?: unknown }): boolean {
-    return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
-}
-
-export function usableHistory(stored: StoredConfig): StoredHistoryItem[] | undefined {
-    const historyUnusable = hasUnusableHistory(stored);
-    if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
-    return Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
 }
 
 function getConfigPath(): string {
@@ -55,7 +43,7 @@ function getConfigPath(): string {
     return path.join(dir, 'config.json');
 }
 
-export function readConfigFile(): StoredConfig | null {
+function readConfigFile(): StoredConfig | null {
     const p = getConfigPath();
     if (!fs.existsSync(p)) return null;
     try {
@@ -66,15 +54,15 @@ export function readConfigFile(): StoredConfig | null {
     }
 }
 
-export function writeConfigFile(stored: StoredConfig): void {
+function writeConfigFile(stored: StoredConfig): void {
     replaceConfig(getConfigPath(), JSON.stringify(stored, null, 2));
 }
 
 function isDamaged(configPath: string): boolean {
     if (!fs.existsSync(configPath)) return false;
-    const text = fs.readFileSync(configPath, 'utf-8');
     try {
-        return hasUnusableHistory(parseConfig(text));
+        parseConfig(fs.readFileSync(configPath, 'utf-8'));
+        return false;
     } catch {
         return true;
     }
@@ -117,4 +105,37 @@ function replaceConfig(configPath: string, content: string): void {
         fs.rmSync(tempPath, { force: true });
         throw error;
     }
+}
+
+const ownedKeys = new Set<string>();
+
+export function configSection<const Key extends string>(keys: readonly Key[]): ConfigSection<Key> {
+    const taken = keys.filter(key => ownedKeys.has(key));
+    if (taken.length > 0) throw new Error(`配置键已有拥有方: ${taken.join(', ')}`);
+    keys.forEach(key => ownedKeys.add(key));
+    const owns = (key: string): key is Key => (keys as readonly string[]).includes(key);
+    return {
+        read() {
+            const stored = readConfigFile();
+            if (!stored) return null;
+            const values: ConfigValues<Key> = {};
+            for (const key of keys) {
+                if (key in stored) values[key] = stored[key];
+            }
+            return values;
+        },
+        replace(values) {
+            const foreign = Object.keys(values).filter(key => !owns(key));
+            if (foreign.length > 0) throw new Error(`配置键不归这一块: ${foreign.join(', ')}`);
+            const stored = readConfigFile() ?? {};
+            for (const key of keys) {
+                if (values[key] === undefined) {
+                    delete stored[key];
+                } else {
+                    stored[key] = values[key];
+                }
+            }
+            writeConfigFile(stored);
+        },
+    };
 }

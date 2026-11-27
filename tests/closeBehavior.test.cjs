@@ -96,7 +96,7 @@ test('hiding the window before the tray exists keeps the one-time balloon for th
     clickClose(env.window);
     await settle();
 
-    assert.equal(require('../dest/modules/fn_config/preferences.js').trayNotificationShown(), false);
+    assert.equal(require('../dest/modules/fn_config/clientState.js').trayNotificationShown(), false);
 });
 
 test('on Windows choosing quit with remember quits, and the next start quits on close without asking', async (t) => {

@@ -36,7 +36,10 @@ function setupConfig(t) {
         config: {
             ...require('../dest/modules/fn_config/loginStore.js'),
             ...require('../dest/modules/fn_config/preferences.js'),
+            ...require('../dest/modules/fn_config/clientState.js'),
         },
+        configFile: () => require('../dest/modules/fn_config/configFile.js'),
+        safeStorage: electronMock.safeStorage,
         configPath: path.join(userData, 'config.json'),
         userData,
         backups: () => fs.readdirSync(userData).filter((name) => name.startsWith('config.json.corrupt-')).sort(),
@@ -153,21 +156,17 @@ for (const [label, history] of [
     });
 }
 
-test('writing over a non-array history keeps the original file in a backup', async (t) => {
-    const { config, configPath, backups, readBackup, logText } = setupConfig(t);
-    const original = JSON.stringify({ mpvVolume: 33, history: { password: 'c2VjcmV0' } });
-    fs.writeFileSync(configPath, original);
+test('a login written over a non-array history replaces it and logs that it was dropped', async (t) => {
+    const { config, configPath, backups, logText } = setupConfig(t);
+    fs.writeFileSync(configPath, JSON.stringify({ mpvVolume: 33, history: { password: 'c2VjcmV0' } }));
 
     await logInWithHistory(config, { domain: 'nas.example', account: 'user', password: 'new-password' });
 
-    assert.equal(backups().length, 1);
-    assert.equal(readBackup(backups()[0]), original);
-    assert.equal((await readHistoryWithCredentials(config))[0].account, 'user');
+    assert.deepEqual(backups(), []);
+    assert.deepEqual((await readHistoryWithCredentials(config)).map((item) => item.account), ['user']);
     assert.equal(config.mpvVolume(), 33);
+    assert.match(logText(), /写入时已丢弃/);
     assert.doesNotMatch(logText(), /c2VjcmV0/);
-
-    config.setMpvVolume(44);
-    assert.equal(backups().length, 1);
 });
 
 for (const [label, content] of [
@@ -231,31 +230,27 @@ for (const [label, entry] of [
     });
 }
 
-test('writing over a history with unusable entries keeps the original file in a backup', async (t) => {
-    const { config, configPath, backups, readBackup, logText } = setupConfig(t);
-    const original = JSON.stringify({ mpvVolume: 33, history: [null, 'c2VjcmV0', SAVED_ENTRY] });
-    fs.writeFileSync(configPath, original);
+test('writing preferences and client state leaves a history with unusable entries untouched', async (t) => {
+    const { config, configPath, backups } = setupConfig(t);
+    const history = [null, 'c2VjcmV0', SAVED_ENTRY];
+    fs.writeFileSync(configPath, JSON.stringify({ mpvVolume: 33, history }));
 
     config.setMpvVolume(44);
+    config.set('nasLocalProxy', true);
 
-    assert.equal(backups().length, 1);
-    assert.equal(readBackup(backups()[0]), original);
-    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')).history.map((item) => item.account), ['user']);
-    assert.doesNotMatch(logText(), /c2VjcmV0/);
-
-    config.setMpvVolume(55);
-    assert.equal(backups().length, 1);
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')).history, history);
+    assert.deepEqual(backups(), []);
 });
 
-test('migrating legacy credentials on read keeps the unusable history entries in a backup', async (t) => {
-    const { config, configPath, backups, readBackup } = setupConfig(t);
-    const original = JSON.stringify({ token: 'legacy-token', history: [null, SAVED_ENTRY] });
-    fs.writeFileSync(configPath, original);
+test('migrating legacy credentials on read drops the unusable history entries and logs it', async (t) => {
+    const { config, configPath, backups, logText } = setupConfig(t);
+    fs.writeFileSync(configPath, JSON.stringify({ token: 'legacy-token', history: [null, SAVED_ENTRY] }));
 
     assert.equal((await config.readCurrentLogin()).token, 'legacy-token');
 
-    assert.equal(backups().length, 1);
-    assert.equal(readBackup(backups()[0]), original);
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')).history.map((item) => item.account), ['user']);
+    assert.deepEqual(backups(), []);
+    assert.match(logText(), /写入时已丢弃/);
 });
 
 test('a retained credential survives the rewrite that drops an unusable entry', async (t) => {
@@ -263,7 +258,7 @@ test('a retained credential survives the rewrite that drops an unusable entry', 
     const undecryptable = { domain: 'nas.example', account: 'user', password: 'not-legacy-ciphertext' };
     fs.writeFileSync(configPath, JSON.stringify({ history: [null, undecryptable] }));
 
-    config.setMpvVolume(44);
+    await config.saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'new-token', accessCode: '', useHttps: true });
 
     const { history } = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     assert.equal(history.length, 1);
@@ -274,7 +269,47 @@ test('a config without history still has no history after a write', async (t) =>
     const { config, configPath } = setupConfig(t);
     fs.writeFileSync(configPath, JSON.stringify({ history: null, mpvVolume: 33 }));
 
-    config.setMpvVolume(44);
+    await config.saveCurrentLogin({ account: 'user', domain: 'https://nas.example', token: 'new-token', accessCode: '', useHttps: true });
 
     assert.equal('history' in JSON.parse(fs.readFileSync(configPath, 'utf8')), false);
+});
+
+test('a config key that already has an owner cannot be declared again', async (t) => {
+    const { configFile } = setupConfig(t);
+    require('../dest/modules/fn_config/preferences.js');
+
+    assert.throws(() => configFile().configSection(['nasProxyEnabled']), /nasProxyEnabled/);
+});
+
+test('a preference written while a login is being encrypted survives the login write', async (t) => {
+    const { config, safeStorage } = setupConfig(t);
+    const encrypt = safeStorage.encryptStringAsync;
+    let writtenDuringEncryption = false;
+    safeStorage.encryptStringAsync = async (value) => {
+        if (!writtenDuringEncryption) {
+            writtenDuringEncryption = true;
+            config.set('nasLocalProxy', true);
+            config.setMpvVolume(44);
+        }
+        return encrypt(value);
+    };
+
+    await logInWithHistory(config, { domain: 'nas.example', account: 'user', password: 'new-password' });
+
+    assert.equal(writtenDuringEncryption, true);
+    assert.equal(config.get('nasLocalProxy'), true);
+    assert.equal(config.mpvVolume(), 44);
+    assert.deepEqual((await readHistoryWithCredentials(config)).map((item) => item.account), ['user']);
+});
+
+test('config keys that no module declares stay in the file across every kind of write', async (t) => {
+    const { config, configPath } = setupConfig(t);
+    fs.writeFileSync(configPath, JSON.stringify({ fromNewerVersion: { kept: true } }));
+
+    config.set('nasLocalProxy', true);
+    config.setMpvVolume(44);
+    await logInWithHistory(config, { domain: 'nas.example', account: 'user', password: 'new-password' });
+    await config.clearHistory();
+
+    assert.deepEqual(JSON.parse(fs.readFileSync(configPath, 'utf8')).fromNewerVersion, { kept: true });
 });

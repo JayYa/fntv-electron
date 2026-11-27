@@ -1,4 +1,4 @@
-import { type StoredConfig, type StoredHistoryItem, readConfigFile, usableHistory, warnOnce, writeConfigFile } from './configFile';
+import { type ConfigValues, configSection, warnOnce } from './configFile';
 import {
     type Credential,
     type LegacyFormat,
@@ -12,6 +12,35 @@ import {
 } from './credentialCrypto';
 
 const HISTORY_LIMIT = 5;
+
+const STORED_KEYS = ['account', 'domain', 'token', 'accessCode', 'useHttps', 'history'] as const;
+
+const section = configSection(STORED_KEYS);
+
+type StoredLogin = ConfigValues<typeof STORED_KEYS[number]>;
+
+interface StoredHistoryItem extends Record<string, unknown> {
+    domain: string;
+    account: string;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isHistoryItem(item: unknown): item is StoredHistoryItem {
+    return isObject(item) && typeof item.domain === 'string' && typeof item.account === 'string';
+}
+
+function hasUnusableHistory(stored: StoredLogin): boolean {
+    return stored.history !== undefined && stored.history !== null && !(Array.isArray(stored.history) && stored.history.every(isHistoryItem));
+}
+
+function usableHistory(stored: StoredLogin): StoredHistoryItem[] | undefined {
+    const historyUnusable = hasUnusableHistory(stored);
+    if (historyUnusable) warnOnce('配置里的 history 含无法使用的内容，读取时已跳过');
+    return Array.isArray(stored.history) ? stored.history.filter(isHistoryItem) : historyUnusable ? [] : undefined;
+}
 
 const LOGIN_CREDENTIALS = { token: 'plaintext', accessCode: 'plaintext' } as const satisfies Record<string, LegacyFormat>;
 const HISTORY_CREDENTIALS = { password: 'legacyPassword', accessCode: 'plaintext' } as const satisfies Record<string, LegacyFormat>;
@@ -28,6 +57,7 @@ interface HistoryEntry {
 interface LoginState {
     access: CredentialAccess;
     found: boolean;
+    stored: StoredLogin;
     account?: unknown;
     domain?: unknown;
     useHttps?: unknown;
@@ -62,7 +92,7 @@ const asString = (value: unknown): string => (typeof value === 'string' ? value 
 
 const isEntry = (item: HistoryKey, { domain, account }: HistoryKey): boolean => item.domain === domain && item.account === account;
 
-const historyOf = (stored: StoredConfig | null): StoredHistoryItem[] => (stored ? usableHistory(stored) ?? [] : []);
+const historyOf = (stored: StoredLogin | null): StoredHistoryItem[] => (stored ? usableHistory(stored) ?? [] : []);
 
 function tokenUnlessAccessCodeSealed({ token, accessCode }: LoginState['credentials']): string {
     return 'sealed' in accessCode ? '' : plaintextOf(token);
@@ -102,12 +132,13 @@ function writeCredentials(
 }
 
 async function load(access: CredentialAccess): Promise<LoginState> {
-    const stored = readConfigFile();
-    const source: StoredConfig = stored ?? {};
+    const stored = section.read();
+    const source: StoredLogin = stored ?? {};
     const history = usableHistory(source);
     return {
         access,
         found: stored !== null,
+        stored: source,
         account: source.account,
         domain: source.domain,
         useHttps: source.useHttps,
@@ -128,11 +159,8 @@ function allCredentials(state: LoginState): Credential[] {
 
 async function commit(state: LoginState): Promise<void> {
     const encrypted = await encryptAll(allCredentials(state).filter(needsEncryption).map(credential => credential.plain));
-    writeOverSettingsReadAfterEncryption(state, encrypted);
-}
-
-function writeOverSettingsReadAfterEncryption(state: LoginState, encrypted: Map<string, string>): void {
-    const stored: StoredConfig = { ...readConfigFile() };
+    if (hasUnusableHistory(state.stored)) warnOnce('配置里的 history 含无法使用的内容，写入时已丢弃');
+    const stored: StoredLogin = { ...state.stored };
     stored.account = state.account;
     stored.domain = state.domain;
     writeCredentials(stored, state.credentials, encrypted, state.access);
@@ -142,7 +170,7 @@ function writeOverSettingsReadAfterEncryption(state: LoginState, encrypted: Map<
         writeCredentials(written, credentials, encrypted, state.access);
         return written;
     });
-    writeConfigFile(stored);
+    section.replace(stored);
 }
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -235,7 +263,7 @@ export function clearToken(): Promise<boolean> {
 }
 
 export function listHistory(): HistoryListing[] {
-    return historyOf(readConfigFile()).map(item => ({
+    return historyOf(section.read()).map(item => ({
         domain: item.domain,
         account: item.account,
         useHttps: item.useHttps === true,
@@ -244,7 +272,7 @@ export function listHistory(): HistoryListing[] {
 
 export function historyCredentials(key: HistoryKey): Promise<{ password: string; accessCode: string }> {
     return serialize(async () => {
-        const history = historyOf(readConfigFile());
+        const history = historyOf(section.read());
         const index = history.findIndex(item => isEntry(item, key));
         if (index < 0) return { password: '', accessCode: '' };
         const { password, accessCode } = await readCredentials(HISTORY_CREDENTIALS, history[index], `history[${index}].`, 'open');

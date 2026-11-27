@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { platformBehavior } from '../../public/platform';
 import type { CloseBehavior, CloseBehaviorSetting } from '../../public/platform/shared';
 import * as log from '../logger';
-import { type StoredConfig, readConfigFile, usableHistory, writeConfigFile } from './configFile';
+import { type ConfigValues, configSection } from './configFile';
 
 export interface AppDownloadProxy {
     enabled: boolean;
@@ -19,9 +19,23 @@ export interface Preferences {
 
 export type PreferenceName = keyof Preferences;
 
+const STORED_KEYS = [
+    'downloadProxyEnabled',
+    'downloadProxy',
+    'hideOriginalPlayButton',
+    'nasProxyEnabled',
+    'mpvPlayerPath',
+    'macCloseAction',
+    'exitMode',
+] as const;
+
+const section = configSection(STORED_KEYS);
+
+type StoredPreferences = ConfigValues<typeof STORED_KEYS[number]>;
+
 interface Preference<T> {
-    read(config: StoredConfig): T;
-    write(config: StoredConfig, value: T): void;
+    read(config: StoredPreferences): T;
+    write(config: StoredPreferences, value: T): void;
 }
 
 export const DEFAULT_DOWNLOAD_PROXY_URL = 'https://gh-proxy.com/';
@@ -84,16 +98,15 @@ const PREFERENCES: { [K in PreferenceName]: Preference<Preferences[K]> } = {
 
 const listeners = new Set<(name: PreferenceName) => void>();
 
-function readStoredConfig(): StoredConfig {
-    const stored = readConfigFile();
-    return stored ? { ...stored, history: usableHistory(stored) } : {};
+function readStored(): StoredPreferences {
+    return section.read() ?? {};
 }
 
 export function get<K extends PreferenceName>(name: K): Preferences[K] {
-    return PREFERENCES[name].read(readStoredConfig());
+    return PREFERENCES[name].read(readStored());
 }
 
-function writePreference<K extends PreferenceName>(config: StoredConfig, name: K, value: Preferences[K]): boolean {
+function writePreference<K extends PreferenceName>(config: StoredPreferences, name: K, value: Preferences[K]): boolean {
     const preference = PREFERENCES[name];
     const before = preference.read(config);
     preference.write(config, value);
@@ -113,9 +126,9 @@ function notify(name: PreferenceName): void {
 export function update(patch: Partial<Preferences>): void {
     const names = Object.keys(patch) as PreferenceName[];
     if (names.length === 0) return;
-    const config = readStoredConfig();
+    const config = readStored();
     const changed = names.filter(name => writePreference(config, name, patch[name] as Preferences[typeof name]));
-    writeConfigFile(config);
+    section.replace(config);
     changed.forEach(notify);
 }
 
@@ -126,7 +139,7 @@ export function set<K extends PreferenceName>(name: K, value: Preferences[K]): v
 export type PreferencesSnapshot = Pick<Preferences, 'appDownloadProxy' | 'mpvPlayback'> & { defaultProxyUrl: string };
 
 export function snapshot(): PreferencesSnapshot {
-    const config = readStoredConfig();
+    const config = readStored();
     return {
         appDownloadProxy: PREFERENCES.appDownloadProxy.read(config),
         mpvPlayback: PREFERENCES.mpvPlayback.read(config),
@@ -139,28 +152,3 @@ export function onChange(listener: (name: PreferenceName) => void): () => void {
     return () => listeners.delete(listener);
 }
 
-const clampVolume = (volume: number): number => Math.min(100, Math.max(0, Math.round(volume)));
-
-export function mpvVolume(): number {
-    const volume = readStoredConfig().mpvVolume;
-    return typeof volume === 'number' && Number.isFinite(volume) ? clampVolume(volume) : 70;
-}
-
-export function setMpvVolume(volume: number): void {
-    if (!Number.isFinite(volume)) {
-        throw new Error('MPV音量必须是有限数值');
-    }
-    const config = readStoredConfig();
-    config.mpvVolume = clampVolume(volume);
-    writeConfigFile(config);
-}
-
-export function trayNotificationShown(): boolean {
-    return readStoredConfig().trayNotificationShown === true;
-}
-
-export function markTrayNotificationShown(): void {
-    const config = readStoredConfig();
-    config.trayNotificationShown = true;
-    writeConfigFile(config);
-}

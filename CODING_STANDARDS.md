@@ -31,7 +31,7 @@
 
 ## 凭据和配置
 
-- `config.json` 只由 `src/modules/fn_config/` 下两个 module 写（落盘和损坏备份在 `configFile.ts`）：当前登录和登录历史归 `loginStore.ts`，只在其中的 `commit` 写盘（改动走 `transaction`，读取当前登录时的旧格式迁移也调它）；用户偏好和客户端自己记下的状态归 `preferences.ts`（不解密，凭据磁盘值原样写回，只顺带去掉登录历史里不能用的条目）。新增凭据字段时只在 `loginStore.ts` 的 `LOGIN_CREDENTIALS` 或 `HISTORY_CREDENTIALS` 登记。
+- `config.json` 由 `src/modules/fn_config/configFile.ts` 落盘和备份；其它 module 用 `configSection` 声明自己的键，只经它读写这些键，一个键只能有一个拥有方，没人声明的键原样保留。当前登录和登录历史归 `loginStore.ts`，只在其中的 `commit` 写盘（改动走 `transaction`，读取当前登录时的旧格式迁移也调它）；用户偏好归 `preferences.ts`，客户端状态归 `clientState.ts`，二者都不碰凭据和登录历史。新增凭据字段时只在 `loginStore.ts` 的 `LOGIN_CREDENTIALS` 或 `HISTORY_CREDENTIALS` 登记。
 - 要明文凭据的导出函数是异步的（`safeStorage` 只有异步接口可用），按调用顺序排队执行；加解密都在读改写之前做完，读改写本身同步完成。
 - FN ID、用户名和完整 NAS 地址不进日志。日志脱敏只是兜底。
 - 访问码、token 和播放 `session` 不进日志、URL、命令行参数和环境变量。例外是播放 URL 里的 `session`，它本身就是短期能力，记录时脱敏（`src/modules/logger/masking.ts`）。

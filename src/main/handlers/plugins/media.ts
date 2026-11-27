@@ -1,7 +1,7 @@
 import { dialog, IpcMainEvent } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
-import * as preferences from '../../../modules/fn_config/preferences';
+import * as clientState from '../../../modules/fn_config/clientState';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { mainWindow } from '../../common/mainWindow';
@@ -45,12 +45,12 @@ function launchPlayer(options: PlayerOptions): ply.Player | undefined {
         '--force-window=immediate',
         '--border=no',
         '--network-timeout=180',
-        `--volume=${preferences.mpvVolume()}`,
+        `--volume=${clientState.mpvVolume()}`,
     ];
     return new ply.MpvPlayer({
         ...options,
         createMpvProcess: ply.mpvProcessFactory({ binary: program.path, args: extraArgs, debug: true }),
-        onVolumeChange: preferences.setMpvVolume,
+        onVolumeChange: clientState.setMpvVolume,
     });
 }
 
