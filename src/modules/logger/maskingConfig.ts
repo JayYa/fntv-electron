@@ -102,8 +102,6 @@ export const maskingPatterns: Record<string, MaskingPatternConfig> = {
     }
 };
 
-export const maskingEnabled: boolean = true;
-
 export const sensitiveKeywords: string[] = [
     'password', 'pwd', 'passwd', 'token', 'session', 'secret', 'key', 'auth',
     'phone', 'mobile', 'email', 'id_card', 'idcard', 'bank_card',
