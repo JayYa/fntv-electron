@@ -16,8 +16,9 @@
 
 - 访问码先去除首尾空白。空访问码不验证、不产生授权，登录流程保持原样。
 - 每次验证都先清空已有授权，包括之前经端口跳转发现的 origin，因为应用同时只有一个登录。
-- 重定向只允许同主机，不允许 HTTPS 降级到 HTTP，最多 5 次，整个请求 10 秒超时。这防止访问码被发到其它主机，同时支持常见的 80 到 5666 端口跳转。
+- 重定向只允许同主机，不允许 HTTPS 降级到 HTTP，最多 5 次，整个请求 10 秒超时；HTTPS 地址在这之前还有一次最多 10 秒的证书探测（见下面的自签名证书）。这防止访问码被发到其它主机，同时支持常见的 80 到 5666 端口跳转。
 - `401`、`403`、`429` 视为访问码被拒绝，用户看到“访问码错误”。其它非 2xx、网络错误，以及 2xx 但没有拿到 Cookie，都按网络失败处理，和账号密码错误区分开。
+- 用户在证书提示里取消时按“登录取消”处理，不算网络失败，见下面的自签名证书。
 - Cookie 由 `composeCookieHeader` 结构化组合，`mode=relay` 只出现一次。主进程和 Proxy 共用这一个实现（`src/modules/fn_api/core/cookie.ts`）。
 
 ## FN ID 登录
@@ -37,6 +38,21 @@ FN ID 窗口是隔离的。FN Connect 运行时才返回 NAS 地址，窗口离�
 - 页面经 `console-message` 的 `__FNTV_BRIDGE__:` 前缀给主进程发消息。任何页面都能打印这个前缀，所以只听 NAS 页面的主框架。
 - 每次登录用新的临时分区（`fnid-oauth-<时间戳>`），旧 token 不会被当成本次登录的结果。分区里确认目标前只认中继页的 Cookie，确认后只认目标 NAS 的 Cookie。中继页不看 Cookie 的路径：真实中继没有验证过，路径猜错会让中继登录失败。确认目标后中继的 Cookie 不再可用：它不是目标 NAS 的 token，放弃后还能走 OAuth。取到的 token 还要过 NAS 的用户信息接口，这里只排除其它站点的 Cookie。
 - 日志只记页面的路径和 hash 路由：查询串里可能有授权码和 `state`，FN Connect 的路径就是 FN ID，也不记。被忽略的登录 Cookie 只记域、不记值，登录走不通时靠这行判断是不是误拒。
+
+## 自签名证书
+
+访问码验证用 Electron 的 `net.request`，走网页端会话，这样网关 Cookie 直接落进网页端会话。Electron 45 上实测（`tests/accessCodeCertificate.test.cjs`）：
+
+- `net.request` 遇到不受信任的证书直接报 `ERR_CERT_*`，不触发 `app` 的 `certificate-error`，那个事件只给 webContents。
+- 会话的 `setCertificateVerifyProc` 能管 `net.request`，回调可以晚些再调。但同一主机和证书的第一次结果会被会话记住：之后换掉 proc、`closeAllConnections`、`clearCache` 都不会再问；装上 proc 之前失败过的请求，之后也不再经过 proc。
+
+所以不在 proc 里弹窗：用户取消一次，这个主机在这次运行里就再也连不上。做法是（`src/modules/cert_trust/sessionCertificates.ts`）：
+
+1. 启动时（`main.ts`，在任何请求之前）给网页端会话装上 proc，只放行已确认的证书（主机名加 SHA-256 指纹），其余返回 `-3`，交给 Chromium 照常校验，webContents 仍走 `certificate-error`。
+2. HTTPS 地址验证访问码之前，先在一个新的临时会话里对同一地址发一次 `HEAD`，由那个会话的 proc 记下证书校验结果。用 Electron 而不用 Node 的 `tls`：Node 只认自带的 CA，系统证书库里装的私有 CA 会被误判为不受信任；DNS 解析也和 `net.request` 一致。每次探测用新会话，因为会话会记住 proc 的结果。证书不受信任时，已在证书信任里（本次信任或记住的）就直接确认；否则弹证书信任提示。确认后记下这张证书，再发 `net.request`，proc 第一次见到它就放行。
+3. 用户取消就不发请求，会话里没有记下任何结果，下次验证还会再问。
+
+proc 拿不到端口，所以按指纹而不是按主机和端口确认：同一主机别的端口换了证书不会被放行。只探测登录用的地址；重定向到的同主机其它端口证书不受信任时，按网络失败处理，WARN 日志里记 `ERR_CERT_*`。
 
 ## 存储与暴露范围
 

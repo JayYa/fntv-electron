@@ -1,5 +1,7 @@
 import { net, type Session } from 'electron';
+import { confirmCertificate } from '../../modules/cert_trust/sessionCertificates';
 import { clearAccessGrants, setAccessGrant } from '../../modules/fn_api/accessGrant';
+import * as log from '../../modules/logger';
 import * as webUiSession from './webUiSession';
 
 const MAX_REDIRECTS = 5;
@@ -33,10 +35,12 @@ export type AccessCodeSessionResult = {
     cookie: string;
 };
 
-export class AccessCodeVerificationError extends Error {
-    readonly reason: 'rejected' | 'network';
+export type AccessCodeFailureReason = 'rejected' | 'certificate-declined' | 'network';
 
-    constructor(reason: 'rejected' | 'network', message: string, options?: ErrorOptions) {
+export class AccessCodeVerificationError extends Error {
+    readonly reason: AccessCodeFailureReason;
+
+    constructor(reason: AccessCodeFailureReason, message: string, options?: ErrorOptions) {
         super(message, options);
         this.name = 'AccessCodeVerificationError';
         this.reason = reason;
@@ -75,7 +79,10 @@ export function encodeAccessCode(accessCode: string): string {
     return Buffer.from(accessCode, 'utf8').toString('base64');
 }
 
-export const requestAccessCode: GatewayRequester = (gatewaySession, url, headers) => {
+export const requestAccessCode: GatewayRequester = async (gatewaySession, url, headers) => {
+    if (!await confirmCertificate(url)) {
+        throw new AccessCodeVerificationError('certificate-declined', '用户取消信任证书');
+    }
     return new Promise((resolve, reject) => {
         let currentUrl = parseBaseUrl(url);
         let redirects = 0;
@@ -129,6 +136,7 @@ export const requestAccessCode: GatewayRequester = (gatewaySession, url, headers
         });
         request.on('error', error => {
             if (settled) return;
+            if (error.message.includes('ERR_CERT_')) log.warn('访问码验证遇到证书错误:', error.message);
             settled = true;
             clearTimeout(timeout);
             reject(error);

@@ -67,6 +67,8 @@ if (!gotTheLock) {
                 }
             });
 
+            webUiSession.acceptConfirmedCertificates();
+
             await startProxy();
 
             mainWindow.start({ showBalloon: showTrayBalloon, downloadProgress: getUpdateChecker().downloadProgress });
