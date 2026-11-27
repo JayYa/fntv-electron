@@ -382,6 +382,7 @@ export interface AuthRequest {
 export interface AuthResponse {
     token: string;
 }
+
 export interface LoginResponse {
     token: string;
 }

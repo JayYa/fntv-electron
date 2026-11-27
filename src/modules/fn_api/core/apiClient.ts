@@ -15,6 +15,7 @@ function inFlightFor(cache: TtlCache): Map<string, Promise<FnApiResult>> {
 }
 
 const TOKEN_CHECK_TIMEOUT = 5000;
+const USER_INFO_PATH = '/v/api/v1/user/info';
 
 export class FnApiClient {
     protected readonly baseURL: string;
@@ -91,11 +92,11 @@ export class FnApiClient {
     }
 
     getUserInfo(): Promise<FnApiResult<types.UserInfo>> {
-        return this.send(HttpMethod.GET, '/v/api/v1/user/info');
+        return this.send(HttpMethod.GET, USER_INFO_PATH);
     }
 
     async tokenAccepted(): Promise<boolean> {
-        const result = await this.send(HttpMethod.GET, '/v/api/v1/user/info', { timeout: TOKEN_CHECK_TIMEOUT, retries: 0 });
+        const result = await this.send(HttpMethod.GET, USER_INFO_PATH, { timeout: TOKEN_CHECK_TIMEOUT, retries: 0 });
         return result.ok;
     }
 

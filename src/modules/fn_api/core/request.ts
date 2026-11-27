@@ -20,7 +20,8 @@ export type FnApiResult<T = any> =
     | { ok: true; data: T; movedTo?: string }
     | { ok: false; failure: FnApiFailure };
 
-const failed = (message: string): FnApiResult<never> => ({ ok: false, failure: { kind: 'failed', message } });
+const failure = (kind: FnApiFailureKind, message: string): FnApiResult<never> => ({ ok: false, failure: { kind, message } });
+const failed = (message: string): FnApiResult<never> => failure('failed', message);
 
 export interface FnApiResponseData<T = any> {
     code: number;
@@ -122,13 +123,20 @@ export interface FnApiRequest {
     expect?: ResponseExpectation;
 }
 
-export function request<T = any>(context: RequestContext, req: FnApiRequest): Promise<FnApiResult<T>> {
-    return followingRedirects<T>(context, {
-        timeout: DEFAULT_TIMEOUT,
-        retries: 5,
-        expect: 'json',
+type ResolvedRequest = Required<Omit<FnApiRequest, 'data' | 'cookie'>> & Pick<FnApiRequest, 'data' | 'cookie'>;
+
+export async function request<T = any>(context: RequestContext, req: FnApiRequest): Promise<FnApiResult<T>> {
+    const result = await followingRedirects<T>(context, {
         ...req,
+        timeout: req.timeout ?? DEFAULT_TIMEOUT,
+        retries: req.retries ?? 5,
+        expect: req.expect ?? 'json',
     }, MAX_REDIRECTS);
+    if (result.ok && result.movedTo && originOf(result.movedTo) === originOf(req.baseUrl)) {
+        const { movedTo: _unchanged, ...sameOrigin } = result;
+        return sameOrigin;
+    }
+    return result;
 }
 
 function originOf(baseUrl: string): string {
@@ -148,11 +156,10 @@ function describeOriginChange(from: string, to: string): string {
 
 async function followingRedirects<T>(
     context: RequestContext,
-    req: Required<Omit<FnApiRequest, 'data' | 'cookie'>> & Pick<FnApiRequest, 'data' | 'cookie'>,
+    req: ResolvedRequest,
     redirectsLeft: number,
 ): Promise<FnApiResult<T>> {
-    const { method, token, timeout, retries, expect } = req;
-    const url = req.path;
+    const { method, token, timeout, retries, expect, path: url } = req;
     const normalizedBaseUrl = req.baseUrl.replace(/\/+$/, '');
     const fullUrl = normalizedBaseUrl + url;
     let data = req.data;
@@ -217,9 +224,7 @@ async function followingRedirects<T>(
                         { ...req, baseUrl: newBaseUrl, path: newUrlPath, data },
                         redirectsLeft - 1,
                     );
-                    if (!followed.ok || followed.movedTo || originOf(newBaseUrl) === originOf(normalizedBaseUrl)) {
-                        return followed;
-                    }
+                    if (!followed.ok || followed.movedTo) return followed;
                     return { ...followed, movedTo: newBaseUrl };
                 }
                 context.log.warn(`检测到重定向 (${response.status})，但响应没有 Location`);
@@ -237,7 +242,7 @@ async function followingRedirects<T>(
 
             if (res.code === 5000 && res.msg === 'invalid sign') {
                 if (attempt >= retries) {
-                    return failed(`尝试次数过多 try_times = ${attempt + 1}`);
+                    return failed(`签名错误，已尝试 ${attempt + 1} 次`);
                 }
 
                 context.log.warn(`fn_api 请求时签名错误，重试中 attempt = ${attempt + 1}, path: ${url}`);
@@ -261,11 +266,11 @@ async function followingRedirects<T>(
 
             if (isCertificateError(error) && !context.skipVerify(normalizedBaseUrl)) {
                 context.log.warn(`检测到证书验证错误: code: ${errorCode}, msg: ${errorMsg}, path: ${url}`);
-                return { ok: false, failure: { kind: 'certificate', message: errorMsg } };
+                return failure('certificate', errorMsg);
             }
 
             if (isHttpsPortMismatch(errorMsg)) {
-                return { ok: false, failure: { kind: 'https-port-mismatch', message: errorMsg } };
+                return failure('https-port-mismatch', errorMsg);
             }
 
             if (attempt >= retries) {

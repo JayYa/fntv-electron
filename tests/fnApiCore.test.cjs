@@ -319,7 +319,7 @@ test('following a redirect to another NAS address logs neither its host nor its 
     }
 });
 
-function nasClient(t, context, baseUrl) {
+function nasClient(context, baseUrl) {
     const { FnApiClient } = require(path.join(CORE_DIR, 'apiClient.js'));
     const { TtlCache } = require(path.join(CORE_DIR, 'ttlCache.js'));
     return new FnApiClient(context, baseUrl, 'token-1', new TtlCache());
@@ -337,7 +337,7 @@ test('a NAS whose certificate is not trusted is reported as a certificate failur
     });
     const baseUrl = `https://127.0.0.1:${await listen(t, server)}`;
 
-    const result = await nasClient(t, nasContext(), baseUrl).getPlayInfo('item-1');
+    const result = await nasClient(nasContext(), baseUrl).getPlayInfo('item-1');
 
     assert.equal(result.ok, false);
     assert.equal(result.failure.kind, 'certificate');
@@ -351,7 +351,7 @@ test('asking an HTTP port over HTTPS is reported as an HTTPS port mismatch witho
     server.on('connection', () => { connections += 1; });
     const port = await listen(t, server);
 
-    const result = await nasClient(t, nasContext(), `https://127.0.0.1:${port}`).getPlayInfo('item-1');
+    const result = await nasClient(nasContext(), `https://127.0.0.1:${port}`).getPlayInfo('item-1');
 
     assert.equal(result.ok, false);
     assert.equal(result.failure.kind, 'https-port-mismatch');
@@ -361,33 +361,62 @@ test('asking an HTTP port over HTTPS is reported as an HTTPS port mismatch witho
 test('an fnAPI error is reported as a plain failure carrying the NAS message', async (t) => {
     withoutElectron(t);
     const nas = await nasAnswering(t, 'application/json', JSON.stringify({ code: 1001, msg: 'item not found', data: null }));
-    const baseUrl = nas.baseUrl;
-
-    const result = await nasClient(t, nasContext(), baseUrl).getPlayInfo('item-1');
+    const result = await nasClient(nasContext(), nas.baseUrl).getPlayInfo('item-1');
 
     assert.deepEqual(result, { ok: false, failure: { kind: 'failed', message: 'item not found' } });
 });
 
-test('a call redirected to another NAS address reports where it ended up, a redirect within the same address does not', async (t) => {
-    withoutElectron(t);
-    const targetPort = await listen(t, http.createServer((req, res) => {
+function playInfoNas() {
+    return http.createServer((req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ code: 0, msg: '', data: { guid: 'item-1' } }));
-    }));
-    const target = `http://localhost:${targetPort}`;
-    const moved = await listen(t, http.createServer((req, res) => {
+    });
+}
+
+function redirectingTo(location) {
+    return http.createServer((req, res) => {
         res.statusCode = 302;
-        res.setHeader('Location', `${target}${req.url}`);
+        res.setHeader('Location', location(req));
         res.end();
-    }));
-    const sameAddress = await redirectingNas(t, 2);
+    });
+}
 
-    const movedResult = await nasClient(t, nasContext(), `http://127.0.0.1:${moved}`).getPlayInfo('item-1');
-    const sameResult = await nasClient(t, nasContext(), sameAddress.baseUrl).getEpisodeList('hop/2');
+test('a call redirected to another NAS address reports where it ended up', async (t) => {
+    withoutElectron(t);
+    const target = `http://localhost:${await listen(t, playInfoNas())}`;
+    const source = `http://127.0.0.1:${await listen(t, redirectingTo((req) => `${target}${req.url}`))}`;
 
-    assert.deepEqual(movedResult, { ok: true, data: { guid: 'item-1' }, movedTo: target });
-    assert.equal(sameResult.ok, true);
-    assert.equal('movedTo' in sameResult, false);
+    const result = await nasClient(nasContext(), source).getPlayInfo('item-1');
+
+    assert.deepEqual(result, { ok: true, data: { guid: 'item-1' }, movedTo: target });
+});
+
+test('a call redirected within the same NAS address, or away and back to it, does not report a move', async (t) => {
+    withoutElectron(t);
+    let detour = '';
+    const routes = {
+        '/v/api/v1/play/info': () => '/moved/play/info',
+        '/v/api/v1/stream/list/item-1': () => `${detour}/back`,
+    };
+    const nas = http.createServer((req, res) => {
+        const next = routes[req.url];
+        if (next) {
+            res.statusCode = 302;
+            res.setHeader('Location', next());
+            res.end();
+            return;
+        }
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ code: 0, msg: '', data: { guid: 'item-1' } }));
+    });
+    const source = `http://127.0.0.1:${await listen(t, nas)}`;
+    detour = `http://localhost:${await listen(t, redirectingTo(() => `${source}/answer`))}`;
+
+    const sameAddress = await nasClient(nasContext(), source).getPlayInfo('item-1');
+    const awayAndBack = await nasClient(nasContext(), source).getStreamList('item-1');
+
+    assert.deepEqual(sameAddress, { ok: true, data: { guid: 'item-1' } });
+    assert.deepEqual(awayAndBack, { ok: true, data: { guid: 'item-1' } });
 });
 
 test('a token check asks the NAS once and reports whether the token was accepted', async (t) => {
