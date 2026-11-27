@@ -1,6 +1,6 @@
 import { net, type Session } from 'electron';
 import { clearAccessGrants, setAccessGrant } from '../../modules/fn_api/accessGrant';
-import { gatewaySession as webUiGatewaySession } from './webUiSession';
+import * as webUiSession from './webUiSession';
 
 const MAX_REDIRECTS = 5;
 const REJECTED_STATUS_CODES = new Set([401, 403, 429]);
@@ -140,7 +140,7 @@ export const requestAccessCode: GatewayRequester = (gatewaySession, url, headers
 export async function establishAccessCodeSession(
     baseUrl: string,
     accessCode: string,
-    gatewaySession: GatewaySession = webUiGatewaySession() as unknown as GatewaySession,
+    gatewaySession: GatewaySession = webUiSession.gatewaySession() as unknown as GatewaySession,
     requester: GatewayRequester = requestAccessCode,
 ): Promise<AccessCodeSessionResult> {
     const initialUrl = parseBaseUrl(baseUrl);

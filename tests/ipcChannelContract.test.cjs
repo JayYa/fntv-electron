@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { useFakeElectron } = require('./helpers/fakeElectron.cjs');
 
 const root = path.join(__dirname, '..');
 
@@ -38,11 +40,33 @@ const loginPageReceives = loginPageUses('(?:on|once|off)');
 const preload = sourceFiles('src/preload', '.ts');
 const webUiUses = (method) => channels(preload, new RegExp(`ipcRenderer\\.${method}\\('([a-z-]+)'`, 'g'));
 
-const main = sourceFiles('src/main', '.ts');
-const handled = channels(main, /registerHandler\('([a-z-]+)',[^)\n]*useHandle: true/g);
-const registered = channels(main, /registerHandler\('([a-z-]+)'/g);
-const listened = new Set(sorted(registered).filter((channel) => !handled.has(channel)));
-const mainSends = channels(main, /(?:event\.reply|webContents\.send)\('([a-z-]+)'/g);
+const mainSends = channels(sourceFiles('src/main', '.ts'), /(?:event\.reply|webContents\.send)\('([a-z-]+)'/g);
+
+function registerMainHandlers(t) {
+    const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'fntv-ipc-contract-'));
+    t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
+    t.mock.timers.enable({ apis: ['setInterval'] });
+    const listened = new Set();
+    const handled = new Set();
+    useFakeElectron(t, {
+        app: {
+            getPath: () => testRoot,
+            getAppPath: () => testRoot,
+            getVersion: () => '0.0.0',
+            getName: () => 'fntv',
+            on() {},
+            isPackaged: false,
+            setPath() {},
+            commandLine: { getSwitchValue: () => '' },
+        },
+        ipcMain: { on: (channel) => listened.add(channel), handle: (channel) => handled.add(channel), removeAllListeners() {} },
+        session: {
+            fromPartition: () => ({ webRequest: { onBeforeRequest() {} }, getCacheSize: async () => 0, clearCache: async () => {} }),
+        },
+    });
+    require('../dest/main/handlers/index.js').registerAllPlugins();
+    return { listened, handled };
+}
 
 const sent = new Set([...loginPageSends, ...webUiUses('send')]);
 const invoked = new Set([...loginPageInvokes, ...webUiUses('invoke')]);
@@ -54,12 +78,14 @@ test('the preload allow lists hold exactly the channels the login page uses', ()
     assert.deepEqual(sorted(allowList('RECEIVE_CHANNELS')), sorted(loginPageReceives));
 });
 
-test('every channel a page sends or invokes has a main process handler of the matching kind', () => {
+test('every channel a page sends or invokes has a main process handler of the matching kind', (t) => {
+    const { listened, handled } = registerMainHandlers(t);
     assert.deepEqual(missing(sent, listened), []);
     assert.deepEqual(missing(invoked, handled), []);
 });
 
-test('every main process handler is reached by a page', () => {
+test('every main process handler is reached by a page', (t) => {
+    const { listened, handled } = registerMainHandlers(t);
     assert.deepEqual(missing(listened, sent), []);
     assert.deepEqual(missing(handled, invoked), []);
 });
