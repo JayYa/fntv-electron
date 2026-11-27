@@ -31,7 +31,7 @@ export async function handleGetSkipInfo(
 
     deps.log.info(`开始获取跳过片头片尾信息: itemGuid=${itemGuid}`);
     const info = await sessionApiClient(session, deps).getPlayInfo(itemGuid);
-    if (!info.success) {
+    if (!info.ok) {
         deps.log.error('获取跳过片头片尾信息失败');
         sendError(res, 500, 'Failed to get skip info');
         return;
@@ -104,7 +104,7 @@ export async function handleSetSkipInfo(
 
     const api = sessionApiClient(session, deps);
     const info = await api.getPlayInfoCached(body.guid);
-    if (!info.success) {
+    if (!info.ok) {
         deps.log.error('获取播放信息缓存失败');
         sendError(res, 500, 'Failed to get play info cache');
         return;
@@ -113,7 +113,7 @@ export async function handleSetSkipInfo(
 
     deps.log.info(`开始设置跳过片头片尾信息: parentGuid=${parentGuid}, skipStart=${body.skipStart}, skipEnd=${body.skipEnd}`);
     const written = await api.setSkipInfo(parentGuid, body.skipStart, body.skipEnd);
-    if (!written.success) {
+    if (!written.ok) {
         deps.log.error('设置跳过片头片尾信息失败');
         sendError(res, 500, 'Failed to set skip info');
         return;

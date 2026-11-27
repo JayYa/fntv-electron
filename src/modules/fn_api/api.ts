@@ -1,5 +1,3 @@
-import * as fn from "./request";
-import { HttpMethod } from "./request";
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
@@ -7,6 +5,15 @@ import * as log from '../logger';
 import * as types from './core/types';
 import { TtlCache } from './core/ttlCache';
 import { FnApiClient } from './core/apiClient';
+import { RequestContext } from './core/request';
+import { isTrusted } from '../cert_trust';
+import { getAccessCookieHeader } from './accessGrant';
+
+const mainContext: RequestContext = {
+    accessCookie: getAccessCookieHeader,
+    skipVerify: isTrusted,
+    log,
+};
 
 const apiServiceCache = new TtlCache({ defaultTtl: 300 });
 
@@ -14,7 +21,7 @@ export class ApiService extends FnApiClient {
     private tempDir: string;
 
     constructor(baseURL: string, token: string = '', subtitleDir: string = path.join(app.getPath('temp'), 'fntv_subtitles')) {
-        super(fn.mainContext, baseURL, token, apiServiceCache);
+        super(mainContext, baseURL, token, apiServiceCache);
         this.tempDir = subtitleDir;
 
         this.downloadSubtitle = this.downloadSubtitle.bind(this);
@@ -53,72 +60,26 @@ export class ApiService extends FnApiClient {
         }
     }
 
-    login(username: string, password: string): Promise<fn.ApiResponse<any>> {
-        return fn.request(this.baseURL, '/v/api/v1/login', HttpMethod.POST, this.token, {
-            app_name: "trimemedia-web",
-            username: username,
-            password: password,
-        } as types.LoginData);
-    }
-
-    getSysConfig(): Promise<fn.ApiResponse<types.SysConfigResponse>> {
-        return fn.request(this.baseURL, '/v/api/v1/sys/config', HttpMethod.GET, this.token);
-    }
-
-    auth(code: string): Promise<fn.ApiResponse<types.AuthResponse>> {
-        return fn.request(this.baseURL, '/v/api/v1/auth', HttpMethod.POST, this.token, {
-            source: "Trim-NAS",
-            code: code,
-        } as types.AuthRequest);
-    }
-
-    logout(): Promise<fn.ApiResponse<any>> {
-        return fn.request(this.baseURL, '/v/api/v1/logout', HttpMethod.POST, this.token);
-    }
-
-    getUserInfo(timeout?: number, tryTimes?: number): Promise<fn.ApiResponse<types.UserInfo>> {
-        return fn.request(this.baseURL, '/v/api/v1/user/info', HttpMethod.GET, this.token, undefined, undefined, undefined, timeout, tryTimes);
-    }
-
-    getEpisodeListCached = this.createCachedFunction(this.getEpisodeList.bind(this), 'getEpisodeList', 600);
-
-    getEpisodeList(id: string): Promise<fn.ApiResponse<types.PlayListItem[]>> {
-        return fn.request(this.baseURL, `/v/api/v1/episode/list/${id}`, HttpMethod.GET, this.token);
-    }
-
-    getItemList(req: types.ItemListRequest): Promise<fn.ApiResponse<types.ItemListResponse>> {
-        return fn.request(this.baseURL, '/v/api/v1/item/list', HttpMethod.POST, this.token, req);
-    }
-
-    getItemListCached = this.createCachedFunction(this.getItemList.bind(this), 'getItemList', 600);
-
     async getSubtitle(itemGuid: string): Promise<types.Subtitle[]> {
-        try {
-            const response = await this.getStreamList(itemGuid);
-
-            if (response.success && response.data) {
-                const streams = response.data.subtitle_streams || [];
-                const subtitles: types.Subtitle[] = streams.filter(stream => stream.is_external).map(stream => ({
-                    id: stream.guid,
-                    format: stream.format,
-                    name: stream.title
-                }));
-
-                if (subtitles.length > 0) {
-                    log.info('获取到字幕文件:', subtitles);
-                    return subtitles;
-                } else {
-                    log.info('没有找到字幕文件');
-                    return [];
-                }
-            } else {
-                log.error('获取字幕列表失败:', response.message);
-                return [];
-            }
-        } catch (error) {
-            log.error('获取字幕列表时发生错误:', error);
+        const response = await this.getStreamList(itemGuid);
+        if (!response.ok) {
+            log.error('获取字幕列表失败:', response.failure.message);
             return [];
         }
+
+        const streams = response.data.subtitle_streams || [];
+        const subtitles: types.Subtitle[] = streams.filter(stream => stream.is_external).map(stream => ({
+            id: stream.guid,
+            format: stream.format,
+            name: stream.title
+        }));
+
+        if (subtitles.length === 0) {
+            log.info('没有找到字幕文件');
+            return [];
+        }
+        log.info('获取到字幕文件:', subtitles);
+        return subtitles;
     }
 
     async downloadSubtitle(subs: types.Subtitle[]): Promise<string[]> {
@@ -138,28 +99,21 @@ export class ApiService extends FnApiClient {
                 return Promise.resolve({ id, filePath, status: 'skipped' } as types.SubtitleDownloadResult);
             }
 
-            return fn.requestRaw(this.baseURL, `/v/api/v1/subtitle/dl/${id}`, HttpMethod.GET, this.token)
+            return this.getSubtitleFile(id)
                 .then(response => {
-                    if (response.success && response.data) {
+                    if (response.ok) {
                         return fs.promises.writeFile(filePath, response.data)
                             .then(() => {
                                 log.info(`✅ 字幕文件已下载到: ${filePath}`);
                                 return { id, filePath, status: 'downloaded' } as types.SubtitleDownloadResult;
                             });
                     } else {
-                        log.error(`❌ 服务端错误: ${response.message} (ID: ${id})`);
-                        return { id, filePath, status: 'failed', error: `HTTP ${response.message}` } as types.SubtitleDownloadResult;
+                        log.error(`❌ 服务端错误: ${response.failure.message} (ID: ${id})`);
+                        return { id, filePath, status: 'failed', error: `HTTP ${response.failure.message}` } as types.SubtitleDownloadResult;
                     }
                 })
                 .catch((error: any) => {
-                    let errorMsg = '未知错误';
-                    if (error.response) {
-                        errorMsg = `服务端错误: ${error.response.status}`;
-                    } else if (error.request) {
-                        errorMsg = '网络错误: 无响应';
-                    } else {
-                        errorMsg = `请求错误: ${error.message}`;
-                    }
+                    const errorMsg = `写入失败: ${error.message}`;
                     log.error(`❌ ID ${id} 下载失败: ${errorMsg}`);
                     return { id, filePath, status: 'failed', error: errorMsg } as types.SubtitleDownloadResult;
                 });
@@ -187,17 +141,4 @@ export class ApiService extends FnApiClient {
         log.info('成功下载的字幕文件:', successfulDownloads);
         return successfulDownloads;
     }
-
-    setWatched(itemGuid: string): Promise<fn.ApiResponse<any>> {
-        return fn.request(this.baseURL, '/v/api/v1/item/watched', HttpMethod.POST, this.token, {
-            item_guid: itemGuid,
-        } as types.WatchedData);
-    }
-
-    savePlayRecord(record: types.PlayRecord): Promise<fn.ApiResponse<any>> {
-        return fn.request(this.baseURL, '/v/api/v1/play/record', HttpMethod.POST, this.token, record);
-    }
-
-    getUserInfoCached = this.createCachedFunction(this.getUserInfo.bind(this), 'getUserInfo', 600);
-
 }

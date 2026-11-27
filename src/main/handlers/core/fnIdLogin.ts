@@ -305,8 +305,7 @@ class FnIdLogin {
             }
 
             const target = await verifyAccess(resolveFnConnectBaseUrl(currentUrl, this.fnConnectUrl), this.accessCode);
-            const verification = await new ApiService(target.baseUrl, tokenCookie.value).getUserInfo(5000, 0);
-            if (!verification?.success) {
+            if (!await new ApiService(target.baseUrl, tokenCookie.value).tokenAccepted()) {
                 log.info('[FN ID] 当前 Cookie 不是可用的媒体 token，继续 OAuth 流程');
                 return;
             }
