@@ -105,8 +105,7 @@ interface LoginSteps {
 }
 
 async function savedTokenAccepted(baseUrl: string, token: string): Promise<boolean> {
-    const response = await new ApiService(baseUrl, token).getUserInfo(5000, 0);
-    return Boolean(response?.success);
+    return new ApiService(baseUrl, token).tokenAccepted();
 }
 
 async function establish(windowForWebUi: () => LoginWindow, steps: LoginSteps): Promise<LoginResult> {

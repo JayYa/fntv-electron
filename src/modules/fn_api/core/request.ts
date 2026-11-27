@@ -9,13 +9,18 @@ import { isHttpsPortMismatch } from './httpsPortMismatch';
 const api_key = 'NDzZTVxnRKP8Z0jXg1VAMonaG8akvh';
 const api_secret = '16CCEB3D-AB42-077D-36A1-F355324E4237';
 
-export interface ApiResponse<T = any> {
-    success: boolean;
-    data?: T;
-    message?: string;
-    certificateError?: boolean;
-    moveUrl?: string;
+export type FnApiFailureKind = 'certificate' | 'https-port-mismatch' | 'failed';
+
+export interface FnApiFailure {
+    kind: FnApiFailureKind;
+    message: string;
 }
+
+export type FnApiResult<T = any> =
+    | { ok: true; data: T; movedTo?: string }
+    | { ok: false; failure: FnApiFailure };
+
+const failed = (message: string): FnApiResult<never> => ({ ok: false, failure: { kind: 'failed', message } });
 
 export interface FnApiResponseData<T = any> {
     code: number;
@@ -105,20 +110,29 @@ function fnApiBody<T>(body: FnApiResponseData<T> | string): Partial<FnApiRespons
 
 export type ResponseExpectation = 'json' | 'raw';
 
-export function request<T = any>(
-    context: RequestContext,
-    baseUrl: string,
-    url: string,
-    method: HttpMethod,
-    token: string,
-    data?: any,
-    extraHeaders?: Record<string, string>,
-    axiosConfig?: Record<string, any>,
-    timeout: number = DEFAULT_TIMEOUT,
-    tryTimes: number = 5,
-    expect: ResponseExpectation = 'json',
-): Promise<ApiResponse<T>> {
-    return followingRedirects<T>(context, baseUrl, url, method, token, data, extraHeaders, axiosConfig, timeout, tryTimes, expect, MAX_REDIRECTS);
+export interface FnApiRequest {
+    baseUrl: string;
+    path: string;
+    method: HttpMethod;
+    token: string;
+    data?: any;
+    cookie?: string;
+    timeout?: number;
+    retries?: number;
+    expect?: ResponseExpectation;
+}
+
+export function request<T = any>(context: RequestContext, req: FnApiRequest): Promise<FnApiResult<T>> {
+    return followingRedirects<T>(context, {
+        timeout: DEFAULT_TIMEOUT,
+        retries: 5,
+        expect: 'json',
+        ...req,
+    }, MAX_REDIRECTS);
+}
+
+function originOf(baseUrl: string): string {
+    return new URL(baseUrl).origin;
 }
 
 function describeOriginChange(from: string, to: string): string {
@@ -134,20 +148,14 @@ function describeOriginChange(from: string, to: string): string {
 
 async function followingRedirects<T>(
     context: RequestContext,
-    baseUrl: string,
-    url: string,
-    method: HttpMethod,
-    token: string,
-    data: any,
-    extraHeaders: Record<string, string> | undefined,
-    axiosConfig: Record<string, any> | undefined,
-    timeout: number,
-    tryTimes: number,
-    expect: ResponseExpectation,
+    req: Required<Omit<FnApiRequest, 'data' | 'cookie'>> & Pick<FnApiRequest, 'data' | 'cookie'>,
     redirectsLeft: number,
-): Promise<ApiResponse<T>> {
-    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+): Promise<FnApiResult<T>> {
+    const { method, token, timeout, retries, expect } = req;
+    const url = req.path;
+    const normalizedBaseUrl = req.baseUrl.replace(/\/+$/, '');
     const fullUrl = normalizedBaseUrl + url;
+    let data = req.data;
     if (method === HttpMethod.POST || method === HttpMethod.PUT) {
         data = data || {};
         data["nonce"] = generateRandomDigits();
@@ -159,8 +167,7 @@ async function followingRedirects<T>(
         "Content-Type": "application/json",
         "Authorization": token,
         "Authx": authx,
-        ...extraHeaders,
-        "Cookie": composeCookieHeader(context.accessCookie(normalizedBaseUrl), extraHeaders?.Cookie),
+        "Cookie": composeCookieHeader(context.accessCookie(normalizedBaseUrl), req.cookie),
     };
 
     const shouldIgnoreCert = context.skipVerify(normalizedBaseUrl);
@@ -172,7 +179,6 @@ async function followingRedirects<T>(
         validateStatus: (status: number) => status >= 200 && status < 400,
         httpsAgent: httpsAgent(!shouldIgnoreCert, context.ca, timeout),
         ...(expect === 'raw' ? { responseType: 'text' as const } : {}),
-        ...axiosConfig
     };
 
     for (let attempt = 0; ; attempt++) {
@@ -192,7 +198,7 @@ async function followingRedirects<T>(
 
                 if (location) {
                     if (redirectsLeft <= 0) {
-                        return { success: false, message: `重定向次数过多（超过 ${MAX_REDIRECTS} 次）` };
+                        return failed(`重定向次数过多（超过 ${MAX_REDIRECTS} 次）`);
                     }
 
                     let newBaseUrl = normalizedBaseUrl;
@@ -206,25 +212,15 @@ async function followingRedirects<T>(
                     const hop = MAX_REDIRECTS - redirectsLeft + 1;
                     context.log.warn(`检测到重定向 (${response.status})，第 ${hop} 次，${describeOriginChange(normalizedBaseUrl, newBaseUrl)}`);
 
-                    const recursiveResult = await followingRedirects<T>(
+                    const followed = await followingRedirects<T>(
                         context,
-                        newBaseUrl,
-                        newUrlPath,
-                        method,
-                        token,
-                        data,
-                        extraHeaders,
-                        axiosConfig,
-                        timeout,
-                        tryTimes,
-                        expect,
-                        redirectsLeft - 1
+                        { ...req, baseUrl: newBaseUrl, path: newUrlPath, data },
+                        redirectsLeft - 1,
                     );
-
-                    return {
-                        ...recursiveResult,
-                        moveUrl: recursiveResult.moveUrl || newBaseUrl
-                    };
+                    if (!followed.ok || followed.movedTo || originOf(newBaseUrl) === originOf(normalizedBaseUrl)) {
+                        return followed;
+                    }
+                    return { ...followed, movedTo: newBaseUrl };
                 }
                 context.log.warn(`检测到重定向 (${response.status})，但响应没有 Location`);
             }
@@ -232,19 +228,16 @@ async function followingRedirects<T>(
             const contentType = response.headers['content-type'];
             if (typeof contentType !== 'string' || !contentType.includes('application/json')) {
                 if (expect === 'raw') {
-                    return { success: true, data: response.data as any };
+                    return { ok: true, data: response.data as any };
                 }
-                return { success: false, message: `响应不是 JSON（HTTP ${response.status}，Content-Type: ${contentType ?? '缺失'}）` };
+                return failed(`响应不是 JSON（HTTP ${response.status}，Content-Type: ${contentType ?? '缺失'}）`);
             }
 
             const res = fnApiBody<T>(response.data);
 
             if (res.code === 5000 && res.msg === 'invalid sign') {
-                if (attempt >= tryTimes) {
-                    return {
-                        success: false,
-                        message: `尝试次数过多 try_times = ${attempt + 1}`
-                    };
+                if (attempt >= retries) {
+                    return failed(`尝试次数过多 try_times = ${attempt + 1}`);
                 }
 
                 context.log.warn(`fn_api 请求时签名错误，重试中 attempt = ${attempt + 1}, path: ${url}`);
@@ -254,13 +247,10 @@ async function followingRedirects<T>(
 
             if (res.code !== 0) {
                 context.log.error(`fn_api 请求失败`, res);
-                return { success: false, message: res.msg || `HTTP Error ${response.status}` };
+                return failed(res.msg || `HTTP Error ${response.status}`);
             }
 
-            return {
-                success: true,
-                data: res.data
-            };
+            return { ok: true, data: res.data as T };
 
         } catch (error: any) {
             const errorCode = error.code || 'UNKNOWN';
@@ -271,16 +261,15 @@ async function followingRedirects<T>(
 
             if (isCertificateError(error) && !context.skipVerify(normalizedBaseUrl)) {
                 context.log.warn(`检测到证书验证错误: code: ${errorCode}, msg: ${errorMsg}, path: ${url}`);
-
-                return {
-                    success: false,
-                    message: errorMsg,
-                    certificateError: true
-                } as ApiResponse<T> & { certificateError?: boolean };
+                return { ok: false, failure: { kind: 'certificate', message: errorMsg } };
             }
 
-            if (attempt >= tryTimes || isHttpsPortMismatch(errorMsg)) {
-                return { success: false, message: errorMsg };
+            if (isHttpsPortMismatch(errorMsg)) {
+                return { ok: false, failure: { kind: 'https-port-mismatch', message: errorMsg } };
+            }
+
+            if (attempt >= retries) {
+                return failed(errorMsg);
             }
 
             await setTimeout(100);

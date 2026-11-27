@@ -57,7 +57,7 @@ export async function handlePlayVideo(
 
     const api = sessionApiClient(session, deps);
     const list = await api.getStreamListCached(itemGuid);
-    const videoStreams = list.success ? list.data?.video_streams ?? [] : [];
+    const videoStreams = list.ok ? list.data?.video_streams ?? [] : [];
     if (videoStreams.length === 0) {
         deps.log.error('获取播放信息失败或为空');
         sendJson(res, 500, { error: 'Failed to get play info' });
@@ -69,7 +69,7 @@ export async function handlePlayVideo(
         : videoStreams[0].media_guid;
 
     const stream = await api.getStreamCached(mediaGuid, stringToUuid(session.account));
-    if (!stream.success) {
+    if (!stream.ok) {
         deps.log.error('获取视频流失败');
         sendJson(res, 500, { error: 'Failed to get stream' });
         return;

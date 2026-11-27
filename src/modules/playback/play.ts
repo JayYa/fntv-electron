@@ -1,5 +1,6 @@
 import type { ApiService } from '../fn_api/api';
 import type { ItemListRequest, PlayInfo, PlayListItem, PlayRecord } from '../fn_api/core/types';
+import type { FnApiResult } from '../fn_api/core/request';
 import { EventHandler, EventType, Player, PlayerEvent, PlayExitData, PlayItem, PlayStatusData } from '../players/types';
 import * as log from '../logger';
 import { isNearEnd, resumePosition } from './nearEnd';
@@ -38,8 +39,8 @@ async function startPlayback(deps: PlayDeps, { id, sourceIndex, restart }: PlayR
     const { fnapi, openPlaybackSession } = await deps.connect();
 
     const response = await fnapi.getPlayInfo(id);
-    if (!response.success || !response.data) {
-        log.error('获取播放信息失败:', response ? response.message : '未知错误');
+    if (!response.ok || !response.data) {
+        log.error('获取播放信息失败:', failureMessage(response));
         return;
     }
     const info = response.data;
@@ -88,8 +89,8 @@ async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[]
     if (info.type === 'Episode' && info.parent_guid) {
         log.info('当前为剧集，尝试获取系列下的所有剧集进行播放');
         const episodeList = await fnapi.getEpisodeList(info.parent_guid);
-        if (!episodeList.success || !episodeList.data) {
-            log.error('获取剧集列表失败:', episodeList ? episodeList.message : '未知错误');
+        if (!episodeList.ok || !episodeList.data) {
+            log.error('获取剧集列表失败:', failureMessage(episodeList));
             return [];
         }
         return episodeList.data.map(fromListItem);
@@ -104,8 +105,8 @@ async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[]
             sort_type: 'ASC',
         };
         const mediaList = await fnapi.getItemList(req);
-        if (!mediaList.success || !mediaList.data || !mediaList.data.list) {
-            log.error('获取媒体列表失败:', mediaList ? mediaList.message : '未知错误');
+        if (!mediaList.ok || !mediaList.data?.list) {
+            log.error('获取媒体列表失败:', failureMessage(mediaList));
             return [];
         }
         log.info(`获取媒体列表成功，共 ${mediaList.data.list.length} 项`);
@@ -122,6 +123,10 @@ async function buildPlayList(fnapi: PlayApi, info: PlayInfo): Promise<PlayItem[]
         duration: info.item.duration,
         playLink: '',
     }];
+}
+
+function failureMessage(result: FnApiResult): string {
+    return result.ok ? '服务端没有返回数据' : result.failure.message;
 }
 
 function fromListItem(item: PlayListItem): PlayItem {
@@ -151,39 +156,30 @@ function buildPlayRecord(fnapi: PlayApi, info: PlayInfo, itemGuid: string, ts: n
 }
 
 async function reportPlayRecord(fnapi: PlayApi, status: PlayStatusData): Promise<boolean> {
-    try {
-        const resp = await fnapi.getPlayInfoCached(status.itemGuid);
-        if (!resp.success || !resp.data) {
-            log.error('获取播放信息失败:', resp ? resp.message : '未知错误');
-            return false;
-        }
-
-        const record = buildPlayRecord(fnapi, resp.data, status.itemGuid, status.ts, status.duration);
-        log.info('播放进度更新:', { item_guid: record.item_guid, ts: record.ts, duration: record.duration });
-
-        const recorded = await fnapi.savePlayRecord(record);
-        if (!recorded.success) {
-            log.error('回传播放进度失败:', recorded.message || '未知错误');
-            return false;
-        }
-        return true;
-    } catch (err) {
-        log.error('回传播放进度异常:', err instanceof Error ? err.message : String(err));
+    const resp = await fnapi.getPlayInfoCached(status.itemGuid);
+    if (!resp.ok || !resp.data) {
+        log.error('获取播放信息失败:', failureMessage(resp));
         return false;
     }
+
+    const record = buildPlayRecord(fnapi, resp.data, status.itemGuid, status.ts, status.duration);
+    log.info('播放进度更新:', { item_guid: record.item_guid, ts: record.ts, duration: record.duration });
+
+    const recorded = await fnapi.savePlayRecord(record);
+    if (!recorded.ok) {
+        log.error('回传播放进度失败:', recorded.failure.message);
+        return false;
+    }
+    return true;
 }
 
 async function clearPlayRecord(fnapi: PlayApi, info: PlayInfo, duration: number): Promise<void> {
-    try {
-        const record = buildPlayRecord(fnapi, info, info.guid, 0, duration);
-        log.info('从头播放，清零服务端播放进度:', { item_guid: record.item_guid, duration: record.duration });
+    const record = buildPlayRecord(fnapi, info, info.guid, 0, duration);
+    log.info('从头播放，清零服务端播放进度:', { item_guid: record.item_guid, duration: record.duration });
 
-        const recorded = await fnapi.savePlayRecord(record);
-        if (!recorded.success) {
-            log.warn('清零播放进度失败:', recorded.message || '未知错误');
-        }
-    } catch (err) {
-        log.warn('清零播放进度异常:', err instanceof Error ? err.message : String(err));
+    const recorded = await fnapi.savePlayRecord(record);
+    if (!recorded.ok) {
+        log.warn('清零播放进度失败:', recorded.failure.message);
     }
 }
 
@@ -198,16 +194,12 @@ async function finishPlayItem(fnapi: PlayApi, status: PlayStatusData): Promise<v
         return;
     }
 
-    try {
-        const watchedResp = await fnapi.setWatched(status.itemGuid);
-        if (!watchedResp.success) {
-            log.error('标记已观看失败:', watchedResp.message || '未知错误');
-            return;
-        }
-        log.info('已标记为已观看:', status.itemGuid);
-    } catch (err) {
-        log.error('标记已观看异常:', err instanceof Error ? err.message : String(err));
+    const watchedResp = await fnapi.setWatched(status.itemGuid);
+    if (!watchedResp.ok) {
+        log.error('标记已观看失败:', watchedResp.failure.message);
+        return;
     }
+    log.info('已标记为已观看:', status.itemGuid);
 }
 
 function eventHandler(deps: PlayDeps, fnapi: PlayApi, run: PlaybackRun) {

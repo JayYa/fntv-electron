@@ -1,6 +1,5 @@
 import { BrowserWindow, CookiesSetDetails } from 'electron';
 import { ApiService } from '../../../modules/fn_api/api';
-import { request, HttpMethod } from '../../../modules/fn_api/request';
 import * as log from '../../../modules/logger';
 import { type GrantedBaseUrl, verifyAccess } from '../../common/currentLogin';
 
@@ -52,8 +51,8 @@ export class FnIdOauthHandshake {
             log.error('[FN ID] Token 交换失败:', err);
             throw err;
         }
-        if (!authResponse || !authResponse.success || !authResponse.data?.token) {
-            const msg = authResponse?.message || '换取 token 失败';
+        if (!authResponse.ok || !authResponse.data?.token) {
+            const msg = authResponse.ok ? '换取 token 失败' : authResponse.failure.message;
             log.error(`[FN ID] 授权失败: ${msg}`);
             throw new Error(msg);
         }
@@ -109,16 +108,9 @@ export class FnIdOauthHandshake {
 
         const parsed = new URL(currentUrl);
         const currentBaseUrl = `${parsed.protocol}//${parsed.host}`;
-        const configResponse = await request(
-            currentBaseUrl,
-            '/v/api/v1/sys/config',
-            HttpMethod.GET,
-            '',
-            undefined,
-            { 'Cookie': cookie + '; mode=relay' },
-        );
+        const configResponse = await new ApiService(currentBaseUrl).getSysConfig(cookie);
 
-        const oauth = configResponse.success ? (configResponse.data as any)?.nas_oauth : undefined;
+        const oauth = configResponse.ok ? configResponse.data?.nas_oauth : undefined;
         if (oauth && oauth.app_id) {
             this.oauthBaseUrl = this.adoptOauthBaseUrl(oauth.url || '', currentBaseUrl);
             log.info('[FN ID] 通过 API 获取 OAuth 配置，跳转到授权页面');

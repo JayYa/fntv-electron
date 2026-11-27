@@ -36,22 +36,22 @@ function fakeFnMedia({ info = playInfo(), episodes = [listItem('ep-1'), listItem
     const fnMedia = {
         writes,
         stored: {},
-        saveResult: async () => ({ success: true }),
+        saveResult: async () => ({ ok: true }),
         api: {
-            getPlayInfo: async () => ({ success: true, data: info }),
-            getPlayInfoCached: async (guid) => ({ success: true, data: { ...info, guid, media_guid: `media-${guid}` } }),
-            getEpisodeList: async () => ({ success: true, data: episodes }),
-            getItemList: async () => ({ success: true, data: { list: items } }),
+            getPlayInfo: async () => ({ ok: true, data: info }),
+            getPlayInfoCached: async (guid) => ({ ok: true, data: { ...info, guid, media_guid: `media-${guid}` } }),
+            getEpisodeList: async () => ({ ok: true, data: episodes }),
+            getItemList: async () => ({ ok: true, data: { list: items } }),
             savePlayRecord: async (record) => {
                 writes.push(['savePlayRecord', record.item_guid, record.ts]);
                 fnMedia.lastRecord = record;
                 const result = await fnMedia.saveResult(record);
-                if (result.success) fnMedia.stored[record.item_guid] = record.ts;
+                if (result.ok) fnMedia.stored[record.item_guid] = record.ts;
                 return result;
             },
             setWatched: async (guid) => {
                 writes.push(['setWatched', guid]);
-                return { success: true };
+                return { ok: true };
             },
             getVideoUrl: (mediaGuid) => `https://nas.example:5666/v/api/v1/media/${mediaGuid}`,
             getSubtitle: async () => [],
@@ -156,7 +156,7 @@ test('restart clears the play record before playing and does not resume', async 
 
 test('restart still plays when clearing the play record fails', async (t) => {
     const fnMedia = fakeFnMedia();
-    fnMedia.saveResult = async () => { throw new Error('network down'); };
+    fnMedia.saveResult = async () => ({ ok: false, failure: { kind: 'failed', message: 'network down' } });
     const world = setup(t, { fnMedia });
     await world.play({ id: 'ep-2', restart: true });
 
@@ -211,7 +211,7 @@ test('leaving a play item near end reports its progress, then marks it watched',
 
 test('a play item is marked watched near end even when reporting its progress fails', async (t) => {
     const fnMedia = fakeFnMedia();
-    fnMedia.saveResult = async () => ({ success: false, message: 'busy' });
+    fnMedia.saveResult = async () => ({ ok: false, failure: { kind: 'failed', message: 'busy' } });
     const world = setup(t, { fnMedia });
     await world.play({ id: 'ep-2' });
 
@@ -228,7 +228,7 @@ test('the playback run ends only after the exit progress report has finished', a
     t.after(playbackState.onPlaybackEnded(() => ended.push('ended')));
 
     const saved = deferred();
-    fnMedia.saveResult = () => saved.promise.then(() => ({ success: true }));
+    fnMedia.saveResult = () => saved.promise.then(() => ({ ok: true }));
     world.players[0].exitStatus = status('ep-2', 1200);
     const stopped = playbackState.stopPlaybackAndWait();
 
@@ -247,7 +247,7 @@ function holdFirstSave(fnMedia) {
     let calls = 0;
     fnMedia.saveResult = () => {
         calls += 1;
-        return calls === 1 ? first.promise.then(() => ({ success: true })) : Promise.resolve({ success: true });
+        return calls === 1 ? first.promise.then(() => ({ ok: true })) : Promise.resolve({ ok: true });
     };
     return first;
 }
@@ -382,7 +382,7 @@ test('the playback run ends right away when MPV is not found or play info is una
     assert.equal(playbackState.isPlaying(), false);
 
     const fnMedia = fakeFnMedia();
-    fnMedia.api.getPlayInfo = async () => ({ success: false, message: 'gone' });
+    fnMedia.api.getPlayInfo = async () => ({ ok: false, failure: { kind: 'failed', message: 'gone' } });
     const noInfo = setup(t, { fnMedia });
     await noInfo.play({ id: 'ep-2' });
     assert.equal(playbackState.isPlaying(), false);

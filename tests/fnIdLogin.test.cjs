@@ -255,7 +255,7 @@ test('a token cookie and an authorization code arriving together establish the c
     await login.finishLoad(`${NAS}/v`);
     await login.bridge(sysConfig(NAS));
     const { ApiService } = require('../dest/modules/fn_api/api.js');
-    t.mock.method(ApiService.prototype, 'auth', async () => ({ success: true, data: { token: 'code-token' } }));
+    t.mock.method(ApiService.prototype, 'auth', async () => ({ ok: true, data: { token: 'code-token' } }));
 
     await Promise.all([
         login.tokenCookieChanged(),
@@ -322,7 +322,7 @@ test('an authorization code the NAS refuses fails the login and logs the refusal
     await login.bridge(sysConfig(NAS));
 
     const { ApiService } = require('../dest/modules/fn_api/api.js');
-    t.mock.method(ApiService.prototype, 'auth', async () => ({ success: false, message: '授权码已过期' }));
+    t.mock.method(ApiService.prototype, 'auth', async () => ({ ok: false, failure: { kind: 'failed', message: '授权码已过期' } }));
     const errors = [];
     t.mock.method(require('../dest/modules/logger/index.js'), 'error', (...args) => errors.push(args.join(' ')));
     await login.bridge({ type: 'Response', url: `${NAS}/oauthapi/authorize`, code: 'auth-code' });

@@ -2,7 +2,6 @@ import { IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { isLoginPage } from '../../common/loginPage';
 import { mainWindow } from '../../common/mainWindow';
 import * as fn from '../../../modules/fn_api/api';
-import { HTTPS_PORT_MISMATCH_MESSAGE, isHttpsPortMismatch } from '../../../modules/fn_api/core/httpsPortMismatch';
 import * as loginStore from '../../../modules/fn_config/loginStore';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
@@ -89,6 +88,8 @@ async function handleDeleteHistoryItem(event: IpcMainEvent, { domain, account }:
     }
 }
 
+const HTTPS_PORT_MISMATCH_MESSAGE = '无法用 HTTPS 连接到服务器，请检查 HTTPS 设置和端口。';
+
 const loginFailed = (message: string): IssuedToken => ({ error: { title: '登录失败', message } });
 
 async function requestToken(
@@ -98,21 +99,22 @@ async function requestToken(
 ): Promise<IssuedToken> {
     const response = await new fn.ApiService(baseUrl).login(loginData.username, loginData.password);
 
-    if (response?.success) {
-        const token = response.data.token;
+    if (response.ok) {
+        const token = response.data?.token;
         if (!token) {
             log.error('登录失败: 没有有效的登录信息，无法恢复 cookies');
             return loginFailed('没有有效的登录信息，无法恢复 cookies');
         }
         log.info('登录成功，已获取 token');
-        return { token, movedTo: response.moveUrl || undefined };
+        return { token, movedTo: response.movedTo };
     }
 
-    if (response?.certificateError) {
+    const { failure } = response;
+    if (failure.kind === 'certificate') {
         log.info('检测到证书验证错误，询问用户是否信任');
         const shouldTrust = await showCertificateTrustDialog(
             baseUrl,
-            response.message || '未知证书错误',
+            failure.message || '未知证书错误',
             mainWindow.window(),
         );
         if (!shouldTrust) {
@@ -130,11 +132,10 @@ async function requestToken(
         return requestToken(baseUrl, loginData, true);
     }
 
-    const msg = response ? response.message : '未知错误';
-    log.error('登录失败:', msg);
-    return loginFailed(isHttpsPortMismatch(msg)
+    log.error('登录失败:', failure.message);
+    return loginFailed(failure.kind === 'https-port-mismatch'
         ? HTTPS_PORT_MISMATCH_MESSAGE
-        : msg || '登录时发生未知错误，请稍后重试。');
+        : failure.message || '登录时发生未知错误，请稍后重试。');
 }
 
 async function handleLogin(_event: IpcMainInvokeEvent, loginData: LoginData): Promise<LoginReply> {
