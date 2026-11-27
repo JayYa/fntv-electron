@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as log from '../logger';
 import { createCertificateTrust, type RememberedHosts, type TrustAnswer } from './trust';
 
-export type { CertificateAttempt, CertificateOutcome } from './trust';
+export type { CertificateFailureReason } from './trust';
 
 let rememberedHostsCache: Set<string> | null = null;
 let fallbackWindow: () => BrowserWindow | undefined = () => undefined;
@@ -47,7 +47,7 @@ const rememberedHosts: RememberedHosts = {
 };
 
 async function showTrustDialog(host: string, error: string, origin?: WebContents): Promise<TrustAnswer> {
-    const parentWindow = (origin && BrowserWindow.fromWebContents(origin)) || fallbackWindow();
+    const parentWindow = (origin && BrowserWindow.fromWebContents(origin)) || BrowserWindow.getFocusedWindow() || fallbackWindow();
     const options: MessageBoxOptions = {
         type: 'warning',
         title: '证书安全警告',
@@ -68,11 +68,11 @@ async function showTrustDialog(host: string, error: string, origin?: WebContents
         return answer;
     } catch (dialogError) {
         log.error('显示证书信任对话框失败:', dialogError);
-        throw dialogError;
+        return { trust: false, remember: false };
     }
 }
 
-const certificateTrust = createCertificateTrust<WebContents>({ prompt: showTrustDialog, remembered: rememberedHosts });
+const certificateTrust = createCertificateTrust<WebContents>({ askUser: showTrustDialog, remembered: rememberedHosts });
 
 export const { isTrusted, confirmTrust, withCertificateTrust } = certificateTrust;
 
@@ -80,7 +80,7 @@ export function start(options: { fallbackWindow: () => BrowserWindow | undefined
     fallbackWindow = options.fallbackWindow;
     app.on('certificate-error', (event, webContents, url, error, _certificate, callback) => {
         event.preventDefault();
-        if (!isTrusted(url)) log.warn(`证书验证错误: ${url}, 错误: ${error}`);
+        if (!isTrusted(url)) log.warn('网页遇到不受信任的证书:', error);
         void confirmTrust(url, error, webContents).then(callback);
     });
 }

@@ -37,6 +37,8 @@ function setup(t, {
     let mainWindow = null;
 
     class FakeBrowserWindow extends EventEmitter {
+        static getFocusedWindow() { return null; }
+
         constructor() {
             super();
             mainWindow = this;

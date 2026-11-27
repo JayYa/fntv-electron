@@ -9,7 +9,7 @@ function world({ answers = [], remembered = [] } = {}) {
     const rememberedHosts = new Set(remembered);
     const pendingAnswers = [...answers];
     const trust = createCertificateTrust({
-        prompt: (host, error, origin) => {
+        askUser: (host, error, origin) => {
             prompts.push({ host, error, origin });
             const answer = pendingAnswers.shift() ?? 'cancel';
             return typeof answer === 'function' ? answer() : Promise.resolve(answer);
@@ -98,14 +98,6 @@ test('requests to the same host while a prompt is open share that one prompt', a
 
     assert.deepEqual(await both, [true, true]);
     assert.equal(prompts.length, 1);
-});
-
-test('a prompt that fails to show counts as cancelled, and the next request asks again', async () => {
-    const { trust, prompts } = world({ answers: [() => Promise.reject(new Error('no display')), TRUST] });
-
-    assert.equal(await trust.confirmTrust(NAS, 'error'), false);
-    assert.equal(await trust.confirmTrust(NAS, 'error'), true);
-    assert.equal(prompts.length, 2);
 });
 
 test('the prompt is told which window the request came from', async () => {

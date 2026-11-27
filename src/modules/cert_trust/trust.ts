@@ -14,10 +14,12 @@ export interface RememberedHosts {
 
 export type CertificateAttempt<T> = { ok: true; value: T } | { ok: false; certificateError: string };
 
-export type CertificateOutcome<T> = { ok: true; value: T } | { ok: false; reason: 'declined' | 'still-untrusted' };
+export type CertificateFailureReason = 'declined' | 'still-untrusted';
 
-export function createCertificateTrust<Origin>({ prompt, remembered }: {
-    prompt: TrustPrompt<Origin>;
+export type CertificateOutcome<T> = { ok: true; value: T } | { ok: false; reason: CertificateFailureReason };
+
+export function createCertificateTrust<Origin>({ askUser, remembered }: {
+    askUser: TrustPrompt<Origin>;
     remembered: RememberedHosts;
 }) {
     const trustedThisRun = new Set<string>();
@@ -29,12 +31,7 @@ export function createCertificateTrust<Origin>({ prompt, remembered }: {
     }
 
     async function ask(host: string, error: string, origin?: Origin): Promise<boolean> {
-        let answer: TrustAnswer;
-        try {
-            answer = await prompt(host, error, origin);
-        } catch {
-            return false;
-        }
+        const answer = await askUser(host, error, origin);
         if (answer.trust) trustedThisRun.add(host);
         if (answer.trust && answer.remember) remembered.add(host);
         return answer.trust;
