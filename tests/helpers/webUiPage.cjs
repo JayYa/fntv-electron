@@ -27,12 +27,12 @@ function settle() {
     return new Promise(resolve => setImmediate(resolve));
 }
 
-async function openWebUiPage(t, { url, html, mpvPlayback = true }) {
+async function openWebUiPage(t, { url, html, mpvPlayback = true, readyState = 'loading' }) {
     const window = new Window({ url });
     t.after(() => window.happyDOM.close());
     const { document } = window;
     document.body.innerHTML = html;
-    Object.defineProperty(document, 'readyState', { configurable: true, value: 'loading' });
+    Object.defineProperty(document, 'readyState', { configurable: true, value: readyState });
 
     const { sent, ipcRenderer } = fakeIpcRenderer({ mpvPlayback });
     const context = vm.createContext({
@@ -56,8 +56,10 @@ async function openWebUiPage(t, { url, html, mpvPlayback = true }) {
     });
     vm.runInContext(fs.readFileSync(BUNDLE, 'utf8'), context);
 
-    Object.defineProperty(document, 'readyState', { configurable: true, value: 'interactive' });
-    document.dispatchEvent(new window.Event('DOMContentLoaded'));
+    if (readyState === 'loading') {
+        Object.defineProperty(document, 'readyState', { configurable: true, value: 'interactive' });
+        document.dispatchEvent(new window.Event('DOMContentLoaded'));
+    }
     await settle();
 
     function element(selector) {

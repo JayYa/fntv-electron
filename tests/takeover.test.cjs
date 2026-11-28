@@ -123,14 +123,24 @@ test('the detail page main button plays the page item with the selected media so
     assert.equal(nativeClicks.length, 0);
 });
 
-test('a detail page main button rendered after load is taken over too', async t => {
-    const page = await openWebUiPage(t, { url: SHOW_PAGE, html: SOURCES });
+for (const readyState of ['loading', 'interactive', 'complete']) {
+    test(`a detail page main button already on the page is taken over when the preload starts with the document ${readyState}`, async t => {
+        const page = await openWebUiPage(t, { url: SHOW_PAGE, html: ACTION_ROW + SOURCES, readyState });
 
-    await page.changeDom(ACTION_ROW);
-    page.tap('#main');
+        page.tap('#main');
 
-    assert.deepEqual(page.plays(), [{ id: SHOW, sourceIndex: 1 }]);
-});
+        assert.deepEqual(page.plays(), [{ id: SHOW, sourceIndex: 1 }]);
+    });
+
+    test(`a detail page main button rendered after load is taken over when the preload starts with the document ${readyState}`, async t => {
+        const page = await openWebUiPage(t, { url: SHOW_PAGE, html: SOURCES, readyState });
+
+        await page.changeDom(ACTION_ROW);
+        page.tap('#main');
+
+        assert.deepEqual(page.plays(), [{ id: SHOW, sourceIndex: 1 }]);
+    });
+}
 
 test('a detail page main button that is still loading plays nothing', async t => {
     const loading = ACTION_ROW

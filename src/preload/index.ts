@@ -8,15 +8,17 @@ import './plugins/titlebar';
 
 const PLUGINS = ['takeover', 'titlebar'];
 
+function startHooks(): void {
+    runHooks(HookType.OnReady);
+    const observer = new MutationObserver(() => runHooks(HookType.OnDomChange));
+    observer.observe(document.body, { childList: true, subtree: true });
+}
+
 function initInjector(): void {
-    if (document.readyState !== 'loading') {
-        runHooks(HookType.OnReady);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startHooks);
     } else {
-        document.addEventListener('DOMContentLoaded', () => {
-            runHooks(HookType.OnReady);
-            const observer = new MutationObserver(() => runHooks(HookType.OnDomChange));
-            observer.observe(document.body, { childList: true, subtree: true });
-        });
+        startHooks();
     }
 }
 
