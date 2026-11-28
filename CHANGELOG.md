@@ -5,36 +5,47 @@
 
 ### 新功能
 
-* 记住主窗口上次的大小、位置和最大化状态 ([#235](https://github.com/JayYa/fntv-electron/issues/235)) ([195d29e](https://github.com/JayYa/fntv-electron/commit/195d29e3cd85b567739ab8f2814cf6fbb8bde15a))
+* 窗口：记住主窗口上次的大小、位置和是否最大化，下次打开时恢复 ([#235](https://github.com/JayYa/fntv-electron/issues/235))
 
 
 ### 问题修复
 
-* **deps:** 附带的 MPV 和插件更新到 fntv-mpv-v20261118_225012 ([#234](https://github.com/JayYa/fntv-electron/issues/234)) ([c3eb012](https://github.com/JayYa/fntv-electron/commit/c3eb012a6896edee019b64895d5f884965147146))
-* MPV 启动失败、崩溃或以未知退出码结束后，播放不再卡住或留下没人管的 MPV ([#322](https://github.com/JayYa/fntv-electron/issues/322)) ([80a159e](https://github.com/JayYa/fntv-electron/commit/80a159e29e6677cab4e7673fe1357dbdcbff291b))
-* MPV 在启动过程中失败或退出时，播放不再卡住，也不留下没人管的 MPV 进程 ([#326](https://github.com/JayYa/fntv-electron/issues/326)) ([39fdbc2](https://github.com/JayYa/fntv-electron/commit/39fdbc21a45a0406990e8d503bf54d119ea04bc4))
-* MPV 播放中子进程出错时不再让主进程抛出未捕获的 TypeError ([#327](https://github.com/JayYa/fntv-electron/issues/327)) ([7afa937](https://github.com/JayYa/fntv-electron/commit/7afa9379149b76e6e2ed9100e2732994918adbfd))
-* NAS 地址会重定向时，启动校验和 FN ID 登录不再误判已保存的登录失效 ([#285](https://github.com/JayYa/fntv-electron/issues/285)) ([6f0dc1d](https://github.com/JayYa/fntv-electron/commit/6f0dc1d330b0ce5118f07ecbf28e1b0eba42220d))
-* NAS 地址是 IPv6 时 FN ID 登录也能转发 Cookie，设置失败记 WARN ([#304](https://github.com/JayYa/fntv-electron/issues/304)) ([136a7c6](https://github.com/JayYa/fntv-electron/commit/136a7c6822fb4fb7b9d79119fb6d778467138cff))
-* NAS 或网关返回 HTML 错误页时，fn_api 请求不再当成成功或把整页写进日志 ([#287](https://github.com/JayYa/fntv-electron/issues/287)) ([4c7b064](https://github.com/JayYa/fntv-electron/commit/4c7b0641fd7bd214b78435817f09c826983b0412))
-* NAS 用自签名证书又开着访问码时，验证访问码前先询问是否信任证书，记住过的证书不再让登录失败 ([#351](https://github.com/JayYa/fntv-electron/issues/351)) ([49cd484](https://github.com/JayYa/fntv-electron/commit/49cd484d1cee73c4273688c341086a58201d46fa))
-* **preload:** 文档已不在 loading 状态时也安装 DOM 变化观察器，换页后的详情页播放键照常接管 ([#360](https://github.com/JayYa/fntv-electron/issues/360)) ([48ea64c](https://github.com/JayYa/fntv-electron/commit/48ea64cc87ce7f4914f4cecdddda37962cae6cbe))
-* 不勾「记住此证书」时不再永久信任该主机 ([#255](https://github.com/JayYa/fntv-electron/issues/255)) ([16482ae](https://github.com/JayYa/fntv-electron/commit/16482ae0967024686cfe91778ff791f27e8865f7))
-* 从非首集开始播放时，切到目标播放项不再卡住或漏报错误 ([#276](https://github.com/JayYa/fntv-electron/issues/276)) ([be5ef8e](https://github.com/JayYa/fntv-electron/commit/be5ef8eb9401b836bcbab48a3c521be1b0beb275))
-* 切到下一集时，正在回传的播放进度不再混进下一集的数据 ([#237](https://github.com/JayYa/fntv-electron/issues/237)) ([e693f2d](https://github.com/JayYa/fntv-electron/commit/e693f2d74c575e871b0ca1ce97d39f3000f43990))
-* 托盘开始监视待合并更新后再数一次，监视生效前删掉的 .fntv-new 不再让那一项一直留着 ([#335](https://github.com/JayYa/fntv-electron/issues/335)) ([7a25149](https://github.com/JayYa/fntv-electron/commit/7a25149b8fba915068a8e7043563eb31b0a01a0d))
-* 日志里同一行有 IP 时对象字段照样脱敏，warn 和 debug 记下的错误不再是 {} ([#349](https://github.com/JayYa/fntv-electron/issues/349)) ([9a237b3](https://github.com/JayYa/fntv-electron/commit/9a237b39fce348f7053030777b917bc52d2f9535))
-* 登录、检查更新和保存设置的按钮在操作真正结束后才恢复 ([#267](https://github.com/JayYa/fntv-electron/issues/267)) ([d115227](https://github.com/JayYa/fntv-electron/commit/d1152270025d8c9b99a0d32c3a5f3a576acbd3a2))
-* 登录时恢复登录状态失败不再保存 token，三种登录方式走同一套步骤 ([#245](https://github.com/JayYa/fntv-electron/issues/245)) ([9d89016](https://github.com/JayYa/fntv-electron/commit/9d89016112c537e0d43eee64a34fca2e5916a274))
-* 登录页开着时托盘改过的设置随之更新，保存不再改回去 ([#342](https://github.com/JayYa/fntv-electron/issues/342)) ([54004a9](https://github.com/JayYa/fntv-electron/commit/54004a97671e998dc74946c68a43d484e9019531))
-* 登录页弹窗关闭后，光标回到原来所在的输入框 ([#266](https://github.com/JayYa/fntv-electron/issues/266)) ([575d494](https://github.com/JayYa/fntv-electron/commit/575d4949782f1123f2c5f592903a931b05bc9677))
-* 登录页改过的设置托盘跟着变，托盘里切换下载加速不再覆盖登录页设的地址 ([#340](https://github.com/JayYa/fntv-electron/issues/340)) ([d66f648](https://github.com/JayYa/fntv-electron/commit/d66f648507d95ebba7cb4c46ffbfe3e2c57d86e4))
-* 续播跳转最多重试 30 秒，切到别的播放项后不再跳到上一项的位置 ([#333](https://github.com/JayYa/fntv-electron/issues/333)) ([c108723](https://github.com/JayYa/fntv-electron/commit/c1087239b949db8724a5d70a3259b7c50041cc19))
-* 网络慢时播放进度不再被较早的回传倒退回去 ([#240](https://github.com/JayYa/fntv-electron/issues/240)) ([5f95a05](https://github.com/JayYa/fntv-electron/commit/5f95a05b8f0faa84cb9f42f696e4e8b2dde215f5))
-* 网页端进入 /v/login、/v/welcome 时客户端回到登录页 ([#307](https://github.com/JayYa/fntv-electron/issues/307)) ([21e62fb](https://github.com/JayYa/fntv-electron/commit/21e62fb0b2f29b127652d61041116299450feba5))
-* 退出登录后重启客户端不再自动登录回去 ([#247](https://github.com/JayYa/fntv-electron/issues/247)) ([ce74a8d](https://github.com/JayYa/fntv-electron/commit/ce74a8d88d14655dc9bd6dc73a1927890de1055a))
-* 通过 scoop 安装的 MPV 也能读到 portable_config 配置 ([#269](https://github.com/JayYa/fntv-electron/issues/269)) ([169cb33](https://github.com/JayYa/fntv-electron/commit/169cb33b1b34b20f6354980f3898b4ffabf5aed3))
-* 附带的 MPV 和插件更新到 fntv-mpv-v20261121_193330 ([#275](https://github.com/JayYa/fntv-electron/issues/275)) ([33318d1](https://github.com/JayYa/fntv-electron/commit/33318d1ab1e3d3b19dd22b2f59da20eb1133ad85))
+#### 播放
+
+* 在网页端切换页面后打开的详情页，播放按钮有时不会交给 MPV 播放，现已修复 ([#360](https://github.com/JayYa/fntv-electron/issues/360))
+* 从剧集中间某一集开始播放时不再卡住，出错时也会正常提示 ([#276](https://github.com/JayYa/fntv-electron/issues/276))
+* 继续播放时，跳到上次位置最多尝试 30 秒，仍不成功就从头播放；中途换了一集也不会跳到上一集的位置 ([#333](https://github.com/JayYa/fntv-electron/issues/333))
+* 切到下一集时，上一集的播放进度不再记到下一集上 ([#237](https://github.com/JayYa/fntv-electron/issues/237))
+* 网络较慢时，已记录的播放进度不再倒退 ([#240](https://github.com/JayYa/fntv-electron/issues/240))
+
+#### MPV 播放器
+
+* MPV 启动失败、崩溃或异常退出后，播放不再卡住，后台也不再残留 MPV 进程 ([#322](https://github.com/JayYa/fntv-electron/issues/322)) ([#326](https://github.com/JayYa/fntv-electron/issues/326))
+* MPV 播放时出错不再引发客户端内部错误 ([#327](https://github.com/JayYa/fntv-electron/issues/327))
+* 用 scoop 安装的 MPV 也能读取 portable_config 里的配置 ([#269](https://github.com/JayYa/fntv-electron/issues/269))
+* 托盘菜单里「MPV 配置有 N 个待合并的更新」的数量会及时刷新，处理完的更新不再一直显示 ([#335](https://github.com/JayYa/fntv-electron/issues/335))
+* 客户端附带的 MPV 和插件更新到新版本 ([#234](https://github.com/JayYa/fntv-electron/issues/234)) ([#275](https://github.com/JayYa/fntv-electron/issues/275))
+
+#### 登录与连接
+
+* 退出登录后重启客户端，不会再自动登录回去 ([#247](https://github.com/JayYa/fntv-electron/issues/247))
+* 在网页端退回登录页或欢迎页时，客户端会回到自己的登录页 ([#307](https://github.com/JayYa/fntv-electron/issues/307))
+* 登录过程中某一步失败时，不再保存不完整的登录信息 ([#245](https://github.com/JayYa/fntv-electron/issues/245))
+* NAS 地址会自动跳转到另一个地址时，已保存的登录不再被误判为失效 ([#285](https://github.com/JayYa/fntv-electron/issues/285))
+* NAS 使用 IPv6 地址时，FN ID 登录也能正常完成 ([#304](https://github.com/JayYa/fntv-electron/issues/304))
+* NAS 或网关返回错误页面时，客户端能正确识别为请求失败 ([#287](https://github.com/JayYa/fntv-electron/issues/287))
+* NAS 使用自签名证书并设置了访问码时，会先询问是否信任证书；已记住的证书不再导致登录失败 ([#351](https://github.com/JayYa/fntv-electron/issues/351))
+* 信任证书时没有勾选「记住此证书」，下次启动会再次询问，不再被永久信任 ([#255](https://github.com/JayYa/fntv-electron/issues/255))
+
+#### 登录页与设置
+
+* 登录、检查更新、保存设置的按钮会等操作真正完成后才恢复，避免重复提交；保存设置失败时会提示原因 ([#267](https://github.com/JayYa/fntv-electron/issues/267))
+* 登录页的弹窗关闭后，光标回到原来所在的输入框 ([#266](https://github.com/JayYa/fntv-electron/issues/266))
+* 登录页和托盘菜单里的设置保持同步，在一边改过的设置不会被另一边改回去 ([#340](https://github.com/JayYa/fntv-electron/issues/340)) ([#342](https://github.com/JayYa/fntv-electron/issues/342))
+
+#### 日志
+
+* 日志里的敏感信息遮盖得更完整，记录的错误内容不再显示为空 ([#349](https://github.com/JayYa/fntv-electron/issues/349))
 
 ## [3.4.0](https://github.com/JayYa/fntv-electron/compare/v3.3.0...v3.4.0) (2026-11-15)
 
