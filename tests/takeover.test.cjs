@@ -132,6 +132,17 @@ test('a detail page main button rendered after load is taken over too', async t 
     assert.deepEqual(page.plays(), [{ id: SHOW, sourceIndex: 1 }]);
 });
 
+for (const readyState of ['interactive', 'complete']) {
+    test(`a detail page main button rendered after load is taken over when the preload starts with the document ${readyState}`, async t => {
+        const page = await openWebUiPage(t, { url: SHOW_PAGE, html: SOURCES, readyState });
+
+        await page.changeDom(ACTION_ROW);
+        page.tap('#main');
+
+        assert.deepEqual(page.plays(), [{ id: SHOW, sourceIndex: 1 }]);
+    });
+}
+
 test('a detail page main button that is still loading plays nothing', async t => {
     const loading = ACTION_ROW
         .replace('<button id="main"', '<button id="main" disabled')
