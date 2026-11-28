@@ -1,5 +1,52 @@
 # 更新日志
 
+## [3.5.0](https://github.com/JayYa/fntv-electron/compare/v3.4.0...v3.5.0) (2026-11-28)
+
+
+### 新功能
+
+* 窗口：记住主窗口上次的大小、位置和是否最大化，下次打开时恢复 ([#235](https://github.com/JayYa/fntv-electron/issues/235))
+
+
+### 问题修复
+
+#### 播放
+
+* 在网页端切换页面后打开的详情页，播放按钮有时不会交给 MPV 播放，现已修复 ([#360](https://github.com/JayYa/fntv-electron/issues/360))
+* 从剧集中间某一集开始播放时不再卡住，出错时也会正常提示 ([#276](https://github.com/JayYa/fntv-electron/issues/276))
+* 继续播放时，跳到上次位置最多尝试 30 秒，仍不成功就从头播放；中途换了一集也不会跳到上一集的位置 ([#333](https://github.com/JayYa/fntv-electron/issues/333))
+* 切到下一集时，上一集的播放进度不再记到下一集上 ([#237](https://github.com/JayYa/fntv-electron/issues/237))
+* 网络较慢时，已记录的播放进度不再倒退 ([#240](https://github.com/JayYa/fntv-electron/issues/240))
+
+#### MPV 播放器
+
+* MPV 启动失败、崩溃或异常退出后，播放不再卡住，后台也不再残留 MPV 进程 ([#322](https://github.com/JayYa/fntv-electron/issues/322)) ([#326](https://github.com/JayYa/fntv-electron/issues/326))
+* MPV 播放时出错不再引发客户端内部错误 ([#327](https://github.com/JayYa/fntv-electron/issues/327))
+* 用 scoop 安装的 MPV 也能读取 portable_config 里的配置 ([#269](https://github.com/JayYa/fntv-electron/issues/269))
+* 托盘菜单里「MPV 配置有 N 个待合并的更新」的数量会及时刷新，处理完的更新不再一直显示 ([#335](https://github.com/JayYa/fntv-electron/issues/335))
+* 客户端附带的 MPV 和插件更新到新版本 ([#234](https://github.com/JayYa/fntv-electron/issues/234)) ([#275](https://github.com/JayYa/fntv-electron/issues/275))
+
+#### 登录与连接
+
+* 退出登录后重启客户端，不会再自动登录回去 ([#247](https://github.com/JayYa/fntv-electron/issues/247))
+* 在网页端退回登录页或欢迎页时，客户端会回到自己的登录页 ([#307](https://github.com/JayYa/fntv-electron/issues/307))
+* 登录过程中某一步失败时，不再保存不完整的登录信息 ([#245](https://github.com/JayYa/fntv-electron/issues/245))
+* NAS 地址会自动跳转到另一个地址时，已保存的登录不再被误判为失效 ([#285](https://github.com/JayYa/fntv-electron/issues/285))
+* NAS 使用 IPv6 地址时，FN ID 登录也能正常完成 ([#304](https://github.com/JayYa/fntv-electron/issues/304))
+* NAS 或网关返回错误页面时，客户端能正确识别为请求失败 ([#287](https://github.com/JayYa/fntv-electron/issues/287))
+* NAS 使用自签名证书并设置了访问码时，会先询问是否信任证书；已记住的证书不再导致登录失败 ([#351](https://github.com/JayYa/fntv-electron/issues/351))
+* 信任证书时没有勾选「记住此证书」，下次启动会再次询问，不再被永久信任 ([#255](https://github.com/JayYa/fntv-electron/issues/255))
+
+#### 登录页与设置
+
+* 登录、检查更新、保存设置的按钮会等操作真正完成后才恢复，避免重复提交；保存设置失败时会提示原因 ([#267](https://github.com/JayYa/fntv-electron/issues/267))
+* 登录页的弹窗关闭后，光标回到原来所在的输入框 ([#266](https://github.com/JayYa/fntv-electron/issues/266))
+* 登录页和托盘菜单里的设置保持同步，在一边改过的设置不会被另一边改回去 ([#340](https://github.com/JayYa/fntv-electron/issues/340)) ([#342](https://github.com/JayYa/fntv-electron/issues/342))
+
+#### 日志
+
+* 日志里的敏感信息遮盖得更完整，记录的错误内容不再显示为空 ([#349](https://github.com/JayYa/fntv-electron/issues/349))
+
 ## [3.4.0](https://github.com/JayYa/fntv-electron/compare/v3.3.0...v3.4.0) (2026-11-15)
 
 
